@@ -7,15 +7,15 @@ const testingGuidePath = resolve(process.cwd(), 'docs/testing.md')
 const codeQualityGuidePath = resolve(process.cwd(), 'docs/code-quality.md')
 
 describe('前端测试 workflow', () => {
-  it('在 PR 与 v2 push 上运行，并将变更文件格式检查限制为 PR', () => {
+  it('在 PR 与 custom push 上运行，并将变更文件格式检查限制为 PR', () => {
     const workflow = readFileSync(workflowPath, 'utf8')
     const formatJob = workflow.match(/\n {2}format:\n(?<job>[\s\S]*?)(?=\n {2}[\w-]+:\n|$)/)?.groups?.job
     const qualityJob = workflow.match(/\n {2}typecheck-and-coverage:\n(?<job>[\s\S]*?)(?=\n {2}[\w-]+:\n|$)/)?.groups
       ?.job
 
     expect(workflow).toContain('permissions:\n  contents: read')
-    expect(workflow).toContain('pull_request:\n    branches:\n      - v2')
-    expect(workflow).toContain('push:\n    branches:\n      - v2')
+    expect(workflow).toContain('pull_request:\n    branches:\n      - custom')
+    expect(workflow).toContain('push:\n    branches:\n      - custom')
     expect(workflow).toContain('group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}')
     expect(formatJob).toBeDefined()
     expect(formatJob).toContain("if: github.event_name == 'pull_request'")
