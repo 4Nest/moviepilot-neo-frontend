@@ -13,6 +13,7 @@ import jellyfinLogo from '@/assets/images/logos/jellyfin.png'
 import plexLogo from '@/assets/images/logos/plex.png'
 import trimemediaLogo from '@/assets/images/logos/trimemedia.png'
 import ugreenLogo from '@/assets/images/logos/ugreen.png'
+import mediavaultLogo from '@/assets/images/logos/mediavault.png'
 import wechatLogo from '@/assets/images/logos/wechat.png'
 import feishuLogo from '@/assets/images/logos/feishu.png'
 import clawbotLogo from '@/assets/images/logos/clawbot.png'
@@ -47,6 +48,7 @@ const logoMap: Record<string, string> = {
   plex: plexLogo,
   trimemedia: trimemediaLogo,
   ugreen: ugreenLogo,
+  mediavault: mediavaultLogo,
   wechat: wechatLogo,
   feishu: feishuLogo,
   wechatclawbot: clawbotLogo,
@@ -106,10 +108,8 @@ export function getDisplayImageUrl(url: string, useCache = false): string {
   const encodedUrl = encodeURIComponent(url)
   if (isBangumiImageUrl(url))
     return `${import.meta.env.VITE_API_BASE_URL}system/img/1?imgurl=${encodedUrl}${useCache ? '&cache=true' : ''}`
-  if (useCache)
-    return `${import.meta.env.VITE_API_BASE_URL}system/cache/image?url=${encodedUrl}`
-  if (url.includes('doubanio.com'))
-    return `${import.meta.env.VITE_API_BASE_URL}system/img/0?imgurl=${encodedUrl}`
+  if (useCache) return `${import.meta.env.VITE_API_BASE_URL}system/cache/image?url=${encodedUrl}`
+  if (url.includes('doubanio.com')) return `${import.meta.env.VITE_API_BASE_URL}system/img/0?imgurl=${encodedUrl}`
   return url
 }
 
