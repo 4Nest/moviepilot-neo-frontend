@@ -149,11 +149,11 @@ onMounted(() => {
         <div class="app-card-summary__title text-h6">{{ mediaserver.name }}</div>
         <div
           v-if="mediaServerDict[mediaserver.type] && mediaserver.enabled"
-          class="grid min-h-6 grid-cols-3 gap-2 text-sm text-medium-emphasis"
+          class="flex min-h-6 flex-wrap gap-x-3 text-sm text-medium-emphasis"
         >
-          <span v-for="item in infoItems" :key="item.title" class="flex min-w-0 items-center">
+          <span v-for="item in infoItems" :key="item.title" class="flex items-center whitespace-nowrap">
             <VIcon rounded :icon="item.avatar" class="me-1 shrink-0" />
-            <span class="truncate">{{ item.amount }}</span>
+            <span>{{ item.amount }}</span>
           </span>
         </div>
         <div v-else-if="!mediaServerDict[mediaserver.type]" class="app-card-summary__subtitle text-sm">
