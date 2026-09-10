@@ -1,10 +1,10 @@
 name: Build moviepilot-neo Frontend
 
 on:
-  # custom 每次推送都重新构建并替换 dist.zip 资产（镜像内嵌前端，回滚靠镜像 digest）
+  # neo 每次推送都重新构建并替换 dist.zip 资产（镜像内嵌前端，回滚靠镜像 digest）
   push:
     branches:
-      - custom
+      - neo
   workflow_dispatch:
 
 permissions:

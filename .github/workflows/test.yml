@@ -3,10 +3,10 @@ name: Frontend Tests
 on:
   pull_request:
     branches:
-      - custom
+      - neo
   push:
     branches:
-      - custom
+      - neo
 
 permissions:
   contents: read
