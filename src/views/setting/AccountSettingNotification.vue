@@ -436,35 +436,8 @@ useSilentSettingRefresh(loadPageData, {
                     <VListItem @click="addNotification('wechat')">
                       <VListItemTitle>{{ t('setting.notification.wechat') }}</VListItemTitle>
                     </VListItem>
-                    <VListItem @click="addNotification('wechatclawbot')">
-                      <VListItemTitle>{{ t('setting.notification.wechatClawBot') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('feishu')">
-                      <VListItemTitle>{{ t('setting.notification.feishu') }}</VListItemTitle>
-                    </VListItem>
                     <VListItem @click="addNotification('telegram')">
                       <VListItemTitle>{{ t('setting.notification.telegram') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('slack')">
-                      <VListItemTitle>{{ t('setting.notification.slack') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('discord')">
-                      <VListItemTitle>Discord</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('synologychat')">
-                      <VListItemTitle>{{ t('setting.notification.synologyChat') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('qqbot')">
-                      <VListItemTitle>{{ t('setting.notification.qq') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('vocechat')">
-                      <VListItemTitle>{{ t('setting.notification.voceChat') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('webpush')">
-                      <VListItemTitle>{{ t('setting.notification.webPush') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addNotification('custom')">
-                      <VListItemTitle>{{ t('setting.system.custom') }}</VListItemTitle>
                     </VListItem>
                   </VList>
                 </VMenu>

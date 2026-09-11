@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { formatDateDifference } from '@/@core/utils/formatters'
 import type { SubscribeShare } from '@/api/types'
-import router from '@/router'
+
 import { useGlobalSettingsStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
@@ -12,10 +12,14 @@ const SubscribeEditDialog = defineAsyncComponent(() => import('../dialog/Subscri
 // 输入参数
 const props = defineProps({
   media: Object as PropType<SubscribeShare>,
+  // 批量管理模式
+  batchMode: Boolean,
+  // 是否已选中
+  selected: Boolean,
 })
 
 // 定义删除事件
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['delete', 'toggle-select'])
 
 // 从 provide 中获取全局设置
 // 全局设置
@@ -45,29 +49,15 @@ const posterUrl = computed(() => {
   return getDisplayImageUrl(url || '', globalSettings.GLOBAL_IMAGE_CACHE)
 })
 
-// 获得mediaid
-function getMediaId() {
-  if (props.media?.media_source && props.media?.media_id) {
-    const prefix = props.media.media_source === 'themoviedb' ? 'tmdb' : props.media.media_source
-    return `${prefix}:${props.media.media_id}`
-  }
-  if (props.media?.tmdbid) return `tmdb:${props.media?.tmdbid}`
-  else if (props.media?.doubanid) return `douban:${props.media?.doubanid}`
-  else if (props.media?.bangumiid) return `bangumi:${props.media?.bangumiid}`
-  else if (props.media?.anilistid) return `anilist:${props.media?.anilistid}`
-}
 
-// 查看媒体详情
-async function viewMediaDetail() {
-  router.push({
-    path: '/media',
-    query: {
-      mediaid: getMediaId(),
-      title: props.media?.name,
-      year: props.media?.year,
-      type: props.media?.type,
-    },
-  })
+
+// 卡片点击：批量模式下切换选择，正常模式打开详情
+function handleCardClick() {
+  if (props.batchMode) {
+    emit('toggle-select')
+  } else {
+    showForkSubscribe()
+  }
 }
 
 // 复用订阅
@@ -110,9 +100,18 @@ function doDelete() {
             <VCard
               :key="props.media?.id"
               class="app-hover-lift-card flex flex-col h-full"
+              :class="{ 'share-card--selected': props.selected }"
               min-height="150"
-              @click="showForkSubscribe"
+              @click="handleCardClick"
             >
+              <!-- 批量模式选择框 -->
+              <div v-if="props.batchMode" class="share-card-checkbox">
+                <VIcon
+                  :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
+                  :color="props.selected ? 'primary' : undefined"
+                  size="24"
+                />
+              </div>
               <template #image>
                 <VImg :src="backdropUrl || posterUrl" aspect-ratio="3/2" cover @load="imageLoadHandler" position="top">
                   <template #placeholder>
@@ -128,7 +127,7 @@ function doDelete() {
               <div class="h-full flex flex-col">
                 <VCardText class="flex items-center pa-3 pb-1 grow">
                   <div class="h-auto w-16 flex-shrink-0 overflow-hidden rounded-md" v-if="imageLoaded">
-                    <VImg :src="posterUrl" aspect-ratio="2/3" cover @click.stop="viewMediaDetail">
+                    <VImg :src="posterUrl" aspect-ratio="2/3" cover>
                       <template #placeholder>
                         <div class="w-full h-full">
                           <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
@@ -180,5 +179,24 @@ function doDelete() {
 
 .subscribe-card-background {
   background-image: linear-gradient(180deg, rgba(31, 41, 55, 47%) 0%, rgb(31, 41, 55) 100%);
+}
+
+// 批量模式选择框
+.share-card-checkbox {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  padding: 0.35rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  place-items: center;
+}
+
+// 选中状态高亮
+.share-card--selected {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 </style>

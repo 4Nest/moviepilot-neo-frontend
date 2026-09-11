@@ -9,9 +9,8 @@ import ShortcutBar from './ShortcutBar.vue'
 import UserProfile from './UserProfile.vue'
 import QuickAccess from './QuickAccess.vue'
 import HeaderTab from './HeaderTab.vue'
-import AgentAssistantWidget from '@/components/agent/AgentAssistantWidget.vue'
 import ThemeCustomizer from '@/components/theme/ThemeCustomizer.vue'
-import { useGlobalSettingsStore, usePluginSidebarNavStore, useUserStore } from '@/stores'
+import { usePluginSidebarNavStore, useUserStore } from '@/stores'
 import { getNavMenus } from '@/router/i18n-menu'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
 import { NavMenu } from '@/@layouts/types'
@@ -37,7 +36,7 @@ import {
   THEME_CUSTOMIZER_OPEN_EVENT,
   type ThemeCustomizerSettings,
 } from '@/composables/useThemeCustomizer'
-import ThemeLogoMark from '@/components/misc/ThemeLogoMark.vue'
+import NeoLogoMark from '@/components/misc/NeoLogoMark.vue'
 
 const display = useDisplay()
 // PWA模式检测
@@ -51,14 +50,9 @@ const showThemeCustomizer = ref(false)
 // 用户 Store
 const userStore = useUserStore()
 const pluginSidebarNavStore = usePluginSidebarNavStore()
-const globalSettingsStore = useGlobalSettingsStore()
-
 // 获取用户权限信息
 const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
 const canAdmin = computed(() => hasPermission(userPermissions.value, 'admin'))
-const showAgentAssistant = computed(
-  () => globalSettingsStore.get('AI_AGENT_ENABLE') === true && globalSettingsStore.get('AI_AGENT_HIDE_ENTRY') !== true,
-)
 
 // 开始菜单项
 const startMenus = ref<NavMenu[]>([])
@@ -527,8 +521,8 @@ onMounted(async () => {
         :class="{ 'theme-navbar-row--horizontal': showHorizontalThemeNav }"
       >
         <RouterLink v-if="showHorizontalThemeNav" :to="canAdmin ? '/dashboard' : '/apps'" class="theme-horizontal-logo">
-          <ThemeLogoMark class="theme-horizontal-logo__mark" />
-          <span class="theme-horizontal-logo__text moviepilot-wordmark">MOVIEPILOT</span>
+          <NeoLogoMark class="brand-logo-mark" />
+          <span class="theme-horizontal-logo__text moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
         </RouterLink>
         <!-- 👉 Vertical Nav Toggle -->
         <IconBtn v-if="!appMode && display.mdAndDown.value" class="ms-n2" @click="toggleVerticalOverlayNavActive(true)">
@@ -750,8 +744,7 @@ onMounted(async () => {
   <!-- 👉 Theme Customizer -->
   <ThemeCustomizer v-if="showThemeCustomizer" @close="showThemeCustomizer = false" />
 
-  <!-- 👉 Agent Assistant -->
-  <AgentAssistantWidget v-if="showAgentAssistant" />
+
 </template>
 
 <style lang="scss" scoped>

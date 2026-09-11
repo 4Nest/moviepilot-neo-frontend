@@ -249,7 +249,7 @@ describe('subscribe page', () => {
     const header = getHeaderConfig()
 
     expect(router.currentRoute.value.meta.subType).toBe('电影')
-    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'popular'])
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
     expect(header.modelValue.value).toBe('mysub')
     expect(getListOutput('list type')).toHaveTextContent('电影')
     expect(getListOutput('list subscription id')).toHaveTextContent('42')
@@ -263,7 +263,7 @@ describe('subscribe page', () => {
     const header = getHeaderConfig()
 
     expect(router.currentRoute.value.meta.subType).toBe('电视剧')
-    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'popular', 'share'])
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'share'])
     expect(header.modelValue.value).toBe('share')
     expect(screen.getByLabelText('share keyword')).toHaveTextContent('')
   })
@@ -413,31 +413,6 @@ describe('subscribe page', () => {
       'dialog.subscribeHistory.title',
       'dialog.subscribeEdit.titleDefault',
     ])
-  })
-
-  it.each([
-    [true, true],
-    [false, false],
-  ])('gates the PWA share statistics action by subscribe permission=%s', async (permission, visible) => {
-    await renderSubscribe({
-      appMode: true,
-      initialRoute: '/subscribe/tv?tab=share',
-      subType: '电视剧',
-      subscribePermission: permission,
-    })
-    const dynamicButton = getDynamicButtonConfig()
-
-    expect(unref(dynamicButton.show)).toBe(visible)
-    if (visible) {
-      expect(unref(dynamicButton.icon)).toBe('mdi-chart-line')
-      dynamicButton.onClick?.()
-      expect(mocks.openSharedDialog).toHaveBeenCalledWith(
-        expect.any(Object),
-        {},
-        {},
-        { closeOn: ['close'] },
-      )
-    }
   })
 
   it('debounces and trims share search, then cancels pending work on unmount', async () => {

@@ -47,34 +47,13 @@ const DialogCloseButtonStub = defineComponent({
 
 const PosterStub = defineComponent({
   name: 'VImg',
-  emits: ['click'],
-  setup(_props, { emit }) {
-    return () =>
-      h(
-        'button',
-        {
-          'aria-label': '查看媒体详情',
-          type: 'button',
-          onClick: () => emit('click'),
-        },
-        '查看媒体详情',
-      )
+  props: { src: { type: String, default: '' } },
+  setup(props) {
+    return () => h('img', { src: props.src })
   },
 })
 
-interface MediaIdentifiers {
-  anilistid?: number
-  bangumiid?: number
-  doubanid?: string
-  tmdbid?: number
-}
 
-const mediaDetailCases: Array<[string, MediaIdentifiers, string]> = [
-  ['TMDB', { tmdbid: 6301 }, 'tmdb:6301'],
-  ['Douban', { doubanid: 'db-6302', tmdbid: undefined }, 'douban:db-6302'],
-  ['Bangumi', { bangumiid: 6303, doubanid: undefined, tmdbid: undefined }, 'bangumi:6303'],
-  ['AniList', { anilistid: 6304, bangumiid: undefined, tmdbid: undefined }, 'anilist:6304'],
-]
 
 function createDeferred() {
   let resolve!: () => void
@@ -142,7 +121,7 @@ describe('ForkSubscribeDialog follow behavior', () => {
     expect(requested).toHaveBeenCalledOnce()
   })
 
-  it('places long recognition words in a full-width metadata row', async () => {
+  it('renders recognition words in a collapsible panel', async () => {
     server.use(followSubscribersSettingHandler([]))
     const { media } = await renderDialog(
       createSubscribeShare({
@@ -150,11 +129,17 @@ describe('ForkSubscribeDialog follow behavior', () => {
       }),
     )
 
-    const row = document.querySelector('.subscribe-share-detail__recognition')
+    const toggle = screen.getByRole('button', { name: /识别词/ })
+    expect(toggle).toBeInTheDocument()
 
-    expect(row).toBeInTheDocument()
-    expect(row?.querySelector(':scope > dt')).toHaveTextContent('识别词：')
-    expect(row?.querySelector(':scope > dd')).toHaveTextContent(media.custom_words!.replaceAll('\n', ' '))
+    // 默认折叠
+    const content = document.querySelector('.share-words__content')
+    expect(content).not.toBeVisible()
+
+    // 展开后显示识别词
+    await userEvent.click(toggle)
+    expect(content).toBeVisible()
+    expect(content).toHaveTextContent(media.custom_words!.replaceAll('\n', ' '))
   })
 
   it('follows a share user and refreshes the action from the server setting', async () => {
@@ -373,32 +358,12 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
     expect(events.close).toHaveBeenCalledOnce()
   })
 
-  it.each(mediaDetailCases)(
-    'routes %s shares to their media details',
-    async (_source, identifiers, expectedMediaId) => {
-      const media: SubscribeShare = {
-        ...createSubscribeShare({
-          anilistid: identifiers.anilistid,
-          doubanid: identifiers.doubanid,
-          tmdbid: identifiers.tmdbid,
-        }),
-        bangumiid: identifiers.bangumiid,
-      }
-      server.use(followSubscribersSettingHandler([]))
-      const user = userEvent.setup()
-      await renderDialog(media)
+  it('has no media detail navigation entry', async () => {
+    server.use(followSubscribersSettingHandler([]))
+    await renderDialog(createSubscribeShare({ tmdbid: 6301 }))
 
-      await user.click(screen.getByRole('button', { name: '查看媒体详情' }))
-
-      expect(mocks.routerPush).toHaveBeenCalledWith({
-        path: '/media',
-        query: {
-          mediaid: expectedMediaId,
-          title: media.name,
-          type: media.type,
-          year: media.year,
-        },
-      })
-    },
-  )
+    // 海报与内容均不提供媒体详情跳转入口
+    expect(screen.queryByRole('button', { name: '查看媒体详情' })).not.toBeInTheDocument()
+    expect(document.querySelector('.share-hero__poster-overlay')).toBeNull()
+  })
 })

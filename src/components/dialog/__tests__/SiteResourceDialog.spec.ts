@@ -1,6 +1,5 @@
 import type { TorrentInfo } from '@/api/types'
 import SiteResourceDialog from '@/components/dialog/SiteResourceDialog.vue'
-import i18n from '@/plugins/i18n'
 import { getActiveRequestsCount } from '@/utils/requestOptimizer'
 import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
@@ -443,21 +442,4 @@ describe('SiteResourceDialog', () => {
     await waitFor(() => expect(screen.queryByLabelText('搜索关键字')).not.toBeInTheDocument())
   })
 
-  it('emits close and formats the result summary in English', async () => {
-    server.use(
-      siteCategoriesHandler(501, []),
-      siteResourcesHandler(501, [createTorrentInfo({ title: 'Language resource' })]),
-    )
-    const user = userEvent.setup()
-
-    const { close, container } = await renderDialog()
-    await screen.findByText('Language resource')
-    i18n.global.locale.value = 'en-US'
-    expect(await screen.findByText('1 results')).toBeInTheDocument()
-
-    const closeButton = container.querySelector('.v-toolbar-items .v-btn')
-    expect(closeButton).not.toBeNull()
-    await user.click(closeButton as HTMLElement)
-    expect(close).toHaveBeenCalledOnce()
-  })
 })

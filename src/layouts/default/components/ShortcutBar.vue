@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 // 国际化
 const { t } = useI18n()
-const { visibleShortcuts, openShortcutDialog: openShortcutTool } = useShortcutTools()
+const { menuShortcuts, pinnedShortcuts, visibleShortcuts, openShortcutDialog: openShortcutTool } = useShortcutTools()
 
 // App捷径
 const appsMenu = ref(false)
@@ -31,6 +31,14 @@ onMounted(() => {
 </script>
 
 <template>
+  <!-- 固定工具图标按钮：识别 → 词表 → 日志 -->
+  <VTooltip v-for="item in pinnedShortcuts" :key="item.dialog" :text="item.title" location="top">
+    <template #activator="{ props: tooltipProps }">
+      <IconBtn class="ms-2" v-bind="tooltipProps" @click="openShortcutTool(item)">
+        <VIcon :icon="item.icon" />
+      </IconBtn>
+    </template>
+  </VTooltip>
   <VMenu
     v-model="appsMenu"
     :max-width="menuMaxWidth"
@@ -62,7 +70,7 @@ onMounted(() => {
       <div class="pa-3">
         <div class="grid grid-cols-2 gap-3">
           <!-- 循环渲染快捷方式 -->
-          <div v-for="(item, index) in visibleShortcuts" :key="index">
+          <div v-for="(item, index) in menuShortcuts" :key="index">
             <VHover v-slot="hover">
               <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
               <div v-bind="hover.props" class="shortcut-card-hover-area h-full">

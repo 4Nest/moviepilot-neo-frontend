@@ -31,10 +31,15 @@ export type ShortcutToolItem = PermissionProtectedItem & {
   dialogSubtitle?: string
   icon: string
   maxWidth?: string
+  /** 固定为捷径按钮左侧的独立图标按钮，不再出现在捷径菜单中 */
+  pinned?: boolean
   subtitle: string
   title: string
   titleText?: string
 }
+
+// 固定图标按钮的展示顺序：识别 → 词表 → 日志
+const PINNED_SHORTCUT_ORDER = ['nameTest', 'words', 'logging']
 
 /** 提供顶部捷径与仪表板共用的工具定义和打开逻辑。 */
 export function useShortcutTools() {
@@ -48,6 +53,7 @@ export function useShortcutTools() {
       subtitle: t('shortcut.recognition.subtitle'),
       icon: 'mdi-text-recognition',
       dialog: 'nameTest',
+      pinned: true,
       component: NameTestView,
       maxWidth: '65rem',
       titleText: t('shortcut.recognition.title'),
@@ -66,6 +72,7 @@ export function useShortcutTools() {
       subtitle: t('shortcut.log.subtitle'),
       icon: 'mdi-file-document',
       dialog: 'logging',
+      pinned: true,
       customDialog: ShortcutLogDialog,
     },
     {
@@ -81,6 +88,7 @@ export function useShortcutTools() {
       subtitle: t('shortcut.words.subtitle'),
       icon: 'mdi-file-word-box',
       dialog: 'words',
+      pinned: true,
       bodyClass: 'words-shortcut-dialog-body pa-0',
       cardClass: 'words-shortcut-dialog-card',
       component: WordsView,
@@ -124,6 +132,16 @@ export function useShortcutTools() {
 
   const visibleShortcuts = computed(() => filterItemsByPermission(shortcuts, userPermissions.value))
 
+  // 固定在捷径按钮左侧的独立图标按钮（按 PINNED_SHORTCUT_ORDER 排序）
+  const pinnedShortcuts = computed(() =>
+    PINNED_SHORTCUT_ORDER.map(dialog => visibleShortcuts.value.find(item => item.dialog === dialog)).filter(
+      (item): item is ShortcutToolItem => Boolean(item),
+    ),
+  )
+
+  // 捷径菜单中仅保留未固定的工具
+  const menuShortcuts = computed(() => visibleShortcuts.value.filter(item => !item.pinned))
+
   /** 打开工具对应的共享弹窗。 */
   function openShortcutDialog(item: ShortcutToolItem) {
     if (!hasItemPermission(item, userPermissions.value)) return
@@ -147,12 +165,14 @@ export function useShortcutTools() {
         view: item.component,
       },
       {},
-      { closeOn: ['close', 'update:modelValue'] },
+      { closeOn: ['close'] },
     )
   }
 
   return {
+    menuShortcuts,
     openShortcutDialog,
+    pinnedShortcuts,
     visibleShortcuts,
   }
 }

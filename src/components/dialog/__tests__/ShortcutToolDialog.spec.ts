@@ -1,5 +1,5 @@
 import ShortcutToolDialog from '@/components/dialog/ShortcutToolDialog.vue'
-import { screen } from '@testing-library/vue'
+import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
 import { defineComponent, markRaw } from 'vue'
@@ -29,6 +29,7 @@ describe('ShortcutToolDialog', () => {
     await user.click(screen.getByRole('button', { name: '关闭工具' }))
 
     expect(result.emitted()['update:modelValue']).toEqual([[false]])
-    expect(result.emitted().close).toEqual([[]])
+    // 退场动画结束后才向宿主发出 close
+    await waitFor(() => expect(result.emitted().close).toEqual([[]]))
   })
 })

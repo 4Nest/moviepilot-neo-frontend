@@ -78,7 +78,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
     }),
     !isTestMode(mode) &&
       federation({
-        name: 'MoviePilot',
+        name: 'MoviePilot Neo',
         filename: 'remoteEntry.js',
         // @ts-ignore
         remotes: {
@@ -106,8 +106,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
           type: 'module',
         },
         manifest: {
-          'name': 'MoviePilot',
-          'short_name': 'MoviePilot',
+          'name': 'MoviePilot Neo',
+          'short_name': 'MoviePilot Neo',
           'description': 'MoviePilot - 智能影视媒体库管理工具',
           'start_url': './',
           'scope': './',

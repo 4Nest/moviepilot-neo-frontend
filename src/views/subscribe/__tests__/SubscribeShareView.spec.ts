@@ -193,52 +193,12 @@ describe('SubscribeShareView', () => {
     expect(requests[0].searchParams.get('page')).toBe('1')
     expect(requests[0].searchParams.get('count')).toBe('30')
     expect(requests[0].searchParams.get('name') ?? '').toBe('')
-    expect(requests[0].searchParams.get('sort_type')).toBe('time')
+    // 筛选器已移除：不再携带排序/风格/评分参数
+    expect(requests[0].searchParams.get('sort_type')).toBeNull()
     expect(requests[0].searchParams.get('genre_id')).toBeNull()
     expect(requests[0].searchParams.get('min_rating')).toBeNull()
     expect(requests[0].searchParams.get('max_rating')).toBeNull()
     expect(screen.getByRole('status', { name: '订阅分享渐进网格键' })).toHaveTextContent('3101')
-  })
-
-  it('resets to page one with exact sort, genre and rating filters', async () => {
-    const requests: URL[] = []
-    server.use(
-      http.get(subscribeApiUrls.shares, ({ request }) => {
-        const url = new URL(request.url)
-        requests.push(url)
-        const shareTitle = url.searchParams.has('min_rating')
-          ? '高分分享结果'
-          : url.searchParams.has('genre_id')
-            ? '动作分享结果'
-            : url.searchParams.get('sort_type') === 'count'
-              ? '热门分享结果'
-              : '默认分享结果'
-        return HttpResponse.json([createSubscribeShare({ share_title: shareTitle })])
-      }),
-    )
-    const user = userEvent.setup()
-
-    await renderShare()
-    expect(await screen.findByText('默认分享结果')).toBeInTheDocument()
-
-    await user.click(screen.getByText('热门'))
-    expect(await screen.findByText('热门分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('默认分享结果')).not.toBeInTheDocument()
-
-    await user.click(screen.getByText('动作'))
-    expect(await screen.findByText('动作分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('热门分享结果')).not.toBeInTheDocument()
-
-    screen.getByRole('slider').focus()
-    await user.keyboard('{ArrowRight}'.repeat(6))
-    expect(await screen.findByText('高分分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('动作分享结果')).not.toBeInTheDocument()
-
-    expect(requests.length).toBeGreaterThanOrEqual(4)
-    expect(requests.slice(1).every(url => url.searchParams.get('page') === '1')).toBe(true)
-    expect(requests[1].searchParams.get('sort_type')).toBe('count')
-    expect(requests[2].searchParams.get('genre_id')).toBe('28')
-    expect(requests.at(-1)?.searchParams.get('min_rating')).toBe('6')
   })
 
   it('appends later pages and stops when a page is empty', async () => {

@@ -31,7 +31,6 @@ export const PERMISSION_FEATURE = {
   SEARCH_RESOURCE: 'search.resource',
   SUBSCRIBE_MOVIE: 'subscribe.movie',
   SUBSCRIBE_TV: 'subscribe.tv',
-  SUBSCRIBE_CALENDAR: 'subscribe.calendar',
   SUBSCRIBE_SHARE: 'subscribe.share',
   MANAGE_WORKFLOW: 'manage.workflow',
   MANAGE_DOWNLOADING: 'manage.downloading',
@@ -80,14 +79,6 @@ export const USER_PERMISSION_FEATURES: UserPermissionFeatureOption[] = [
     descriptionKey: 'dialog.userAddEdit.permissions.featureDescriptions.tvSubscribe',
     icon: 'mdi-television',
     path: '/subscribe/tv',
-  },
-  {
-    key: PERMISSION_FEATURE.SUBSCRIBE_CALENDAR,
-    permission: 'subscribe',
-    titleKey: 'dialog.userAddEdit.permissions.features.calendar',
-    descriptionKey: 'dialog.userAddEdit.permissions.featureDescriptions.calendar',
-    icon: 'mdi-calendar',
-    path: '/calendar',
   },
   {
     key: PERMISSION_FEATURE.SUBSCRIBE_SHARE,

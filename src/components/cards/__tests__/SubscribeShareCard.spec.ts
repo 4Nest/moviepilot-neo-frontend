@@ -124,26 +124,18 @@ describe('SubscribeShareCard', () => {
   })
 
   it.each([
-    ['TMDB before Douban', { doubanid: '2202', tmdbid: 1101 }, 'tmdb:1101'],
-    ['Douban without TMDB', { doubanid: '2202', tmdbid: undefined }, 'douban:2202'],
-    ['Bangumi without TMDB or Douban', { bangumiid: 3303, doubanid: undefined, tmdbid: undefined }, 'bangumi:3303'],
-    ['AniList without other IDs', { anilistid: 4404, bangumiid: undefined, tmdbid: undefined }, 'anilist:4404'],
-  ] as const)('routes media details with %s while keeping the fork dialog closed', async (_case, ids, mediaid) => {
-    const { container, media } = await renderCard(ids)
+    ['TMDB before Douban', { doubanid: '2202', tmdbid: 1101 }],
+    ['Douban without TMDB', { doubanid: '2202', tmdbid: undefined }],
+    ['Bangumi without TMDB or Douban', { bangumiid: 3303, doubanid: undefined, tmdbid: undefined }],
+    ['AniList without other IDs', { anilistid: 4404, bangumiid: undefined, tmdbid: undefined }],
+  ] as const)('does not navigate when clicking the poster (%s)', async (_case, ids) => {
+    const { container } = await renderCard(ids)
     const poster = await loadPoster(container)
 
     await fireEvent.click(poster)
 
-    expect(mocks.routerPush).toHaveBeenCalledWith({
-      path: '/media',
-      query: {
-        mediaid,
-        title: media.name,
-        type: media.type,
-        year: media.year,
-      },
-    })
-    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    // 海报不再跳转媒体详情（点击冒泡打开复用弹窗属卡片正常行为）
+    expect(mocks.routerPush).not.toHaveBeenCalled()
   })
 
   it('opens the fork dialog with the exact media and replaces it with editing after fork success', async () => {

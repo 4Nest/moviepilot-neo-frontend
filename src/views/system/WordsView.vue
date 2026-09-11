@@ -925,6 +925,20 @@ onMounted(() => {
   gap: 0.8rem;
 }
 
+@media (width <= 599.98px) {
+  /* 窄屏下工具行允许换行，避免开关被截断 */
+  .words-field-meta,
+  .words-rule-toolbar {
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+  }
+
+  .words-field-actions {
+    justify-content: flex-start;
+    gap: 0.2rem 0.8rem;
+  }
+}
+
 .words-editor-switch {
   flex: 0 0 auto;
 }

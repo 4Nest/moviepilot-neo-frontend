@@ -95,17 +95,6 @@ export function getNavMenus(t: Composer['t']): NavMenu[] {
       tabs: getWorkflowTabs(t),
     },
     {
-      title: t('navItems.calendar'),
-      full_title: t('navItems.calendar'),
-      icon: 'mdi-calendar',
-      iconColor: 'info',
-      to: '/calendar',
-      header: t('menu.subscribe'),
-      admin: false,
-      permission: 'subscribe',
-      feature: PERMISSION_FEATURE.SUBSCRIBE_CALENDAR,
-    },
-    {
       title: t('navItems.downloadManager'),
       icon: 'mdi-download-outline',
       iconColor: 'info',
@@ -248,11 +237,6 @@ export function getSubscribeMovieTabs(t: Composer['t']): NavMenuTabItem[] {
       tab: 'mysub',
       icon: 'mdi-bell-check',
     },
-    {
-      title: t('subscribeTabs.movie.popular'),
-      tab: 'popular',
-      icon: 'mdi-fire',
-    },
   ]
 }
 
@@ -263,11 +247,6 @@ export function getSubscribeTvTabs(t: Composer['t']): NavMenuTabItem[] {
       title: t('subscribeTabs.tv.mysub'),
       tab: 'mysub',
       icon: 'mdi-bell-check',
-    },
-    {
-      title: t('subscribeTabs.tv.popular'),
-      tab: 'popular',
-      icon: 'mdi-fire',
     },
     {
       title: t('subscribeTabs.tv.share'),

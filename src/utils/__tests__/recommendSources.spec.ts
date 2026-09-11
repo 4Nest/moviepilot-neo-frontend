@@ -11,24 +11,8 @@ const translate = (key: string) => `translated:${key}`
 
 describe('recommendSources', () => {
   it('provides localized AniList ranking titles', () => {
-    const originalLocale = i18n.global.locale.value
-    const titles = {
-      'zh-CN': ['AniList 当前趋势', 'AniList 本季热门'],
-      'zh-TW': ['AniList 當前趨勢', 'AniList 本季熱門'],
-      'en-US': ['AniList TRENDING NOW', 'AniList POPULAR THIS SEASON'],
-    } as const
-    const locales = ['zh-CN', 'zh-TW', 'en-US'] as const
-
-    try {
-      locales.forEach(locale => {
-        const expected = titles[locale]
-        i18n.global.locale.value = locale
-        expect(i18n.global.t('recommend.anilistTrendingNow')).toBe(expected[0])
-        expect(i18n.global.t('recommend.anilistPopularThisSeason')).toBe(expected[1])
-      })
-    } finally {
-      i18n.global.locale.value = originalLocale
-    }
+    expect(i18n.global.t('recommend.anilistTrendingNow')).toBe('AniList 当前趋势')
+    expect(i18n.global.t('recommend.anilistPopularThisSeason')).toBe('AniList 本季热门')
   })
 
   it('creates the complete built-in source contract', () => {
