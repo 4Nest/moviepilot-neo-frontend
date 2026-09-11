@@ -1,71 +1,45 @@
-# MoviePilot-Frontend
+# MoviePilot Neo Frontend
 
-*中文 | [English](README_EN.md)*
+[MoviePilot-Frontend](https://github.com/jxxghp/MoviePilot-Frontend) v2 的个人定制分支（Fork），与 [moviepilot-neo](https://github.com/4Nest/moviepilot-neo) 后端配套。
 
-[MoviePilot](https://github.com/jxxghp/MoviePilot) 的前端项目，最低支持 Node.js `20.19`，推荐使用 Node.js `24`。
+<p>
+  <img src="./docs/neo-icon.png" width="96" alt="NEO" />
+</p>
 
-## 特性
+## 与官方前端的差异
 
-- 基于 Vue 3 和 Vuetify 3 构建的现代化界面
-- 使用 Vite 作为构建工具，提供快速的开发体验
-- 支持多语言（中文/英文）
-- 完整的插件系统支持，包括远程组件动态加载
+- NEO 品牌标识（导航 Logo、登录页精简、favicon/PWA 图标、MoviePilot Neo 标题）
+- 界面精简：移除日历页、热门订阅、分享统计、订阅分享筛选器、AI 助手悬浮入口、智能助手配置
+- 通知渠道只保留 Telegram / 企业微信
+- 多语言精简为仅简体中文
+- 识别测试页重构（结果区重排、识别标题区分、媒体 ID 徽章、表单会话保留）
+- 订阅分享批量管理、详情页重排
+- 重命名格式双模式编辑器（简易字段流 / 进阶 Jinja2）
+- 捷径工具栏：识别 / 词表 / 日志独立图标按钮
 
+## 构建产物
 
-## 开发部署
+`neo` 分支每次推送自动构建 `dist.zip` 并发布到本仓库 Release（tag 与 `package.json` 版本一致）。后端镜像构建时从此处下载前端产物：
 
-### 推荐的IDE设置
-
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.volar) (并禁用 Vetur).
-
-### 配置Vite
-
-请参阅 [Vite 配置参考](https://vitejs.dev/config/).
-
-### 依赖安装
-
-```sh
-yarn
+```
+https://github.com/4Nest/moviepilot-neo-frontend/releases/download/<version>/dist.zip
 ```
 
-### 开发运行
+注意：`dist.zip` 在同一 tag 下会随每次构建重建覆盖。
 
-```sh
-yarn dev
-```
+## 图标
 
-### 编译打包
+- `docs/neo-icon.png`：512×512 PNG 图标（用于 Unraid 模板等场景）
+- `src/assets/images/logos/neo.svg`：矢量品牌图标（界面内使用）
 
-```sh
-yarn build
-```
+外链：`https://raw.githubusercontent.com/4Nest/moviepilot-neo-frontend/neo/docs/neo-icon.png`
 
-### 单元测试
+## 开发
 
-```sh
-yarn test:run
-yarn test:coverage
-```
+- `neo` 分支为开发主线，功能分支 → PR 到 `neo`（format/lint/typecheck/coverage 门禁）
+- 本地预览：`yarn dev`（API 代理到 `localhost:3001`）
+- 上游同步：`git fetch upstream && git merge upstream/v2`
 
-测试文件组织、共享测试设施、HTTP mock、覆盖率门禁和新增用例规范见[单元测试架构](docs/testing.md)。
+## License
 
-ESLint、Prettier、Node 兼容范围及渐进式 CI 门禁见[前端代码质量工具链演进](docs/code-quality.md)。
-
-### 静态运行
-
-1. 使用 `nginx` 等Web服务器托管 `dist` 静态文件，nginx配置参考 `public/nginx.conf`。
-
-2. 使用 `node` 命令直接运行`service.js`，默认监听 `3000` 端口，设置环境变量 `NGINX_PORT` 来调整运行端口。
-
-```shell
-node dist/service.js
-```
-
-
-### 模块联邦功能
-
-MoviePilot 现已支持模块联邦（Module Federation）功能，允许插件开发者创建可动态加载的远程组件，实现更丰富的插件用户界面。
-
-- [模块联邦开发指南](docs/module-federation-guide.md) - 如何开发远程组件插件
-- [模块联邦问题排查指南](docs/federation-troubleshooting.md) - 常见问题和解决方案
-- [插件远程组件示例](examples/plugin-component/) - 开发插件组件的完整示例项目 
+GPL-3.0（与上游一致）

@@ -474,6 +474,7 @@ async function saveCustomWords() {
 }
 
 .hero-body {
+  overflow: hidden;
   min-inline-size: 0;
 }
 
@@ -500,6 +501,7 @@ async function saveCustomWords() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  min-inline-size: 0;
 }
 
 .hero-chip {
@@ -509,15 +511,15 @@ async function saveCustomWords() {
 /* 媒体 ID 徽章：与资源标签区分开的虚线描边药丸 */
 .media-id-badge {
   display: inline-flex;
+  overflow: hidden;
   align-items: center;
   padding: 0.3rem 0.7rem;
   border: 1px dashed rgba(var(--v-theme-primary), 0.55);
-  border-radius: 999px;
-  color: rgb(var(--v-theme-primary));
   font-size: 0.78rem;
   font-weight: 600;
-  gap: 0.3rem;
-  letter-spacing: 0.04em;
+  max-inline-size: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-decoration: none;
   transition:
     background-color 0.2s ease,
@@ -531,7 +533,12 @@ async function saveCustomWords() {
 
 .pipeline {
   display: flex;
+  min-inline-size: 0;
   flex-direction: column;
+}
+
+.shortcut-result-panel {
+  min-inline-size: 0;
 }
 
 .pipeline-step {
@@ -570,7 +577,7 @@ async function saveCustomWords() {
 .pipeline-value {
   margin-block-start: 0.2rem;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: break-all;
 }
 
 .applied-words {
