@@ -73,7 +73,6 @@ export function serializeTokens(tokens: RenameToken[]): string {
   return parts.join('')
 }
 
-
 /** 求值 jinja 表达式（支持根变量 + 常见过滤器链），用于预览 */
 export function evalExpr(rawExpr: string, data: Record<string, string>): string {
   let body = rawExpr.replace(/^\{\{|\}\}$/g, '').trim()

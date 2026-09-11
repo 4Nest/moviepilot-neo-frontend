@@ -53,8 +53,6 @@ const PosterStub = defineComponent({
   },
 })
 
-
-
 function createDeferred() {
   let resolve!: () => void
   const promise = new Promise<void>(done => {

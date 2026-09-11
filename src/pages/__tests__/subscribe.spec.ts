@@ -3,16 +3,7 @@ import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import {
-  computed,
-  defineComponent,
-  h,
-  nextTick,
-  ref,
-  unref,
-  type ComputedRef,
-  type Ref,
-} from 'vue'
+import { computed, defineComponent, h, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -108,23 +99,14 @@ const SubscribeListViewStub = defineComponent({
         h('output', { 'aria-label': 'list active state' }, String(props.active)),
         h('output', { 'aria-label': 'list batch state' }, JSON.stringify(batchState.value)),
         h('output', { 'aria-label': 'last list command' }, lastCommand.value),
-        h(
-          'button',
-          { type: 'button', onClick: () => emit('update:sortMode', true) },
-          'emit sort mode on',
-        ),
-        h(
-          'button',
-          { type: 'button', onClick: () => emit('update:sortMode', false) },
-          'emit sort mode off',
-        ),
+        h('button', { type: 'button', onClick: () => emit('update:sortMode', true) }, 'emit sort mode on'),
+        h('button', { type: 'button', onClick: () => emit('update:sortMode', false) }, 'emit sort mode off'),
         h('button', { type: 'button', onClick: () => emit('update:sortBy', 'date') }, 'emit date sort'),
         h(
           'button',
           {
             type: 'button',
-            onClick: () =>
-              publishBatchState({ enabled: true, selectedCount: 2, totalCount: 3, allSelected: false }),
+            onClick: () => publishBatchState({ enabled: true, selectedCount: 2, totalCount: 3, allSelected: false }),
           },
           'publish batch selection',
         ),
@@ -132,8 +114,7 @@ const SubscribeListViewStub = defineComponent({
           'button',
           {
             type: 'button',
-            onClick: () =>
-              publishBatchState({ enabled: true, selectedCount: 3, totalCount: 3, allSelected: true }),
+            onClick: () => publishBatchState({ enabled: true, selectedCount: 3, totalCount: 3, allSelected: true }),
           },
           'publish all selected batch',
         ),

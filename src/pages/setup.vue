@@ -130,7 +130,6 @@ onMounted(async () => {
 
             <!-- 步骤7：资源偏好 -->
             <VStepperWindowItem :value="7">
-
               <PreferencesSettingsStep />
             </VStepperWindowItem>
           </VStepperWindow>

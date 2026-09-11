@@ -261,7 +261,14 @@ async function saveCustomWords() {
               prepend-inner-icon="mdi-tag-text-outline"
             />
             <div class="custom-words-toolbar">
-              <VBtn type="button" size="small" variant="text" color="primary" class="me-auto" @click="openWordsShortcut">
+              <VBtn
+                type="button"
+                size="small"
+                variant="text"
+                color="primary"
+                class="me-auto"
+                @click="openWordsShortcut"
+              >
                 <template #prepend>
                   <VIcon icon="mdi-format-list-bulleted" />
                 </template>
@@ -512,7 +519,9 @@ async function saveCustomWords() {
   gap: 0.3rem;
   letter-spacing: 0.04em;
   text-decoration: none;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .media-id-badge:hover {

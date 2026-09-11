@@ -442,4 +442,20 @@ describe('SiteResourceDialog', () => {
     await waitFor(() => expect(screen.queryByLabelText('搜索关键字')).not.toBeInTheDocument())
   })
 
+  it('emits close and formats the result summary', async () => {
+    server.use(
+      siteCategoriesHandler(501, []),
+      siteResourcesHandler(501, [createTorrentInfo({ title: 'Language resource' })]),
+    )
+    const user = userEvent.setup()
+
+    const { close, container } = await renderDialog()
+    await screen.findByText('Language resource')
+    expect(await screen.findByText(/条结果|results/)).toBeInTheDocument()
+
+    const closeButton = container.querySelector('.v-toolbar-items .v-btn')
+    expect(closeButton).not.toBeNull()
+    await user.click(closeButton as HTMLElement)
+    expect(close).toHaveBeenCalledOnce()
+  })
 })

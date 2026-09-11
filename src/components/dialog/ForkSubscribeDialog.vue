@@ -95,8 +95,6 @@ const posterUrl = computed(() => {
   return getDisplayImageUrl(url || '', globalSettings.GLOBAL_IMAGE_CACHE)
 })
 
-
-
 // 复用订阅
 async function doFork() {
   // 开始处理
@@ -183,7 +181,9 @@ onMounted(() => {
               class="share-hero__meta-item"
               :class="{ 'share-hero__meta-item--clickable': props.media?.share_uid }"
               :role="props.media?.share_uid ? 'button' : undefined"
-              :aria-label="props.media?.share_uid ? (isFollowed ? t('subscribe.unfollow') : t('subscribe.follow')) : undefined"
+              :aria-label="
+                props.media?.share_uid ? (isFollowed ? t('subscribe.unfollow') : t('subscribe.follow')) : undefined
+              "
               :tabindex="props.media?.share_uid ? 0 : undefined"
               @click.stop="props.media?.share_uid && (isFollowed ? unfollowUser() : followUser())"
               @keydown.enter.stop="props.media?.share_uid && (isFollowed ? unfollowUser() : followUser())"

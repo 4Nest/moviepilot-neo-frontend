@@ -1371,7 +1371,6 @@ export function useSetupWizard() {
     }
   }
 
-
   // 保存资源偏好设置
   async function savePreferenceSettings() {
     try {

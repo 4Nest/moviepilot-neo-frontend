@@ -13,10 +13,7 @@ import { useDisplay } from 'vuetify'
 
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
 
-
 const display = useDisplay()
-
-
 
 // 国际化
 const { t } = useI18n()
@@ -31,7 +28,6 @@ const props = defineProps({
 // 下载器/媒体服务器排序按需加载，降低系统设置页入口解析量。
 const Draggable = defineAsyncComponent(() => import('vuedraggable').then(module => module.default))
 
-
 // 系统设置项
 const SystemSettings = ref<any>({
   // 基础设置
@@ -42,7 +38,6 @@ const SystemSettings = ref<any>({
     WALLPAPER: 'tmdb',
     GITHUB_TOKEN: null,
     CUSTOMIZE_WALLPAPER_API_URL: null,
-
   },
   // 高级系统设置
   Advanced: {
@@ -97,8 +92,6 @@ const SystemSettings = ref<any>({
     TRANSFER_THREADS: 1,
   },
 })
-
-
 
 // 刮削配置
 const scrapingConfig = [
@@ -169,20 +162,9 @@ const advancedDialog = ref(false)
 const savingBasic = ref(false)
 const rustAccelAvailable = ref(false)
 
-
-
-
-
-
-
-
-
-
 const rustAccelHint = computed(() =>
   rustAccelAvailable.value ? t('setting.system.rustAccelHint') : t('setting.system.rustAccelUnavailableHint'),
 )
-
-
 
 const activeTab = ref('system')
 
@@ -225,8 +207,6 @@ const dataCleanupFieldRules = [
 const newSecurityDomain = ref('')
 // 图片代理允许非公网网段添加变量
 const newImageProxyAllowedPrivateRange = ref('')
-
-
 
 // 添加安全域名
 function addSecurityDomain() {
@@ -320,7 +300,6 @@ async function saveMediaServerSetting() {
 
 // 加载系统设置
 async function loadSystemSettings() {
-
   try {
     const result: { [key: string]: any } = await api.get('system/env')
     if (result.success) {
@@ -340,8 +319,6 @@ async function loadSystemSettings() {
     console.log(error)
   }
 }
-
-
 
 // 调用API保存设置
 async function saveSystemSetting(value: { [key: string]: any }) {
@@ -363,18 +340,13 @@ async function saveSystemSetting(value: { [key: string]: any }) {
 async function saveBasicSettings() {
   savingBasic.value = true
   try {
-
-
     if (await saveSystemSetting(SystemSettings.value.Basic)) {
-
       $toast.success(t('setting.system.basicSaveSuccess'))
     }
   } finally {
     savingBasic.value = false
   }
 }
-
-
 
 // 保存高级设置
 async function saveAdvancedSettings() {
@@ -596,8 +568,6 @@ onDeactivated(() => {
   isRequest.value = false
 })
 
-
-
 useSilentSettingRefresh(
   async () => {
     if (advancedDialog.value || savingBasic.value) return
@@ -607,8 +577,6 @@ useSilentSettingRefresh(
     active: computed(() => props.active),
   },
 )
-
-
 </script>
 
 <template>
@@ -699,7 +667,6 @@ useSilentSettingRefresh(
                 @click="saveBasicSettings"
                 prepend-icon="mdi-content-save"
                 :loading="savingBasic"
-
                 class="text-no-wrap"
               >
                 {{ t('common.save') }}
@@ -822,7 +789,6 @@ useSilentSettingRefresh(
       </VCard>
     </VCol>
   </VRow>
-
 
   <!-- 高级系统设置 -->
   <VDialog

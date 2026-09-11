@@ -423,11 +423,7 @@ useDynamicButton({
   onClick: handleSubscribeDynamicAction,
   menuItems: subscribeDynamicMenuItems,
   permission: 'subscribe',
-  show: computed(
-    () =>
-      appMode.value &&
-      (subscribeBatchState.value.enabled || showDefaultRuleAction.value),
-  ),
+  show: computed(() => appMode.value && (subscribeBatchState.value.enabled || showDefaultRuleAction.value)),
 })
 
 // 使用动态标签页
@@ -686,7 +682,6 @@ onMounted(() => {
           class="compact-fab compact-fab--primary"
           @click="openDefaultRuleDialog"
         />
-
       </div>
     </Teleport>
   </div>

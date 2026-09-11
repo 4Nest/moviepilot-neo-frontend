@@ -3,12 +3,7 @@
 import '@/ace-config'
 import { VAceEditor } from 'vue3-ace-editor'
 import { useI18n } from 'vue-i18n'
-import {
-  evalExpr,
-  parseFormat,
-  serializeTokens,
-  type RenameToken,
-} from './renameFormatTokens'
+import { evalExpr, parseFormat, serializeTokens, type RenameToken } from './renameFormatTokens'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -110,8 +105,6 @@ const fieldGroups = computed(() => [
 
 // ===== Token 模型（模块提供：parseFormat/serializeTokens/evalExpr/RenameToken） =====
 
-
-
 // 简易模式 token 状态
 const tokens = ref<RenameToken[]>(parseFormat(props.modelValue))
 
@@ -163,8 +156,6 @@ function displayText(value: string): string {
 function removeToken(index: number) {
   tokens.value.splice(index, 1)
 }
-
-
 
 function onTokenDrop(targetIndex: number) {
   const from = draggingIndex.value
@@ -223,9 +214,8 @@ const sampleData: ComputedRef<Record<string, string>> = computed(() =>
         fileExt: '.mkv',
         customization: '',
         webSource: '',
-      } as Record<string, string>)
+      } as Record<string, string>),
 )
-
 
 const preview = computed(() => {
   const data = sampleData.value
@@ -250,11 +240,16 @@ const preview = computed(() => {
         )
       }
     } else {
-      parts.push(token.type === 'field' ? (token.expr ? evalExpr(token.expr, data) : (data[token.value] ?? '')) : token.value)
+      parts.push(
+        token.type === 'field' ? (token.expr ? evalExpr(token.expr, data) : (data[token.value] ?? '')) : token.value,
+      )
       i++
     }
   }
-  return parts.join('').replace(/\s{2,}/g, ' ').trim()
+  return parts
+    .join('')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 })
 
 // Ace 编辑器配置
@@ -313,7 +308,12 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
             @dragover.prevent
           >
             {{ tokenLabel(token) }}
-            <VIcon icon="mdi-close" size="12" class="rename-format-editor__token-remove" @click.stop="removeToken(index)" />
+            <VIcon
+              icon="mdi-close"
+              size="12"
+              class="rename-format-editor__token-remove"
+              @click.stop="removeToken(index)"
+            />
           </span>
         </template>
         <span v-else class="rename-format-editor__token-empty">{{ t('renameFormat.emptyHint') }}</span>

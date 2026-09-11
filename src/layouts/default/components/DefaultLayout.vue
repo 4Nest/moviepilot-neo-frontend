@@ -743,8 +743,6 @@ onMounted(async () => {
 
   <!-- 👉 Theme Customizer -->
   <ThemeCustomizer v-if="showThemeCustomizer" @close="showThemeCustomizer = false" />
-
-
 </template>
 
 <style lang="scss" scoped>

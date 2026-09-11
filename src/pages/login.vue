@@ -16,13 +16,11 @@ import { loadRemoteComponentFromModule, type RemoteModule } from '@/utils/federa
 import type { MfaMethod } from '@/types/auth'
 import { getLoginVisualProfile } from '@/utils/loginPresentation'
 
-
 // 国际化
 const { t, te } = useI18n()
 
 const { global: loginTheme } = useTheme()
 const loginVisualProfile = computed(() => getLoginVisualProfile(loginTheme.name.value))
-
 
 // 认证 Store
 const authStore = useAuthStore()
@@ -52,8 +50,6 @@ const mfaStepActive = ref(false)
 const mfaOtpLoading = ref(false)
 
 const mfaMethods = ref<MfaMethod[]>([])
-
-
 
 // 登录按钮 loading
 const loading = ref(false)
@@ -717,7 +713,6 @@ onUnmounted(() => {
       <span class="login-ambient-light__wash" />
     </div>
 
-
     <!-- 登录表单 -->
     <div class="auth-wrapper d-flex align-center justify-center">
       <VCard
@@ -857,7 +852,6 @@ onUnmounted(() => {
             </VRow>
           </form>
         </VCardText>
-
       </VCard>
     </div>
     <VDialog v-model="pluginAuthDialog" max-width="520" persistent>
@@ -1037,7 +1031,6 @@ onUnmounted(() => {
   margin-block-end: 12px;
   text-align: center;
 }
-
 
 .login-subtitle {
   animation: text-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
@@ -1301,7 +1294,6 @@ onUnmounted(() => {
   color: rgb(86, 170, 0) !important;
 }
 
-
 /* ===================== 入场动画 ===================== */
 .login-card--enter {
   animation: login-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1378,7 +1370,6 @@ onUnmounted(() => {
   .auth-wrapper {
     padding-inline: 12px;
   }
-
 
   .login-card {
     padding: 1.5rem !important;

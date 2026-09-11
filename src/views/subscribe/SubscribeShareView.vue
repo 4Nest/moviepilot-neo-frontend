@@ -175,13 +175,7 @@ async function batchDelete() {
     <div class="d-flex justify-end align-center gap-2">
       <!-- 批量操作工具（批量模式下显示） -->
       <template v-if="isBatchMode">
-        <VBtn
-          color="error"
-          variant="flat"
-          size="small"
-          :disabled="selectedShareIds.size === 0"
-          @click="batchDelete"
-        >
+        <VBtn color="error" variant="flat" size="small" :disabled="selectedShareIds.size === 0" @click="batchDelete">
           <template #prepend>
             <VIcon icon="mdi-delete-outline" />
           </template>
@@ -254,6 +248,4 @@ async function batchDelete() {
       :error-description="keyword ? t('common.noContent') : t('subscribe.noShareData')"
     />
   </VInfiniteScroll>
-
 </template>
-

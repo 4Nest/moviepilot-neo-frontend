@@ -80,7 +80,13 @@ function closeDialog() {
 </script>
 
 <template>
-  <VDialog v-model="visible" :max-width="props.maxWidth" scrollable :fullscreen="isFullscreen" @after-leave="onAfterLeave">
+  <VDialog
+    v-model="visible"
+    :max-width="props.maxWidth"
+    scrollable
+    :fullscreen="isFullscreen"
+    @after-leave="onAfterLeave"
+  >
     <VCard :class="cardClasses">
       <VCardItem>
         <VCardTitle>

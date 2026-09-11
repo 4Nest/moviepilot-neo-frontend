@@ -49,8 +49,6 @@ const posterUrl = computed(() => {
   return getDisplayImageUrl(url || '', globalSettings.GLOBAL_IMAGE_CACHE)
 })
 
-
-
 // 卡片点击：批量模式下切换选择，正常模式打开详情
 function handleCardClick() {
   if (props.batchMode) {

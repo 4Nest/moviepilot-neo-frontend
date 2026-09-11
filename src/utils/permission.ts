@@ -146,7 +146,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** 规整用户权限数据，兼容没有 features 字段的历史用户。 */
-export function normalizeUserPermissions(permissions: Partial<UserPermissions> | null | undefined = {}): UserPermissions {
+export function normalizeUserPermissions(
+  permissions: Partial<UserPermissions> | null | undefined = {},
+): UserPermissions {
   const permissionData = permissions ?? {}
   const rawFeatures = isRecord(permissionData.features) ? permissionData.features : {}
   const features = Object.fromEntries(
@@ -164,7 +166,10 @@ export function normalizeUserPermissions(permissions: Partial<UserPermissions> |
 }
 
 /** 构造权限检查上下文，统一超级管理员标记、分类权限与功能权限字段。 */
-export function buildUserPermissionContext(isSuperuser: boolean, permissions: Partial<UserPermissions> = {}): UserPermissionContext {
+export function buildUserPermissionContext(
+  isSuperuser: boolean,
+  permissions: Partial<UserPermissions> = {},
+): UserPermissionContext {
   return {
     is_superuser: isSuperuser,
     ...normalizeUserPermissions(permissions),
