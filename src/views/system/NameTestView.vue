@@ -1,127 +1,45 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useToast } from 'vue-toastification'
 import { requiredValidator } from '@/@validators'
 import api from '@/api'
-import type { Context, MediaDataSource, MediaInfo } from '@/api/types'
-import { getMediaSubscribeId, getMediaSubscribeIdentity } from '@/composables/useMediaSubscribe'
-import router from '@/router'
-import { useGlobalSettingsStore } from '@/stores'
-import { getLogoUrl } from '@/utils/imageUtils'
+import type { Context, MediaInfo } from '@/api/types'
+import { getMediaSubscribeIdentity } from '@/composables/useMediaSubscribe'
+import { useNameTestSession } from '@/composables/useNameTestSession'
+import { useShortcutTools } from '@/composables/useShortcutTools'
 import { useI18n } from 'vue-i18n'
 
 interface PipelineStep {
   icon: string
-  identity?: MediaIdentity
-  source?: MediaSourceDisplay
   title: string
   value: string
 }
 
 interface MediaIdentity {
   id: string
+  idPrefix: string
   link?: string
-  source: string
-  sourceKey: string
 }
-
-interface MediaSourceDisplay {
-  icon?: string
-  image?: string
-  key: string
-  label: string
-}
-
-interface NameTestForm {
-  customWords: string | null
-  source: MediaDataSource
-  subtitle: string | null
-  title: string | null
-}
-
-const MEDIA_SOURCE_LABELS: Record<string, string> = {
-  anilist: 'AniList',
-  bangumi: 'Bangumi',
-  douban: 'Douban',
-  themoviedb: 'TheMovieDb',
-}
-
-const MEDIA_SOURCE_LOGOS: Record<string, string> = {
-  bangumi: getLogoUrl('bangumi'),
-  douban: getLogoUrl('douban'),
-  themoviedb: getLogoUrl('tmdb'),
-}
-
-const NAME_TEST_TITLE_HISTORY_KEY = 'MP_NAME_TEST_TITLE_HISTORY'
-const NAME_TEST_TITLE_HISTORY_LIMIT = 5
-
-const emit = defineEmits<{ close: [] }>()
 
 // 国际化
 const { t } = useI18n()
-const globalSettingsStore = useGlobalSettingsStore()
-
-const mediaSourceItems = computed<{ title: string; value: MediaDataSource }[]>(() => [
-  { title: t('setting.cache.recognitionSource.themoviedb'), value: 'themoviedb' },
-  { title: t('setting.cache.recognitionSource.douban'), value: 'douban' },
-  { title: t('setting.cache.recognitionSource.bangumi'), value: 'bangumi' },
-  { title: t('setting.cache.recognitionSource.anilist'), value: 'anilist' },
-])
-
-// 获取后台默认识别数据源，未知值兼容回退到TheMovieDb。
-function getDefaultMediaSource(): MediaDataSource {
-  const configuredSource = globalSettingsStore.globalSettings.RECOGNIZE_SOURCE as MediaDataSource
-  return mediaSourceItems.value.some(item => item.value === configuredSource) ? configuredSource : 'themoviedb'
-}
-
 // 提示
 const $toast = useToast()
+
+// 捷径工具（用于跳转到词表管理）
+const { visibleShortcuts, openShortcutDialog } = useShortcutTools()
+
+/** 打开词表管理弹窗（叠加在当前弹窗之上，关闭后编辑内容仍在）。 */
+function openWordsShortcut() {
+  const wordsTool = visibleShortcuts.value.find(shortcut => shortcut.dialog === 'words')
+  if (wordsTool) openShortcutDialog(wordsTool)
+}
 
 // 识别结果
 const nameTestResult = ref<Context>()
 
-// 名称识别表单
-const nameTestForm = reactive<NameTestForm>({
-  title: null,
-  subtitle: null,
-  customWords: null,
-  source: getDefaultMediaSource(),
-})
-
-/** 从本地存储读取最近使用的识别标题。 */
-function loadTitleHistory() {
-  try {
-    const storedHistory: unknown = JSON.parse(localStorage.getItem(NAME_TEST_TITLE_HISTORY_KEY) || '[]')
-    if (!Array.isArray(storedHistory)) return []
-
-    return storedHistory
-      .filter((title): title is string => typeof title === 'string' && Boolean(title.trim()))
-      .map(title => title.trim())
-      .filter((title, index, titles) => titles.indexOf(title) === index)
-      .slice(0, NAME_TEST_TITLE_HISTORY_LIMIT)
-  } catch {
-    return []
-  }
-}
-
-const nameTestTitleHistory = ref<string[]>(loadTitleHistory())
-
-/** 将本次提交的标题移到历史记录首位，并只保留最新五条。 */
-function saveTitleHistory(title: string) {
-  const normalizedTitle = title.trim()
-  if (!normalizedTitle) return
-
-  nameTestTitleHistory.value = [
-    normalizedTitle,
-    ...nameTestTitleHistory.value.filter(historyTitle => historyTitle !== normalizedTitle),
-  ].slice(0, NAME_TEST_TITLE_HISTORY_LIMIT)
-
-  try {
-    localStorage.setItem(NAME_TEST_TITLE_HISTORY_KEY, JSON.stringify(nameTestTitleHistory.value))
-  } catch {
-    // 本地存储不可用时仍继续执行本次识别。
-  }
-}
+// 名称识别表单（会话级保留，弹窗关闭重开不丢失）
+const nameTestForm = useNameTestSession()
 
 // 识别按钮状态
 const nameTestLoading = ref(false)
@@ -141,14 +59,14 @@ const savingCustomWords = ref(false)
 const metaInfo = computed(() => nameTestResult.value?.meta_info)
 const mediaInfo = computed(() => nameTestResult.value?.media_info)
 const isRecognized = computed(() => Boolean(metaInfo.value?.name))
-const resultTitle = computed(() => mediaInfo.value?.title || metaInfo.value?.name || t('nameTest.unrecognized'))
-const resultSubtitle = computed(() => {
-  const parts = [mediaInfo.value?.year || metaInfo.value?.year]
-  if (metaInfo.value?.season_episode) parts.push(metaInfo.value.season_episode)
-  return parts.filter(Boolean).join(' · ') || t('nameTest.waitingResult')
+// 名称（年份）作为结果主标题
+const resultTitle = computed(() => {
+  const name = mediaInfo.value?.title || metaInfo.value?.name || t('nameTest.unrecognized')
+  const year = mediaInfo.value?.year || metaInfo.value?.year
+  return year ? `${name}（${year}）` : name
 })
 const mediaClassification = computed(() => {
-  return [mediaInfo.value?.type || metaInfo.value?.type, mediaInfo.value?.category].filter(Boolean).join(' · ') || '-'
+  return [mediaInfo.value?.type || metaInfo.value?.type, mediaInfo.value?.category].filter(Boolean).join(' · ') || ''
 })
 const resourceChips = computed(() => {
   return [
@@ -160,16 +78,8 @@ const resourceChips = computed(() => {
     metaInfo.value?.resource_team,
   ].filter(Boolean) as string[]
 })
-// 是否已匹配到具体媒体，决定是否展示查看详情入口
-const canViewMediaDetail = computed(() =>
-  Boolean(
-    mediaInfo.value?.tmdb_id ||
-    mediaInfo.value?.douban_id ||
-    mediaInfo.value?.bangumi_id ||
-    mediaInfo.value?.anilist_id ||
-    mediaInfo.value?.media_id,
-  ),
-)
+// 有媒体源官方链接时展示「查看详情」入口（跳转 TMDB 等官方页面）
+const canViewMediaDetail = computed(() => Boolean(mediaIdentity.value?.link))
 
 /** 生成媒体源官方详情页地址。 */
 function getMediaOfficialLink(media: MediaInfo, source: string, mediaId: string) {
@@ -191,6 +101,14 @@ function getMediaOfficialLink(media: MediaInfo, source: string, mediaId: string)
   }
 }
 
+// 媒体源 ID 前缀（徽章展示用）
+const MEDIA_SOURCE_ID_PREFIX: Record<string, string> = {
+  anilist: 'AniList',
+  bangumi: 'BGM',
+  douban: '豆瓣',
+  themoviedb: 'TMDB',
+}
+
 /** 生成识别结果中的数据源原生 ID，并兼容旧接口字段。 */
 function getMediaIdentity(media?: MediaInfo): MediaIdentity | undefined {
   if (!media) return undefined
@@ -200,80 +118,39 @@ function getMediaIdentity(media?: MediaInfo): MediaIdentity | undefined {
 
   return {
     id: identity.mediaId,
+    idPrefix: MEDIA_SOURCE_ID_PREFIX[identity.source] || identity.source.toUpperCase(),
     link: getMediaOfficialLink(media, identity.source, identity.mediaId),
-    source: MEDIA_SOURCE_LABELS[identity.source] || identity.source,
-    sourceKey: identity.source,
   }
 }
 
 const mediaIdentity = computed(() => getMediaIdentity(mediaInfo.value))
-const recognizedMediaSource = computed<MediaSourceDisplay>(() => {
-  const sourceKey = mediaIdentity.value?.sourceKey || nameTestForm.source
 
-  return {
-    icon: sourceKey === 'anilist' ? 'mdi-alpha-a-circle' : undefined,
-    image: MEDIA_SOURCE_LOGOS[sourceKey],
-    key: sourceKey,
-    label: mediaIdentity.value?.source || MEDIA_SOURCE_LABELS[sourceKey] || sourceKey,
+const pipelineSteps = computed<PipelineStep[]>(() => {
+  const steps: PipelineStep[] = [
+    {
+      icon: 'mdi-file-document-outline',
+      title: t('nameTest.steps.original.title'),
+      // 原始输入标题（识别词处理前）
+      value: metaInfo.value?.title || nameTestForm.title || '-',
+    },
+  ]
+
+  // 识别词生效时展示处理后的识别标题
+  if (metaInfo.value?.apply_words?.length) {
+    steps.push({
+      icon: 'mdi-tag-check-outline',
+      title: t('nameTest.steps.recognized.title'),
+      value: metaInfo.value?.org_string || '-',
+    })
   }
-})
 
-const pipelineSteps = computed<PipelineStep[]>(() => [
-  {
-    icon: 'mdi-file-document-outline',
-    title: t('nameTest.steps.original.title'),
-    value: metaInfo.value?.org_string || nameTestForm.title || '-',
-  },
-  {
-    icon: 'mdi-puzzle-check-outline',
-    title: t('nameTest.steps.meta.title'),
-    value:
-      [metaInfo.value?.name, metaInfo.value?.resource_term, metaInfo.value?.release_group]
-        .filter(Boolean)
-        .join(' · ') || '-',
-  },
-  {
-    icon: 'mdi-shape-outline',
-    title: t('nameTest.steps.classification.title'),
-    value: mediaClassification.value,
-  },
-  {
-    icon: 'mdi-database-search-outline',
-    source: recognizedMediaSource.value,
-    title: t('nameTest.steps.source.title'),
-    value: recognizedMediaSource.value.label,
-  },
-  {
-    icon: 'mdi-identifier',
-    identity: mediaIdentity.value,
-    title: t('nameTest.steps.media.title'),
-    value: mediaIdentity.value?.id || t('nameTest.unrecognized'),
-  },
-])
+  return steps
+})
 
 /** 将 TMDB 原始图片地址转换为弹窗内更轻量的海报缩略图。 */
 function getPosterImage(url = '') {
   if (!url) return ''
   return url.replace('original', 'w500')
-}
-
-/** 关闭识别测试弹窗后，跳转查看当前识别结果匹配到的媒体详情。 */
-async function viewMediaDetail() {
-  if (!canViewMediaDetail.value || !mediaInfo.value) return
-
-  const target = {
-    path: '/media',
-    query: {
-      mediaid: getMediaSubscribeId(mediaInfo.value),
-      title: mediaInfo.value.title,
-      year: mediaInfo.value.year,
-      type: mediaInfo.value.type,
-    },
-  }
-
-  emit('close')
-  await nextTick()
-  await router.push(target)
 }
 
 /** 调用媒体识别接口并刷新解析工作台，输入的识别词会临时应用于本次识别测试。 */
@@ -282,7 +159,6 @@ async function nameTest() {
   if (!normalizedTitle) return
 
   nameTestForm.title = normalizedTitle
-  saveTitleHistory(normalizedTitle)
 
   try {
     nameTestLoading.value = true
@@ -294,7 +170,6 @@ async function nameTest() {
         title: nameTestForm.title,
         subtitle: nameTestForm.subtitle,
         custom_words: nameTestForm.customWords?.trim() || undefined,
-        source: nameTestForm.source,
       },
     })
     nameTestText.value = t('nameTest.recognizeAgain')
@@ -352,24 +227,15 @@ async function saveCustomWords() {
       <VForm validate-on="submit lazy" @submit.prevent="nameTest">
         <VRow class="shortcut-form">
           <VCol cols="12" class="shortcut-form-col">
-            <VCombobox
+            <VTextarea
               v-model="nameTestForm.title"
-              :items="nameTestTitleHistory"
               :label="t('nameTest.title')"
               :hint="t('nameTest.titleHint')"
               persistent-hint
               :rules="[requiredValidator]"
+              rows="2"
+              auto-grow
               prepend-inner-icon="mdi-movie-open"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VSelect
-              v-model="nameTestForm.source"
-              :items="mediaSourceItems"
-              :label="t('nameTest.source')"
-              :hint="t('nameTest.sourceHint')"
-              persistent-hint
-              prepend-inner-icon="mdi-database-search"
             />
           </VCol>
           <VCol cols="12" class="shortcut-form-col">
@@ -395,6 +261,19 @@ async function saveCustomWords() {
               prepend-inner-icon="mdi-tag-text-outline"
             />
             <div class="custom-words-toolbar">
+              <VBtn
+                type="button"
+                size="small"
+                variant="text"
+                color="primary"
+                class="me-auto"
+                @click="openWordsShortcut"
+              >
+                <template #prepend>
+                  <VIcon icon="mdi-format-list-bulleted" />
+                </template>
+                {{ t('nameTest.openWords') }}
+              </VBtn>
               <VBtn
                 type="button"
                 size="small"
@@ -451,12 +330,15 @@ async function saveCustomWords() {
           <div class="min-w-0 hero-body">
             <div class="hero-heading">
               <VIcon v-if="!isRecognized" icon="mdi-alert-circle-outline" color="primary" size="20" />
-              <span class="hero-title-text text-subtitle-1 font-weight-bold text-truncate">{{ resultTitle }}</span>
+              <span class="hero-title-text text-h6 font-weight-bold">{{ resultTitle }}</span>
             </div>
-            <div class="text-body-2 text-medium-emphasis mt-1">
-              {{ resultSubtitle }}
+            <div v-if="metaInfo?.season_episode" class="hero-episode">
+              {{ metaInfo.season_episode }}
             </div>
-            <div v-if="resourceChips.length" class="hero-chips mt-3">
+            <div v-if="mediaClassification" class="text-body-2 text-medium-emphasis mt-1">
+              {{ mediaClassification }}
+            </div>
+            <div v-if="resourceChips.length || canViewMediaDetail" class="hero-chips mt-3">
               <VChip
                 v-for="chip in resourceChips"
                 :key="chip"
@@ -467,21 +349,17 @@ async function saveCustomWords() {
               >
                 {{ chip }}
               </VChip>
+              <a
+                v-if="canViewMediaDetail"
+                class="media-id-badge"
+                :href="mediaIdentity?.link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <VIcon icon="mdi-open-in-new" size="13" />
+                {{ mediaIdentity?.idPrefix }}ID：{{ mediaIdentity?.id }}
+              </a>
             </div>
-            <p v-if="mediaInfo?.overview" class="hero-overview text-body-2 text-medium-emphasis mt-3">
-              {{ mediaInfo.overview }}
-            </p>
-            <VBtn
-              v-if="canViewMediaDetail"
-              class="mt-3"
-              size="small"
-              variant="tonal"
-              color="primary"
-              append-icon="mdi-chevron-right"
-              @click="viewMediaDetail"
-            >
-              {{ t('common.viewDetails') }}
-            </VBtn>
           </div>
         </div>
 
@@ -496,42 +374,7 @@ async function saveCustomWords() {
                 {{ step.title }}
               </div>
               <div class="text-body-2 font-weight-medium pipeline-value">
-                <span
-                  v-if="step.source"
-                  class="media-source-display"
-                  :aria-label="step.source.label"
-                  :data-source="step.source.key"
-                  :title="step.source.label"
-                  data-testid="recognition-source"
-                >
-                  <VImg
-                    v-if="step.source.image"
-                    class="media-source-logo"
-                    :src="step.source.image"
-                    :alt="step.source.label"
-                  />
-                  <VIcon
-                    v-else-if="step.source.icon"
-                    class="media-source-logo"
-                    color="#02a9ff"
-                    :icon="step.source.icon"
-                  />
-                  <span>{{ step.source.label }}</span>
-                </span>
-                <template v-else-if="step.identity">
-                  <a
-                    v-if="step.identity.link"
-                    class="media-id-link"
-                    :href="step.identity.link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    @click.stop
-                  >
-                    {{ step.identity.id }}
-                  </a>
-                  <span v-else>{{ step.identity.id }}</span>
-                </template>
-                <template v-else>{{ step.value }}</template>
+                {{ step.value }}
               </div>
             </div>
           </div>
@@ -562,7 +405,7 @@ async function saveCustomWords() {
 .shortcut-workbench {
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   padding-block-start: 0.5rem;
 }
 
@@ -609,8 +452,8 @@ async function saveCustomWords() {
   border: var(--app-surface-border);
   border-radius: var(--app-surface-radius);
   background: rgba(var(--v-theme-primary), 0.08);
-  gap: 0.85rem;
-  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 1rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
 }
 
 .result-hero--failed {
@@ -644,6 +487,15 @@ async function saveCustomWords() {
   min-inline-size: 0;
 }
 
+/* 季集突出显示 */
+.hero-episode {
+  color: rgb(var(--v-theme-primary));
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-block-start: 0.25rem;
+}
+
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
@@ -654,12 +506,27 @@ async function saveCustomWords() {
   max-inline-size: 100%;
 }
 
-.hero-overview {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-height: 1.5;
+/* 媒体 ID 徽章：与资源标签区分开的虚线描边药丸 */
+.media-id-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px dashed rgba(var(--v-theme-primary), 0.55);
+  border-radius: 999px;
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 0.3rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.media-id-badge:hover {
+  background: rgba(var(--v-theme-primary), 0.1);
+  border-color: rgb(var(--v-theme-primary));
 }
 
 .pipeline {
@@ -704,24 +571,6 @@ async function saveCustomWords() {
   margin-block-start: 0.2rem;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.media-id-link {
-  color: rgb(var(--v-theme-primary));
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-
-.media-source-display {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.media-source-logo {
-  flex: 0 0 1.4rem;
-  block-size: 1.4rem;
-  inline-size: 1.4rem;
 }
 
 .applied-words {
@@ -773,7 +622,7 @@ async function saveCustomWords() {
   }
 
   .result-hero {
-    grid-template-columns: 4.25rem minmax(0, 1fr);
+    grid-template-columns: 5.5rem minmax(0, 1fr);
   }
 }
 </style>

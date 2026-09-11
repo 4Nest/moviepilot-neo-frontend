@@ -10,7 +10,7 @@ import { useTheme } from 'vuetify'
 import { storageAttributes } from '@/api/constants'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { configureAceEditorPadding } from '@/utils/aceEditor'
+import RenameFormatEditor from '@/components/form/RenameFormatEditor.vue'
 
 const { t } = useI18n()
 const { global: globalTheme } = useTheme()
@@ -73,13 +73,6 @@ const mountedLocalDiskDeleteEmptyDirsKey = 'MountedLocalDiskDeleteEmptyDirs'
 // 编辑器主题
 // Ace 跟随 Vuetify 当前生效主题，auto 模式下也按实际明暗色渲染。
 const editorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dark' : 'github_light_default'))
-
-const renameEditorOptions = {
-  fontSize: 14,
-  tabSize: 2,
-  showLineNumbers: true,
-  showGutter: true,
-}
 
 // 打开共享分类编辑弹窗，保存后刷新本页分类配置。
 function openCategoryDialog() {
@@ -440,21 +433,7 @@ useSilentSettingRefresh(loadPageData, {
                   <VIcon icon="mdi-movie-open" size="20" class="me-2" />
                   <span>{{ t('setting.directory.movieRenameFormat') }}</span>
                 </div>
-                <VAceEditor
-                  v-model:value="movieRenameFormat"
-                  lang="jinja2"
-                  :theme="editorTheme"
-                  :options="renameEditorOptions"
-                  :print-margin="false"
-                  :min-lines="4"
-                  :max-lines="12"
-                  wrap
-                  class="rename-format-editor__ace"
-                  @init="configureAceEditorPadding"
-                />
-                <div class="rename-format-editor__hint">
-                  {{ t('setting.directory.movieRenameFormatHint') }}
-                </div>
+                <RenameFormatEditor v-model="movieRenameFormat" media-type="movie" :editor-theme="editorTheme" />
               </div>
             </VCol>
             <VCol cols="12">
@@ -463,21 +442,7 @@ useSilentSettingRefresh(loadPageData, {
                   <VIcon icon="mdi-television" size="20" class="me-2" />
                   <span>{{ t('setting.directory.tvRenameFormat') }}</span>
                 </div>
-                <VAceEditor
-                  v-model:value="tvRenameFormat"
-                  lang="jinja2"
-                  :theme="editorTheme"
-                  :options="renameEditorOptions"
-                  :print-margin="false"
-                  :min-lines="4"
-                  :max-lines="12"
-                  wrap
-                  class="rename-format-editor__ace"
-                  @init="configureAceEditorPadding"
-                />
-                <div class="rename-format-editor__hint">
-                  {{ t('setting.directory.tvRenameFormatHint') }}
-                </div>
+                <RenameFormatEditor v-model="tvRenameFormat" media-type="tv" :editor-theme="editorTheme" />
               </div>
             </VCol>
           </VRow>

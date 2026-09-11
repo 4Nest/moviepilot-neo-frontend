@@ -293,7 +293,7 @@ export default defineComponent({
       transform: none !important;
     }
 
-    .app-logo .theme-logo-mark {
+    .app-logo .brand-logo-mark {
       block-size: 2.5rem;
       inline-size: 2.5rem;
     }

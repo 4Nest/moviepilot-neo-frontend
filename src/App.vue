@@ -5,7 +5,6 @@ import { ensureRenderComplete, removeEl } from './@core/utils/dom'
 import api, { type ConnectionAwareRequestConfig } from '@/api'
 import { useAuthStore, useGlobalSettingsStore } from '@/stores'
 import { getBrowserLocale, setI18nLanguage } from './plugins/i18n'
-import { SupportedLocale } from '@/types/i18n'
 import { checkAndEmitUnreadMessages } from '@/utils/badge'
 import { preloadImage } from './@core/utils/image'
 import { globalLoadingStateManager } from '@/utils/loadingStateManager'
@@ -145,9 +144,8 @@ function syncRootLaunchPalette() {
   })
 }
 
-// 生效语言
-const localeValue = getBrowserLocale()
-setI18nLanguage(localeValue as SupportedLocale)
+// 生效语言（仅简体中文）
+setI18nLanguage(getBrowserLocale())
 
 // 检查是否登录
 const authStore = useAuthStore()

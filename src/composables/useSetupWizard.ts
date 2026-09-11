@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { copyToClipboard } from '@/@core/utils/navigator'
-import type { ApiResponse, User } from '@/api/types'
+import type { User } from '@/api/types'
 
 export interface WizardData {
   basic: {
@@ -174,7 +174,7 @@ function resolveThinkingLevelValue(data?: Record<string, any>) {
 
 // 全局状态，所有组件共享
 const currentStep = ref(1)
-const totalSteps = 8
+const totalSteps = 7
 
 // 加载状态
 const isLoading = ref(false)
@@ -350,15 +350,8 @@ export function useSetupWizard() {
     },
     // 通知映射
     notification: {
-      'feishu': 'FeishuModule',
       'telegram': 'TelegramModule',
       'wechat': 'WechatModule',
-      'wechatclawbot': 'WechatClawBotModule',
-      'slack': 'SlackModule',
-      'synologychat': 'SynologyChatModule',
-      'qqbot': 'QQBotModule',
-      'vocechat': 'VoceChatModule',
-      'webpush': 'WebPushModule',
     },
   }
 
@@ -370,7 +363,7 @@ export function useSetupWizard() {
     t('setupWizard.downloader.title'),
     t('setupWizard.mediaServer.title'),
     t('setupWizard.notification.title'),
-    t('setupWizard.agent.title'),
+
     t('setupWizard.preferences.title'),
   ])
 
@@ -382,7 +375,7 @@ export function useSetupWizard() {
     t('setupWizard.downloader.description'),
     t('setupWizard.mediaServer.description'),
     t('setupWizard.notification.description'),
-    t('setupWizard.agent.description'),
+
     t('setupWizard.preferences.description'),
   ])
 
@@ -698,18 +691,6 @@ export function useSetupWizard() {
           validationErrors.value.notification.WECHAT_APP_SECRET = true
         }
         break
-      case 'wechatclawbot':
-        break
-      case 'feishu':
-        if (!config.FEISHU_APP_ID?.trim()) {
-          errors.push(t('notification.feishu.appIdRequired'))
-          validationErrors.value.notification.FEISHU_APP_ID = true
-        }
-        if (!config.FEISHU_APP_SECRET?.trim()) {
-          errors.push(t('notification.feishu.appSecretRequired'))
-          validationErrors.value.notification.FEISHU_APP_SECRET = true
-        }
-        break
       case 'telegram':
         if (!config.TELEGRAM_TOKEN?.trim()) {
           errors.push(t('notification.telegram.tokenRequired'))
@@ -718,48 +699,6 @@ export function useSetupWizard() {
         if (!config.TELEGRAM_CHAT_ID?.trim()) {
           errors.push(t('notification.telegram.chatIdRequired'))
           validationErrors.value.notification.TELEGRAM_CHAT_ID = true
-        }
-        break
-      case 'slack':
-        if (!config.SLACK_OAUTH_TOKEN?.trim()) {
-          errors.push(t('notification.slack.oauthTokenRequired'))
-          validationErrors.value.notification.SLACK_OAUTH_TOKEN = true
-        }
-        if (!config.SLACK_CHANNEL?.trim()) {
-          errors.push(t('notification.slack.channelRequired'))
-          validationErrors.value.notification.SLACK_CHANNEL = true
-        }
-        break
-      case 'synologychat':
-        if (!config.SYNOLOGYCHAT_WEBHOOK?.trim()) {
-          errors.push(t('notification.synologychat.webhookRequired'))
-          validationErrors.value.notification.SYNOLOGYCHAT_WEBHOOK = true
-        }
-        break
-      case 'vocechat':
-        if (!config.VOCECHAT_HOST?.trim()) {
-          errors.push(t('notification.vocechat.hostRequired'))
-          validationErrors.value.notification.VOCECHAT_HOST = true
-        }
-        if (!config.VOCECHAT_API_KEY?.trim()) {
-          errors.push(t('notification.vocechat.apiKeyRequired'))
-          validationErrors.value.notification.VOCECHAT_API_KEY = true
-        }
-        break
-      case 'webpush':
-        if (!config.WEBPUSH_USERNAME?.trim()) {
-          errors.push(t('notification.webpush.usernameRequired'))
-          validationErrors.value.notification.WEBPUSH_USERNAME = true
-        }
-        break
-      case 'qqbot':
-        if (!config.QQ_APP_ID?.trim()) {
-          errors.push(t('notification.qqbot.appIdRequired'))
-          validationErrors.value.notification.QQ_APP_ID = true
-        }
-        if (!config.QQ_APP_SECRET?.trim()) {
-          errors.push(t('notification.qqbot.appSecretRequired'))
-          validationErrors.value.notification.QQ_APP_SECRET = true
         }
         break
     }
@@ -881,14 +820,7 @@ export function useSetupWizard() {
         }
         break
 
-      case 7: // 智能助手设置
-        if (wizardData.value.agent.enabled) {
-          const validation = validateAgentFields()
-          errors.push(...validation.errors)
-        }
-        break
-
-      case 8: // 偏好设置
+      case 7: // 偏好设置
         // 偏好设置有默认值，不需要验证
         break
     }
@@ -1175,8 +1107,6 @@ export function useSetupWizard() {
         case 6:
           return await saveNotificationSettings()
         case 7:
-          return await saveAgentSettings()
-        case 8:
           return await savePreferenceSettings()
       }
     } catch (error) {
@@ -1438,60 +1368,6 @@ export function useSetupWizard() {
       // 没有选择通知时，清空现有配置
       console.log('No notification selected, skipping save')
       return true
-    }
-  }
-
-  // 保存智能助手设置
-  async function saveAgentSettings() {
-    try {
-      const agentTemperature = Number(wizardData.value.agent.temperature ?? 0.3)
-      const agentSettings = {
-        AI_AGENT_ENABLE: wizardData.value.agent.enabled,
-        AI_AGENT_GLOBAL: wizardData.value.agent.enabled ? wizardData.value.agent.global : false,
-        AI_AGENT_VERBOSE: wizardData.value.agent.enabled ? wizardData.value.agent.verbose : false,
-        LLM_PROVIDER: wizardData.value.agent.provider,
-        LLM_MODEL: wizardData.value.agent.model,
-        LLM_THINKING_LEVEL: wizardData.value.agent.thinkingLevel,
-        LLM_API_PROTOCOL: wizardData.value.agent.apiProtocol || 'auto',
-        LLM_WEB_SEARCH_MODE: wizardData.value.agent.webSearchMode || 'local',
-        LLM_SUPPORT_IMAGE_INPUT: wizardData.value.agent.supportImageInput,
-        LLM_SUPPORT_AUDIO_INPUT: wizardData.value.agent.supportAudioInput,
-        LLM_SUPPORT_AUDIO_OUTPUT: wizardData.value.agent.supportAudioOutput,
-        LLM_API_KEY: wizardData.value.agent.apiKey,
-        LLM_BASE_URL: wizardData.value.agent.baseUrl || null,
-        LLM_USE_PROXY: wizardData.value.agent.useProxy,
-        LLM_BASE_URL_PRESET: wizardData.value.agent.baseUrlPreset || null,
-        LLM_MAX_CONTEXT_TOKENS: wizardData.value.agent.maxContextTokens,
-        LLM_USER_AGENT: wizardData.value.agent.userAgent || null,
-        LLM_TEMPERATURE: Number.isFinite(agentTemperature) ? agentTemperature : 0.3,
-        AUDIO_INPUT_PROVIDER: wizardData.value.agent.audioInputProvider || 'openai',
-        AUDIO_INPUT_API_KEY: wizardData.value.agent.audioInputApiKey || null,
-        AUDIO_INPUT_BASE_URL: wizardData.value.agent.audioInputBaseUrl || null,
-        AUDIO_INPUT_MODEL: wizardData.value.agent.audioInputModel,
-        AUDIO_INPUT_LANGUAGE: wizardData.value.agent.audioInputLanguage,
-        AUDIO_OUTPUT_PROVIDER: wizardData.value.agent.audioOutputProvider || 'openai',
-        AUDIO_OUTPUT_API_KEY: wizardData.value.agent.audioOutputApiKey || null,
-        AUDIO_OUTPUT_BASE_URL: wizardData.value.agent.audioOutputBaseUrl || null,
-        AUDIO_OUTPUT_MODEL: wizardData.value.agent.audioOutputModel,
-        AUDIO_OUTPUT_VOICE: wizardData.value.agent.audioOutputVoice,
-        AUDIO_OUTPUT_INCLUDE_TEXT: wizardData.value.agent.audioOutputIncludeText,
-        AI_AGENT_JOB_INTERVAL: wizardData.value.agent.enabled ? wizardData.value.agent.jobInterval : 0,
-        AI_AGENT_RETRY_TRANSFER: wizardData.value.agent.enabled ? wizardData.value.agent.retryTransfer : false,
-        AI_RECOMMEND_ENABLED: wizardData.value.agent.enabled && wizardData.value.agent.recommendEnabled,
-        AI_RECOMMEND_USER_PREFERENCE: wizardData.value.agent.recommendUserPreference,
-        AI_RECOMMEND_MAX_ITEMS: wizardData.value.agent.recommendMaxItems,
-      }
-
-      const response: Pick<ApiResponse<unknown>, 'success' | 'message'> = await api.post('system/env', agentSettings)
-      if (!response.success) {
-        $toast.error(response.message || t('setupWizard.saveAgentSettingsFailed'))
-        return false
-      }
-      return true
-    } catch (error) {
-      console.error('Save agent settings failed:', error)
-      $toast.error(t('setupWizard.saveAgentSettingsFailed'))
-      return false
     }
   }
 

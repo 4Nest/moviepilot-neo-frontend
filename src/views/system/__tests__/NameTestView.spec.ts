@@ -1,5 +1,6 @@
+import { resetNameTestSession } from '@/composables/useNameTestSession'
 import NameTestView from '@/views/system/NameTestView.vue'
-import { screen, waitFor } from '@testing-library/vue'
+import { screen } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
-  routerPush: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   toastWarning: vi.fn(),
@@ -17,12 +17,6 @@ vi.mock('@/api', () => ({
   default: {
     get: mocks.apiGet,
     post: mocks.apiPost,
-  },
-}))
-
-vi.mock('@/router', () => ({
-  default: {
-    push: mocks.routerPush,
   },
 }))
 
@@ -43,19 +37,20 @@ interface RecognizedMedia {
   year: string
 }
 
-async function renderRecognizedMedia(media: RecognizedMedia, onClose = vi.fn()) {
+async function renderRecognizedMedia(media: RecognizedMedia, metaOverrides: Record<string, unknown> = {}) {
   mocks.apiGet.mockResolvedValueOnce({
     media_info: media,
     meta_info: {
       apply_words: [],
       name: media.title,
       org_string: 'Test.Release',
+      title: 'Test.Release',
+      ...metaOverrides,
     },
     torrent_info: {},
   })
 
   const result = await renderWithProviders(NameTestView, {
-    attrs: { onClose },
     initialState: {
       globalSettings: {
         data: { RECOGNIZE_SOURCE: 'themoviedb' },
@@ -66,16 +61,16 @@ async function renderRecognizedMedia(media: RecognizedMedia, onClose = vi.fn()) 
 
   await user.type(screen.getByLabelText('标题'), 'Test.Release')
   await user.click(screen.getByRole('button', { name: '识别' }))
-  await screen.findByRole('link', { name: media.media_id })
+  await screen.findByText(new RegExp(`ID：${media.media_id}`))
 
-  return { ...result, onClose, user }
+  return { ...result, user }
 }
 
 describe('NameTestView media identity', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    mocks.routerPush.mockResolvedValue(undefined)
+    resetNameTestSession()
   })
 
   it.each([
@@ -83,99 +78,85 @@ describe('NameTestView media identity', () => {
       'TheMovieDb',
       { media_id: '271016', source: 'themoviedb', title: '测试剧集', type: '电视剧', year: '2026' },
       'https://www.themoviedb.org/tv/271016',
+      'TMDBID：271016',
     ],
     [
       'Douban',
       { media_id: '1295644', source: 'douban', title: '测试电影', type: '电影', year: '1994' },
       'https://movie.douban.com/subject/1295644',
+      '豆瓣ID：1295644',
     ],
     [
       'Bangumi',
       { media_id: '485', source: 'bangumi', title: '测试动画', type: '电视剧', year: '2026' },
       'https://bgm.tv/subject/485',
+      'BGMID：485',
     ],
     [
       'AniList',
       { media_id: '154587', source: 'anilist', title: '测试番剧', type: '电视剧', year: '2026' },
       'https://anilist.co/anime/154587',
+      'AniListID：154587',
     ],
-  ])('formats %s and links its native media ID', async (sourceLabel, media, expectedLink) => {
+  ])('媒体 ID 徽章跳转 %s 官方页面', async (_sourceLabel, media, expectedLink, expectedBadgeText) => {
     await renderRecognizedMedia(media)
 
-    const mediaIdLink = screen.getByRole('link', { name: media.media_id })
-    expect(mediaIdLink).toHaveAttribute('href', expectedLink)
-    expect(mediaIdLink).toHaveAttribute('target', '_blank')
-    expect(mediaIdLink).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(mediaIdLink.closest('.pipeline-step')).toHaveTextContent(`媒体 ID${media.media_id}`)
-    expect(mediaIdLink.closest('.pipeline-step')).not.toHaveTextContent(sourceLabel)
-    const sourceDisplay = screen.getByTestId('recognition-source')
-    expect(sourceDisplay).toHaveAttribute('data-source', media.source)
-    expect(sourceDisplay).toHaveAccessibleName(sourceLabel)
-    expect(sourceDisplay.closest('.pipeline-step')).toHaveTextContent(`识别数据源${sourceLabel}`)
-    expect(sourceDisplay.querySelector('.media-source-logo')).toBeInTheDocument()
+    // 媒体 ID 徽章独立样式展示「来源ID：值」，点击跳转媒体源官方页面
+    const idLink = screen.getByText(expectedBadgeText as string).closest('a')
+    expect(idLink).toHaveClass('media-id-badge')
+    expect(idLink).toHaveAttribute('href', expectedLink)
+    expect(idLink).toHaveAttribute('target', '_blank')
+    expect(idLink).toHaveAttribute('rel', 'noopener noreferrer')
+
+    // 链路步骤中不再展示媒体 ID 与识别数据源
+    expect(screen.queryByText('媒体 ID')).not.toBeInTheDocument()
+    expect(screen.queryByText('识别数据源')).not.toBeInTheDocument()
   })
 
-  it('shows the recognized media type and category below metadata', async () => {
+  it('结果头部突出展示名称（年份）与季集', async () => {
+    const { container } = await renderRecognizedMedia(
+      { category: '动漫', media_id: '485', source: 'bangumi', title: '测试动画', type: '电视剧', year: '2026' },
+      { season_episode: 'S02E12', overview: '不应展示的简介' },
+    )
+
+    const hero = container.querySelector('.result-hero')
+    expect(hero).toHaveTextContent('测试动画（2026）')
+    expect(hero).toHaveTextContent('S02E12')
+    expect(hero).toHaveTextContent('电视剧 · 动漫')
+    // 简介不再展示
+    expect(hero).not.toHaveTextContent('不应展示的简介')
+  })
+
+  it('识别词生效时在原始标题下方展示识别标题', async () => {
+    await renderRecognizedMedia(
+      { media_id: '271016', source: 'themoviedb', title: '测试剧集', type: '电视剧', year: '2026' },
+      {
+        apply_words: ['False Love => '],
+        org_string: 'Nisekoi S02E12',
+        title: 'Nisekoi False Love S02E12',
+      },
+    )
+
+    // 原始标题为识别词处理前的输入，识别标题为处理后的结果
+    expect(screen.getByText('原始标题').closest('.pipeline-step')).toHaveTextContent('Nisekoi False Love S02E12')
+    expect(screen.getByText('识别标题').closest('.pipeline-step')).toHaveTextContent('Nisekoi S02E12')
+  })
+
+  it('未应用识别词时不展示识别标题步骤', async () => {
     await renderRecognizedMedia({
-      category: '动漫',
-      media_id: '485',
-      source: 'bangumi',
-      title: '测试动画',
-      type: '电视剧',
-      year: '2026',
-    })
-
-    const classificationStep = screen.getByText('媒体分类').closest('.pipeline-step')
-    expect(classificationStep).toHaveTextContent('媒体分类电视剧 · 动漫')
-  })
-
-  it('closes the recognition dialog before navigating to the media detail', async () => {
-    const eventOrder: string[] = []
-    const onClose = vi.fn(() => eventOrder.push('close'))
-    mocks.routerPush.mockImplementation(async () => {
-      eventOrder.push('push')
-    })
-    const media = {
       media_id: '271016',
       source: 'themoviedb',
       title: '测试剧集',
       type: '电视剧',
       year: '2026',
-    }
-    const { user } = await renderRecognizedMedia(media, onClose)
-
-    await user.click(screen.getByRole('button', { name: '查看详情' }))
-
-    expect(eventOrder).toEqual(['close', 'push'])
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(mocks.routerPush).toHaveBeenCalledWith({
-      path: '/media',
-      query: {
-        mediaid: 'tmdb:271016',
-        title: '测试剧集',
-        type: '电视剧',
-        year: '2026',
-      },
     })
+
+    expect(screen.queryByText('识别标题')).not.toBeInTheDocument()
+    expect(screen.getByText('原始标题').closest('.pipeline-step')).toHaveTextContent('Test.Release')
   })
 
-  it('persists the five most recent unique titles and restores them in the combobox', async () => {
-    mocks.apiGet.mockImplementation(async (_endpoint: string, options: { params: { title: string } }) => ({
-      media_info: {
-        media_id: '271016',
-        source: 'themoviedb',
-        title: options.params.title,
-        type: '电视剧',
-        year: '2026',
-      },
-      meta_info: {
-        apply_words: [],
-        name: options.params.title,
-        org_string: options.params.title,
-      },
-      torrent_info: {},
-    }))
-    const result = await renderWithProviders(NameTestView, {
+  it('弹窗关闭重开后保留上次编辑的表单内容', async () => {
+    const first = await renderWithProviders(NameTestView, {
       initialState: {
         globalSettings: {
           data: { RECOGNIZE_SOURCE: 'themoviedb' },
@@ -183,25 +164,13 @@ describe('NameTestView media identity', () => {
       },
     })
     const user = userEvent.setup()
-    const titleInput = screen.getByLabelText('标题')
-    const submittedTitles = ['标题一', '标题二', '标题三', '标题四', '标题五', '标题六', '标题三']
 
-    for (const [index, title] of submittedTitles.entries()) {
-      await user.clear(titleInput)
-      await user.type(titleInput, ` ${title} `)
-      await user.click(screen.getByRole('button', { name: index === 0 ? '识别' : '重新识别' }))
-      await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledTimes(index + 1))
-    }
+    await user.type(screen.getByLabelText('标题'), 'Nisekoi.False.Love.S02E12')
+    await user.type(screen.getByLabelText('副标题'), 'DIY 中字')
+    await user.type(screen.getByLabelText('识别词'), 'False Love => ')
+    first.unmount()
 
-    expect(JSON.parse(localStorage.getItem('MP_NAME_TEST_TITLE_HISTORY') || '[]')).toEqual([
-      '标题三',
-      '标题六',
-      '标题五',
-      '标题四',
-      '标题二',
-    ])
-
-    result.unmount()
+    // 重新打开（重新挂载）后表单内容保留
     await renderWithProviders(NameTestView, {
       initialState: {
         globalSettings: {
@@ -209,13 +178,8 @@ describe('NameTestView media identity', () => {
         },
       },
     })
-
-    const restoredInput = screen.getByLabelText('标题')
-    await user.click(restoredInput)
-    const historyOptions = await screen.findAllByRole('option')
-    expect(historyOptions.map(option => option.textContent)).toEqual(['标题三', '标题六', '标题五', '标题四', '标题二'])
-    await user.click(screen.getByRole('option', { name: '标题六' }))
-
-    expect(restoredInput).toHaveValue('标题六')
+    expect(screen.getByLabelText('标题')).toHaveValue('Nisekoi.False.Love.S02E12')
+    expect(screen.getByLabelText('副标题')).toHaveValue('DIY 中字')
+    expect(screen.getByLabelText('识别词')).toHaveValue('False Love => ')
   })
 })

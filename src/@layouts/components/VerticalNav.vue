@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Component } from 'vue'
 import { useDisplay } from 'vuetify'
-import ThemeLogoMark from '@/components/misc/ThemeLogoMark.vue'
+import NeoLogoMark from '@/components/misc/NeoLogoMark.vue'
 
 interface Props {
   tag?: string | Component
@@ -51,10 +51,10 @@ function handleNavScroll(evt: Event) {
     <div class="nav-header">
       <slot name="nav-header">
         <RouterLink to="/" class="app-logo d-flex align-center app-title-wrapper">
-          <ThemeLogoMark />
+          <NeoLogoMark class="brand-logo-mark" />
 
-          <h1 class="leading-normal text-xl">
-            <span class="moviepilot-wordmark">MOVIEPILOT</span> <span class="text-sm text-gray-500">v2</span>
+          <h1 class="leading-normal text-lg text-nowrap">
+            <span class="moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
           </h1>
         </RouterLink>
       </slot>
@@ -92,7 +92,10 @@ function handleNavScroll(evt: Event) {
   inline-size: variables.$layout-vertical-nav-width;
   inset-block-start: 0;
   inset-inline-start: 0;
-  transition: transform 0.25s ease-in-out, inline-size 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
+  transition:
+    transform 0.25s ease-in-out,
+    inline-size 0.25s ease-in-out,
+    box-shadow 0.25s ease-in-out;
   visibility: hidden;
   will-change: transform, inline-size;
 
@@ -110,7 +113,10 @@ function handleNavScroll(evt: Event) {
   }
 
   .app-title-wrapper {
-    margin-inline-end: auto;
+    flex: 1;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-inline-end: 0;
   }
 
   .nav-items {

@@ -3,16 +3,7 @@ import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import {
-  computed,
-  defineComponent,
-  h,
-  nextTick,
-  ref,
-  unref,
-  type ComputedRef,
-  type Ref,
-} from 'vue'
+import { computed, defineComponent, h, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -108,23 +99,14 @@ const SubscribeListViewStub = defineComponent({
         h('output', { 'aria-label': 'list active state' }, String(props.active)),
         h('output', { 'aria-label': 'list batch state' }, JSON.stringify(batchState.value)),
         h('output', { 'aria-label': 'last list command' }, lastCommand.value),
-        h(
-          'button',
-          { type: 'button', onClick: () => emit('update:sortMode', true) },
-          'emit sort mode on',
-        ),
-        h(
-          'button',
-          { type: 'button', onClick: () => emit('update:sortMode', false) },
-          'emit sort mode off',
-        ),
+        h('button', { type: 'button', onClick: () => emit('update:sortMode', true) }, 'emit sort mode on'),
+        h('button', { type: 'button', onClick: () => emit('update:sortMode', false) }, 'emit sort mode off'),
         h('button', { type: 'button', onClick: () => emit('update:sortBy', 'date') }, 'emit date sort'),
         h(
           'button',
           {
             type: 'button',
-            onClick: () =>
-              publishBatchState({ enabled: true, selectedCount: 2, totalCount: 3, allSelected: false }),
+            onClick: () => publishBatchState({ enabled: true, selectedCount: 2, totalCount: 3, allSelected: false }),
           },
           'publish batch selection',
         ),
@@ -132,8 +114,7 @@ const SubscribeListViewStub = defineComponent({
           'button',
           {
             type: 'button',
-            onClick: () =>
-              publishBatchState({ enabled: true, selectedCount: 3, totalCount: 3, allSelected: true }),
+            onClick: () => publishBatchState({ enabled: true, selectedCount: 3, totalCount: 3, allSelected: true }),
           },
           'publish all selected batch',
         ),
@@ -249,7 +230,7 @@ describe('subscribe page', () => {
     const header = getHeaderConfig()
 
     expect(router.currentRoute.value.meta.subType).toBe('电影')
-    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'popular'])
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
     expect(header.modelValue.value).toBe('mysub')
     expect(getListOutput('list type')).toHaveTextContent('电影')
     expect(getListOutput('list subscription id')).toHaveTextContent('42')
@@ -263,7 +244,7 @@ describe('subscribe page', () => {
     const header = getHeaderConfig()
 
     expect(router.currentRoute.value.meta.subType).toBe('电视剧')
-    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'popular', 'share'])
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'share'])
     expect(header.modelValue.value).toBe('share')
     expect(screen.getByLabelText('share keyword')).toHaveTextContent('')
   })
@@ -413,31 +394,6 @@ describe('subscribe page', () => {
       'dialog.subscribeHistory.title',
       'dialog.subscribeEdit.titleDefault',
     ])
-  })
-
-  it.each([
-    [true, true],
-    [false, false],
-  ])('gates the PWA share statistics action by subscribe permission=%s', async (permission, visible) => {
-    await renderSubscribe({
-      appMode: true,
-      initialRoute: '/subscribe/tv?tab=share',
-      subType: '电视剧',
-      subscribePermission: permission,
-    })
-    const dynamicButton = getDynamicButtonConfig()
-
-    expect(unref(dynamicButton.show)).toBe(visible)
-    if (visible) {
-      expect(unref(dynamicButton.icon)).toBe('mdi-chart-line')
-      dynamicButton.onClick?.()
-      expect(mocks.openSharedDialog).toHaveBeenCalledWith(
-        expect.any(Object),
-        {},
-        {},
-        { closeOn: ['close'] },
-      )
-    }
   })
 
   it('debounces and trims share search, then cancels pending work on unmount', async () => {

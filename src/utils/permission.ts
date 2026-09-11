@@ -31,7 +31,6 @@ export const PERMISSION_FEATURE = {
   SEARCH_RESOURCE: 'search.resource',
   SUBSCRIBE_MOVIE: 'subscribe.movie',
   SUBSCRIBE_TV: 'subscribe.tv',
-  SUBSCRIBE_CALENDAR: 'subscribe.calendar',
   SUBSCRIBE_SHARE: 'subscribe.share',
   MANAGE_WORKFLOW: 'manage.workflow',
   MANAGE_DOWNLOADING: 'manage.downloading',
@@ -80,14 +79,6 @@ export const USER_PERMISSION_FEATURES: UserPermissionFeatureOption[] = [
     descriptionKey: 'dialog.userAddEdit.permissions.featureDescriptions.tvSubscribe',
     icon: 'mdi-television',
     path: '/subscribe/tv',
-  },
-  {
-    key: PERMISSION_FEATURE.SUBSCRIBE_CALENDAR,
-    permission: 'subscribe',
-    titleKey: 'dialog.userAddEdit.permissions.features.calendar',
-    descriptionKey: 'dialog.userAddEdit.permissions.featureDescriptions.calendar',
-    icon: 'mdi-calendar',
-    path: '/calendar',
   },
   {
     key: PERMISSION_FEATURE.SUBSCRIBE_SHARE,
@@ -155,7 +146,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** 规整用户权限数据，兼容没有 features 字段的历史用户。 */
-export function normalizeUserPermissions(permissions: Partial<UserPermissions> | null | undefined = {}): UserPermissions {
+export function normalizeUserPermissions(
+  permissions: Partial<UserPermissions> | null | undefined = {},
+): UserPermissions {
   const permissionData = permissions ?? {}
   const rawFeatures = isRecord(permissionData.features) ? permissionData.features : {}
   const features = Object.fromEntries(
@@ -173,7 +166,10 @@ export function normalizeUserPermissions(permissions: Partial<UserPermissions> |
 }
 
 /** 构造权限检查上下文，统一超级管理员标记、分类权限与功能权限字段。 */
-export function buildUserPermissionContext(isSuperuser: boolean, permissions: Partial<UserPermissions> = {}): UserPermissionContext {
+export function buildUserPermissionContext(
+  isSuperuser: boolean,
+  permissions: Partial<UserPermissions> = {},
+): UserPermissionContext {
   return {
     is_superuser: isSuperuser,
     ...normalizeUserPermissions(permissions),

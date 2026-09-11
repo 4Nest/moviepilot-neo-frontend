@@ -7,10 +7,8 @@ import { authState, userState } from '@/stores/types'
 import api from '@/api'
 import router from '@/router'
 import LoginMfaStep from '@/components/auth/LoginMfaStep.vue'
-import OpticalLogoLab from '@/components/misc/OpticalLogoLab.vue'
 import { bufferToBase64Url, base64UrlToUint8Array, urlBase64ToUint8Array } from '@/@core/utils/navigator'
-import { SUPPORTED_LOCALES, SupportedLocale } from '@/types/i18n'
-import { getCurrentLocale, setI18nLanguage } from '@/plugins/i18n'
+
 import { getNavMenus } from '@/router/i18n-menu'
 import { buildUserPermissionContext, filterMenusByPermission } from '@/utils/permission'
 import type { ApiResponse } from '@/api/types'
@@ -18,48 +16,11 @@ import { loadRemoteComponentFromModule, type RemoteModule } from '@/utils/federa
 import type { MfaMethod } from '@/types/auth'
 import { getLoginVisualProfile } from '@/utils/loginPresentation'
 
-type LabTapTarget = 'logo' | 'title'
-
-const LAB_TAP_COUNT = 5
-const LAB_TAP_WINDOW_MS = 2000
-const labTapSequences: Record<LabTapTarget, { count: number; startedAt: number }> = {
-  logo: { count: 0, startedAt: 0 },
-  title: { count: 0, startedAt: 0 },
-}
-const { global: loginTheme } = useTheme()
-const loginVisualProfile = computed(() => getLoginVisualProfile(loginTheme.name.value))
-
-/** 在指定区域连续点击五次时进入隐藏的 Logo 实验室。 */
-function handleLabTap(target: LabTapTarget) {
-  if (router.currentRoute.value.query.lab === '1') return
-
-  const now = performance.now()
-  const sequence = labTapSequences[target]
-  if (sequence.count === 0 || now - sequence.startedAt > LAB_TAP_WINDOW_MS) {
-    sequence.count = 1
-    sequence.startedAt = now
-    return
-  }
-
-  sequence.count += 1
-  if (sequence.count < LAB_TAP_COUNT) return
-
-  labTapSequences.logo.count = 0
-  labTapSequences.title.count = 0
-  void router.push({
-    path: '/login',
-    query: { ...router.currentRoute.value.query, lab: '1' },
-  })
-}
-
 // 国际化
 const { t, te } = useI18n()
 
-// 应用版本号（构建时注入，形如 v2.13.10）
-const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''
-
-// 版权年份
-const copyrightYear = new Date().getFullYear()
+const { global: loginTheme } = useTheme()
+const loginVisualProfile = computed(() => getLoginVisualProfile(loginTheme.name.value))
 
 // 认证 Store
 const authStore = useAuthStore()
@@ -89,15 +50,6 @@ const mfaStepActive = ref(false)
 const mfaOtpLoading = ref(false)
 
 const mfaMethods = ref<MfaMethod[]>([])
-
-// 语言选择菜单
-const langMenu = ref(false)
-
-// 当前语言
-const currentLocale = ref(getCurrentLocale())
-
-// 可用的语言列表
-const locales = Object.values(SUPPORTED_LOCALES)
 
 // 登录按钮 loading
 const loading = ref(false)
@@ -511,13 +463,6 @@ async function loginWithPassKey(isConditional = false) {
   )
 }
 
-// 切换语言
-async function switchLanguage(locale: SupportedLocale) {
-  await setI18nLanguage(locale)
-  currentLocale.value = locale
-  langMenu.value = false
-}
-
 // 订阅推送通知
 async function subscribeForPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
@@ -768,33 +713,6 @@ onUnmounted(() => {
       <span class="login-ambient-light__wash" />
     </div>
 
-    <!-- 顶部漂浮语言切换 -->
-    <VMenu v-model="langMenu" :close-on-content-click="false">
-      <template #activator="{ props }">
-        <VBtn variant="text" size="small" v-bind="props" class="lang-switch-btn">
-          <span v-if="SUPPORTED_LOCALES[currentLocale].flag">{{ SUPPORTED_LOCALES[currentLocale].flag }}</span>
-          <VIcon v-else icon="mdi-translate" />
-          <span class="ms-1">{{ SUPPORTED_LOCALES[currentLocale].title }}</span>
-        </VBtn>
-      </template>
-      <VCard min-width="180" class="lang-menu-card">
-        <VList>
-          <VListItem
-            v-for="locale in locales"
-            :key="locale.name"
-            :value="locale.name"
-            @click="switchLanguage(locale.name as SupportedLocale)"
-          >
-            <template #prepend>
-              <span v-if="locale.flag" class="mr-2">{{ locale.flag }}</span>
-              <VIcon v-else icon="mdi-translate" size="small" />
-            </template>
-            <VListItemTitle>{{ locale.title }}</VListItemTitle>
-          </VListItem>
-        </VList>
-      </VCard>
-    </VMenu>
-
     <!-- 登录表单 -->
     <div class="auth-wrapper d-flex align-center justify-center">
       <VCard
@@ -804,12 +722,9 @@ onUnmounted(() => {
       >
         <div class="login-card__surface" aria-hidden="true" />
 
-        <!-- 卡片头部：Logo + 标题 + 欢迎语 -->
+        <!-- 卡片头部：欢迎语 -->
         <div class="login-head">
-          <OpticalLogoLab class="login-logo" :locale="currentLocale" @logo-click="handleLabTap('logo')">
-            <h1 class="login-title moviepilot-wordmark" @click="handleLabTap('title')">MoviePilot</h1>
-            <p class="login-subtitle">{{ t('login.welcomeBack') || 'Welcome Back' }}</p>
-          </OpticalLogoLab>
+          <p class="login-subtitle">{{ t('login.welcomeBack') || 'Welcome Back' }}</p>
         </div>
 
         <VCardText class="login-body">
@@ -937,12 +852,6 @@ onUnmounted(() => {
             </VRow>
           </form>
         </VCardText>
-
-        <!-- 卡片页脚：版权 + 版本 -->
-        <div class="login-foot">
-          <span>{{ t('login.copyright', { year: copyrightYear }) }}</span>
-          <span v-if="appVersion" class="login-version">{{ appVersion }}</span>
-        </div>
       </VCard>
     </div>
     <VDialog v-model="pluginAuthDialog" max-width="520" persistent>
@@ -1017,25 +926,6 @@ onUnmounted(() => {
 @keyframes ambient-drift {
   to {
     transform: translate3d(-1.5%, 1%, 0) scale(1);
-  }
-}
-
-/* ===================== 浮动语言切换 ===================== */
-.lang-switch-btn {
-  position: absolute;
-  z-index: 3;
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.6));
-  border-radius: 999px;
-  background: rgba(var(--v-theme-surface), 0.6);
-  inset-block-start: calc(env(safe-area-inset-top, 0px) + 16px);
-  inset-inline-end: calc(env(safe-area-inset-right, 0px) + 16px);
-  transition:
-    background 200ms ease,
-    border-color 200ms ease;
-
-  &:hover {
-    border-color: rgba(var(--v-theme-primary), 0.3);
-    background: rgba(var(--v-theme-surface), 0.85);
   }
 }
 
@@ -1140,19 +1030,6 @@ onUnmounted(() => {
   inline-size: 100%;
   margin-block-end: 12px;
   text-align: center;
-}
-
-.login-logo {
-  inline-size: 100%;
-}
-
-.login-title {
-  margin: 0;
-  animation: text-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
-  font-size: 1.85rem;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
 }
 
 .login-subtitle {
@@ -1417,25 +1294,6 @@ onUnmounted(() => {
   color: rgb(86, 170, 0) !important;
 }
 
-/* ===================== 卡片页脚 ===================== */
-.login-foot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(var(--v-theme-on-surface), calc(var(--v-disabled-opacity) * 1.4));
-  font-size: 0.7rem;
-  gap: 8px;
-  letter-spacing: 0.03em;
-  margin-block-start: 14px;
-  opacity: 0.75;
-  animation: text-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) 520ms both;
-}
-
-.login-version {
-  border-inline-start: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.6));
-  padding-inline: 6px;
-}
-
 /* ===================== 入场动画 ===================== */
 .login-card--enter {
   animation: login-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1468,8 +1326,6 @@ onUnmounted(() => {
 /* ===================== 无障碍：尊重减少动态偏好 ===================== */
 @media (prefers-reduced-motion: reduce) {
   .login-card--enter,
-  .login-foot,
-  .login-title,
   .login-subtitle {
     animation: none !important;
   }
@@ -1515,10 +1371,6 @@ onUnmounted(() => {
     padding-inline: 12px;
   }
 
-  .login-title {
-    font-size: 1.5rem;
-  }
-
   .login-card {
     padding: 1.5rem !important;
     border-radius: 16px !important;
@@ -1526,10 +1378,6 @@ onUnmounted(() => {
 }
 
 @media (width <= 480px) and (height <= 600px) {
-  .lang-switch-btn {
-    inset-block-start: calc(env(safe-area-inset-top, 0px) + 4px);
-  }
-
   .login-card {
     padding-block: 0.75rem !important;
   }

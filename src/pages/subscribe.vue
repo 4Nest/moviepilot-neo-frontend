@@ -19,12 +19,8 @@ const userStore = useUserStore()
 const { appMode } = usePWA()
 
 // 非默认标签页和弹窗按需加载，避免进入订阅列表时同步下载分享/统计相关代码。
-const SubscribePopularView = defineAsyncComponent(() => import('@/views/subscribe/SubscribePopularView.vue'))
 const SubscribeShareView = defineAsyncComponent(() => import('@/views/subscribe/SubscribeShareView.vue'))
 const SubscribeEditDialog = defineAsyncComponent(() => import('@/components/dialog/SubscribeEditDialog.vue'))
-const SubscribeShareStatisticsDialog = defineAsyncComponent(
-  () => import('@/components/dialog/SubscribeShareStatisticsDialog.vue'),
-)
 
 const subType = route.meta.subType?.toString()
 const subId = ref(route.query.id as string)
@@ -211,10 +207,8 @@ const searchActivator = computed(() => '[data-menu-activator="share-filter-btn"]
 
 const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
 const canAdmin = computed(() => hasPermission(userPermissions.value, 'admin'))
-const canSubscribe = computed(() => hasPermission(userPermissions.value, 'subscribe'))
 const showDefaultRuleAction = computed(() => activeTab.value === 'mysub' && canAdmin.value)
 const showSubscribeHistoryAction = computed(() => showDefaultRuleAction.value && canAdmin.value)
-const showShareStatisticsAction = computed(() => activeTab.value === 'share' && canSubscribe.value)
 
 function openDefaultRuleDialog() {
   openSharedDialog(
@@ -230,10 +224,6 @@ function openDefaultRuleDialog() {
 
 function openSubscribeHistoryDialog() {
   subscribeListViewRef.value?.openHistoryDialog()
-}
-
-function openShareStatisticsDialog() {
-  openSharedDialog(SubscribeShareStatisticsDialog, {}, {}, { closeOn: ['close'] })
 }
 
 // 订阅列表批量状态变化响应，用于驱动移动端 Footer 和桌面 FAB 操作按钮。
@@ -408,7 +398,6 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
 
 const subscribeDynamicIcon = computed(() => {
   if (subscribeBatchState.value.enabled) return 'mdi-checkbox-multiple-marked-outline'
-  if (showShareStatisticsAction.value) return 'mdi-chart-line'
   if (showSubscribeHistoryAction.value) return 'mdi-history'
   return 'mdi-clipboard-edit-outline'
 })
@@ -416,11 +405,6 @@ const subscribeDynamicIcon = computed(() => {
 function handleSubscribeDynamicAction() {
   if (subscribeBatchState.value.enabled) {
     exitSubscribeBatchMode()
-    return
-  }
-
-  if (showShareStatisticsAction.value) {
-    openShareStatisticsDialog()
     return
   }
 
@@ -439,11 +423,7 @@ useDynamicButton({
   onClick: handleSubscribeDynamicAction,
   menuItems: subscribeDynamicMenuItems,
   permission: 'subscribe',
-  show: computed(
-    () =>
-      appMode.value &&
-      (subscribeBatchState.value.enabled || showDefaultRuleAction.value || showShareStatisticsAction.value),
-  ),
+  show: computed(() => appMode.value && (subscribeBatchState.value.enabled || showDefaultRuleAction.value)),
 })
 
 // 使用动态标签页
@@ -535,11 +515,7 @@ onMounted(() => {
           />
         </div>
       </VWindowItem>
-      <VWindowItem value="popular">
-        <div>
-          <SubscribePopularView :type="subType" />
-        </div>
-      </VWindowItem>
+
       <VWindowItem value="share">
         <div>
           <SubscribeShareView :keyword="shareKeyword" />
@@ -705,14 +681,6 @@ onMounted(() => {
           appear
           class="compact-fab compact-fab--primary"
           @click="openDefaultRuleDialog"
-        />
-        <VFab
-          v-if="!subscribeBatchState.enabled && showShareStatisticsAction"
-          icon="mdi-chart-line"
-          color="primary"
-          appear
-          class="compact-fab compact-fab--primary"
-          @click="openShareStatisticsDialog"
         />
       </div>
     </Teleport>

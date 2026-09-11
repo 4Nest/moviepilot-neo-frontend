@@ -32,14 +32,24 @@ const props = withDefaults(
 // 定义触发的自定义事件
 const emit = defineEmits(['update:modelValue', 'close'])
 
-// 弹窗显示状态
-const visible = computed({
-  get: () => props.modelValue,
-  set: value => {
-    emit('update:modelValue', value)
-    if (!value) emit('close')
-  },
+// 弹窗显示状态（本地持有：宿主只认 close 事件，关闭后待退场动画结束再卸载）
+const visible = ref(props.modelValue)
+
+// 退场动画兜底定时器（jsdom 等无动画环境）
+let closeFallbackTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(visible, value => {
+  if (value) return
+  emit('update:modelValue', value)
+  // 退场动画最长约 225ms，超时仍未播完则直接关闭
+  closeFallbackTimer = setTimeout(() => emit('close'), 250)
 })
+
+/** 退场动画结束后通知宿主关闭并卸载弹窗。 */
+function onAfterLeave() {
+  clearTimeout(closeFallbackTimer)
+  emit('close')
+}
 
 const isFullscreen = computed(() => !display.mdAndUp.value)
 const isTransparentTheme = computed(() => theme.name.value === 'transparent')
@@ -70,7 +80,13 @@ function closeDialog() {
 </script>
 
 <template>
-  <VDialog v-if="visible" v-model="visible" :max-width="props.maxWidth" scrollable :fullscreen="isFullscreen">
+  <VDialog
+    v-model="visible"
+    :max-width="props.maxWidth"
+    scrollable
+    :fullscreen="isFullscreen"
+    @after-leave="onAfterLeave"
+  >
     <VCard :class="cardClasses">
       <VCardItem>
         <VCardTitle>

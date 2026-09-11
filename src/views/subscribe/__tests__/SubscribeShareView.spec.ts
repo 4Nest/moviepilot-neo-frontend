@@ -95,8 +95,10 @@ const SubscribeShareCardStub = defineComponent({
       type: Object as PropType<SubscribeShare>,
       required: true,
     },
+    batchMode: { type: Boolean, default: false },
+    selected: { type: Boolean, default: false },
   },
-  emits: ['delete'],
+  emits: ['delete', 'toggle-select'],
   setup(props, { emit }) {
     return () =>
       h('article', [
@@ -110,6 +112,18 @@ const SubscribeShareCardStub = defineComponent({
           },
           '删除',
         ),
+        props.batchMode
+          ? h(
+              'button',
+              {
+                'aria-label': `选择分享 ${props.media.id}`,
+                'data-selected': String(props.selected),
+                onClick: () => emit('toggle-select'),
+                type: 'button',
+              },
+              '选择',
+            )
+          : null,
       ])
   },
 })
@@ -193,52 +207,12 @@ describe('SubscribeShareView', () => {
     expect(requests[0].searchParams.get('page')).toBe('1')
     expect(requests[0].searchParams.get('count')).toBe('30')
     expect(requests[0].searchParams.get('name') ?? '').toBe('')
-    expect(requests[0].searchParams.get('sort_type')).toBe('time')
+    // 筛选器已移除：不再携带排序/风格/评分参数
+    expect(requests[0].searchParams.get('sort_type')).toBeNull()
     expect(requests[0].searchParams.get('genre_id')).toBeNull()
     expect(requests[0].searchParams.get('min_rating')).toBeNull()
     expect(requests[0].searchParams.get('max_rating')).toBeNull()
     expect(screen.getByRole('status', { name: '订阅分享渐进网格键' })).toHaveTextContent('3101')
-  })
-
-  it('resets to page one with exact sort, genre and rating filters', async () => {
-    const requests: URL[] = []
-    server.use(
-      http.get(subscribeApiUrls.shares, ({ request }) => {
-        const url = new URL(request.url)
-        requests.push(url)
-        const shareTitle = url.searchParams.has('min_rating')
-          ? '高分分享结果'
-          : url.searchParams.has('genre_id')
-            ? '动作分享结果'
-            : url.searchParams.get('sort_type') === 'count'
-              ? '热门分享结果'
-              : '默认分享结果'
-        return HttpResponse.json([createSubscribeShare({ share_title: shareTitle })])
-      }),
-    )
-    const user = userEvent.setup()
-
-    await renderShare()
-    expect(await screen.findByText('默认分享结果')).toBeInTheDocument()
-
-    await user.click(screen.getByText('热门'))
-    expect(await screen.findByText('热门分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('默认分享结果')).not.toBeInTheDocument()
-
-    await user.click(screen.getByText('动作'))
-    expect(await screen.findByText('动作分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('热门分享结果')).not.toBeInTheDocument()
-
-    screen.getByRole('slider').focus()
-    await user.keyboard('{ArrowRight}'.repeat(6))
-    expect(await screen.findByText('高分分享结果')).toBeInTheDocument()
-    expect(screen.queryByText('动作分享结果')).not.toBeInTheDocument()
-
-    expect(requests.length).toBeGreaterThanOrEqual(4)
-    expect(requests.slice(1).every(url => url.searchParams.get('page') === '1')).toBe(true)
-    expect(requests[1].searchParams.get('sort_type')).toBe('count')
-    expect(requests[2].searchParams.get('genre_id')).toBe('28')
-    expect(requests.at(-1)?.searchParams.get('min_rating')).toBe('6')
   })
 
   it('appends later pages and stops when a page is empty', async () => {
@@ -448,5 +422,61 @@ describe('SubscribeShareView', () => {
 
     expect(screen.getByText('新关键字实时分享')).toBeInTheDocument()
     expect(screen.queryByText('过期关键字分享')).not.toBeInTheDocument()
+  })
+
+  it('enters batch mode, selects shares and batch deletes them', async () => {
+    const shareA = createSubscribeShare({ id: 4101, share_title: '批量甲' })
+    const shareB = createSubscribeShare({ id: 4102, share_title: '批量乙' })
+    const deleted: number[] = []
+    server.use(
+      subscribeSharesHandler([shareA, shareB]),
+      http.delete('/api/v1/subscribe/share/:id', ({ params }) => {
+        deleted.push(Number(params.id))
+        return HttpResponse.json({ success: true })
+      }),
+    )
+    const user = userEvent.setup()
+
+    await renderShare()
+    expect(await screen.findByText('批量甲')).toBeInTheDocument()
+
+    // 进入批量模式并选中两项
+    await user.click(screen.getByRole('button', { name: '批量管理' }))
+    await user.click(screen.getByRole('button', { name: '选择分享 4101' }))
+    await user.click(screen.getByRole('button', { name: '选择分享 4102' }))
+
+    // 批量删除后列表清空并退出批量模式
+    await user.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => expect(deleted).toEqual([4101, 4102]))
+    await waitFor(() => expect(screen.queryByText('批量甲')).not.toBeInTheDocument())
+    expect(screen.queryByText('批量乙')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '退出批量操作' })).not.toBeInTheDocument()
+  })
+
+  it('keeps failed shares selected and reports batch delete failures', async () => {
+    const shareA = createSubscribeShare({ id: 4201, share_title: '删除成功项' })
+    const shareB = createSubscribeShare({ id: 4202, share_title: '删除失败项' })
+    server.use(
+      subscribeSharesHandler([shareA, shareB]),
+      http.delete('/api/v1/subscribe/share/:id', ({ params }) => {
+        if (Number(params.id) === 4201) return HttpResponse.json({ success: true })
+        return HttpResponse.json({ message: 'occupied' }, { status: 500 })
+      }),
+    )
+    const user = userEvent.setup()
+
+    await renderShare()
+    expect(await screen.findByText('删除成功项')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '批量管理' }))
+    await user.click(screen.getByRole('button', { name: '选择分享 4201' }))
+    await user.click(screen.getByRole('button', { name: '选择分享 4202' }))
+    await user.click(screen.getByRole('button', { name: '删除' }))
+
+    // 成功项移除，失败项保留且仍处于批量模式
+    await waitFor(() => expect(screen.queryByText('删除成功项')).not.toBeInTheDocument())
+    expect(screen.getByText('删除失败项')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '退出批量操作' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择分享 4202' })).toHaveAttribute('data-selected', 'true')
   })
 })

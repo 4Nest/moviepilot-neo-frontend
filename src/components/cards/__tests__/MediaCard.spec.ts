@@ -610,7 +610,7 @@ describe('MediaCard', () => {
 
     requests[0].reveal()
     await waitFor(() => expect(getCard(container)).toHaveAttribute('data-glass-optical-mode', 'excluded'))
-    expect(container).toHaveTextContent('TV')
+    expect(container).toHaveTextContent('电视剧')
     expect(container).toHaveTextContent('8.6')
 
     requests[0].fail()

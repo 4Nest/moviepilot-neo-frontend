@@ -1422,6 +1422,30 @@ html[data-theme='transparent'].transparent-glass-realtime .v-theme--transparent 
   text-transform: uppercase;
 }
 
+// NEO 徽标：微弱霓虹发光（drop-shadow 贴合字形，避免透明渐层文字阴影糊边）
+.moviepilot-neo-badge {
+  color: rgb(var(--v-theme-primary));
+  filter: drop-shadow(0 0 5px rgba(var(--v-theme-primary), 0.35)) drop-shadow(0 0 1px rgba(var(--v-theme-primary), 0.5));
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+// NEO 徽标独立作为品牌文字时恢复完整字号
+.moviepilot-neo-badge--solo {
+  font-size: 1em;
+  font-weight: 800;
+}
+
+// 品牌 Logo 图标：与 NEO 文字同一主题色与微霓虹
+.brand-logo-mark {
+  block-size: 1.9rem;
+  color: rgb(var(--v-theme-primary));
+  filter: drop-shadow(0 0 5px rgba(var(--v-theme-primary), 0.35)) drop-shadow(0 0 1px rgba(var(--v-theme-primary), 0.5));
+  flex: none;
+  inline-size: 1.9rem;
+}
+
 .text-shadow {
   text-shadow: 1px 1px #777;
 }

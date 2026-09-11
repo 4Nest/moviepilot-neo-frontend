@@ -119,16 +119,6 @@ const router = createRouter({
           },
         },
         {
-          path: '/calendar',
-          component: () => import('../pages/calendar.vue'),
-          meta: {
-            keepAlive: true,
-            requiresAuth: true,
-            permission: 'subscribe',
-            feature: PERMISSION_FEATURE.SUBSCRIBE_CALENDAR,
-          },
-        },
-        {
           path: '/downloading',
           component: () => import('../pages/downloading.vue'),
           meta: {

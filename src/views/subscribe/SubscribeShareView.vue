@@ -5,9 +5,11 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import SubscribeShareCard from '@/components/cards/SubscribeShareCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 // 国际化
 const { t } = useI18n()
+const $toast = useToast()
 
 // 定义输入参数
 const props = defineProps({
@@ -29,14 +31,6 @@ const page = ref(1)
 // 搜索关键字
 const keyword = ref(props.keyword)
 
-// 筛选参数
-const filterParams = reactive({
-  genre_id: '', // 空字符串表示选中"全部"
-  min_rating: 0,
-  max_rating: 10,
-  sort_type: 'time', // 默认按时间排序
-})
-
 // 当前Key（用于重新加载数据）
 const currentKey = ref(0)
 
@@ -49,55 +43,6 @@ function resetData() {
   currentKey.value++
 }
 
-// TMDB电影风格字典
-const tmdbMovieGenreDict: Record<string, string> = {
-  '28': t('tmdb.genreType.action'),
-  '12': t('tmdb.genreType.adventure'),
-  '16': t('tmdb.genreType.animation'),
-  '35': t('tmdb.genreType.comedy'),
-  '80': t('tmdb.genreType.crime'),
-  '99': t('tmdb.genreType.documentary'),
-  '18': t('tmdb.genreType.drama'),
-  '10751': t('tmdb.genreType.family'),
-  '14': t('tmdb.genreType.fantasy'),
-  '36': t('tmdb.genreType.history'),
-  '27': t('tmdb.genreType.horror'),
-  '10402': t('tmdb.genreType.music'),
-  '9648': t('tmdb.genreType.mystery'),
-  '10749': t('tmdb.genreType.romance'),
-  '878': t('tmdb.genreType.scienceFiction'),
-  '10770': t('tmdb.genreType.tvMovie'),
-  '53': t('tmdb.genreType.thriller'),
-  '10752': t('tmdb.genreType.war'),
-  '37': t('tmdb.genreType.western'),
-}
-
-// TMDB电视剧风格字典
-const tmdbTvGenreDict: Record<string, string> = {
-  '10759': t('tmdb.genreType.actionAdventure'),
-  '16': t('tmdb.genreType.animation'),
-  '35': t('tmdb.genreType.comedy'),
-  '80': t('tmdb.genreType.crime'),
-  '99': t('tmdb.genreType.documentary'),
-  '18': t('tmdb.genreType.drama'),
-  '10751': t('tmdb.genreType.family'),
-  '10762': t('tmdb.genreType.kids'),
-  '9648': t('tmdb.genreType.mystery'),
-  '10763': t('tmdb.genreType.news'),
-  '10764': t('tmdb.genreType.reality'),
-  '10765': t('tmdb.genreType.sciFiFantasy'),
-  '10766': t('tmdb.genreType.soap'),
-  '10767': t('tmdb.genreType.talk'),
-  '10768': t('tmdb.genreType.warPolitics'),
-  '37': t('tmdb.genreType.western'),
-}
-
-// 获取当前类型对应的风格字典（订阅分享包含电影和电视剧，所以显示所有风格）
-const currentGenreDict = computed(() => {
-  // 合并电影和电视剧风格字典
-  return { ...tmdbMovieGenreDict, ...tmdbTvGenreDict }
-})
-
 // 监听 props.keyword 变化
 watch(
   () => props.keyword,
@@ -105,15 +50,6 @@ watch(
     keyword.value = newKeyword || ''
     resetData()
   },
-)
-
-// 监听筛选参数变化
-watch(
-  filterParams,
-  () => {
-    resetData()
-  },
-  { deep: true },
 )
 
 // 是否加载完成
@@ -125,33 +61,23 @@ const loadError = ref(false)
 // 数据列表
 const dataList = ref<SubscribeShare[]>([])
 
+// 批量管理模式
+const isBatchMode = ref(false)
+
+// 批量选择中的分享 ID 集合
+const selectedShareIds = ref<Set<number>>(new Set())
+
 // 搜索或筛选重置允许新旧请求短暂并行，只接纳当前代次的响应。
 let requestGeneration = 0
 const loadingGenerations = new Set<number>()
 
 // 拼装参数
 function getParams() {
-  let params: { [key: string]: any } = {
+  return {
     page: page.value,
     count: 30,
     name: keyword.value,
   }
-
-  // 添加筛选参数
-  if (filterParams.genre_id) {
-    params.genre_id = parseInt(filterParams.genre_id)
-  }
-  if (filterParams.min_rating > 0) {
-    params.min_rating = filterParams.min_rating
-  }
-  if (filterParams.max_rating < 10) {
-    params.max_rating = filterParams.max_rating
-  }
-  if (filterParams.sort_type) {
-    params.sort_type = filterParams.sort_type
-  }
-
-  return params
 }
 
 // 获取列表数据
@@ -202,64 +128,73 @@ async function fetchData({ done }: { done: (status: 'empty' | 'error' | 'ok') =>
 // 将数据从列表中移除
 function removeData(id: number) {
   dataList.value = dataList.value.filter(item => item.id !== id)
+  selectedShareIds.value.delete(id)
+}
+
+// 切换批量管理模式
+function toggleBatchMode() {
+  isBatchMode.value = !isBatchMode.value
+  if (!isBatchMode.value) selectedShareIds.value.clear()
+}
+
+// 切换单个分享选中状态
+function toggleSelectShare(id: number) {
+  if (selectedShareIds.value.has(id)) selectedShareIds.value.delete(id)
+  else selectedShareIds.value.add(id)
+}
+
+// 批量删除选中分享
+async function batchDelete() {
+  const ids = [...selectedShareIds.value]
+  if (ids.length === 0) return
+
+  const failedIds: number[] = []
+  for (const id of ids) {
+    try {
+      await api.delete(`subscribe/share/${id}`)
+      removeData(id)
+    } catch {
+      failedIds.push(id)
+    }
+  }
+
+  if (failedIds.length > 0) {
+    selectedShareIds.value = new Set(failedIds)
+    $toast.error(t('subscribe.batchDeleteFailed', { count: failedIds.length }))
+  } else {
+    selectedShareIds.value.clear()
+    isBatchMode.value = false
+    $toast.success(t('subscribe.batchDeleteSuccess', { count: ids.length }))
+  }
 }
 </script>
 
 <template>
-  <!-- 筛选器 -->
+  <!-- 批量管理工具栏 -->
   <div class="px-3 mb-4">
-    <div class="flex justify-start align-center mb-3">
-      <div class="mr-5">
-        <VLabel>{{ t('tmdb.sort') }}</VLabel>
-      </div>
-      <VChipGroup v-model="filterParams.sort_type">
-        <VChip :color="filterParams.sort_type == 'time' ? 'primary' : ''" filter tile value="time">
-          {{ t('tmdb.sortType.time') }}
-        </VChip>
-        <VChip :color="filterParams.sort_type == 'count' ? 'primary' : ''" filter tile value="count">
-          {{ t('tmdb.sortType.count') }}
-        </VChip>
-        <VChip :color="filterParams.sort_type == 'rating' ? 'primary' : ''" filter tile value="rating">
-          {{ t('tmdb.sortType.rating') }}
-        </VChip>
-      </VChipGroup>
-    </div>
-
-    <div class="flex justify-start align-center mb-3">
-      <div class="mr-5">
-        <VLabel>{{ t('tmdb.genre') }}</VLabel>
-      </div>
-      <VChipGroup v-model="filterParams.genre_id">
-        <VChip :color="filterParams.genre_id == '' ? 'primary' : ''" filter tile value="">
-          {{ t('common.all') }}
-        </VChip>
-        <VChip
-          :color="filterParams.genre_id == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
-          v-for="(value, key) in currentGenreDict"
-          :key="key"
-        >
-          {{ value }}
-        </VChip>
-      </VChipGroup>
-    </div>
-
-    <div class="flex justify-start align-center mb-3">
-      <div class="mr-5">
-        <VLabel>{{ t('tmdb.rating') }}</VLabel>
-      </div>
-      <VSlider
-        v-model="filterParams.min_rating"
-        thumb-label
-        max="10"
-        min="0"
-        :step="1"
-        class="align-center"
-        hide-details
+    <div class="d-flex justify-end align-center gap-2">
+      <!-- 批量操作工具（批量模式下显示） -->
+      <template v-if="isBatchMode">
+        <VBtn color="error" variant="flat" size="small" :disabled="selectedShareIds.size === 0" @click="batchDelete">
+          <template #prepend>
+            <VIcon icon="mdi-delete-outline" />
+          </template>
+          {{ t('common.delete') }}
+        </VBtn>
+      </template>
+      <!-- 批量管理切换按钮 -->
+      <VBtn
+        v-if="dataList.length > 0"
+        :color="isBatchMode ? 'primary' : undefined"
+        :variant="isBatchMode ? 'flat' : 'tonal'"
+        size="small"
+        @click="toggleBatchMode"
       >
-      </VSlider>
+        <template #prepend>
+          <VIcon :icon="isBatchMode ? 'mdi-close' : 'mdi-checkbox-multiple-marked-outline'" />
+        </template>
+        {{ isBatchMode ? t('subscribe.exitBatchMode') : t('subscribe.batchManage') }}
+      </VBtn>
     </div>
   </div>
 
@@ -297,7 +232,13 @@ function removeData(id: number) {
       tabindex="0"
     >
       <template #default="{ item }">
-        <SubscribeShareCard :media="item" @delete="removeData(item.id || 0)" />
+        <SubscribeShareCard
+          :media="item"
+          :batch-mode="isBatchMode"
+          :selected="selectedShareIds.has(item.id || 0)"
+          @delete="removeData(item.id || 0)"
+          @toggle-select="toggleSelectShare(item.id || 0)"
+        />
       </template>
     </ProgressiveCardGrid>
     <NoDataFound
