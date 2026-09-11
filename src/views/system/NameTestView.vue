@@ -349,16 +349,21 @@ async function saveCustomWords() {
               >
                 {{ chip }}
               </VChip>
-              <a
+              <VChip
                 v-if="canViewMediaDetail"
                 class="media-id-badge"
+                color="primary"
+                size="small"
+                variant="tonal"
                 :href="mediaIdentity?.link"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <VIcon icon="mdi-open-in-new" size="13" />
+                <template #prepend>
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                </template>
                 {{ mediaIdentity?.idPrefix }}ID：{{ mediaIdentity?.id }}
-              </a>
+              </VChip>
             </div>
           </div>
         </div>
@@ -508,27 +513,10 @@ async function saveCustomWords() {
   max-inline-size: 100%;
 }
 
-/* 媒体 ID 徽章：与资源标签区分开的虚线描边药丸 */
+/* 媒体 ID 标签：沿用资源标签样式，同时保留官方详情页链接。 */
 .media-id-badge {
-  display: inline-flex;
-  overflow: hidden;
-  align-items: center;
-  padding: 0.3rem 0.7rem;
-  border: 1px dashed rgba(var(--v-theme-primary), 0.55);
-  font-size: 0.78rem;
-  font-weight: 600;
   max-inline-size: 100%;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   text-decoration: none;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.media-id-badge:hover {
-  background: rgba(var(--v-theme-primary), 0.1);
-  border-color: rgb(var(--v-theme-primary));
 }
 
 .pipeline {
