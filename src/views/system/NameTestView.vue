@@ -412,6 +412,8 @@ async function saveCustomWords() {
   gap: 1rem;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   padding-block-start: 0.5rem;
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .shortcut-panel {
@@ -421,6 +423,7 @@ async function saveCustomWords() {
   backdrop-filter: var(--app-grouped-list-backdrop-filter);
   background: var(--app-grouped-list-background);
   box-shadow: var(--app-surface-shadow);
+  min-inline-size: 0;
 }
 
 .shortcut-form {
@@ -448,6 +451,12 @@ async function saveCustomWords() {
 .result-stack {
   display: grid;
   gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+}
+
+.result-stack > * {
+  min-inline-size: 0;
 }
 
 .result-hero {
@@ -459,6 +468,8 @@ async function saveCustomWords() {
   background: rgba(var(--v-theme-primary), 0.08);
   gap: 1rem;
   grid-template-columns: 6.5rem minmax(0, 1fr);
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .result-hero--failed {
@@ -523,6 +534,7 @@ async function saveCustomWords() {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
+  inline-size: 100%;
 }
 
 .shortcut-result-panel {
@@ -533,6 +545,7 @@ async function saveCustomWords() {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: 1.75rem minmax(0, 1fr);
+  min-inline-size: 0;
 }
 
 .pipeline-marker {
@@ -583,6 +596,19 @@ async function saveCustomWords() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  min-inline-size: 0;
+}
+
+.words-chips :deep(.v-chip) {
+  block-size: auto;
+  max-inline-size: 100%;
+  white-space: normal;
+}
+
+.words-chips :deep(.v-chip__content) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .empty-state {
