@@ -7,7 +7,7 @@ import { authState, userState } from '@/stores/types'
 import api from '@/api'
 import router from '@/router'
 import LoginMfaStep from '@/components/auth/LoginMfaStep.vue'
-import { bufferToBase64Url, base64UrlToUint8Array, urlBase64ToUint8Array } from '@/@core/utils/navigator'
+import { bufferToBase64Url, base64UrlToUint8Array } from '@/@core/utils/navigator'
 
 import { getNavMenus } from '@/router/i18n-menu'
 import { buildUserPermissionContext, filterMenusByPermission } from '@/utils/permission'
@@ -15,6 +15,7 @@ import type { ApiResponse } from '@/api/types'
 import { loadRemoteComponentFromModule, type RemoteModule } from '@/utils/federationLoader'
 import type { MfaMethod } from '@/types/auth'
 import { getLoginVisualProfile } from '@/utils/loginPresentation'
+import NeoLogoMark from '@/components/misc/NeoLogoMark.vue'
 
 // 国际化
 const { t, te } = useI18n()
@@ -463,32 +464,6 @@ async function loginWithPassKey(isConditional = false) {
   )
 }
 
-// 订阅推送通知
-async function subscribeForPushNotifications() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
-
-  try {
-    const registration = await navigator.serviceWorker.ready
-    let subscription = await registration.pushManager.getSubscription()
-
-    if (!subscription) {
-      if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') return
-
-      const convertedVapidKey = urlBase64ToUint8Array(import.meta.env.VITE_PUBLIC_VAPID_KEY)
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedVapidKey,
-      })
-    }
-
-    if (subscription) {
-      await api.post('/message/webpush/subscribe', subscription)
-    }
-  } catch (error) {
-    console.warn('WebPush subscription failed:', error)
-  }
-}
-
 // 登录后处理
 async function afterLogin(
   superuser: boolean,
@@ -510,9 +485,6 @@ async function afterLogin(
       await router.push(filteredMenus[0].to)
     }
   }
-
-  // 订阅推送通知
-  if (superuser) void subscribeForPushNotifications()
 }
 
 // 处理登录成功
@@ -716,15 +688,21 @@ onUnmounted(() => {
     <!-- 登录表单 -->
     <div class="auth-wrapper d-flex align-center justify-center">
       <VCard
-        class="auth-card login-card glass-effect no-blur pa-7 pa-sm-9 w-full h-full login-card--enter"
+        class="auth-card login-card glass-effect no-blur pa-6 pa-sm-7 w-full h-full login-card--enter"
         max-width="24rem"
         flat
       >
         <div class="login-card__surface" aria-hidden="true" />
 
-        <!-- 卡片头部：欢迎语 -->
-        <div class="login-head">
-          <p class="login-subtitle">{{ t('login.welcomeBack') || 'Welcome Back' }}</p>
+        <!-- NEO 品牌标识 -->
+        <div class="login-brand" aria-label="MoviePilot NEO">
+          <div class="login-brand__mark-row">
+            <NeoLogoMark class="brand-logo-mark login-brand__mark" />
+          </div>
+          <div class="login-brand__name">
+            <span class="login-brand__wordmark">MOVIEPILOT</span>
+            <strong class="moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</strong>
+          </div>
         </div>
 
         <VCardText class="login-body">
@@ -751,7 +729,9 @@ onUnmounted(() => {
               <!-- username -->
               <VCol cols="12">
                 <div class="native-login-field login-input">
-                  <VIcon icon="mdi-account-outline" class="native-login-field__icon" aria-hidden="true" />
+                  <span class="native-login-field__icon-shell" aria-hidden="true">
+                    <VIcon icon="mdi-account-outline" class="native-login-field__icon" />
+                  </span>
                   <input
                     id="username"
                     v-model="form.username"
@@ -771,7 +751,9 @@ onUnmounted(() => {
               <!-- password -->
               <VCol cols="12">
                 <div class="native-login-field native-login-field--password login-input">
-                  <VIcon icon="mdi-lock-outline" class="native-login-field__icon" aria-hidden="true" />
+                  <span class="native-login-field__icon-shell" aria-hidden="true">
+                    <VIcon icon="mdi-lock-outline" class="native-login-field__icon" />
+                  </span>
                   <input
                     id="password"
                     v-model="form.password"
@@ -795,22 +777,18 @@ onUnmounted(() => {
               </VCol>
               <VCol cols="12" class="py-0">
                 <!-- remember me checkbox -->
-                <div class="d-flex align-center justify-space-between flex-wrap">
-                  <label class="native-login-checkbox login-checkbox">
-                    <input
-                      v-model="form.remember"
-                      class="native-login-checkbox__input"
-                      type="checkbox"
-                      name="remember"
-                    />
-                    <span class="native-login-checkbox__label">{{ t('login.stayLoggedIn') }}</span>
-                  </label>
-                </div>
+                <label class="login-remember">
+                  <input v-model="form.remember" class="login-remember__input" type="checkbox" name="remember" />
+                  <span class="login-remember__check" aria-hidden="true">
+                    <VIcon icon="mdi-check" size="14" />
+                  </span>
+                  <span class="login-remember__label">{{ t('login.stayLoggedIn') }}</span>
+                </label>
               </VCol>
               <VCol cols="12">
                 <!-- login button -->
-                <VBtn block type="submit" prepend-icon="mdi-login" :loading="loading" size="large" class="login-submit">
-                  {{ t('login.login') }}
+                <VBtn block type="submit" :loading="loading" size="large" class="login-submit">
+                  <span class="login-submit__label">{{ t('login.login') }}</span>
                 </VBtn>
 
                 <!-- or divider -->
@@ -949,36 +927,17 @@ onUnmounted(() => {
 }
 
 /* ===================== 玻璃卡片 ===================== */
-.login-card {
+.login-root[data-login-visual-profile] .login-card {
   position: relative;
   z-index: 1;
   overflow: hidden;
   border: none !important;
   border-radius: var(--app-surface-radius, 20px) !important;
-  box-shadow: 0 20px 54px rgba(var(--app-shadow-rgb, 0, 0, 0), 0.12) !important;
+  box-shadow: 0 12px 32px rgba(var(--app-shadow-rgb, 0, 0, 0), 0.1) !important;
 
   > :not(.login-card__surface) {
     position: relative;
     z-index: 2;
-  }
-
-  /* 顶部迎光棱镜保持单方向，不随指针另建一套光源。 */
-  &::before {
-    position: absolute;
-    z-index: 4;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.42) 32%,
-      rgba(255, 255, 255, 0.7) 50%,
-      transparent
-    );
-    block-size: 1px;
-    content: '';
-    inset-block-start: 0;
-    inset-inline: 13% 38%;
-    opacity: 0.34;
-    pointer-events: none;
   }
 }
 
@@ -999,84 +958,204 @@ onUnmounted(() => {
 }
 
 .login-root[data-login-visual-profile='classic'] .login-card__surface {
-  backdrop-filter: blur(22px) saturate(118%);
-  background: rgba(var(--v-theme-surface), 0.76);
+  backdrop-filter: blur(22px) saturate(105%);
+  background: rgba(var(--v-theme-surface), 0.62);
 }
 
 .login-root[data-login-visual-profile='transparent'] .login-card__surface {
   backdrop-filter: blur(var(--optical-glass-blur)) saturate(var(--optical-glass-saturate))
     contrast(var(--optical-glass-contrast));
-  background:
-    radial-gradient(
-      180px 150px at 50% 0%,
-      rgba(255, 255, 255, var(--login-card-highlight-alpha, 0.035)),
-      rgba(var(--v-theme-primary), var(--login-card-primary-alpha, 0.02)) 44%,
-      transparent 76%
-    ),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 34%), rgba(var(--v-theme-surface), 0.7);
+  background: rgba(var(--v-theme-surface), 0.56);
 }
 
-.login-root[data-login-visual-profile='glass'] .login-card__surface {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 34%),
-    linear-gradient(rgba(7, 14, 25, 0.04), rgba(7, 14, 25, 0.1));
+.login-root[data-login-visual-profile='glass'] .login-card .login-card__surface {
+  background: rgba(var(--v-theme-surface), 0.18) !important;
 }
 
-/* ===================== 卡片头部 ===================== */
-.login-head {
+.login-brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  flex-direction: column;
+  gap: 0.65rem;
   inline-size: 100%;
-  margin-block-end: 12px;
+  margin-block-end: 1.55rem;
   text-align: center;
 }
 
-.login-subtitle {
-  animation: text-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  margin-block: 4px 0;
-  margin-inline: 0;
-  opacity: 0.8;
+.login-brand__mark-row {
+  display: flex;
+  justify-content: center;
 }
 
+.login-brand__mark {
+  block-size: 3.2rem;
+  inline-size: 3.2rem;
+  filter: drop-shadow(0 0 6px rgba(var(--v-theme-primary), 0.42))
+    drop-shadow(0 0 14px rgba(var(--v-theme-primary), 0.2));
+}
+
+.login-brand__name {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.48rem;
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.login-brand__wordmark {
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.login-brand__name .moviepilot-neo-badge {
+  font-size: 0.98rem;
+  letter-spacing: 0.12em;
+}
+
+.native-login-field__icon-shell {
+  position: absolute;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 100%;
+  inline-size: 24px;
+  inset-block-start: 0;
+  inset-inline-start: 14px;
+  pointer-events: none;
+}
+
+/* 保留 NEO Logo 的轻量霓虹识别度，卡片和表单本身保持克制。 */
+.login-remember {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  cursor: pointer;
+  gap: 0.55rem;
+  min-block-size: 36px;
+  padding-block: 4px;
+  transition: color 160ms ease;
+  user-select: none;
+}
+
+.login-remember:hover {
+  color: rgba(var(--v-theme-on-surface), 0.9);
+}
+
+.login-remember__label {
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.login-remember__input {
+  position: absolute;
+  block-size: 1px;
+  inline-size: 1px;
+  opacity: 0;
+}
+
+.login-remember__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.24);
+  border-radius: 5px;
+  background: rgba(var(--v-theme-surface), 0.12);
+  block-size: 18px;
+  color: transparent;
+  inline-size: 18px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.login-remember__input:checked + .login-remember__check {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+
+.login-remember__input:focus-visible + .login-remember__check {
+  outline: 2px solid rgba(var(--v-theme-primary), 0.55);
+  outline-offset: 3px;
+}
+
+.login-submit {
+  border: 0;
+  border-radius: 13px !important;
+  background: rgb(var(--v-theme-primary)) !important;
+  block-size: 54px !important;
+  box-shadow: 0 5px 14px rgba(var(--v-theme-primary), 0.18);
+  color: rgb(var(--v-theme-on-primary)) !important;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.login-submit:not(.v-btn--disabled):not(.v-btn--loading):hover {
+  box-shadow: 0 5px 14px rgba(var(--v-theme-primary), 0.22);
+  transform: translateY(-1px);
+}
+
+.login-submit:not(.v-btn--disabled):not(.v-btn--loading):active {
+  box-shadow: 0 2px 6px rgba(var(--v-theme-primary), 0.14);
+  transform: translateY(0);
+}
+
+.login-submit :deep(.v-btn__content) {
+  justify-content: center;
+  inline-size: 100%;
+  padding-inline: 0;
+}
+
+.login-submit__label {
+  line-height: 1;
+}
+
+.login-submit.v-btn--disabled {
+  box-shadow: none;
+  transform: none;
+}
 /* ===================== 卡片主体 ===================== */
 .login-body {
-  padding-block: 8px !important;
+  padding-inline: 0 !important;
+  padding-block: 10px !important;
 }
 
 /* 原生登录输入框：保留标准 input DOM，便于密码管理器识别。 */
-.native-login-field {
+.login-root[data-login-visual-profile] .native-login-field {
   position: relative;
   display: flex;
   overflow: hidden;
   align-items: center;
-  border: 1px solid rgba(var(--v-border-color), 0.38);
-  min-block-size: 56px;
-  border-radius: 12px;
-  background: rgba(var(--v-theme-surface), 0.13);
-  backdrop-filter: blur(10px) saturate(118%);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.16);
+  block-size: 56px;
+  border-radius: 13px;
+  background: rgba(var(--v-theme-surface), 0.12);
+  backdrop-filter: blur(10px) saturate(105%);
+  box-shadow: none;
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease,
     background 220ms ease;
 }
 
-.native-login-field:focus-within {
-  border-color: rgb(var(--v-theme-primary));
-  box-shadow: inset 0 0 0 1px rgb(var(--v-theme-primary));
+.login-root[data-login-visual-profile] .native-login-field:focus-within {
+  border-color: rgba(var(--v-theme-primary), 0.5);
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.06);
+  background: rgba(var(--v-theme-surface), 0.1);
 }
 
 .native-login-field__icon {
-  position: absolute;
-  z-index: 1;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  inset-block-start: 16px;
-  inset-inline-start: 16px;
-  pointer-events: none;
+  color: rgba(var(--v-theme-on-surface), 0.54);
 }
 
 .native-login-field__input {
@@ -1093,7 +1172,7 @@ onUnmounted(() => {
   line-height: 1.5;
   outline: none;
   padding-block: 0;
-  padding-inline: 48px 16px;
+  padding-inline: 50px 16px;
 }
 
 .native-login-field__input::placeholder {
@@ -1102,7 +1181,7 @@ onUnmounted(() => {
 }
 
 .native-login-field--password .native-login-field__input {
-  padding-inline-end: 48px;
+  padding-inline-end: 52px;
 }
 
 .native-login-field__input:-webkit-autofill,
@@ -1126,8 +1205,8 @@ onUnmounted(() => {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: pointer;
   inline-size: 40px;
-  inset-block-start: 8px;
-  inset-inline-end: 8px;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
   padding: 0;
   transition:
     background 150ms ease,
@@ -1139,96 +1218,6 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-on-surface), 0.08);
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   outline: none;
-}
-
-/* 原生保持登录复选框，避免使用全局 VCheckbox 小屏适配布局。 */
-.native-login-checkbox {
-  display: inline-flex;
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  cursor: pointer;
-  gap: 10px;
-  min-block-size: 40px;
-  user-select: none;
-}
-
-.native-login-checkbox__input {
-  position: relative;
-  display: inline-grid;
-  flex: 0 0 18px;
-  border: 2px solid rgba(var(--v-theme-on-surface), 0.54);
-  border-radius: 4px;
-  margin: 0;
-  appearance: none;
-  background: transparent;
-  block-size: 18px;
-  cursor: pointer;
-  inline-size: 18px;
-  place-content: center;
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.native-login-checkbox__input::before {
-  block-size: 5px;
-  border-block-end: 2px solid rgb(var(--v-theme-on-primary));
-  border-inline-start: 2px solid rgb(var(--v-theme-on-primary));
-  content: '';
-  inline-size: 9px;
-  transform: translateY(-1px) rotate(-45deg) scale(0);
-  transform-origin: center;
-  transition: transform 120ms ease;
-}
-
-.native-login-checkbox__input:checked {
-  border-color: rgb(var(--v-theme-primary));
-  background-color: rgb(var(--v-theme-primary));
-}
-
-.native-login-checkbox__input:checked::before {
-  transform: translateY(-1px) rotate(-45deg) scale(1);
-}
-
-.native-login-checkbox__input:focus-visible {
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.18);
-  outline: none;
-}
-
-.native-login-checkbox__label {
-  font-size: 0.9375rem;
-  line-height: 1.4;
-}
-
-/* Remember me 复选框样式优化 */
-.login-checkbox {
-  opacity: 0.85;
-  transition: opacity 150ms ease;
-
-  &:hover {
-    opacity: 1;
-  }
-}
-
-/* 登录按钮使用克制的主题色层级，避免在壁纸上形成独立霓虹光源。 */
-.login-submit {
-  box-shadow: 0 6px 18px rgba(var(--v-theme-primary), 0.2);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  transition:
-    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
-
-  &:hover {
-    box-shadow: 0 8px 22px rgba(var(--v-theme-primary), 0.26);
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    box-shadow: 0 3px 10px rgba(var(--v-theme-primary), 0.18);
-    transform: scale(0.99);
-  }
 }
 
 /* Passkey 按钮 */
@@ -1311,22 +1300,9 @@ onUnmounted(() => {
   }
 }
 
-@keyframes text-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ===================== 无障碍：尊重减少动态偏好 ===================== */
 @media (prefers-reduced-motion: reduce) {
-  .login-card--enter,
-  .login-subtitle {
+  .login-card--enter {
     animation: none !important;
   }
 
@@ -1340,8 +1316,8 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .login-card__surface,
-  .native-login-field {
+  .login-root[data-login-visual-profile] .login-card .login-card__surface,
+  .login-root[data-login-visual-profile] .native-login-field {
     backdrop-filter: none !important;
     background: rgb(var(--v-theme-surface)) !important;
     filter: none !important;
@@ -1349,18 +1325,18 @@ onUnmounted(() => {
 }
 
 @media (prefers-contrast: more) {
-  .login-card__surface {
-    background: rgba(var(--v-theme-surface), 0.94);
+  .login-root[data-login-visual-profile] .login-card .login-card__surface {
+    background: rgba(var(--v-theme-surface), 0.94) !important;
   }
 
-  .native-login-field {
+  .login-root[data-login-visual-profile] .native-login-field {
     border-color: rgba(var(--v-theme-on-surface), 0.68);
   }
 }
 
 @supports not (backdrop-filter: blur(1px)) {
-  .login-card__surface,
-  .native-login-field {
+  .login-root[data-login-visual-profile] .login-card .login-card__surface,
+  .login-root[data-login-visual-profile] .native-login-field {
     background: rgba(var(--v-theme-surface), 0.96) !important;
   }
 }
@@ -1371,14 +1347,14 @@ onUnmounted(() => {
     padding-inline: 12px;
   }
 
-  .login-card {
+  .login-root[data-login-visual-profile] .login-card {
     padding: 1.5rem !important;
     border-radius: 16px !important;
   }
 }
 
 @media (width <= 480px) and (height <= 600px) {
-  .login-card {
+  .login-root[data-login-visual-profile] .login-card {
     padding-block: 0.75rem !important;
   }
 }

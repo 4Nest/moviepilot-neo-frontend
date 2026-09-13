@@ -328,7 +328,6 @@ export default {
   login: {
     wallpapers: '壁纸',
     tagline: '你的智能影视媒体库',
-    welcomeBack: '欢迎回来',
     username: '用户名',
     password: '密码',
     showPassword: '显示密码',
@@ -1534,7 +1533,7 @@ export default {
   },
   setting: {
     about: {
-      title: '关于 MoviePilot Neo',
+      title: '关于 NEO',
       softwareVersion: '软件版本',
       frontendVersion: '前端版本',
       systemUptime: '系统已运行',
