@@ -89,82 +89,71 @@ function doDelete() {
       <template #default="hover">
         <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
         <div v-bind="hover.props" class="subscribe-share-card-hover-area w-full h-full">
-          <div
-            class="app-hover-lift-card w-full h-full overflow-hidden"
-            :class="{
-              'app-hover-lift-card--hovering': hover.isHovering,
-            }"
+          <VCard
+            :key="props.media?.id"
+            class="app-hover-lift-card flex flex-col h-full overflow-hidden"
+            :class="{ 'share-card--selected': props.selected, 'app-hover-lift-card--hovering': hover.isHovering }"
+            min-height="150"
+            @click="handleCardClick"
           >
-            <VCard
-              :key="props.media?.id"
-              class="app-hover-lift-card flex flex-col h-full"
-              :class="{ 'share-card--selected': props.selected }"
-              min-height="150"
-              @click="handleCardClick"
-            >
-              <!-- 批量模式选择框 -->
-              <div v-if="props.batchMode" class="share-card-checkbox">
-                <VIcon
-                  :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
-                  :color="props.selected ? 'primary' : undefined"
-                  size="24"
-                />
-              </div>
-              <template #image>
-                <VImg :src="backdropUrl || posterUrl" aspect-ratio="3/2" cover @load="imageLoadHandler" position="top">
-                  <template #placeholder>
-                    <div class="w-full h-full">
-                      <VSkeletonLoader class="object-cover aspect-w-3 aspect-h-2" />
-                    </div>
-                  </template>
-                  <template #default>
-                    <div class="absolute inset-0 subscribe-card-background"></div>
-                  </template>
-                </VImg>
-              </template>
-              <div class="h-full flex flex-col">
-                <VCardText class="flex items-center pa-3 pb-1 grow">
-                  <div class="h-auto w-16 flex-shrink-0 overflow-hidden rounded-md" v-if="imageLoaded">
-                    <VImg :src="posterUrl" aspect-ratio="2/3" cover>
-                      <template #placeholder>
-                        <div class="w-full h-full">
-                          <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
-                        </div>
-                      </template>
-                    </VImg>
+            <!-- 批量模式选择框 -->
+            <div v-if="props.batchMode" class="share-card-checkbox">
+              <VIcon
+                :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
+                :color="props.selected ? 'primary' : undefined"
+                size="24"
+              />
+            </div>
+            <template #image>
+              <VImg :src="backdropUrl || posterUrl" aspect-ratio="3/2" cover @load="imageLoadHandler" position="top">
+                <template #placeholder>
+                  <div class="w-full h-full">
+                    <VSkeletonLoader class="object-cover aspect-w-3 aspect-h-2" />
                   </div>
-                  <div class="flex flex-col justify-center pl-2 xl:pl-4">
-                    <div
-                      class="mr-2 min-w-0 text-lg font-bold text-white line-clamp-2 overflow-hidden text-ellipsis ..."
-                    >
-                      {{ props.media?.share_title }}
-                    </div>
-                    <div
-                      class="text-sm font-medium text-gray-200 sm:pt-1 line-clamp-3 overflow-hidden text-ellipsis ..."
-                    >
-                      {{ props.media?.share_comment }}
-                    </div>
+                </template>
+                <template #default>
+                  <div class="absolute inset-0 subscribe-card-background"></div>
+                </template>
+              </VImg>
+            </template>
+            <div class="h-full flex flex-col">
+              <VCardText class="flex items-center pa-3 pb-1 grow">
+                <div class="h-auto w-16 flex-shrink-0 overflow-hidden rounded-md" v-if="imageLoaded">
+                  <VImg :src="posterUrl" aspect-ratio="2/3" cover>
+                    <template #placeholder>
+                      <div class="w-full h-full">
+                        <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
+                      </div>
+                    </template>
+                  </VImg>
+                </div>
+                <div class="flex flex-col justify-center pl-2 xl:pl-4">
+                  <div class="mr-2 min-w-0 text-lg font-bold text-white line-clamp-2 overflow-hidden text-ellipsis ...">
+                    {{ props.media?.share_title }}
                   </div>
-                </VCardText>
-                <VCardText class="share-card-meta">
-                  <div class="share-card-meta__author text-white">
-                    <VIcon icon="mdi-account" size="16" aria-hidden="true" />
-                    <span class="share-card-meta__name" :title="props.media?.share_user">
-                      {{ props.media?.share_user }}
-                    </span>
+                  <div class="text-sm font-medium text-gray-200 sm:pt-1 line-clamp-3 overflow-hidden text-ellipsis ...">
+                    {{ props.media?.share_comment }}
                   </div>
-                  <div v-if="props.media?.count" class="share-card-meta__heat text-white">
-                    <VIcon icon="mdi-fire" size="16" aria-hidden="true" />
-                    <span>{{ props.media.count.toLocaleString() }}</span>
-                  </div>
-                  <div v-if="dateText" class="share-card-meta__date text-gray-300" :title="props.media?.date">
-                    <VIcon icon="mdi-calendar" size="16" aria-hidden="true" />
-                    <span>{{ dateText }}</span>
-                  </div>
-                </VCardText>
-              </div>
-            </VCard>
-          </div>
+                </div>
+              </VCardText>
+              <VCardText class="share-card-meta">
+                <div class="share-card-meta__author text-white">
+                  <VIcon icon="mdi-account" size="16" aria-hidden="true" />
+                  <span class="share-card-meta__name" :title="props.media?.share_user">
+                    {{ props.media?.share_user }}
+                  </span>
+                </div>
+                <div v-if="props.media?.count" class="share-card-meta__heat text-white">
+                  <VIcon icon="mdi-fire" size="16" aria-hidden="true" />
+                  <span>{{ props.media.count.toLocaleString() }}</span>
+                </div>
+                <div v-if="dateText" class="share-card-meta__date text-gray-300" :title="props.media?.date">
+                  <VIcon icon="mdi-calendar" size="16" aria-hidden="true" />
+                  <span>{{ dateText }}</span>
+                </div>
+              </VCardText>
+            </div>
+          </VCard>
         </div>
       </template>
     </VHover>
