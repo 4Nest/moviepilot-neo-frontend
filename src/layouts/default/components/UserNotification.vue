@@ -404,22 +404,32 @@ function markAllAsRead() {
   void clearUnreadMessages()
 }
 
+/** 判断通知正文是否明确表达成功完成，来源类型本身不代表失败。 */
+function isSuccessfulNotification(item: SystemNotification) {
+  const content = `${item.title || ''} ${item.text || ''}`
+  return /(?:搜索|同步|刷新|添加|处理).*(?:完成|成功)|已完成/.test(content) && !/(?:失败|错误|没有找到|未找到)/.test(content)
+}
+
 /** 根据通知分类和业务类型选择列表图标。 */
 function getNotificationIcon(item: SystemNotification) {
+  if (isSuccessfulNotification(item)) return 'mdi-check-circle-outline'
+  if (item.mtype === '手动处理') return 'mdi-alert-circle-outline'
   if (getNotificationKind(item) === 'plugin') return 'mdi-puzzle-outline'
   if (item.mtype === '资源下载') return 'mdi-download'
   if (item.mtype === '整理入库') return 'mdi-folder-check-outline'
   if (item.mtype === '订阅') return 'mdi-rss'
-  return getNotificationKind(item) === 'system' ? 'mdi-alert-circle-outline' : 'mdi-bell-outline'
+  return getNotificationKind(item) === 'system' ? 'mdi-information-outline' : 'mdi-bell-outline'
 }
 
-/** 根据通知分类和业务类型选择图标颜色。 */
+/** 根据通知分类和业务类型选择列表图标颜色。 */
 function getNotificationColor(item: SystemNotification) {
-  if (getNotificationKind(item) === 'system') return 'error'
-  if (getNotificationKind(item) === 'plugin') return 'warning'
+  if (isSuccessfulNotification(item)) return 'success'
+  if (item.mtype === '手动处理') return 'error'
   if (item.mtype === '资源下载') return 'info'
   if (item.mtype === '整理入库') return 'success'
   if (item.mtype === '订阅') return 'primary'
+  if (getNotificationKind(item) === 'plugin') return 'primary'
+  if (getNotificationKind(item) === 'system') return 'info'
   return 'secondary'
 }
 
@@ -755,7 +765,7 @@ watch(appsMenu, handleNotificationMenuVisibleChange)
 }
 
 .notification-row--unread {
-  background: rgba(var(--v-theme-error), 0.07);
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
 .notification-row--media {

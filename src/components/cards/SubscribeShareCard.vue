@@ -146,21 +146,21 @@ function doDelete() {
                     </div>
                   </div>
                 </VCardText>
-                <VCardText class="flex justify-space-between align-center flex-wrap py-2">
-                  <div class="flex align-center">
-                    <IconBtn v-bind="props" icon="mdi-account" color="white" class="me-1" />
-                    <div class="text-subtitle-2 me-4 text-white">
+                <VCardText class="share-card-meta">
+                  <div class="share-card-meta__author text-white">
+                    <VIcon icon="mdi-account" size="16" aria-hidden="true" />
+                    <span class="share-card-meta__name" :title="props.media?.share_user">
                       {{ props.media?.share_user }}
-                    </div>
-                    <IconBtn v-if="props.media?.count" icon="mdi-fire" color="white" class="me-1" />
-                    <span v-if="props.media?.count" class="text-subtitle-2 me-4 text-white">
-                      {{ props.media?.count.toLocaleString() }}
                     </span>
                   </div>
-                </VCardText>
-                <VCardText class="absolute right-0 bottom-0 d-flex align-center p-2 text-gray-300">
-                  <VIcon icon="mdi-calendar" class="me-1" />
-                  {{ dateText }}
+                  <div v-if="props.media?.count" class="share-card-meta__heat text-white">
+                    <VIcon icon="mdi-fire" size="16" aria-hidden="true" />
+                    <span>{{ props.media.count.toLocaleString() }}</span>
+                  </div>
+                  <div v-if="dateText" class="share-card-meta__date text-gray-300" :title="props.media?.date">
+                    <VIcon icon="mdi-calendar" size="16" aria-hidden="true" />
+                    <span>{{ dateText }}</span>
+                  </div>
                 </VCardText>
               </div>
             </VCard>
@@ -173,10 +173,52 @@ function doDelete() {
 <style lang="scss" scoped>
 .subscribe-share-card-hover-area {
   inline-size: 100%;
+  container-type: inline-size;
 }
 
 .subscribe-card-background {
   background-image: linear-gradient(180deg, rgba(31, 41, 55, 47%) 0%, rgb(31, 41, 55) 100%);
+}
+.share-card-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding-block: 8px;
+  padding-inline: 12px;
+}
+
+.share-card-meta__author,
+.share-card-meta__heat,
+.share-card-meta__date {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  gap: 5px;
+}
+
+.share-card-meta__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-card-meta__date {
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-inline-size: 100%;
+  font-size: 0.8125rem;
+}
+
+@container (min-width: 360px) {
+  .share-card-meta {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .share-card-meta__date {
+    grid-column: auto;
+    justify-self: auto;
+  }
 }
 
 // 批量模式选择框
