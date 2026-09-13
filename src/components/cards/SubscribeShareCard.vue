@@ -91,7 +91,7 @@ function doDelete() {
         <div v-bind="hover.props" class="subscribe-share-card-hover-area w-full h-full">
           <VCard
             :key="props.media?.id"
-            class="app-hover-lift-card flex flex-col h-full overflow-hidden"
+            class="share-card app-hover-lift-card flex h-full flex-col overflow-hidden"
             :class="{ 'share-card--selected': props.selected, 'app-hover-lift-card--hovering': hover.isHovering }"
             min-height="150"
             @click="handleCardClick"
@@ -116,8 +116,8 @@ function doDelete() {
                 </template>
               </VImg>
             </template>
-            <div class="h-full flex flex-col">
-              <VCardText class="flex items-center pa-3 pb-1 grow">
+            <div class="share-card-body">
+              <div class="share-card-content">
                 <div class="h-auto w-16 flex-shrink-0 overflow-hidden rounded-md" v-if="imageLoaded">
                   <VImg :src="posterUrl" aspect-ratio="2/3" cover>
                     <template #placeholder>
@@ -127,31 +127,33 @@ function doDelete() {
                     </template>
                   </VImg>
                 </div>
-                <div class="flex flex-col justify-center pl-2 xl:pl-4">
-                  <div class="mr-2 min-w-0 text-lg font-bold text-white line-clamp-2 overflow-hidden text-ellipsis ...">
+                <div class="share-card-copy">
+                  <div class="share-card-title">
                     {{ props.media?.share_title }}
                   </div>
-                  <div class="text-sm font-medium text-gray-200 sm:pt-1 line-clamp-3 overflow-hidden text-ellipsis ...">
+                  <div class="share-card-comment">
                     {{ props.media?.share_comment }}
                   </div>
                 </div>
-              </VCardText>
-              <VCardText class="share-card-meta">
-                <div class="share-card-meta__author text-white">
-                  <VIcon icon="mdi-account" size="16" aria-hidden="true" />
-                  <span class="share-card-meta__name" :title="props.media?.share_user">
-                    {{ props.media?.share_user }}
-                  </span>
-                </div>
-                <div v-if="props.media?.count" class="share-card-meta__heat text-white">
-                  <VIcon icon="mdi-fire" size="16" aria-hidden="true" />
-                  <span>{{ props.media.count.toLocaleString() }}</span>
+              </div>
+              <div class="share-card-meta">
+                <div class="share-card-meta__main">
+                  <div class="share-card-meta__author text-white">
+                    <VIcon icon="mdi-account" size="16" aria-hidden="true" />
+                    <span class="share-card-meta__name" :title="props.media?.share_user">
+                      {{ props.media?.share_user }}
+                    </span>
+                  </div>
+                  <div v-if="props.media?.count" class="share-card-meta__heat text-white">
+                    <VIcon icon="mdi-fire" size="16" aria-hidden="true" />
+                    <span>{{ props.media.count.toLocaleString() }}</span>
+                  </div>
                 </div>
                 <div v-if="dateText" class="share-card-meta__date text-gray-300" :title="props.media?.date">
                   <VIcon icon="mdi-calendar" size="16" aria-hidden="true" />
                   <span>{{ dateText }}</span>
                 </div>
-              </VCardText>
+              </div>
             </div>
           </VCard>
         </div>
@@ -165,9 +167,82 @@ function doDelete() {
   container-type: inline-size;
 }
 
+.share-card {
+  min-block-size: 150px;
+  min-inline-size: 0;
+}
+
+.share-card-body {
+  display: flex;
+  min-block-size: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.share-card-content {
+  display: flex;
+  min-block-size: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 12px 12px 4px;
+}
+
+.share-card-copy {
+  min-inline-size: 0;
+  min-block-size: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding-inline-start: 4px;
+}
+
+.share-card-title,
+.share-card-comment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-card-title {
+  margin-inline-end: 8px;
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.share-card-comment {
+  color: rgb(229 231 235);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  padding-block-start: 4px;
+}
+
+.v-card .share-card-meta {
+  flex: 0 0 auto;
+}
+
+.share-card-meta__main {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+
 .subscribe-card-background {
   background-image: linear-gradient(180deg, rgba(31, 41, 55, 47%) 0%, rgb(31, 41, 55) 100%);
 }
+
 .share-card-meta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -175,6 +250,8 @@ function doDelete() {
   gap: 6px 12px;
   padding-block: 8px;
   padding-inline: 12px;
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .share-card-meta__author,
@@ -209,6 +286,7 @@ function doDelete() {
     justify-self: auto;
   }
 }
+
 
 // 批量模式选择框
 .share-card-checkbox {
