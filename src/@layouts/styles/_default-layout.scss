@@ -1,8 +1,8 @@
 // These are styles which are both common in layout w/ vertical nav & horizontal nav
-@use "@layouts/styles/rtl";
-@use "@layouts/styles/placeholders";
-@use "@layouts/styles/mixins";
-@use "@configured-variables" as variables;
+@use '@layouts/styles/rtl';
+@use '@layouts/styles/placeholders';
+@use '@layouts/styles/mixins';
+@use '@configured-variables' as variables;
 
 html {
   background: rgb(var(--v-theme-background));
@@ -37,6 +37,7 @@ body,
   @include mixins.boxed-content(true);
 
   flex-grow: 1;
+  min-inline-size: 0;
   overflow: clip visible;
 
   // TODO: Use grid gutter variable here;
@@ -46,22 +47,24 @@ body,
 
   // display: flex;display
 
-
   .page-content-container {
     // flex: 1;flex
     display: flex;
+    min-inline-size: 0;
 
     & > div:first-child {
       position: relative;
       flex: auto;
       inline-size: calc(100vw - variables.$layout-vertical-nav-width - 1rem);
+      min-inline-size: 0;
     }
   }
 }
 
-@media screen and (width <= 1280px){
-  .page-content-container > div:first-child  {
-    inline-size: calc(100vw - 1rem) !important;
+@media screen and (width <= 1280px) {
+  .page-content-container > div:first-child {
+    inline-size: 100% !important;
+    max-inline-size: 100%;
   }
 }
 

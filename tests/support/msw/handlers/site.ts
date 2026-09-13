@@ -14,11 +14,13 @@ const API_BASE_URL = 'http://localhost/api/v1/'
 interface SiteMutationResponse {
   success: boolean
   data?: Record<string, unknown>
+  detail?: string
   message?: string
 }
 
 export const siteApiUrls = {
   categories: (siteId: number) => new URL(`site/category/${siteId}`, API_BASE_URL).href,
+  cookieCloudBlacklist: (id: number) => new URL(`site/${id}/cookiecloud-blacklist`, API_BASE_URL).href,
   cookie: (id: number) => new URL(`site/cookie/${id}`, API_BASE_URL).href,
   delete: (id: number) => new URL(`site/${id}`, API_BASE_URL).href,
   details: (id: number) => new URL(`site/${id}`, API_BASE_URL).href,
@@ -201,6 +203,18 @@ export function updateSiteHandler(
   return http.put(siteApiUrls.list, async ({ request }) => {
     await onRequest((await request.json()) as Site)
     return HttpResponse.json(response, { status })
+  })
+}
+
+export function addSiteToCookieCloudBlacklistHandler(
+  id: number,
+  result: SiteMutationResponse = { success: true },
+  status = 200,
+  onRequest: () => void | Promise<void> = () => {},
+) {
+  return http.post(siteApiUrls.cookieCloudBlacklist(id), async () => {
+    await onRequest()
+    return HttpResponse.json(result, { status })
   })
 }
 

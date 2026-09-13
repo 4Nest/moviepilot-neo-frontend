@@ -93,8 +93,10 @@ async function testSite() {
   }
 }
 
-// 打开更新站点Cookie UA弹窗
+// 更新需要认证的站点 Cookie 与 UA。
 async function handleSiteUpdate() {
+  if (cardProps.site?.public) return
+
   openSharedDialog(
     SiteCookieUpdateDialog,
     { site: cardProps.site },
@@ -235,6 +237,9 @@ function onSiteResourceDone() {
 onMounted(() => {
   getSiteIcon()
 })
+
+// 窄视口中从按钮下方弹出，避免菜单横向覆盖卡片主体。
+const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' : 'left'))
 </script>
 
 <template>
@@ -264,7 +269,7 @@ onMounted(() => {
         <div v-if="cardProps.site?.is_active" class="site-status-indicator" :class="statColor"></div>
 
         <!-- 主体部分 -->
-        <div class="relative z-1 flex flex-1 flex-col p-3 pr-12">
+        <div class="relative z-1 flex flex-1 flex-col p-3">
           <!-- 顶部：图标和站点名称 -->
           <div class="mb-1 flex min-w-0 items-center gap-2">
             <!-- 站点图标 -->
@@ -338,18 +343,21 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 中间部分：网址 -->
+          <!-- 站点地址 -->
           <div class="my-3">
             <div class="min-w-0 truncate text-sm text-medium-emphasis" @click.stop="handleSiteUrlClick">
               {{ cardProps.site?.url }}
             </div>
           </div>
 
-          <!-- 底部：数据统计 -->
-          <div class="flex-1 flex flex-col justify-end">
-            <!-- 更直观的上传下载数据条 -->
+          <!-- 公开 BT 标签固定在卡片左下角。 -->
+          <div v-if="cardProps.site?.public" class="site-card-public-summary">
+            <VChip size="small" color="success" variant="tonal" prepend-icon="mdi-earth">公开 BT</VChip>
+          </div>
+
+          <!-- PT 站点显示上传下载数据。 -->
+          <div v-else class="flex-1 flex flex-col justify-end">
             <div class="border-t mt-1.5 pt-1.5">
-              <!-- 上传数据 -->
               <div class="flex items-center justify-between gap-3 mb-1.5">
                 <div class="text-sm text-medium-emphasis min-w-[70px]">
                   <VIcon icon="mdi-arrow-up" size="14" color="info" class="mr-1" />
@@ -360,7 +368,6 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- 下载数据 -->
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center text-[0.8rem] text-medium-emphasis min-w-[70px]">
                   <VIcon icon="mdi-arrow-down" size="14" color="success" class="mr-1" />
@@ -373,18 +380,16 @@ onMounted(() => {
             </div>
           </div>
         </div>
-
-        <!-- 右侧操作按钮区 -->
+        <!-- 紧凑操作区：不再占据卡片整列宽度。 -->
         <VSheet
           v-if="!cardProps.sortable"
-          class="site-card-actions absolute inset-y-0 right-0 z-20 flex flex-col py-2 px-1"
+          class="site-card-actions absolute top-2 right-2 z-20 flex items-center gap-1 rounded-lg px-1 py-0.5"
         >
-          <!-- 测试按钮 -->
           <VBtn
             icon
             variant="text"
             density="comfortable"
-            class="mb-1 relative flex items-center justify-center rounded-full mx-auto"
+            class="relative flex items-center justify-center rounded-full"
             :disabled="testButtonDisable"
             @click.stop="testSite"
             size="36"
@@ -405,20 +410,17 @@ onMounted(() => {
             </div>
           </VBtn>
 
-          <!-- 用户数据按钮 -->
-          <VBtn icon variant="text" @click.stop="handleSiteUserData" size="36">
+          <VBtn v-if="!cardProps.site?.public" icon variant="text" @click.stop="handleSiteUserData" size="36">
             <VIcon icon="mdi-chart-bell-curve" size="20" />
           </VBtn>
 
-          <!-- 更新按钮 -->
-          <VBtn icon variant="text" @click.stop="handleSiteUpdate" size="36">
+          <VBtn v-if="!cardProps.site?.public" icon variant="text" @click.stop="handleSiteUpdate" size="36">
             <VIcon icon="mdi-refresh" size="20" />
           </VBtn>
 
-          <!-- 更多选项按钮 -->
-          <VBtn icon variant="text" class="mt-auto" size="36" @click.stop>
+          <VBtn icon variant="text" size="36" @click.stop>
             <VIcon icon="mdi-dots-vertical" size="20" />
-            <VMenu :activator="'parent'" :close-on-content-click="true" :location="'left'">
+            <VMenu :activator="'parent'" :close-on-content-click="true" :location="siteMenuLocation">
               <VList>
                 <VListItem @click="handleSiteEdit" base-color="info">
                   <template #prepend>
@@ -665,16 +667,34 @@ onMounted(() => {
   }
 }
 
+.site-card-public-summary {
+  position: absolute;
+  z-index: 2;
+  inset-block-end: 0.75rem;
+  inset-inline-start: 1rem;
+}
+
 .site-card-actions {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-surface), 0.88);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
   opacity: 0;
-  transform: translateX(100%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(-0.35rem);
+  transition: all 0.2s ease;
   visibility: hidden;
 }
 
 .site-card-hover-area:hover .site-card-actions {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(0);
   visibility: visible;
+}
+
+@media (hover: none), (width <= 600px) {
+  .site-card-actions {
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+  }
 }
 </style>

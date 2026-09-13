@@ -238,18 +238,10 @@ const pageStubs = {
   VScrollToTopBtn: true,
 }
 
-async function renderResource(
-  initialRoute: { path: string; query?: Record<string, string> } = { path: '/resource' },
-  aiEnabled = false,
-) {
+async function renderResource(initialRoute: { path: string; query?: Record<string, string> } = { path: '/resource' }) {
   return renderWithProviders(ResourcePage, {
     initialRoute,
     initialState: {
-      globalSettings: {
-        data: { AI_RECOMMEND_ENABLED: aiEnabled },
-        initialized: true,
-        loading: false,
-      },
       user: {
         permissions: { ...DEFAULT_PERMISSIONS, search: true },
         superUser: false,
@@ -842,56 +834,4 @@ describe('resource page search flow', () => {
     expect(screen.queryByText('过期结果')).not.toBeInTheDocument()
   })
 
-  it('submits every grouped match to AI and restores filters after returning to original results', async () => {
-    let statusChecks = 0
-    mocks.apiPost.mockImplementation((_endpoint: string, body: Record<string, unknown>) => {
-      if (body.check_only) {
-        statusChecks += 1
-        return Promise.resolve(
-          statusChecks === 1
-            ? { data: { status: 'idle' }, success: true }
-            : { data: { results: [0], status: 'completed' }, success: true },
-        )
-      }
-      return Promise.resolve({ success: true })
-    })
-    await renderResource(
-      {
-        path: '/resource',
-        query: { keyword: 'AI 搜索', result_type: 'torrent' },
-      },
-      true,
-    )
-    const source = await latestEventSource()
-    finishStream(source, [
-      createTorrent({ pageUrl: 'https://example.test/group-a', site: 'Site A', title: '同组一' }),
-      createTorrent({ pageUrl: 'https://example.test/group-b', site: 'Site A', title: '同组二' }),
-      createTorrent({ name: '其他媒体', pageUrl: 'https://example.test/other', site: 'Site B', title: '其他结果' }),
-    ])
-    await fireEvent.click(await screen.findByRole('button', { name: '筛选 Site A' }))
-    await waitFor(() => expect(screen.getByTestId('torrent-filter-bar')).toHaveAttribute('data-sites', 'Site A'))
-    await waitFor(() =>
-      expect(
-        mocks.apiPost.mock.calls.some(
-          ([endpoint, body]) =>
-            endpoint === 'search/recommend' && (body as Record<string, unknown>).check_only === true,
-        ),
-      ).toBe(true),
-    )
-    const aiButton = screen.getAllByRole('button', { name: /智能推荐/ })[0]
-    await waitFor(() => expect(aiButton).not.toBeDisabled())
-
-    await fireEvent.click(aiButton)
-    await waitFor(() => {
-      const initialRequest = mocks.apiPost.mock.calls.find(
-        ([endpoint, body]) => endpoint === 'search/recommend' && !(body as Record<string, unknown>).check_only,
-      )
-      expect(initialRequest?.[1]).toEqual({ filtered_indices: [0, 1] })
-    })
-    await waitFor(() => expect(screen.getByTestId('torrent-filter-bar')).toHaveAttribute('data-sites', ''))
-
-    await fireEvent.click(screen.getAllByRole('button', { name: /智能推荐/ })[0])
-
-    await waitFor(() => expect(screen.getByTestId('torrent-filter-bar')).toHaveAttribute('data-sites', 'Site A'))
-  })
 })

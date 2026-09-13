@@ -2,7 +2,6 @@
 import type { SystemNotification } from '@/api/types'
 import api from '@/api'
 import { appUnreadMessageCount, clearUnreadMessages } from '@/utils/badge'
-import { emitAgentAssistantNotificationBubble } from '@/utils/agentAssistantBubble'
 import { formatDateDifference } from '@core/utils/formatters'
 import { useBackground } from '@/composables/useBackground'
 import { useToast } from 'vue-toastification'
@@ -387,7 +386,6 @@ function handleMessage(event: MessageEvent) {
 
     if (mergeNotifications([notification], { prepend: true, read: false })) {
       hasNewMessage.value = true
-      emitAgentAssistantNotificationBubble(notification)
     }
   } catch (error) {
     console.error('解析通知失败:', error)
@@ -412,7 +410,6 @@ function getNotificationIcon(item: SystemNotification) {
   if (item.mtype === '资源下载') return 'mdi-download'
   if (item.mtype === '整理入库') return 'mdi-folder-check-outline'
   if (item.mtype === '订阅') return 'mdi-rss'
-  if (item.mtype === '智能体') return 'lucide:bot'
   return getNotificationKind(item) === 'system' ? 'mdi-alert-circle-outline' : 'mdi-bell-outline'
 }
 

@@ -42,8 +42,8 @@ const resourceItemsPerPage = ref(25)
 // 当前页
 const resourcePage = ref(1)
 
-// 加载状态
 const resourceLoading = ref(false)
+const initialResourceLoading = ref(true)
 
 const resourceError = ref(false)
 
@@ -71,12 +71,10 @@ const resourceTotalItems = computed(() => resourceDataList.value.length)
 
 // 资源浏览表头
 const resourceHeaders = computed(() => [
-  { title: t('dialog.siteResource.titleColumn'), key: 'title', sortable: false },
-  { title: t('dialog.siteResource.timeColumn'), key: 'pubdate', sortable: true },
-  { title: t('dialog.siteResource.sizeColumn'), key: 'size', sortable: true },
-  { title: t('dialog.siteResource.seedersColumn'), key: 'seeders', sortable: true },
-  { title: t('dialog.siteResource.peersColumn'), key: 'peers', sortable: true },
-  { title: '', key: 'actions', sortable: false },
+  { title: t('dialog.siteResource.titleColumn'), key: 'title', sortable: false, width: '72%' },
+  { title: '操作', key: 'quickActions', sortable: false, width: '9%' },
+  { title: t('dialog.siteResource.timeColumn'), key: 'pubdate', sortable: true, width: '9%' },
+  { title: '资源', key: 'stats', sortable: false, width: '10%' },
 ])
 
 // 输入框标签
@@ -179,7 +177,23 @@ async function getResourceList() {
         mobileSearchExpanded.value = false
       }
     }
+
+    if (requestId === resourceRequestId) {
+      // 最后一个初始请求完成后才展开页面，避免旧请求提前结束导致闪烁。
+      initialResourceLoading.value = false
+    }
   }
+}
+
+function getResourceDateParts(item: TorrentInfo) {
+  const raw = item.pubdate?.trim()
+
+  if (raw) {
+    const [date, ...timeParts] = raw.split(/\s+/)
+    return { date, time: timeParts.join(' ') || undefined }
+  }
+
+  return { date: item.date_elapsed || t('dialog.siteResource.unknownTime'), time: undefined }
 }
 
 // 加载站点分类
@@ -229,21 +243,29 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog scrollable :fullscreen="display.smAndDown.value" max-width="92rem" transition="dialog-bottom-transition">
+  <VDialog scrollable :fullscreen="display.smAndDown.value" max-width="78rem" transition="dialog-bottom-transition">
     <VCard class="site-resource-dialog">
-      <div>
-        <VToolbar color="primary" density="comfortable">
-          <VToolbarTitle>{{ t('dialog.siteResource.browseTitle', { name: props.site?.name }) }}</VToolbarTitle>
-          <VSpacer />
-          <VToolbarItems>
-            <VBtn icon @click="emit('close')" class="me-3">
-              <VIcon size="large" color="white" icon="ri-close-line" />
-            </VBtn>
-          </VToolbarItems>
-        </VToolbar>
-      </div>
+      <header class="site-resource-header">
+        <div class="site-resource-header__identity">
+          <VAvatar color="primary" variant="tonal" rounded="lg" size="40">
+            <VIcon icon="mdi-rss-box" size="22" />
+          </VAvatar>
+          <div class="site-resource-header__copy">
+            <div class="site-resource-header__eyebrow">{{ t('site.browseResources') }}</div>
+            <h2 class="site-resource-header__title">{{ props.site?.name }}</h2>
+          </div>
+        </div>
 
-      <div class="pa-3 pb-2">
+        <div class="site-resource-header__meta">
+          <VChip v-if="resourceTotalItems > 0" color="primary" variant="tonal" size="small">
+            {{ resultSummaryText }}
+          </VChip>
+          <VBtn icon="mdi-close" variant="text" size="small" :aria-label="t('common.close')" @click="emit('close')" />
+        </div>
+      </header>
+
+
+      <div class="site-resource-controls">
         <template v-if="!isMobileLayout">
           <VSheet class="site-resource-filter-panel">
             <div class="site-resource-filter-panel__inner">
@@ -295,15 +317,6 @@ onMounted(() => {
                   </VBtn>
                 </VCol>
               </VRow>
-
-              <div v-if="resourceTotalItems > 0" class="d-flex justify-space-between align-center flex-wrap gap-2 mt-3">
-                <div class="text-body-2 text-medium-emphasis">
-                  {{ resultSummaryText }}
-                </div>
-                <VChip size="small" color="primary" variant="tonal" class="site-resource-result-chip">
-                  {{ resourceTotalItems }}
-                </VChip>
-              </div>
             </div>
           </VSheet>
         </template>
@@ -386,6 +399,15 @@ onMounted(() => {
       </div>
 
       <VCardText class="site-resource-content px-0 py-0 my-0">
+        <VFadeTransition>
+          <section v-if="initialResourceLoading" class="site-resource-initial-loading" aria-live="polite">
+            <div class="site-resource-initial-loading__icon">
+              <VIcon icon="mdi-rss-box" size="30" />
+            </div>
+            <div class="site-resource-initial-loading__title">{{ t('dialog.siteResource.initialLoading') }}</div>
+            <VProgressLinear color="primary" indeterminate rounded class="site-resource-initial-loading__bar" />
+          </section>
+        </VFadeTransition>
         <VAlert
           v-if="resourceError && !resourceLoading"
           type="error"
@@ -420,27 +442,35 @@ onMounted(() => {
           class="h-full site-resource-table"
         >
           <template #item.title="{ item }">
-            <button type="button" class="site-resource-title-btn text-start" @click.stop="addDownload(item)">
-              <div class="text-high-emphasis pt-1 font-weight-medium">
-                {{ item.title }}
-              </div>
-              <div v-if="item.description" class="text-sm my-1 text-medium-emphasis">
-                {{ item.description }}
-              </div>
-              <div class="mt-2">
-                <VChip v-if="item.hit_and_run" variant="elevated" size="small" class="me-1 mb-1 text-white bg-black">
+            <div class="site-resource-title-cell text-start">
+              <VTooltip :text="item.title" location="top" :max-width="480">
+                <template #activator="{ props: tooltipProps }">
+                  <div v-bind="tooltipProps" class="site-resource-title-cell__main">
+                    <VIcon icon="mdi-movie-open-outline" size="18" class="site-resource-title-cell__icon" />
+                    <span class="site-resource-title-cell__text">{{ item.title }}</span>
+                  </div>
+                </template>
+              </VTooltip>
+              <VTooltip v-if="item.description" :text="item.description" location="top" :max-width="480">
+                <template #activator="{ props: tooltipProps }">
+                  <div v-bind="tooltipProps" class="site-resource-title-cell__description">
+                    {{ item.description }}
+                  </div>
+                </template>
+              </VTooltip>
+              <div class="site-resource-title-cell__chips">
+                <VChip v-if="item.hit_and_run" variant="elevated" size="x-small" class="text-white bg-black">
                   H&amp;R
                 </VChip>
-                <VChip v-if="item.freedate_diff" variant="elevated" color="secondary" size="small" class="me-1 mb-1">
+                <VChip v-if="item.freedate_diff" variant="tonal" color="secondary" size="x-small">
                   {{ item.freedate_diff }}
                 </VChip>
                 <VChip
                   v-for="(label, index) in item.labels"
                   :key="index"
-                  variant="elevated"
-                  size="small"
-                  color="primary"
-                  class="me-1 mb-1"
+                  class="site-resource-label-chip"
+                  variant="flat"
+                  size="x-small"
                 >
                   {{ label }}
                 </VChip>
@@ -448,60 +478,76 @@ onMounted(() => {
                   v-if="item.downloadvolumefactor !== 1 || item.uploadvolumefactor !== 1"
                   :class="getVolumeFactorClass(item.downloadvolumefactor, item.uploadvolumefactor)"
                   variant="elevated"
-                  size="small"
-                  class="me-1 mb-1"
+                  size="x-small"
                 >
                   {{ item.volume_factor }}
                 </VChip>
               </div>
-            </button>
+            </div>
+          </template>
+          <template #item.quickActions="{ item }">
+            <div class="site-resource-quick-actions">
+              <VTooltip :text="t('actionStep.addDownload')" location="top">
+                <template #activator="{ props: tooltipProps }">
+                  <VBtn
+                    v-bind="tooltipProps"
+                    icon="mdi-tray-arrow-down"
+                    size="small"
+                    variant="text"
+                    color="primary"
+                    class="site-resource-quick-actions__button"
+                    :aria-label="t('actionStep.addDownload')"
+                    @click.stop="addDownload(item)"
+                  />
+                </template>
+              </VTooltip>
+              <VTooltip :text="t('common.viewDetails')" location="top">
+                <template #activator="{ props: tooltipProps }">
+                  <VBtn
+                    v-bind="tooltipProps"
+                    icon="mdi-text-box-search-outline"
+                    size="small"
+                    variant="text"
+                    :disabled="!item.page_url"
+                    class="site-resource-quick-actions__button site-resource-quick-actions__button--detail"
+                    :aria-label="t('common.viewDetails')"
+                    @click.stop="openTorrentDetail(item.page_url || '')"
+                  />
+                </template>
+              </VTooltip>
+            </div>
           </template>
 
           <template #item.pubdate="{ item }">
-            <div>{{ item.date_elapsed }}</div>
-            <div class="text-sm text-medium-emphasis">
-              {{ item.pubdate }}
+            <div class="site-resource-date-cell">
+              <VIcon icon="mdi-clock-outline" size="16" />
+              <div class="site-resource-date-cell__text">
+                <span class="site-resource-date-cell__date">{{ getResourceDateParts(item).date }}</span>
+                <span v-if="getResourceDateParts(item).time" class="site-resource-date-cell__time">
+                  {{ getResourceDateParts(item).time }}
+                </span>
+              </div>
             </div>
           </template>
 
-          <template #item.size="{ item }">
-            <div class="text-nowrap whitespace-nowrap">
-              {{ formatFileSize(item.size) }}
+          <template #item.stats="{ item }">
+            <div class="site-resource-stats-cell">
+              <span class="site-resource-stats-cell__item site-resource-stats-cell__item--size">
+                <VIcon icon="mdi-harddisk" size="15" />
+                {{ formatFileSize(item.size) }}
+              </span>
+              <div class="site-resource-stats-cell__transfer">
+                <span class="site-resource-stats-cell__item site-resource-stats-cell__item--seeders">
+                  <VIcon icon="mdi-arrow-up-bold" size="14" />
+                  {{ item.seeders ?? '-' }}
+                </span>
+                <span class="site-resource-stats-cell__item site-resource-stats-cell__item--peers">
+                  <VIcon icon="mdi-arrow-down-bold" size="14" />
+                  {{ item.peers ?? '-' }}
+                </span>
+              </div>
             </div>
           </template>
-
-          <template #item.seeders="{ item }">
-            <div>{{ item.seeders }}</div>
-          </template>
-
-          <template #item.peers="{ item }">
-            <div>{{ item.peers }}</div>
-          </template>
-
-          <template #item.actions="{ item }">
-            <div class="me-n3">
-              <IconBtn>
-                <VIcon icon="mdi-dots-vertical" />
-                <VMenu activator="parent" close-on-content-click>
-                  <VList>
-                    <VListItem @click="openTorrentDetail(item.page_url || '')">
-                      <template #prepend>
-                        <VIcon icon="mdi-information" />
-                      </template>
-                      <VListItemTitle>{{ t('dialog.siteResource.viewDetails') }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem v-if="item.enclosure?.startsWith('http')" @click="downloadTorrentFile(item.enclosure)">
-                      <template #prepend>
-                        <VIcon icon="mdi-download" />
-                      </template>
-                      <VListItemTitle>{{ t('dialog.siteResource.downloadTorrent') }}</VListItemTitle>
-                    </VListItem>
-                  </VList>
-                </VMenu>
-              </IconBtn>
-            </div>
-          </template>
-
           <template #no-data>{{ t('dialog.siteResource.noData') }}</template>
         </VDataTable>
 
@@ -529,7 +575,7 @@ onMounted(() => {
                   variant="flat"
                 >
                   <VCardText class="pa-3">
-                    <button type="button" class="site-resource-title-btn text-start" @click="addDownload(item)">
+                    <div class="site-resource-title-cell text-start">
                       <div class="site-resource-card__title text-body-1 font-weight-medium text-high-emphasis">
                         {{ item.title }}
                       </div>
@@ -539,8 +585,7 @@ onMounted(() => {
                       >
                         {{ item.description }}
                       </div>
-                    </button>
-
+                    </div>
                     <div class="site-resource-card__chips mt-2">
                       <VChip
                         v-if="item.hit_and_run"
@@ -562,10 +607,9 @@ onMounted(() => {
                       <VChip
                         v-for="(label, chipIndex) in item.labels"
                         :key="chipIndex"
-                        variant="elevated"
+                        variant="flat"
                         size="small"
-                        color="primary"
-                        class="me-1 mb-1"
+                        class="me-1 mb-1 site-resource-label-chip"
                       >
                         {{ label }}
                       </VChip>
@@ -583,8 +627,10 @@ onMounted(() => {
                     <!-- 移动端在操作区前展示关键资源指标，方便点击前快速判断。 -->
                     <div class="site-resource-card__summary mt-3">
                       <div class="site-resource-card__stat">
-                        <VIcon icon="mdi-clock-outline" size="15" />
-                        <span>{{ item.date_elapsed || item.pubdate || '-' }}</span>
+                        <span>{{ getResourceDateParts(item).date }}</span>
+                        <span v-if="getResourceDateParts(item).time" class="site-resource-card__stat-time">
+                          {{ getResourceDateParts(item).time }}
+                        </span>
                       </div>
                       <div class="site-resource-card__stat">
                         <VIcon icon="mdi-harddisk" size="15" />
@@ -686,6 +732,121 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.9));
+  background:
+    radial-gradient(circle at 5% 0%, rgba(var(--v-theme-primary), 0.08), transparent 24rem), rgb(var(--v-theme-surface));
+}
+
+.site-resource-initial-loading {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 2rem;
+  border-radius: inherit;
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  inset: 0;
+  pointer-events: none;
+}
+
+.site-resource-initial-loading__icon {
+  display: grid;
+  place-items: center;
+  block-size: 4rem;
+  inline-size: 4rem;
+  border-radius: 1.25rem;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+.site-resource-initial-loading__title {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.site-resource-initial-loading__bar {
+  inline-size: min(18rem, 80%);
+}
+.site-resource-content {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 20rem;
+}
+
+.site-resource-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-block-size: 4.5rem;
+  padding: 0.8rem 1rem;
+  border-block-end: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.72));
+  background: rgba(var(--v-theme-surface), 0.88);
+  backdrop-filter: blur(18px);
+}
+
+.site-resource-header__identity,
+.site-resource-header__meta {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+
+.site-resource-header__identity {
+  gap: 0.75rem;
+}
+
+.site-resource-header__copy {
+  min-inline-size: 0;
+}
+
+.site-resource-header__eyebrow {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.site-resource-header__title {
+  overflow: hidden;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-resource-header__meta {
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+
+.site-resource-filter-input :deep(.v-field__input) {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 600;
+}
+
+.site-resource-filter-input :deep(.v-label) {
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-weight: 600;
+}
+
+.site-resource-filter-input :deep(.v-chip) {
+  color: rgb(var(--v-theme-on-primary)) !important;
+  background: rgb(var(--v-theme-primary)) !important;
+  font-weight: 650;
+}
+.site-resource-controls {
+  padding: 0.75rem 0.85rem 0.65rem;
 }
 
 .site-resource-filter-row {
@@ -693,78 +854,104 @@ onMounted(() => {
 }
 
 .site-resource-filter-panel {
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.72));
+  border-radius: 14px;
   background:
-    radial-gradient(circle at top left, rgba(var(--v-theme-primary), 0.06), transparent 40%),
-    linear-gradient(180deg, rgba(var(--v-theme-surface), 0.98), rgba(var(--v-theme-surface), 0.93));
+    linear-gradient(135deg, rgba(var(--v-theme-primary), 0.055), transparent 42%), rgba(var(--v-theme-surface), 0.78);
 }
 
 .site-resource-filter-panel__inner {
-  padding: 0.75rem 0.85rem;
+  padding: 0.65rem 0.75rem;
 }
 
 .site-resource-filter-input :deep(.v-field) {
-  border-radius: var(--app-field-radius);
+  border-radius: 10px;
   background: rgba(var(--v-theme-surface), 0.92);
-  box-shadow: inset 0 0 0 1px rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  box-shadow: inset 0 0 0 1px rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.58));
 }
 
 .site-resource-filter-input :deep(.v-field__prepend-inner) {
-  color: rgba(var(--v-theme-primary), 0.85);
+  color: rgba(var(--v-theme-primary), 0.86);
 }
 
 .site-resource-search-btn {
-  box-shadow: 0 8px 18px rgba(var(--v-theme-primary), 0.18);
+  box-shadow: 0 7px 18px rgba(var(--v-theme-primary), 0.18);
   letter-spacing: 0.02em;
   min-block-size: 40px;
 }
 
-.site-resource-result-chip {
-  font-weight: 600;
-}
-
-.site-resource-mobile-search {
+.site-resource-filter-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.4rem;
+  margin-block-start: 0.55rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.78rem;
 }
 
-.site-resource-mobile-search__toggle {
-  flex: 0 0 auto;
+.site-resource-filter-summary .v-icon {
+  color: rgb(var(--v-theme-primary));
 }
-
-.site-resource-title-btn {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  inline-size: 100%;
-}
-
-.site-resource-content {
-  flex: 1 1 auto;
-  min-block-size: 0;
-  overflow: hidden;
-}
-
 .site-resource-table {
   block-size: 100%;
+  max-inline-size: 100%;
+  overflow: hidden;
 }
 
 .site-resource-table :deep(.v-data-table) {
   display: flex;
   flex-direction: column;
   block-size: 100%;
+  max-inline-size: 100%;
+  overflow: hidden;
 }
 
+.site-resource-table :deep(table) {
+  table-layout: fixed;
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.site-resource-table :deep(th),
+.site-resource-table :deep(td) {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.site-resource-table :deep(th:first-child),
+.site-resource-table :deep(td:first-child) {
+  inline-size: 72%;
+  max-inline-size: 72%;
+}
+
+.site-resource-table :deep(th:nth-child(2)),
+.site-resource-table :deep(td:nth-child(2)) {
+  inline-size: 9%;
+  max-inline-size: 9%;
+  padding-inline: 0.15rem;
+}
+
+.site-resource-table :deep(th:nth-child(3)),
+.site-resource-table :deep(td:nth-child(3)) {
+  inline-size: 9%;
+  max-inline-size: 9%;
+}
+
+.site-resource-table :deep(th:last-child),
+.site-resource-table :deep(td:last-child) {
+  inline-size: 10%;
+  max-inline-size: 10%;
+}
+
+.site-resource-table :deep(.v-table__wrapper),
 .site-resource-table :deep(.v-data-table__wrapper) {
   flex: 1 1 auto;
   min-block-size: 0;
-}
-
-.site-resource-table :deep(.v-table__wrapper) {
-  flex: 1 1 auto;
-  min-block-size: 0;
+  max-inline-size: 100%;
+  overflow-x: hidden;
 }
 
 .site-resource-table :deep(.v-data-table-footer) {
@@ -774,6 +961,212 @@ onMounted(() => {
 .site-resource-mobile {
   overflow-y: auto;
   block-size: 100%;
+}
+.site-resource-quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.site-resource-quick-actions :deep(.v-btn) {
+  block-size: 2.35rem;
+  flex: 0 0 auto;
+  inline-size: 2.35rem;
+  min-block-size: 2.35rem;
+  min-inline-size: 2.35rem;
+  padding: 0;
+}
+
+.site-resource-quick-actions__button {
+  box-shadow: none;
+}
+
+.site-resource-quick-actions__button--detail {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.site-resource-quick-actions__button--detail:not(.v-btn--disabled):hover {
+  color: rgb(var(--v-theme-primary));
+}
+
+.site-resource-quick-actions :deep(.v-btn__content) {
+  overflow: visible;
+}
+
+.site-resource-title-cell {
+  display: block;
+  padding-block: 0.35rem;
+}
+
+.site-resource-title-cell__main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.site-resource-title-cell__icon {
+  flex: 0 0 auto;
+  color: rgb(var(--v-theme-primary));
+}
+
+.site-resource-title-cell__text {
+  overflow: hidden;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-resource-title-cell__description {
+  overflow: hidden;
+  margin-block-start: 0.25rem;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 0.76rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-resource-title-cell__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-block-start: 0.4rem;
+}
+
+.site-resource-title-cell__chips :deep(.v-chip) {
+  margin: 0;
+}
+
+.site-resource-label-chip {
+  border: 1px solid rgba(var(--v-theme-primary), 0.42);
+  background: rgba(var(--v-theme-primary), 0.18) !important;
+  color: rgb(var(--v-theme-primary)) !important;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.site-resource-label-chip :deep(.v-chip__content) {
+  color: rgb(var(--v-theme-primary));
+  filter: brightness(1.35);
+}
+
+.site-resource-date-cell,
+.site-resource-size-cell,
+.site-resource-peer-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.site-resource-date-cell {
+  color: rgba(var(--v-theme-on-surface), 0.8);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.site-resource-date-cell__text {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  line-height: 1.3;
+}
+
+.site-resource-date-cell__date,
+.site-resource-date-cell__time {
+  overflow: hidden;
+  max-inline-size: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-resource-date-cell__time {
+  color: rgba(var(--v-theme-on-surface), 0.52);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.site-resource-size-cell {
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.site-resource-peer-cell {
+  justify-content: center;
+  min-inline-size: 3.2rem;
+  padding: 0.28rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.site-resource-peer-cell--seeders {
+  color: rgb(var(--v-theme-success));
+  background: rgba(var(--v-theme-success), 0.1);
+}
+
+.site-resource-peer-cell--peers {
+  color: rgb(var(--v-theme-warning));
+  background: rgba(var(--v-theme-warning), 0.1);
+}
+.site-resource-stats-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+
+.site-resource-stats-cell__item {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 650;
+  gap: 0.22rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.site-resource-stats-cell__item--size {
+  color: rgba(var(--v-theme-on-surface), 0.82);
+}
+
+.site-resource-stats-cell__item--size .v-icon {
+  color: rgba(var(--v-theme-primary), 0.78);
+}
+
+.site-resource-stats-cell__item--seeders {
+  color: rgb(var(--v-theme-success));
+}
+
+.site-resource-stats-cell__item--peers {
+  color: rgb(var(--v-theme-warning));
+}
+
+.site-resource-stats-cell__transfer {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  gap: 0.45rem;
+}
+
+.site-resource-actions-cell {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .site-resource-mobile__list {
@@ -786,11 +1179,13 @@ onMounted(() => {
 
 .site-resource-card {
   --site-resource-card-bg:
-    linear-gradient(180deg, rgba(var(--v-theme-surface), 0.98), rgba(var(--v-theme-surface), 0.94)),
-    radial-gradient(circle at top right, rgba(var(--v-theme-primary), 0.08), transparent 34%);
+    linear-gradient(145deg, rgba(var(--v-theme-primary), 0.055), transparent 44%), rgba(var(--v-theme-surface), 0.96);
 
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.9));
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.82));
+  border-radius: 14px;
   background: var(--site-resource-card-bg);
+  box-shadow: 0 8px 22px rgba(var(--v-theme-on-surface), 0.055);
 }
 
 .site-resource-card--transparent {
@@ -895,7 +1290,21 @@ onMounted(() => {
 
 @media (width <= 959px) {
   .site-resource-dialog {
+    border: 0;
     border-radius: 0;
+  }
+
+  .site-resource-header {
+    min-block-size: 4rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .site-resource-header__meta .v-chip {
+    display: none;
+  }
+
+  .site-resource-controls {
+    padding: 0.45rem 0.75rem 0.55rem;
   }
 
   .site-resource-filter-panel__inner {

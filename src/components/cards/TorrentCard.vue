@@ -164,140 +164,106 @@ watch(
 
       <!-- 媒体标题 -->
       <VCardItem class="pt-3 pb-0">
-        <div class="d-flex flex-row flex-wrap justify-start align-center mb-2 pr-8">
-          <span class="text-h6 font-weight-bold me-2">
-            {{ media?.title ?? meta?.name }}
-          </span>
+        <div class="torrent-card__media-title mb-2 pr-8">
+          {{ media?.title ?? meta?.name }}
           <VChip
             v-if="meta?.season_episode"
-            class="chip-season rounded-sm font-weight-bold"
-            variant="elevated"
+            color="primary"
+            variant="flat"
             size="small"
+            class="torrent-card__season font-weight-bold"
           >
             {{ meta?.season_episode }}
           </VChip>
-        </div>
-
-        <!-- 站点信息条 -->
-        <div class="d-flex justify-space-between align-center flex-wrap">
-          <div class="d-flex align-center">
-            <VImg
-              v-if="siteIcons[torrent?.site || 0]"
-              :src="siteIcons[torrent?.site || 0]"
-              :alt="torrent?.site_name"
-              class="mr-2 rounded"
-              width="20"
-              height="20"
-            />
-            <VAvatar v-else size="20" class="mr-2 text-caption bg-surface-variant" color="surface-variant">
-              {{ torrent?.site_name?.substring(0, 1) }}
-            </VAvatar>
-            <span class="font-weight-bold text-body-2">{{ torrent?.site_name }}</span>
-          </div>
-
-          <div class="d-flex align-center gap-3">
-            <span v-if="torrent?.seeders" class="d-flex align-center font-weight-bold">
-              <VIcon size="small" color="success" icon="mdi-arrow-up" class="mr-1"></VIcon>
-              {{ torrent?.seeders }}
-            </span>
-            <span v-if="torrent?.peers" class="d-flex align-center font-weight-bold">
-              <VIcon size="small" color="warning" icon="mdi-arrow-down" class="mr-1"></VIcon>
-              {{ torrent?.peers }}
-            </span>
-          </div>
         </div>
       </VCardItem>
 
       <!-- 种子内容 -->
       <VCardText class="d-flex flex-column flex-grow-1 pa-3 overflow-hidden">
-        <!-- 种子标题 -->
-        <div class="text-subtitle-2 text-high-emphasis font-weight-medium mb-1 break-all" :title="torrent?.title">
+        <div class="torrent-card__torrent-title mb-1">
           {{ torrent?.title }}
         </div>
 
         <!-- 种子描述 -->
-        <div
-          v-if="meta?.subtitle || torrent?.description"
-          class="text-body-2 text-medium-emphasis mb-2 break-all"
-          :title="meta?.subtitle || torrent?.description"
-        >
+        <div v-if="meta?.subtitle || torrent?.description" class="torrent-card__description mb-2">
           {{ meta?.subtitle || torrent?.description }}
         </div>
-
-        <!-- 发布时间 -->
-        <div v-if="torrent?.pubdate" class="d-flex align-center justify-start mb-2">
-          <VIcon size="small" color="grey" icon="mdi-clock-outline" class="me-1"></VIcon>
-          <span class="text-sm text-medium-emphasis">{{ formatDateDifference(torrent.pubdate) }}</span>
-        </div>
-
-        <!-- 资源标签区 -->
-        <div class="d-flex flex-wrap gap-1 mb-2">
-          <!-- 流媒体平台 -->
-          <VChip v-if="meta?.web_source" class="chip-web-source rounded-sm" size="x-small" variant="elevated">
+        <!-- 资源标签区吸附内容底部，与弹窗 tonal 标签统一 -->
+        <div class="d-flex flex-wrap gap-1 mt-auto">
+          <VChip v-if="meta?.web_source" color="primary" size="x-small" variant="flat">
             {{ meta?.web_source }}
           </VChip>
-
-          <!-- 版本标签 -->
-          <VChip v-if="meta?.edition" class="chip-edition rounded-sm" size="x-small" variant="elevated">
+          <VChip v-if="meta?.edition" color="primary" size="x-small" variant="flat">
             {{ meta?.edition }}
           </VChip>
-
-          <!-- 分辨率标签 -->
-          <VChip v-if="meta?.resource_pix" class="chip-resolution rounded-sm" size="x-small" variant="elevated">
+          <VChip v-if="meta?.resource_pix" color="primary" size="x-small" variant="flat">
             {{ meta?.resource_pix }}
           </VChip>
-
-          <!-- 编码标签 -->
-          <VChip v-if="meta?.video_encode" class="chip-codec rounded-sm" size="x-small" variant="elevated">
+          <VChip v-if="meta?.video_encode" color="primary" size="x-small" variant="flat">
             {{ meta?.video_encode }}
           </VChip>
-
-          <!-- 制作组标签 -->
-          <VChip v-if="meta?.resource_team" class="chip-team rounded-sm" size="x-small" variant="elevated">
+          <VChip v-if="meta?.resource_team" color="primary" size="x-small" variant="flat">
             {{ meta?.resource_team }}
           </VChip>
-
-          <!-- 其他标签 -->
-          <VChip
-            v-for="(label, index) in torrent?.labels"
-            :key="index"
-            class="chip-label rounded-sm"
-            size="x-small"
-            variant="elevated"
-          >
+          <VChip v-for="(label, index) in torrent?.labels" :key="index" color="primary" size="x-small" variant="flat">
             {{ label }}
           </VChip>
-
-          <!-- 特殊标签 -->
-          <VChip v-if="torrent?.hit_and_run" class="chip-hr rounded-sm" size="x-small" variant="elevated">H&R</VChip>
-          <VChip v-if="torrent?.freedate_diff" class="chip-expire rounded-sm" size="x-small" variant="elevated">
+          <VChip v-if="torrent?.hit_and_run" size="x-small" variant="flat" class="text-white bg-black">H&R</VChip>
+          <VChip v-if="torrent?.freedate_diff" color="secondary" size="x-small" variant="flat">
             {{ torrent?.freedate_diff }}
           </VChip>
         </div>
       </VCardText>
 
-      <!-- 卡片底部信息 -->
-      <VCardActions class="border-t border-opacity-10 mt-auto pa-2">
-        <div v-if="props.more && props.more.length > 0">
-          <VBtn
-            variant="text"
-            color="primary"
-            size="small"
-            class="pa-1 d-flex align-center"
-            @click.stop="openMoreTorrentsDialog"
-          >
-            <VIcon icon="mdi-chevron-down" size="small" class="mr-1"></VIcon>
-            更多来源 ({{ props.more.length }})
-          </VBtn>
+      <!-- 卡片底部信息：站点在左下，统计与操作在右 -->
+      <VCardActions class="torrent-card__footer border-t border-opacity-10 mt-auto pa-2">
+        <div class="torrent-card__site">
+          <VImg
+            v-if="siteIcons[torrent?.site || 0]"
+            :src="siteIcons[torrent?.site || 0]"
+            :alt="torrent?.site_name"
+            class="rounded flex-shrink-0"
+            width="20"
+            height="20"
+          />
+          <VAvatar v-else size="20" class="text-caption bg-surface-variant flex-shrink-0" color="surface-variant">
+            {{ torrent?.site_name?.substring(0, 1) }}
+          </VAvatar>
+          <div class="torrent-card__site-text">
+            <span class="torrent-card__site-name">{{ torrent?.site_name }}</span>
+            <span v-if="torrent?.pubdate" class="torrent-card__time">
+              {{ formatDateDifference(torrent.pubdate) }}
+            </span>
+          </div>
         </div>
 
         <VSpacer />
 
-        <!-- 体积和详情按钮并排 -->
-        <div class="d-flex align-center">
-          <VChip v-if="torrent?.size" color="primary" size="x-small" variant="elevated" class="rounded-sm mr-2">
+        <VBtn
+          v-if="props.more && props.more.length > 0"
+          variant="text"
+          color="primary"
+          size="small"
+          class="pa-1 d-flex align-center flex-shrink-0"
+          @click.stop="openMoreTorrentsDialog"
+        >
+          <VIcon icon="mdi-chevron-down" size="small" class="mr-1"></VIcon>
+          更多来源 ({{ props.more.length }})
+        </VBtn>
+
+        <div class="d-flex align-center gap-1 flex-shrink-0">
+          <span class="torrent-stat torrent-stat--seeders">
+            <VIcon icon="mdi-arrow-up-bold" size="13" />
+            {{ torrent?.seeders ?? '-' }}
+          </span>
+          <span class="torrent-stat torrent-stat--peers">
+            <VIcon icon="mdi-arrow-down-bold" size="13" />
+            {{ torrent?.peers ?? '-' }}
+          </span>
+          <span v-if="torrent?.size" class="torrent-stat torrent-stat--size">
+            <VIcon icon="mdi-harddisk" size="14" />
             {{ formatFileSize(torrent.size) }}
-          </VChip>
+          </span>
           <VBtn icon size="small" variant="text" color="primary" @click.stop="openTorrentDetail()">
             <VIcon icon="mdi-information-outline"></VIcon>
           </VBtn>
@@ -306,7 +272,6 @@ watch(
     </VCard>
   </div>
 </template>
-
 <style scoped>
 .discount-banner {
   position: absolute;
@@ -341,63 +306,83 @@ watch(
   background-color: #9c27b0;
 }
 
-.chip-season {
-  background-color: #3f51b5;
-  color: white;
+.torrent-stat {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 0.72rem;
+  font-weight: 650;
+  gap: 0.22rem;
+  line-height: 1;
+  padding: 0.26rem 0.55rem;
+  white-space: nowrap;
 }
 
-.chip-web-source {
-  background-color: #8000ff;
-  color: white;
+.torrent-stat--seeders {
+  background: rgba(var(--v-theme-success), 0.12);
+  color: rgb(var(--v-theme-success));
 }
 
-.chip-edition {
-  background-color: #f44336;
-  color: white;
+.torrent-stat--peers {
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
 }
 
-.chip-resolution {
-  background-color: #7b1fa2;
-  color: white;
+.torrent-card__footer {
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.chip-codec {
-  background-color: #ff9800;
-  color: white;
+.torrent-card__site {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
 }
 
-.chip-team {
-  background-color: #00897b;
-  color: white;
+.torrent-card__site-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-inline-size: 0;
 }
 
-.chip-label {
-  background-color: #5c6bc0;
-  color: white;
+.torrent-card__site-name {
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), 0.85);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chip-hr {
-  background-color: #212121;
-  color: white;
+.torrent-card__season {
+  display: inline-flex;
+  margin-inline-start: 0.4rem;
+  vertical-align: 0.12em;
+}
+.torrent-card__media-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
 }
 
-.chip-expire {
-  background-color: #7e57c2;
-  color: white;
+.torrent-card__torrent-title {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
-.chip-free {
-  background-color: #4caf50;
-  color: white;
-}
-
-.chip-discount {
-  background-color: #ff5722;
-  color: white;
-}
-
-.chip-bonus {
-  background-color: #9c27b0;
-  color: white;
+.torrent-card__description {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  word-break: break-all;
 }
 </style>

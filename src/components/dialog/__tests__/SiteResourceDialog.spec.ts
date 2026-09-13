@@ -84,6 +84,9 @@ function setViewport(width: number) {
   window.dispatchEvent(new Event('resize'))
 }
 
+// 桌面标题与副标题通过 VTooltip 展示完整文本，tooltip 会在 DOM 中保留隐藏副本，文本查询需忽略覆盖层。
+const ignoreTooltipOverlay = { ignore: 'script, style, .v-overlay__content' }
+
 async function renderDialog(
   site = createSite({ id: 501, name: '资源测试站' }),
   stubs: Record<string, boolean | Component> = {},
@@ -183,7 +186,7 @@ describe('SiteResourceDialog', () => {
     await renderDialog()
 
     await user.click(await screen.findByRole('button', { name: '重试' }))
-    expect(await screen.findByText('重试恢复结果')).toBeInTheDocument()
+    expect(await screen.findByText('重试恢复结果', ignoreTooltipOverlay)).toBeInTheDocument()
     expect(attempts).toBe(2)
   })
 
@@ -213,12 +216,12 @@ describe('SiteResourceDialog', () => {
     )
     const user = userEvent.setup()
     await renderDialog()
-    expect(await screen.findByText('已有资源')).toBeInTheDocument()
+    expect(await screen.findByText('已有资源', ignoreTooltipOverlay)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /搜索/ }))
 
     expect(await screen.findByText('资源加载失败，请重试')).toBeInTheDocument()
-    expect(screen.getByText('已有资源')).toBeInTheDocument()
+    expect(screen.getByText('已有资源', ignoreTooltipOverlay)).toBeInTheDocument()
     expect(screen.queryByText('没有数据')).not.toBeInTheDocument()
   })
 
@@ -234,7 +237,7 @@ describe('SiteResourceDialog', () => {
 
     await renderDialog()
 
-    expect(await screen.findByText('首载资源')).toBeInTheDocument()
+    expect(await screen.findByText('首载资源', ignoreTooltipOverlay)).toBeInTheDocument()
     expect(categoryRequests).toHaveLength(1)
     expect(resourceRequests).toHaveLength(1)
     expect(resourceRequests[0].searchParams.get('keyword')).toBeNull()
@@ -294,7 +297,7 @@ describe('SiteResourceDialog', () => {
     await waitFor(() => expect(screen.getByTestId('resource-table')).toHaveAttribute('data-loading', 'true'))
     nextResponse.resolve([createTorrentInfo({ title: '重复搜索结果' })])
 
-    expect(await screen.findByText('重复搜索结果')).toBeInTheDocument()
+    expect(await screen.findByText('重复搜索结果', ignoreTooltipOverlay)).toBeInTheDocument()
     expect(screen.getByTestId('resource-table')).toHaveAttribute('data-loading', 'false')
   })
 
@@ -321,8 +324,8 @@ describe('SiteResourceDialog', () => {
 
     await renderDialog()
 
-    expect(await screen.findByText('免费资源')).toBeInTheDocument()
-    expect(screen.getByText('完整资源说明')).toBeInTheDocument()
+    expect(await screen.findByText('免费资源', ignoreTooltipOverlay)).toBeInTheDocument()
+    expect(screen.getByText('完整资源说明', ignoreTooltipOverlay)).toBeInTheDocument()
     expect(screen.getByText('H&R')).toBeInTheDocument()
     expect(screen.getByText('剩余 1 天')).toBeInTheDocument()
     expect(screen.getByText('原盘')).toBeInTheDocument()
@@ -332,23 +335,25 @@ describe('SiteResourceDialog', () => {
     expect(screen.queryByText('1x')).not.toBeInTheDocument()
   })
 
-  it('opens and closes the add-download boundary through all child outcomes', async () => {
+  it('opens and closes the add-download boundary through the explicit action', async () => {
     server.use(siteCategoriesHandler(501, []), siteResourcesHandler(501, [createTorrentInfo({ title: '待下载资源' })]))
     const user = userEvent.setup()
 
     await renderDialog()
-    const title = await screen.findByRole('button', { name: /待下载资源/ })
+    expect(await screen.findByText('待下载资源', ignoreTooltipOverlay)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /待下载资源/ })).not.toBeInTheDocument()
+    const addDownload = screen.getByRole('button', { name: '添加下载' })
 
-    await user.click(title)
+    await user.click(addDownload)
     expect(screen.getByTestId('add-download-dialog')).toHaveTextContent('待下载资源')
     await user.click(screen.getByRole('button', { name: 'done' }))
     expect(screen.queryByTestId('add-download-dialog')).not.toBeInTheDocument()
 
-    await user.click(title)
+    await user.click(addDownload)
     await user.click(screen.getByRole('button', { name: 'error' }))
     expect(screen.queryByTestId('add-download-dialog')).not.toBeInTheDocument()
 
-    await user.click(title)
+    await user.click(addDownload)
     await user.click(screen.getByRole('button', { name: 'close-download' }))
     expect(screen.queryByTestId('add-download-dialog')).not.toBeInTheDocument()
   })
@@ -364,7 +369,7 @@ describe('SiteResourceDialog', () => {
     const user = userEvent.setup()
 
     await renderDialog(undefined, { VDataTable: DataTableStub })
-    await screen.findByText('分页资源 1')
+    await screen.findByText('分页资源 1', ignoreTooltipOverlay)
     await user.click(screen.getByRole('button', { name: 'page-4' }))
     expect(screen.getByTestId('resource-page')).toHaveTextContent('4')
     await user.click(screen.getByRole('button', { name: 'per-page-100' }))
@@ -406,8 +411,7 @@ describe('SiteResourceDialog', () => {
       '回退键资源-2026-07-19-2',
     ])
 
-    await user.click(screen.getByRole('button', { name: /详情资源/ }))
-    await user.click(screen.getByRole('button', { name: 'close-download' }))
+    expect(screen.queryByRole('button', { name: /详情资源/ })).not.toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: '添加下载' })[0])
     await user.click(screen.getByRole('button', { name: 'close-download' }))
 
@@ -449,13 +453,11 @@ describe('SiteResourceDialog', () => {
     )
     const user = userEvent.setup()
 
-    const { close, container } = await renderDialog()
-    await screen.findByText('Language resource')
+    const { close } = await renderDialog()
+    await screen.findByText('Language resource', ignoreTooltipOverlay)
     expect(await screen.findByText(/条结果|results/)).toBeInTheDocument()
 
-    const closeButton = container.querySelector('.v-toolbar-items .v-btn')
-    expect(closeButton).not.toBeNull()
-    await user.click(closeButton as HTMLElement)
+    await user.click(screen.getByRole('button', { name: '关闭' }))
     expect(close).toHaveBeenCalledOnce()
   })
 })

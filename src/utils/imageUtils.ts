@@ -15,17 +15,9 @@ import trimemediaLogo from '@/assets/images/logos/trimemedia.png'
 import ugreenLogo from '@/assets/images/logos/ugreen.png'
 import mediavaultLogo from '@/assets/images/logos/mediavault.png'
 import wechatLogo from '@/assets/images/logos/wechat.png'
-import feishuLogo from '@/assets/images/logos/feishu.png'
-import clawbotLogo from '@/assets/images/logos/clawbot.png'
 import telegramLogo from '@/assets/images/logos/telegram.webp'
-import slackLogo from '@/assets/images/logos/slack.webp'
-import discordLogo from '@/assets/images/logos/discord.png'
-import synologychatLogo from '@/assets/images/logos/synologychat.png'
-import vocechatLogo from '@/assets/images/logos/vocechat.png'
 import downloaderLogo from '@/assets/images/logos/downloader.png'
 import mediaserverLogo from '@/assets/images/logos/mediaserver.png'
-import notificationLogo from '@/assets/images/logos/notification.png'
-import chromeLogo from '@/assets/images/logos/chrome.png'
 import doubanLogo from '@/assets/images/logos/douban.png'
 import githubLogo from '@/assets/images/logos/github.png'
 import tmdbLogo from '@/assets/images/logos/tmdb.png'
@@ -35,7 +27,6 @@ import pluginLogo from '@/assets/images/logos/plugin.png'
 import siteLogo from '@/assets/images/logos/site.webp'
 import bangumiLogo from '@/assets/images/logos/bangumi.png'
 import doubanBlackLogo from '@/assets/images/logos/douban-black.png'
-import qqLogo from '@/assets/images/logos/qq.png'
 
 // 图标映射表
 const logoMap: Record<string, string> = {
@@ -50,17 +41,9 @@ const logoMap: Record<string, string> = {
   ugreen: ugreenLogo,
   mediavault: mediavaultLogo,
   wechat: wechatLogo,
-  feishu: feishuLogo,
-  wechatclawbot: clawbotLogo,
   telegram: telegramLogo,
-  slack: slackLogo,
-  discord: discordLogo,
-  synologychat: synologychatLogo,
-  vocechat: vocechatLogo,
   downloader: downloaderLogo,
   mediaserver: mediaserverLogo,
-  notification: notificationLogo,
-  chrome: chromeLogo,
   douban: doubanLogo,
   github: githubLogo,
   tmdb: tmdbLogo,
@@ -70,7 +53,6 @@ const logoMap: Record<string, string> = {
   site: siteLogo,
   bangumi: bangumiLogo,
   'douban-black': doubanBlackLogo,
-  qq: qqLogo,
 }
 
 /**

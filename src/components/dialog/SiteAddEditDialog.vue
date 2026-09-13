@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { AxiosError } from 'axios'
 import { useToast } from 'vue-toastification'
 import type { DownloaderConf, Site } from '@/api/types'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
@@ -46,6 +47,8 @@ const siteType = ref('cookie')
 
 // 是否限流
 const isLimit = ref(false)
+// 加入 CookieCloud 同步域名黑名单状态
+const addingToCookieCloudBlacklist = ref(false)
 
 // 状态下拉项
 const statusItems = [
@@ -133,6 +136,30 @@ async function updateSiteInfo() {
     console.error(error)
   }
   doneNProgress()
+}
+
+// 将当前已保存站点加入 CookieCloud 同步域名黑名单
+async function addToCookieCloudBlacklist() {
+  if (!siteForm.value.id) return
+
+  addingToCookieCloudBlacklist.value = true
+  try {
+    const result: { message?: string; success: boolean } = await api.post(
+      `site/${siteForm.value.id}/cookiecloud-blacklist`,
+    )
+    if (result.success) {
+      $toast.success(result.message || t('site.messages.blacklistSuccess'))
+    } else {
+      $toast.error(result.message || t('site.messages.blacklistFailed'))
+    }
+  } catch (error) {
+    console.error(error)
+    const apiError = error as AxiosError<{ detail?: unknown; message?: unknown }>
+    const message = apiError.response?.data?.message || apiError.response?.data?.detail
+    $toast.error(typeof message === 'string' ? message : t('site.messages.blacklistFailed'))
+  } finally {
+    addingToCookieCloudBlacklist.value = false
+  }
 }
 
 onMounted(async () => {
@@ -341,6 +368,16 @@ onMounted(async () => {
         </VForm>
       </VCardText>
       <VCardActions class="app-dialog-actions">
+        <VBtn
+          v-if="props.oper !== 'add'"
+          color="error"
+          variant="tonal"
+          prepend-icon="mdi-cloud-off-outline"
+          :loading="addingToCookieCloudBlacklist"
+          @click="addToCookieCloudBlacklist"
+        >
+          {{ t('site.actions.addToBlacklist') }}
+        </VBtn>
         <VSpacer />
         <VBtn
           v-if="props.oper === 'add'"

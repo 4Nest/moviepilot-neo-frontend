@@ -10,16 +10,14 @@ import SubtitleItem from '@/components/cards/SubtitleItem.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import TorrentFilterBar from '@/components/filter/TorrentFilterBar.vue'
 import { useI18n } from 'vue-i18n'
-import { useGlobalSettingsStore } from '@/stores/global'
-import { useTorrentFilter, type FilterState } from '@/composables/useTorrentFilter'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
-import { useToast } from 'vue-toastification'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 import { useUserStore } from '@/stores'
 import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { SearchReplaceBatchCollector, isSearchReplaceBatchEvent } from '@/utils/searchStream'
 import { getCurrentLocale } from '@/plugins/i18n'
+import { useTorrentFilter } from '@/composables/useTorrentFilter'
 
 // 国际化
 const { t } = useI18n()
@@ -30,11 +28,6 @@ const canSearch = computed(() =>
   hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'search'),
 )
 
-// 提示框
-const toast = useToast()
-
-// 全局设置 Store
-const globalSettingsStore = useGlobalSettingsStore()
 
 // 使用筛选 composable
 const torrentFilter = useTorrentFilter()
@@ -223,20 +216,6 @@ const isSubtitleSearch = computed(() => resultType.value === 'subtitle')
 // 视图类型，从localStorage中读取
 const viewType = ref<TorrentViewType>(normalizeTorrentViewType(localStorage.getItem('MPTorrentsViewType')))
 
-// 智能推荐相关
-// 从全局设置中获取 AI_RECOMMEND_ENABLED 状态
-const aiRecommendEnabled = computed(() => {
-  return globalSettingsStore.get('AI_RECOMMEND_ENABLED') === true
-})
-const isRecommending = ref(false)
-const isReRecommending = ref(false) // 是否正在重新推荐
-const aiRecommended = ref(false) // 是否已执行过智能推荐
-const showingAiResults = ref(false) // 是否正在显示智能推荐结果
-const originalDataList = ref<Array<Context>>([]) // 原始搜索结果
-const aiRecommendedList = ref<Array<Context>>([]) // 智能推荐结果
-const savedFilterState = ref<FilterState | null>(null) // 保存的筛选状态
-const aiStatusChecked = ref(false) // 是否已完成首次AI状态检查
-let aiStatusCheckInterval: ReturnType<typeof setInterval> | null = null // AI状态检查定时器
 
 // 是否有搜索标签
 const hasSearchTags = computed(() => {
@@ -595,13 +574,7 @@ function resetSearchResults() {
   errorDescription.value = t('resource.noResourceFound')
   rawDataList.value = []
   rawSubtitleDataList.value = []
-  originalDataList.value = []
   streamTotalCount.value = 0
-  aiRecommended.value = false
-  showingAiResults.value = false
-  aiRecommendedList.value = []
-  savedFilterState.value = null
-  aiStatusChecked.value = false
   torrentFilter.clearAllFilters()
   applyFilter()
 }
@@ -638,7 +611,6 @@ function setStreamResults(items: Context[]) {
   clearStreamPreviewState()
   rawDataList.value = items
   rawSubtitleDataList.value = []
-  originalDataList.value = items
   if (!progressActive.value) {
     streamTotalCount.value = items.length
   }
@@ -651,7 +623,6 @@ function setSubtitleStreamResults(items: SubtitleInfo[]) {
   clearStreamPreviewState()
   rawSubtitleDataList.value = items
   rawDataList.value = []
-  originalDataList.value = []
   if (!progressActive.value) {
     streamTotalCount.value = items.length
   }
@@ -1008,8 +979,6 @@ async function refreshSearch() {
   if (isRefreshing.value || progressActive.value) return
   isRefreshing.value = true
   try {
-    // 重新搜索时退出 AI 视图，其余状态由 fetchData 内部重置
-    showingAiResults.value = false
     const refreshParams = await resolveRefreshSearchParams()
     if (!refreshParams) {
       console.warn('未找到可用于重新搜索的搜索参数')
@@ -1023,261 +992,6 @@ async function refreshSearch() {
   }
 }
 
-// 切换到智能推荐结果（自动保存筛选条件）
-async function switchToAiResults() {
-  if (showingAiResults.value) {
-    console.log('已经在显示AI结果')
-    return
-  }
-
-  // 保存当前筛选状态
-  savedFilterState.value = torrentFilter.getFilterState()
-
-  // 切换数据
-  rawDataList.value = [...aiRecommendedList.value]
-  showingAiResults.value = true
-  console.log('已切换到智能推荐结果')
-
-  // 清空智能推荐筛选条件
-  torrentFilter.clearAllFilters()
-
-  // 重新应用筛选
-  applyFilter()
-}
-
-// 切换回原始结果（自动还原筛选条件）
-async function switchToOriginalResults() {
-  if (!showingAiResults.value) {
-    console.log('已经在显示原始结果')
-    return
-  }
-
-  // 切换数据
-  rawDataList.value = [...originalDataList.value]
-  showingAiResults.value = false
-  console.log('已切换到原始结果')
-
-  // 恢复原始筛选条件
-  if (savedFilterState.value) {
-    torrentFilter.setFilterState(savedFilterState.value)
-  }
-
-  // 重新应用筛选
-  applyFilter()
-}
-
-// 智能推荐/切换结果
-async function toggleAiRecommend() {
-  // 如果当前显示AI结果，则切换回原始结果
-  if (showingAiResults.value) {
-    await switchToOriginalResults()
-    return
-  }
-
-  // 如果已经有智能推荐结果，直接切换
-  if (aiRecommended.value && aiRecommendedList.value.length > 0) {
-    await switchToAiResults()
-    return
-  }
-
-  // 否则启动智能推荐
-  // 保存当前筛选状态，以便切换回原始结果时恢复
-  savedFilterState.value = torrentFilter.getFilterState()
-  console.log('首次智能推荐，已保存筛选状态:', savedFilterState.value)
-
-  startAiRecommend()
-}
-
-// 启动智能推荐（开始轮询）
-async function startAiRecommend(force: boolean = false) {
-  isRecommending.value = true
-  console.log('启动智能推荐', force ? '(强制)' : '')
-
-  // 首次或强制时，先发送一个启动任务的请求
-  await sendInitialRequest(force)
-
-  // 然后开始 check_only 轮询
-  startAiRecommendPolling()
-}
-
-// 发送初始请求以启动智能推荐任务
-async function sendInitialRequest(force: boolean = false) {
-  try {
-    const requestBody: any = {}
-
-    // 检查是否有筛选条件
-    const hasFilters = torrentFilter.hasActiveFilters()
-    if (hasFilters) {
-      const indices = torrentFilter.getFilteredIndices()
-      if (indices && indices.length > 0) {
-        requestBody.filtered_indices = indices
-      }
-    }
-
-    // 如果是强制模式，添加 force 标志
-    if (force) {
-      requestBody.force = true
-    }
-
-    console.log('发送初始请求以启动任务', force ? '(force)' : '')
-    await api.post('search/recommend', requestBody)
-  } catch (error) {
-    console.error('发送初始请求失败:', error)
-    isRecommending.value = false
-  }
-}
-
-// 开始轮询智能推荐（使用 check_only 模式）
-function startAiRecommendPolling() {
-  // 停止可能存在的轮询
-  stopAiRecommendPolling()
-
-  // 立即发送一次 check_only 请求
-  pollAiRecommend()
-
-  // 然后每2秒轮询一次（check_only）
-  aiStatusCheckInterval = setInterval(() => {
-    pollAiRecommend()
-  }, 2000)
-}
-
-// 轮询智能推荐状态（始终使用 check_only 模式）
-async function pollAiRecommend() {
-  try {
-    const result: { [key: string]: any } = await api.post('search/recommend', {
-      check_only: true,
-    })
-
-    const { success, data } = result
-    const status = data?.status
-
-    // 正在运行，继续轮询
-    if (success && status === 'running') {
-      console.log('AI推理中...')
-      return
-    }
-
-    // 其他所有状态均停止轮询
-    stopAiRecommendPolling()
-    isRecommending.value = false
-
-    if (success && status === 'completed') {
-      // 推荐完成
-      if (data.results?.length > 0) {
-        // 加载智能推荐结果
-        loadAiRecommendedResults(data.results)
-
-        // 自动切换到智能推荐结果（会自动保存筛选条件）
-        await switchToAiResults()
-      }
-    } else if (success && status === 'disabled') {
-      // 功能停用
-      console.error('AI功能未启用')
-    } else {
-      // 错误情况（status === 'error' 或 success 为 false）
-      const errMsg =
-        result.message_i18n ||
-        result.message ||
-        data?.error_i18n ||
-        data?.error ||
-        data?.message_i18n ||
-        data?.message ||
-        'Unknown error'
-      console.error('智能推荐错误:', errMsg)
-      toast.error(`${t('resource.aiRecommendError')}: ${errMsg}`)
-    }
-  } catch (error) {
-    console.error('智能推荐轮询失败:', error)
-    stopAiRecommendPolling()
-    isRecommending.value = false
-  }
-}
-
-// 停止轮询智能推荐
-function stopAiRecommendPolling() {
-  if (aiStatusCheckInterval) {
-    clearInterval(aiStatusCheckInterval)
-    aiStatusCheckInterval = null
-    console.log('停止智能推荐轮询')
-  }
-}
-
-// 加载智能推荐结果（从索引数组提取数据）
-function loadAiRecommendedResults(indices: number[]) {
-  if (!indices || indices.length === 0) {
-    return
-  }
-
-  // 从原始数据中根据索引提取结果
-  aiRecommendedList.value = indices.map((index: number) => originalDataList.value[index]).filter(Boolean)
-  aiRecommended.value = true
-  console.log(`加载智能推荐结果: ${aiRecommendedList.value.length} 条`)
-}
-
-// 重新推荐
-async function reRecommend() {
-  try {
-    isReRecommending.value = true
-    console.log('重新推荐：重置状态')
-
-    // 重置状态
-    aiRecommended.value = false
-    aiRecommendedList.value = []
-
-    // 切换回原始结果（会自动还原筛选条件）
-    await switchToOriginalResults()
-
-    // 等待筛选数据还原完成（nextTick确保DOM更新完成）
-    await nextTick()
-
-    // 再等待一个微任务，确保筛选逻辑完全执行
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    // 重新启动智能推荐（带 force 标志）
-    startAiRecommend(true)
-  } catch (error) {
-    console.error('重新推荐失败:', error)
-  } finally {
-    isReRecommending.value = false
-  }
-}
-
-// 检查智能推荐状态（页面初始化时调用一次）
-async function checkAiRecommendStatus() {
-  try {
-    // 首次检查时使用 check_only 模式
-    const result: { [key: string]: any } = await api.post('search/recommend', {
-      check_only: true,
-    })
-
-    const { success, data } = result
-    const status = data?.status
-
-    // 状态检查只是初始化已有推荐结果，非禁用状态下即使后端暂无历史状态也不应锁住按钮
-    if (status !== 'disabled') {
-      aiStatusChecked.value = true
-    }
-
-    if (success && data) {
-      const { results } = data
-
-      // 如果有完成的结果，加载它
-      if (status === 'completed' && results && results.length > 0) {
-        loadAiRecommendedResults(results)
-      }
-
-      // 如果正在运行，启动轮询
-      if (status === 'running') {
-        isRecommending.value = true
-        startAiRecommendPolling()
-      }
-    }
-  } catch (error) {
-    console.error('检查AI状态失败:', error)
-    // 检查失败不影响用户手动发起智能推荐，避免按钮永久不可用
-    aiStatusChecked.value = true
-  }
-}
 
 // 计算当前显示的数据是否有数据
 const hasData = computed(() => {
@@ -1299,20 +1013,6 @@ const hasData = computed(() => {
   }
 })
 
-// 监听 AI_RECOMMEND_ENABLED 状态和数据加载状态
-// 使用 watchEffect 确保计算属性变化时立即响应
-watchEffect(() => {
-  // 需要满足：AI 功能启用、数据已加载、尚未检查
-  if (
-    aiRecommendEnabled.value &&
-    !isSubtitleSearch.value &&
-    originalDataList.value.length > 0 &&
-    !progressActive.value &&
-    !aiStatusChecked.value
-  ) {
-    void checkAiRecommendStatus()
-  }
-})
 
 watch(
   () => route.query,
@@ -1334,7 +1034,7 @@ onMounted(async () => {
 })
 
 useKeepAliveRefresh(async () => {
-  if (progressActive.value || isRefreshing.value || isRecommending.value || showingAiResults.value) return
+  if (progressActive.value || isRefreshing.value) return
   if (hasLoadedEmptySearchResult()) return
 
   const refreshParams = await resolveRefreshSearchParams()
@@ -1350,7 +1050,6 @@ onUnmounted(() => {
   closeSearchEventSource()
   stopLoadingProgress()
   clearProgressResetTimer()
-  stopAiRecommendPolling()
   clearStreamPreviewState()
 })
 </script>
@@ -1445,41 +1144,6 @@ onUnmounted(() => {
           </VTooltip>
         </IconBtn>
 
-        <!-- AI操作按钮组 -->
-        <div
-          v-if="!isSubtitleSearch && aiRecommendEnabled && originalDataList.length > 0"
-          class="ai-action-group"
-          :class="{ 'ai-action-group--active': showingAiResults }"
-        >
-          <VBtn
-            :variant="showingAiResults ? 'tonal' : 'text'"
-            :color="showingAiResults ? 'primary' : 'gray'"
-            :disabled="isRecommending || !aiStatusChecked"
-            size="small"
-            height="40"
-            class="ai-action-group__primary"
-            @click="toggleAiRecommend"
-          >
-            <template #prepend>
-              <VIcon icon="lucide:sparkles" size="18" />
-            </template>
-            <span class="ai-action-group__label">{{ t('resource.aiRecommend') }}</span>
-            <VTooltip activator="parent" location="top">
-              {{ t('resource.aiRecommend') }}
-            </VTooltip>
-          </VBtn>
-
-          <VExpandXTransition>
-            <div v-if="aiRecommended || isRecommending" class="ai-action-group__more">
-              <IconBtn variant="text" color="gray" :disabled="isRecommending || !aiStatusChecked" @click="reRecommend">
-                <VIcon :icon="isRecommending ? 'line-md:loading-twotone-loop' : 'mdi-auto-fix'" />
-                <VTooltip activator="parent" location="top">
-                  {{ t('resource.reRecommend') }}
-                </VTooltip>
-              </IconBtn>
-            </div>
-          </VExpandXTransition>
-        </div>
       </div>
     </div>
 
@@ -1800,34 +1464,6 @@ onUnmounted(() => {
   font-size: 0.75rem;
 }
 
-.ai-action-group {
-  display: flex;
-  overflow: hidden;
-  align-items: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
-}
-
-.ai-action-group--active {
-  border-color: rgba(var(--v-theme-primary), 0.24);
-  background-color: rgba(var(--v-theme-primary), 0.08);
-}
-
-.ai-action-group__primary {
-  border-radius: 8px 0 0 8px !important;
-  padding-inline: 14px 12px !important;
-}
-
-.ai-action-group__label {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.ai-action-group__more {
-  display: flex;
-  align-items: center;
-  border-inline-start: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-}
 
 .search-results-container {
   position: relative;

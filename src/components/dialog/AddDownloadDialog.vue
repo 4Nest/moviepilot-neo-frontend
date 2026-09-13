@@ -11,7 +11,7 @@ import type {
   TransferDirectoryConf,
 } from '@/api/types'
 import { formatFileSize } from '@/@core/utils/formatters'
-import { VCardTitle, VChip } from 'vuetify/lib/components/index.mjs'
+import { VCardTitle } from 'vuetify/lib/components/index.mjs'
 import { useI18n } from 'vue-i18n'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 import { numberValidator } from '@/@validators'
@@ -87,12 +87,11 @@ const buttonText = computed(() =>
   loading.value ? t('dialog.addDownload.downloading') : t('dialog.addDownload.startDownload'),
 )
 
-// 下载确认副标题，未传媒体标题时回退到种子标题。
+// 下载确认副标题只保留站点名，完整种子标题由下方信息卡片展示。
 const dialogSubtitle = computed(() => {
   const siteName = props.torrent?.site_name?.trim()
-  const displayTitle = props.title?.trim() || props.torrent?.title?.trim()
 
-  return [siteName, displayTitle].filter(Boolean).join(' - ')
+  return siteName || props.title?.trim() || props.torrent?.title?.trim() || ''
 })
 
 // 加载目录设置
@@ -212,112 +211,106 @@ onMounted(() => {
 })
 </script>
 <template>
-  <VDialog max-width="35rem" scrollable>
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog max-width="36rem" scrollable>
+    <VCard class="add-download-dialog">
+      <VCardItem class="add-download-header py-3">
         <template #prepend>
-          <VIcon icon="mdi-monitor-arrow-down-variant" class="me-2" />
+          <div class="add-download-header__icon">
+            <VIcon icon="mdi-monitor-arrow-down-variant" size="22" />
+          </div>
         </template>
-        <VCardTitle>{{ t('dialog.addDownload.confirmDownload') }}</VCardTitle>
-        <VCardSubtitle>{{ dialogSubtitle }}</VCardSubtitle>
+        <VCardTitle class="add-download-header__title">{{ t('dialog.addDownload.confirmDownload') }}</VCardTitle>
+        <VCardSubtitle class="add-download-header__subtitle">{{ dialogSubtitle }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VList lines="one">
-          <VListItem>
-            <template #prepend>
-              <VIcon icon="mdi-web"></VIcon>
-            </template>
-            <VListItemTitle>
-              <span class="whitespace-break-spaces me-2">{{ torrent?.title }}</span>
-              <span class="text-green-700 ms-2 text-sm">↑{{ torrent?.seeders }}</span>
-              <span class="text-orange-700 ms-2 text-sm">↓{{ torrent?.peers }}</span>
-            </VListItemTitle>
-          </VListItem>
-          <VListItem v-if="torrent?.description">
-            <template #prepend>
-              <VIcon icon="mdi-subtitles-outline"></VIcon>
-            </template>
-            <VListItemTitle>
-              <span class="text-body-2 whitespace-break-spaces">{{ torrent?.description }}</span>
-            </VListItemTitle>
-          </VListItem>
-          <VListItem v-if="torrent?.size">
-            <template #prepend>
-              <VIcon icon="mdi-database"></VIcon>
-            </template>
-            <VListItemTitle>
-              <span class="text-body-2">
-                <VChip variant="tonal" label>
-                  {{ formatFileSize(torrent?.size || 0) }}
-                </VChip>
-              </span>
-            </VListItemTitle>
-          </VListItem>
-        </VList>
-        <VRow class="px-5">
-          <VCol cols="12" md="6">
-            <VSelect
-              v-model="selectedDownloader"
-              :items="downloaderOptions"
-              :label="t('dialog.addDownload.downloader')"
-              variant="underlined"
-              :placeholder="t('dialog.addDownload.defaultPlaceholder')"
-              density="comfortable"
-              prepend-inner-icon="mdi-download"
-            />
-          </VCol>
-          <VCol cols="12" md="6">
-            <VCombobox
-              v-model="selectedDirectory"
-              :items="targetDirectories"
-              :label="t('dialog.addDownload.saveDirectory')"
-              :placeholder="t('dialog.addDownload.autoPlaceholder')"
-              variant="underlined"
-              density="comfortable"
-              prepend-inner-icon="mdi-folder"
-            />
-          </VCol>
-        </VRow>
-        <VRow class="px-5 mt-2">
-          <VCol cols="12">
-            <VBtn
-              variant="text"
-              :prepend-icon="showAdvancedOptions ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-              @click="showAdvancedOptions = !showAdvancedOptions"
-            >
-              {{
-                showAdvancedOptions
-                  ? t('dialog.addDownload.hideAdvancedOptions')
-                  : t('dialog.addDownload.showAdvancedOptions')
-              }}
-            </VBtn>
-          </VCol>
-        </VRow>
-        <VRow v-show="showAdvancedOptions" class="px-5">
-          <VCol cols="12">
-            <VTextField
-              v-model="mediaId"
-              :label="mediaIdLabel"
-              :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
-              :rules="[numberValidator]"
-              append-inner-icon="mdi-magnify"
-              :hint="t('dialog.reorganize.mediaIdHint')"
-              persistent-hint
-              prepend-inner-icon="mdi-identifier"
-              variant="underlined"
-              density="comfortable"
-              @click:append-inner="mediaSelectorDialog = true"
-            />
-          </VCol>
-        </VRow>
+      <VCardText class="add-download-content">
+        <div class="add-download-info">
+          <div class="add-download-info__title">{{ torrent?.title }}</div>
+          <div v-if="torrent?.description" class="add-download-info__description">{{ torrent?.description }}</div>
+          <div class="add-download-info__meta">
+            <span v-if="torrent?.size" class="add-download-info__chip">
+              <VIcon icon="mdi-harddisk" size="14" />
+              {{ formatFileSize(torrent?.size || 0) }}
+            </span>
+            <span class="add-download-info__chip add-download-info__chip--seeders">
+              <VIcon icon="mdi-arrow-up-bold" size="13" />
+              {{ torrent?.seeders ?? '-' }}
+            </span>
+            <span class="add-download-info__chip add-download-info__chip--peers">
+              <VIcon icon="mdi-arrow-down-bold" size="13" />
+              {{ torrent?.peers ?? '-' }}
+            </span>
+          </div>
+        </div>
+        <div class="add-download-form">
+          <VSelect
+            v-model="selectedDownloader"
+            :items="downloaderOptions"
+            :label="t('dialog.addDownload.downloader')"
+            variant="outlined"
+            :placeholder="t('dialog.addDownload.defaultPlaceholder')"
+            density="comfortable"
+            prepend-inner-icon="mdi-download"
+            hide-details
+          />
+          <VCombobox
+            v-model="selectedDirectory"
+            :items="targetDirectories"
+            :label="t('dialog.addDownload.saveDirectory')"
+            :placeholder="t('dialog.addDownload.autoPlaceholder')"
+            variant="outlined"
+            density="comfortable"
+            prepend-inner-icon="mdi-folder-outline"
+            hide-details
+          />
+        </div>
+        <VBtn
+          variant="text"
+          size="small"
+          color="primary"
+          class="add-download-advanced__toggle"
+          :prepend-icon="showAdvancedOptions ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+          @click="showAdvancedOptions = !showAdvancedOptions"
+        >
+          {{
+            showAdvancedOptions
+              ? t('dialog.addDownload.hideAdvancedOptions')
+              : t('dialog.addDownload.showAdvancedOptions')
+          }}
+        </VBtn>
+        <div v-show="showAdvancedOptions" class="add-download-advanced">
+          <VTextField
+            v-model="mediaId"
+            :label="mediaIdLabel"
+            :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
+            :rules="[numberValidator]"
+            append-inner-icon="mdi-magnify"
+            :hint="t('dialog.reorganize.mediaIdHint')"
+            persistent-hint
+            prepend-inner-icon="mdi-identifier"
+            variant="outlined"
+            density="comfortable"
+            @click:append-inner="mediaSelectorDialog = true"
+          />
+        </div>
       </VCardText>
-      <VCardText class="text-center">
-        <VBtn variant="elevated" :disabled="loading" @click="addDownload" :prepend-icon="icon" class="px-5">
+      <VDivider />
+      <div class="add-download-actions">
+        <VBtn variant="text" class="add-download-actions__cancel" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          min-width="9rem"
+          :disabled="loading"
+          :prepend-icon="icon"
+          @click="addDownload"
+        >
           {{ buttonText }}
         </VBtn>
-      </VCardText>
+      </div>
     </VCard>
     <!-- 媒体ID选择器 -->
     <VDialog v-model="mediaSelectorDialog" width="40rem" scrollable max-height="85vh">
@@ -325,3 +318,125 @@ onMounted(() => {
     </VDialog>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.add-download-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.9));
+  background:
+    radial-gradient(circle at 5% 0%, rgba(var(--v-theme-primary), 0.08), transparent 24rem), rgb(var(--v-theme-surface));
+}
+
+.add-download-header__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(var(--v-theme-primary), 0.28);
+  border-radius: 0.75rem;
+  background: rgba(var(--v-theme-primary), 0.14);
+  block-size: 2.5rem;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 2.5rem;
+  margin-inline-end: 0.25rem;
+}
+
+.add-download-header__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.add-download-header__subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-download-info {
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7));
+  border-radius: 0.75rem;
+  background: rgba(var(--v-theme-on-surface), 0.03);
+  padding: 0.75rem 0.9rem;
+}
+
+.add-download-info__title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.45;
+  white-space: break-spaces;
+}
+
+.add-download-info__description {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin-block-start: 0.35rem;
+  white-space: break-spaces;
+}
+
+.add-download-info__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-block-start: 0.6rem;
+}
+
+.add-download-info__chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 0.25rem;
+  line-height: 1;
+  padding: 0.28rem 0.6rem;
+}
+
+.add-download-info__chip--seeders {
+  background: rgba(var(--v-theme-success), 0.12);
+  color: rgb(var(--v-theme-success));
+}
+
+.add-download-info__chip--peers {
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
+}
+
+.add-download-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block-start: 1rem;
+}
+
+@media (max-width: 37.5rem) {
+  .add-download-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.add-download-advanced {
+  margin-block-start: 0.5rem;
+}
+
+.add-download-advanced__toggle {
+  margin-block-start: 0.25rem;
+  margin-inline-start: -0.5rem;
+}
+
+.add-download-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem 1rem;
+}
+
+.add-download-actions__cancel {
+  color: rgba(var(--v-theme-on-surface), 0.65);
+}
+</style>

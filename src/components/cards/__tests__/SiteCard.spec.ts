@@ -106,6 +106,21 @@ describe('SiteCard display', () => {
       ),
     ).toEqual(['100', '50'])
   })
+  it('hides account actions and shows public BT status for public sites', async () => {
+    const { container } = await renderCard(
+      { public: 1 },
+      {
+        data: createSiteUserData({ download: 1024, upload: 2048 }),
+      },
+    )
+
+    expect(container.querySelector('.border-t')).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.site-card-actions > button')).toHaveLength(2)
+    expect(screen.getByText('公开 BT')).toBeInTheDocument()
+    expect(screen.queryByText('无需登录 · 点击卡片浏览资源')).not.toBeInTheDocument()
+    expect(screen.queryByText('2.00 KB')).not.toBeInTheDocument()
+    expect(screen.queryByText('1.00 KB')).not.toBeInTheDocument()
+  })
 
   it.each([
     ['failed', createSiteStatistic({ lst_state: 1 }), 'border-error'],

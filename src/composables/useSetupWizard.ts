@@ -48,43 +48,6 @@ export interface WizardData {
     config: any
     switchs: any[]
   }
-  agent: {
-    enabled: boolean
-    global: boolean
-    verbose: boolean
-    provider: string
-    authConnected: boolean
-    model: string
-    thinkingLevel: string
-    apiProtocol: string
-    webSearchMode: string
-    supportImageInput: boolean
-    supportAudioInput: boolean
-    supportAudioOutput: boolean
-    apiKey: string
-    baseUrl: string
-    useProxy: boolean
-    baseUrlPreset: string
-    maxContextTokens: number
-    userAgent: string
-    temperature: number
-    audioInputProvider: string
-    audioInputApiKey: string
-    audioInputBaseUrl: string
-    audioInputModel: string
-    audioInputLanguage: string
-    audioOutputProvider: string
-    audioOutputApiKey: string
-    audioOutputBaseUrl: string
-    audioOutputModel: string
-    audioOutputVoice: string
-    audioOutputIncludeText: boolean
-    jobInterval: number
-    retryTransfer: boolean
-    recommendEnabled: boolean
-    recommendUserPreference: string
-    recommendMaxItems: number
-  }
   preferences: {
     quality: string
     subtitle: string
@@ -134,43 +97,8 @@ export interface ValidationErrorState {
     name: boolean
     [key: string]: boolean
   }
-  agent: {
-    provider: boolean
-    apiKey: boolean
-    model: boolean
-    maxContextTokens: boolean
-    recommendMaxItems: boolean
-  }
 }
 
-function normalizeThinkingLevelValue(value?: unknown) {
-  const normalized = String(value ?? '')
-    .trim()
-    .toLowerCase()
-  if (!normalized) return ''
-
-  const aliasMap: Record<string, string> = {
-    none: 'off',
-    disabled: 'off',
-    disable: 'off',
-    enabled: 'auto',
-    enable: 'auto',
-    default: 'auto',
-    dynamic: 'auto',
-  }
-
-  return aliasMap[normalized] || normalized
-}
-
-function resolveThinkingLevelValue(data?: Record<string, any>) {
-  const explicit = normalizeThinkingLevelValue(data?.LLM_THINKING_LEVEL)
-  if (explicit) return explicit
-
-  const legacyEffort = normalizeThinkingLevelValue(data?.LLM_REASONING_EFFORT)
-  if (data?.LLM_DISABLE_THINKING === true) return 'off'
-  if (data?.LLM_DISABLE_THINKING === false) return legacyEffort || 'auto'
-  return legacyEffort || 'off'
-}
 
 // 全局状态，所有组件共享
 const currentStep = ref(1)
@@ -241,43 +169,6 @@ const wizardData = ref<WizardData>({
     config: {},
     switchs: [],
   },
-  agent: {
-    enabled: false,
-    global: false,
-    verbose: false,
-    provider: 'deepseek',
-    authConnected: false,
-    model: 'deepseek-chat',
-    thinkingLevel: 'off',
-    apiProtocol: 'auto',
-    webSearchMode: 'local',
-    supportImageInput: true,
-    supportAudioInput: false,
-    supportAudioOutput: false,
-    apiKey: '',
-    baseUrl: 'https://api.deepseek.com',
-    useProxy: true,
-    baseUrlPreset: '',
-    maxContextTokens: 64,
-    userAgent: '',
-    temperature: 0.3,
-    audioInputProvider: 'openai',
-    audioInputApiKey: '',
-    audioInputBaseUrl: '',
-    audioInputModel: 'gpt-4o-mini-transcribe',
-    audioInputLanguage: 'zh',
-    audioOutputProvider: 'openai',
-    audioOutputApiKey: '',
-    audioOutputBaseUrl: '',
-    audioOutputModel: 'gpt-4o-mini-tts',
-    audioOutputVoice: 'alloy',
-    audioOutputIncludeText: false,
-    jobInterval: 0,
-    retryTransfer: false,
-    recommendEnabled: false,
-    recommendUserPreference: '',
-    recommendMaxItems: 50,
-  },
   preferences: {
     quality: '4K',
     subtitle: 'chinese',
@@ -316,13 +207,6 @@ const validationErrors = ref<ValidationErrorState>({
   },
   notification: {
     name: false,
-  },
-  agent: {
-    provider: false,
-    apiKey: false,
-    model: false,
-    maxContextTokens: false,
-    recommendMaxItems: false,
   },
 })
 
@@ -443,14 +327,7 @@ export function useSetupWizard() {
       if (!wizardData.value.notification.name || wizardData.value.notification.name.includes('通知')) {
         const displayNameMap: Record<string, string> = {
           wechat: '企业微信',
-          feishu: '飞书',
-          wechatclawbot: '微信 ClawBot',
           telegram: 'Telegram',
-          slack: 'Slack',
-          synologychat: 'SynologyChat',
-          qqbot: 'QQ',
-          vocechat: 'VoceChat',
-          webpush: 'WebPush',
         }
         wizardData.value.notification.name = `${displayNameMap[type] || type} 通知`
       }
@@ -513,13 +390,6 @@ export function useSetupWizard() {
     }
     validationErrors.value.notification = {
       name: false,
-    }
-    validationErrors.value.agent = {
-      provider: false,
-      apiKey: false,
-      model: false,
-      maxContextTokens: false,
-      recommendMaxItems: false,
     }
   }
 
@@ -709,51 +579,6 @@ export function useSetupWizard() {
     }
   }
 
-  // 验证智能助手字段
-  function validateAgentFields(): { isValid: boolean; errors: string[] } {
-    const errors: string[] = []
-    clearValidationErrors()
-
-    if (!wizardData.value.agent.enabled) {
-      return {
-        isValid: true,
-        errors,
-      }
-    }
-
-    if (!wizardData.value.agent.provider?.trim()) {
-      errors.push(t('setupWizard.agent.providerRequired'))
-      validationErrors.value.agent.provider = true
-    }
-
-    if (!wizardData.value.agent.apiKey?.trim() && !wizardData.value.agent.authConnected) {
-      errors.push(t('setupWizard.agent.authOrApiKeyRequired'))
-      validationErrors.value.agent.apiKey = true
-    }
-
-    if (!wizardData.value.agent.model?.trim()) {
-      errors.push(t('setupWizard.agent.modelRequired'))
-      validationErrors.value.agent.model = true
-    }
-
-    if (!wizardData.value.agent.maxContextTokens || wizardData.value.agent.maxContextTokens < 1) {
-      errors.push(t('setupWizard.agent.maxContextTokensRequired'))
-      validationErrors.value.agent.maxContextTokens = true
-    }
-
-    if (
-      wizardData.value.agent.recommendEnabled &&
-      (!wizardData.value.agent.recommendMaxItems || wizardData.value.agent.recommendMaxItems < 1)
-    ) {
-      errors.push(t('setupWizard.agent.recommendMaxItemsRequired'))
-      validationErrors.value.agent.recommendMaxItems = true
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    }
-  }
 
   // 验证当前步骤的必输项
   function validateCurrentStep(): { isValid: boolean; errors: string[] } {
@@ -843,7 +668,7 @@ export function useSetupWizard() {
       case 5: // 媒体服务器测试 - 只有选择了媒体服务器才测试
         return !!wizardData.value.mediaServer.type
       case 6: // 消息通知测试 - 只有选择了通知才测试
-        return !!wizardData.value.notification.type && wizardData.value.notification.type !== 'wechatclawbot'
+        return !!wizardData.value.notification.type
       default:
         return false
     }
@@ -1442,42 +1267,6 @@ export function useSetupWizard() {
         if (result.data.SUPERUSER) {
           wizardData.value.basic.username = result.data.SUPERUSER
         }
-        wizardData.value.agent.enabled = Boolean(result.data.AI_AGENT_ENABLE)
-        wizardData.value.agent.global = Boolean(result.data.AI_AGENT_GLOBAL)
-        wizardData.value.agent.verbose = Boolean(result.data.AI_AGENT_VERBOSE)
-        wizardData.value.agent.provider = result.data.LLM_PROVIDER || 'deepseek'
-        wizardData.value.agent.authConnected = false
-        wizardData.value.agent.model = result.data.LLM_MODEL || ''
-        wizardData.value.agent.thinkingLevel = resolveThinkingLevelValue(result.data)
-        wizardData.value.agent.apiProtocol = result.data.LLM_API_PROTOCOL || 'auto'
-        wizardData.value.agent.webSearchMode = result.data.LLM_WEB_SEARCH_MODE || 'local'
-        wizardData.value.agent.supportImageInput = result.data.LLM_SUPPORT_IMAGE_INPUT ?? true
-        wizardData.value.agent.supportAudioInput = Boolean(result.data.LLM_SUPPORT_AUDIO_INPUT)
-        wizardData.value.agent.supportAudioOutput = Boolean(result.data.LLM_SUPPORT_AUDIO_OUTPUT)
-        wizardData.value.agent.apiKey = result.data.LLM_API_KEY || ''
-        wizardData.value.agent.baseUrl = result.data.LLM_BASE_URL || ''
-        wizardData.value.agent.useProxy = result.data.LLM_USE_PROXY ?? true
-        wizardData.value.agent.baseUrlPreset = result.data.LLM_BASE_URL_PRESET || ''
-        wizardData.value.agent.maxContextTokens = result.data.LLM_MAX_CONTEXT_TOKENS || 64
-        wizardData.value.agent.userAgent = result.data.LLM_USER_AGENT || ''
-        const agentTemperature = Number(result.data.LLM_TEMPERATURE ?? 0.3)
-        wizardData.value.agent.temperature = Number.isFinite(agentTemperature) ? agentTemperature : 0.3
-        wizardData.value.agent.audioInputProvider = result.data.AUDIO_INPUT_PROVIDER || 'openai'
-        wizardData.value.agent.audioInputApiKey = result.data.AUDIO_INPUT_API_KEY || ''
-        wizardData.value.agent.audioInputBaseUrl = result.data.AUDIO_INPUT_BASE_URL || ''
-        wizardData.value.agent.audioInputModel = result.data.AUDIO_INPUT_MODEL || 'gpt-4o-mini-transcribe'
-        wizardData.value.agent.audioInputLanguage = result.data.AUDIO_INPUT_LANGUAGE || 'zh'
-        wizardData.value.agent.audioOutputProvider = result.data.AUDIO_OUTPUT_PROVIDER || 'openai'
-        wizardData.value.agent.audioOutputApiKey = result.data.AUDIO_OUTPUT_API_KEY || ''
-        wizardData.value.agent.audioOutputBaseUrl = result.data.AUDIO_OUTPUT_BASE_URL || ''
-        wizardData.value.agent.audioOutputModel = result.data.AUDIO_OUTPUT_MODEL || 'gpt-4o-mini-tts'
-        wizardData.value.agent.audioOutputVoice = result.data.AUDIO_OUTPUT_VOICE || 'alloy'
-        wizardData.value.agent.audioOutputIncludeText = Boolean(result.data.AUDIO_OUTPUT_INCLUDE_TEXT)
-        wizardData.value.agent.jobInterval = result.data.AI_AGENT_JOB_INTERVAL || 0
-        wizardData.value.agent.retryTransfer = Boolean(result.data.AI_AGENT_RETRY_TRANSFER)
-        wizardData.value.agent.recommendEnabled = Boolean(result.data.AI_RECOMMEND_ENABLED)
-        wizardData.value.agent.recommendUserPreference = result.data.AI_RECOMMEND_USER_PREFERENCE || ''
-        wizardData.value.agent.recommendMaxItems = result.data.AI_RECOMMEND_MAX_ITEMS || 50
 
         // 如果没有API Token，则创建一个随机的
         if (!wizardData.value.basic.apiToken) {
@@ -1617,7 +1406,6 @@ export function useSetupWizard() {
     validateDownloaderFields,
     validateMediaServerFields,
     validateNotificationFields,
-    validateAgentFields,
     clearValidationErrors,
     testConnectivity,
     nextStep,

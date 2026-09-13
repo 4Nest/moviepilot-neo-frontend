@@ -5,6 +5,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createSite, createSiteDownloader } from '@tests/support/factories/site'
 import {
+  addSiteToCookieCloudBlacklistHandler,
   addSiteHandler,
   siteDetailsHandler,
   siteDownloadersHandler,
@@ -189,6 +190,51 @@ describe('SiteAddEditDialog', () => {
     expect(events.save).not.toHaveBeenCalled()
     expect(mocks.done).toHaveBeenCalledOnce()
     if (status === 500) expect(consoleError).toHaveBeenCalledOnce()
+  })
+
+  it('adds the edited site to the CookieCloud blacklist without saving the form', async () => {
+    const site = createSite({ name: '黑名单站点' })
+    const blacklisted = vi.fn()
+    server.use(
+      siteDetailsHandler(site.id, site),
+      addSiteToCookieCloudBlacklistHandler(
+        site.id,
+        { message: `已将 ${site.domain} 加入 CookieCloud 同步域名黑名单`, success: true },
+        200,
+        blacklisted,
+      ),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog('edit', site.id)
+
+    await user.click(await screen.findByRole('button', { name: '加入黑名单' }))
+
+    await waitFor(() => expect(blacklisted).toHaveBeenCalledOnce())
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(`已将 ${site.domain} 加入 CookieCloud 同步域名黑名单`)
+    expect(events.save).not.toHaveBeenCalled()
+    expect(events.close).not.toHaveBeenCalled()
+  })
+
+  it('shows the backend reason when adding to the CookieCloud blacklist fails', async () => {
+    const site = createSite({ name: '黑名单失败站点' })
+    server.use(
+      siteDetailsHandler(site.id, site),
+      addSiteToCookieCloudBlacklistHandler(site.id, { detail: '登录已失效', success: false }, 401),
+    )
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const user = userEvent.setup()
+    await renderDialog('edit', site.id)
+
+    await user.click(await screen.findByRole('button', { name: '加入黑名单' }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('登录已失效'))
+    consoleError.mockRestore()
+  })
+
+  it('does not show the CookieCloud blacklist action when adding a site', async () => {
+    await renderDialog('add')
+
+    expect(screen.queryByRole('button', { name: '加入黑名单' })).not.toBeInTheDocument()
   })
 
   it('emits close from the dialog close button', async () => {

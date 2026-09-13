@@ -1258,10 +1258,6 @@ export interface NotificationSwitch {
   // 开关
   wechat: boolean
   telegram: boolean
-  slack: boolean
-  synologychat: boolean
-  vocechat: boolean
-  webpush: boolean
 }
 
 // 文件浏览接口
@@ -1428,7 +1424,7 @@ export interface DownloaderConf {
 export interface NotificationConf {
   // 名称
   name: string
-  // 类型 telegram/wechat/vocechat/synologychat
+  // 类型 telegram/wechat
   type: string
   // 配置
   config: { [key: string]: any }

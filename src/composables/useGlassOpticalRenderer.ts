@@ -186,9 +186,7 @@ export function useGlassOpticalInteractionSource(
       }
     }
 
-    const fixedSurface = document.querySelectorAll<HTMLElement>(
-      '.agent-assistant-panel, .layout-navbar, .layout-vertical-nav',
-    )
+    const fixedSurface = document.querySelectorAll<HTMLElement>('.layout-navbar, .layout-vertical-nav')
     for (const surface of fixedSurface) {
       const rect = surface.getBoundingClientRect()
       if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return 'fixed'
@@ -418,8 +416,6 @@ interface PreparedWallpaperTexture {
 }
 
 const SURFACE_SELECTORS = [
-  { rank: 1, selector: '.agent-assistant-panel', space: 'fixed' },
-  { rank: 1, selector: '.login-card', space: 'fixed' },
   { rank: 2, selector: '.layout-vertical-nav', space: 'fixed' },
   { rank: 2, selector: '.layout-navbar', space: 'fixed' },
   {
@@ -460,7 +456,7 @@ function getSurfacePresentationSpace(
   selector: (typeof SURFACE_SELECTORS)[number]['selector'],
   defaultSpace: GlassPresentationSpace,
 ) {
-  return selector === '.login-card' && document.querySelector('.login-root') ? 'scroll' : defaultSpace
+  return defaultSpace
 }
 
 /** 判断新增或移除的 DOM 子树是否会改变光学表面集合。 */

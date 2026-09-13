@@ -111,7 +111,7 @@ const filteredSites = computed(() => {
               @click="checkAllSitesorNot"
               class="me-2"
               rounded="pill"
-              variant="flat"
+              variant="tonal"
             >
               <VIcon start size="small">
                 {{ selectedSites.length < sites.length ? 'mdi-check-all' : 'mdi-close-circle-outline' }}

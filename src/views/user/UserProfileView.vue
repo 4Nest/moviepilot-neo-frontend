@@ -494,74 +494,11 @@ watch(
                 </VCol>
                 <VCol cols="12" md="6">
                   <VTextField
-                    v-model="accountInfo.settings.wechatclawbot_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.wechatClawBotUser')"
-                    prepend-inner-icon="mdi-robot-happy-outline"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.feishu_openid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.feishuUser')"
-                    prepend-inner-icon="mdi-message-badge-outline"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
                     v-model="accountInfo.settings.telegram_userid"
                     density="comfortable"
                     clearable
                     :label="t('profile.telegramUser')"
                     prepend-inner-icon="mdi-send"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.slack_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.slackUser')"
-                    prepend-inner-icon="mdi-slack"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.discord_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.discordUser')"
-                    prepend-inner-icon="mdi-discord"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.vocechat_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.vocechatUser')"
-                    prepend-inner-icon="mdi-chat"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.synologychat_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.synologychatUser')"
-                    prepend-inner-icon="mdi-message"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.settings.douban_userid"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.doubanUser')"
-                    prepend-inner-icon="mdi-movie"
                   />
                 </VCol>
               </VRow>

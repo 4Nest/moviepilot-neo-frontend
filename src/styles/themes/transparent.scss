@@ -226,28 +226,6 @@ html[data-theme="transparent"] {
     background: rgba(var(--v-theme-surface), var(--transparent-opacity));
   }
 
-  // 智能助手面板
-  .agent-assistant-panel {
-    backdrop-filter: blur(var(--transparent-blur-heavy));
-    background-color: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy)) !important;
-    border-inline-start: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  }
-
-  .agent-assistant-shell {
-    --agent-assistant-panel-bg: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy));
-    --agent-assistant-panel-blur: var(--transparent-blur);
-    --agent-assistant-assistant-bg: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy));
-  }
-
-  .agent-assistant-fab {
-    background-color: transparent;
-  }
-
-  .agent-assistant-fab__bubble {
-    backdrop-filter: blur(var(--transparent-blur));
-    background-color: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy));
-  }
-
   .Vue-Toastification__toast {
     backdrop-filter: blur(var(--transparent-blur));
     background:
@@ -283,15 +261,12 @@ html[data-theme="transparent"].transparent-glass-lightweight {
   .v-footer,
   .theme-customizer-panel-host,
   .theme-customizer-panel,
-  .agent-assistant-panel,
-  .agent-assistant-fab__bubble,
   .nav-button {
     backdrop-filter: blur(var(--transparent-blur));
   }
 
   .layout-vertical-nav,
-  .theme-customizer-panel-host,
-  .agent-assistant-panel {
+  .theme-customizer-panel-host {
     backdrop-filter: blur(var(--transparent-blur-heavy));
   }
 
@@ -354,8 +329,6 @@ html[data-theme="transparent"].transparent-glass-realtime {
   .v-footer,
   .theme-customizer-panel-host,
   .theme-customizer-panel,
-  .agent-assistant-panel,
-  .agent-assistant-fab__bubble,
   .nav-button,
   .v-overlay__content,
   .v-overlay__content .v-card:not(.bg-primary),
@@ -373,8 +346,7 @@ html[data-theme="transparent"].transparent-glass-realtime {
   }
 
   .layout-vertical-nav,
-  .theme-customizer-panel-host,
-  .agent-assistant-panel {
+  .theme-customizer-panel-host {
     backdrop-filter: blur(var(--transparent-blur-heavy));
   }
 }
@@ -394,8 +366,7 @@ html[data-theme="transparent"].transparent-blur-disabled {
   .v-overlay__content .v-list,
   .theme-customizer-panel-host,
   .theme-customizer-panel,
-  .agent-assistant-panel,
-  .agent-assistant-fab__bubble,
+  .theme-customizer-panel,
   .nav-button,
   .layout-navbar {
     backdrop-filter: none !important;

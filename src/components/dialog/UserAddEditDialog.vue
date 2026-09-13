@@ -92,12 +92,7 @@ const userForm = ref<ExtendedUser>({
   },
   settings: {
     wechat_userid: null,
-    wechatclawbot_userid: null,
     telegram_userid: null,
-    slack_userid: null,
-    discord_userid: null,
-    vocechat_userid: null,
-    synologychat_userid: null,
   },
   nickname: '', // 昵称字段
 })
@@ -588,56 +583,11 @@ onMounted(() => {
             </VCol>
             <VCol cols="12" md="6">
               <VTextField
-                v-model="userForm.settings.wechatclawbot_userid"
-                density="comfortable"
-                clearable
-                :label="t('dialog.userAddEdit.wechatClawBot')"
-                prepend-inner-icon="mdi-robot-happy-outline"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
                 v-model="userForm.settings.telegram_userid"
                 density="comfortable"
                 clearable
                 :label="t('dialog.userAddEdit.telegram')"
                 prepend-inner-icon="mdi-send"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="userForm.settings.slack_userid"
-                density="comfortable"
-                clearable
-                :label="t('dialog.userAddEdit.slack')"
-                prepend-inner-icon="mdi-slack"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="userForm.settings.discord_userid"
-                density="comfortable"
-                clearable
-                :label="t('dialog.userAddEdit.discord')"
-                prepend-inner-icon="mdi-discord"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="userForm.settings.vocechat_userid"
-                density="comfortable"
-                clearable
-                :label="t('dialog.userAddEdit.vocechat')"
-                prepend-inner-icon="mdi-chat"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="userForm.settings.synologychat_userid"
-                density="comfortable"
-                clearable
-                :label="t('dialog.userAddEdit.synologyChat')"
-                prepend-inner-icon="mdi-message"
               />
             </VCol>
             <VCol cols="12" md="6">

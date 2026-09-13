@@ -1473,15 +1473,6 @@ useSilentSettingRefresh(
 </template>
 
 <style scoped>
-.ai-agent-settings-card {
-  border-color: rgba(var(--v-theme-primary), 0.15);
-  background: linear-gradient(180deg, rgba(var(--v-theme-primary), 0.04) 0%, rgba(var(--v-theme-surface), 0.92) 100%);
-}
-
-.ai-agent-settings-card-transparent {
-  border-color: rgba(var(--v-theme-primary), 0);
-  background-color: rgba(var(--v-theme-surface), 0) !important;
-}
 
 .setting-actions {
   display: flex;
@@ -1494,27 +1485,4 @@ useSilentSettingRefresh(
   flex-shrink: 0;
 }
 
-.llm-test-trigger {
-  min-inline-size: 0;
-}
-
-.agent-mcp-summary__content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.agent-mcp-summary__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-@media (max-width: 600px) {
-  .agent-mcp-summary__content {
-    align-items: stretch;
-    flex-direction: column;
-  }
-}
 </style>
