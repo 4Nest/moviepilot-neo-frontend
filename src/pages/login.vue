@@ -787,9 +787,11 @@ onUnmounted(() => {
               </VCol>
               <VCol cols="12">
                 <!-- login button -->
-                <VBtn block type="submit" :loading="loading" size="large" class="login-submit">
-                  <span class="login-submit__label">{{ t('login.login') }}</span>
-                </VBtn>
+                <div class="login-submit-row">
+                  <VBtn type="submit" :loading="loading" class="login-submit">
+                    <span class="login-submit__label">{{ t('login.login') }}</span>
+                  </VBtn>
+                </div>
 
                 <!-- or divider -->
                 <div v-if="showPasskeyLogin || pluginAuthProviders.length > 0" class="or-divider my-5">
@@ -1086,11 +1088,18 @@ onUnmounted(() => {
   outline-offset: 3px;
 }
 
+.login-submit-row {
+  display: flex;
+  justify-content: center;
+  inline-size: 100%;
+}
+
 .login-submit {
   border: 0;
   border-radius: 13px !important;
   background: rgb(var(--v-theme-primary)) !important;
-  block-size: 54px !important;
+  block-size: 46px !important;
+  inline-size: min(100%, 14rem);
   box-shadow: 0 5px 14px rgba(var(--v-theme-primary), 0.18);
   color: rgb(var(--v-theme-on-primary)) !important;
   font-weight: 600;
@@ -1346,6 +1355,7 @@ onUnmounted(() => {
   .auth-wrapper {
     padding-inline: 12px;
   }
+
 
   .login-root[data-login-visual-profile] .login-card {
     padding: 1.5rem !important;

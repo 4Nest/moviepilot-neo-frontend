@@ -3,6 +3,7 @@
 import '@/ace-config'
 import { VAceEditor } from 'vue3-ace-editor'
 import { useI18n } from 'vue-i18n'
+import { useDisplay } from 'vuetify'
 import { evalExpr, parseFormat, serializeTokens, type RenameToken } from './renameFormatTokens'
 
 const props = defineProps({
@@ -16,6 +17,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const { t } = useI18n()
+
+const display = useDisplay()
+const editorMinLines = computed(() => (display.smAndDown.value ? 6 : 8))
+const editorMaxLines = computed(() => (display.smAndDown.value ? 14 : 20))
 
 // ===== 模式 =====
 type EditorMode = 'simple' | 'advanced'
@@ -46,6 +51,8 @@ const DEFAULT_FORMATS: Record<string, string> = {
 function resetToDefault() {
   format.value = DEFAULT_FORMATS[props.mediaType] ?? DEFAULT_FORMATS.movie
 }
+
+defineExpose({ resetToDefault })
 
 const fieldLabelMap = computed<Record<string, string>>(() => ({
   title: t('renameFormat.fieldTitle'),
@@ -273,10 +280,6 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   <div class="rename-format-editor">
     <!-- 模式切换 -->
     <div class="rename-format-editor__mode-bar">
-      <VBtn size="small" variant="text" color="warning" @click="resetToDefault">
-        <VIcon icon="mdi-restore" size="16" class="me-1" />
-        {{ t('renameFormat.reset') }}
-      </VBtn>
       <VBtnToggle v-model="mode" color="primary" density="compact" mandatory variant="outlined" divided>
         <VBtn value="simple" size="small">
           <VIcon icon="mdi-cursor-default-click-outline" size="16" class="me-1" />
@@ -375,8 +378,8 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
         :theme="editorTheme"
         :options="aceOptions"
         :print-margin="false"
-        :min-lines="4"
-        :max-lines="12"
+        :min-lines="editorMinLines"
+        :max-lines="editorMaxLines"
         wrap
         class="rename-format-editor__ace"
         @init="onAceInit"
@@ -523,6 +526,13 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
 .rename-format-editor__ace {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
+  min-block-size: 10rem;
+}
+
+@media (width >= 601px) {
+  .rename-format-editor__ace {
+    min-block-size: 13rem;
+  }
 }
 
 .rename-format-editor__hint {

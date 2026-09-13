@@ -74,6 +74,10 @@ const mountedLocalDiskDeleteEmptyDirsKey = 'MountedLocalDiskDeleteEmptyDirs'
 // Ace 跟随 Vuetify 当前生效主题，auto 模式下也按实际明暗色渲染。
 const editorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dark' : 'github_light_default'))
 
+type RenameMediaType = 'movie' | 'tv'
+const activeRenameMediaType = ref<RenameMediaType>('movie')
+const renameFormatEditorRef = ref<InstanceType<typeof RenameFormatEditor> | null>(null)
+
 // 打开共享分类编辑弹窗，保存后刷新本页分类配置。
 function openCategoryDialog() {
   openSharedDialog(
@@ -97,6 +101,14 @@ const tvRenameFormat = computed({
   get: () => SystemSettings.value.Basic.TV_RENAME_FORMAT ?? '',
   set: (value: string) => {
     SystemSettings.value.Basic.TV_RENAME_FORMAT = value || null
+  },
+})
+
+const activeRenameFormat = computed({
+  get: () => (activeRenameMediaType.value === 'movie' ? movieRenameFormat.value : tvRenameFormat.value),
+  set: (value: string) => {
+    if (activeRenameMediaType.value === 'movie') movieRenameFormat.value = value
+    else tvRenameFormat.value = value
   },
 })
 
@@ -428,21 +440,40 @@ useSilentSettingRefresh(loadPageData, {
               />
             </VCol>
             <VCol cols="12">
-              <div class="rename-format-editor">
-                <div class="rename-format-editor__label">
-                  <VIcon icon="mdi-movie-open" size="20" class="me-2" />
-                  <span>{{ t('setting.directory.movieRenameFormat') }}</span>
+              <div class="rename-format-editor-section">
+                <div class="rename-format-type-bar">
+                  <VBtnToggle
+                    v-model="activeRenameMediaType"
+                    class="rename-format-media-toggle"
+                    color="primary"
+                    density="comfortable"
+                    mandatory
+                    variant="outlined"
+                    divided
+                  >
+                    <VBtn value="movie">
+                      <VIcon icon="mdi-movie-open" size="18" class="me-2" />
+                      {{ t('setting.directory.movieRenameFormat') }}
+                    </VBtn>
+                    <VBtn value="tv">
+                      <VIcon icon="mdi-television" size="18" class="me-2" />
+                      {{ t('setting.directory.tvRenameFormat') }}
+                    </VBtn>
+                  </VBtnToggle>
+                  <VBtn size="small" variant="text" color="warning" @click="renameFormatEditorRef?.resetToDefault()">
+                    <VIcon icon="mdi-restore" size="16" class="me-1" />
+                    {{ t('renameFormat.reset') }}
+                  </VBtn>
                 </div>
-                <RenameFormatEditor v-model="movieRenameFormat" media-type="movie" :editor-theme="editorTheme" />
-              </div>
-            </VCol>
-            <VCol cols="12">
-              <div class="rename-format-editor">
-                <div class="rename-format-editor__label">
-                  <VIcon icon="mdi-television" size="20" class="me-2" />
-                  <span>{{ t('setting.directory.tvRenameFormat') }}</span>
+
+                <div class="rename-format-editor-panel">
+                  <RenameFormatEditor
+                    ref="renameFormatEditorRef"
+                    v-model="activeRenameFormat"
+                    :media-type="activeRenameMediaType"
+                    :editor-theme="editorTheme"
+                  />
                 </div>
-                <RenameFormatEditor v-model="tvRenameFormat" media-type="tv" :editor-theme="editorTheme" />
               </div>
             </VCol>
           </VRow>
@@ -462,14 +493,40 @@ useSilentSettingRefresh(loadPageData, {
 </template>
 
 <style scoped>
-.rename-format-editor__label {
+.rename-format-editor-section {
+  min-inline-size: 0;
+}
+
+.rename-format-type-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.78);
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.375rem;
-  margin-block-end: 0.5rem;
+  gap: 0.5rem;
+}
+
+.rename-format-media-toggle {
+  max-inline-size: 100%;
+}
+
+.rename-format-media-toggle :deep(.v-btn) {
+  min-inline-size: 10.5rem;
+}
+
+.rename-format-editor-panel {
+  padding-block: 0.875rem 0.75rem;
+}
+
+@media (width <= 600px) {
+  .rename-format-media-toggle {
+    display: flex;
+    inline-size: 100%;
+  }
+
+  .rename-format-media-toggle :deep(.v-btn) {
+    flex: 1 1 50%;
+    min-inline-size: 0;
+    padding-inline: 0.5rem;
+  }
 }
 
 .rename-format-editor__ace {

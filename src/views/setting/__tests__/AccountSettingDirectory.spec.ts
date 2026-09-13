@@ -115,4 +115,29 @@ describe('mounted local disk empty directory cleanup setting', () => {
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith('整理选项设置保存成功')
   })
+
+  it('keeps rename changes local until the organize settings are saved', async () => {
+    mockSettings(true)
+    await renderDirectorySettings()
+    await screen.findByRole('button', { name: '重置默认' })
+    mocks.apiPost.mockClear()
+
+    await fireEvent.click(screen.getByRole('button', { name: '重置默认' }))
+
+    expect(mocks.apiPost).not.toHaveBeenCalled()
+
+    const organizeCard = screen.getByText('整理 & 刮削').closest('.v-card')
+    expect(organizeCard).not.toBeNull()
+    await fireEvent.click(within(organizeCard as HTMLElement).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(mocks.apiPost).toHaveBeenCalledWith(
+        'system/env',
+        expect.objectContaining({
+          MOVIE_RENAME_FORMAT: expect.stringContaining('{{title}}'),
+          TV_RENAME_FORMAT: null,
+        }),
+      )
+    })
+  })
 })

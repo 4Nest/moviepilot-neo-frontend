@@ -247,7 +247,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
     <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
     <div class="site-card-hover-area h-full">
       <VCard
-        class="site-card app-hover-lift-card relative h-full flex flex-col overflow-hidden group"
+        class="site-card app-hover-lift-card relative h-full min-h-[168px] flex flex-col overflow-hidden group"
         :class="[
           cardProps.site?.is_active ? '' : 'opacity-70',
           {
@@ -350,8 +350,8 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
             </div>
           </div>
 
-          <!-- 公开 BT 标签固定在卡片左下角。 -->
-          <div v-if="cardProps.site?.public" class="site-card-public-summary">
+          <!-- 公开 BT 标签占据剩余空间并在底部对齐，避免短行卡片覆盖站点地址。 -->
+          <div v-if="cardProps.site?.public" class="site-card-public-summary flex flex-1 items-end">
             <VChip size="small" color="success" variant="tonal" prepend-icon="mdi-earth">公开 BT</VChip>
           </div>
 
@@ -668,10 +668,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
 }
 
 .site-card-public-summary {
-  position: absolute;
-  z-index: 2;
-  inset-block-end: 0.75rem;
-  inset-inline-start: 1rem;
+  min-block-size: 2rem;
 }
 
 .site-card-actions {
