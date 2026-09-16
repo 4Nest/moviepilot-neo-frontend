@@ -1452,6 +1452,8 @@ export interface DownloaderConf {
   default: boolean
   // 是否 BT(公开)站点默认
   bt_default?: boolean
+  // BT(公开)站点默认下载路径
+  bt_save_path?: string
   // 配置
   config: { [key: string]: any }
   // 是否启用

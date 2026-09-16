@@ -52,6 +52,7 @@ const downloaderInfo = ref<DownloaderConf>({
   type: '',
   default: false,
   bt_default: false,
+  bt_save_path: '',
   enabled: false,
   config: {},
   path_mapping: [],
@@ -232,6 +233,19 @@ onMounted(() => {
                   :hint="t('downloader.btDefaultHint')"
                   persistent-hint
                   :disabled="!downloaderInfo.enabled"
+                />
+              </VCol>
+            </VRow>
+            <VRow>
+              <VCol cols="12">
+                <VTextField
+                  v-model="downloaderInfo.bt_save_path"
+                  :label="t('downloader.btSavePath')"
+                  :hint="t('downloader.btSavePathHint')"
+                  persistent-hint
+                  clearable
+                  :disabled="!downloaderInfo.enabled || !downloaderInfo.bt_default"
+                  prepend-inner-icon="mdi-folder-outline"
                 />
               </VCol>
             </VRow>

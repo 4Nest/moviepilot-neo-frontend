@@ -3472,6 +3472,8 @@ export default {
     default: '默认',
     btDefault: 'BT 站点默认',
     btDefaultHint: '从 BT(公开)站点下载时优先使用该下载器',
+    btSavePath: 'BT 默认下载路径',
+    btSavePathHint: 'BT(公开)站点下载保存到该路径，留空按下载目录设置',
     host: '地址',
     apiKey: 'API Key',
     username: '用户名',

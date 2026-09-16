@@ -66,6 +66,25 @@ describe('DownloaderInfoDialog', () => {
     expect(screen.getByText('从 BT(公开)站点下载时优先使用该下载器')).toBeInTheDocument()
   })
 
+  it('开启 BT 站点默认后保存路径随结果回传', async () => {
+    const editing = createDownloader('BT下载器', { bt_default: true, bt_save_path: '/media/Raw/AnimeBT' })
+    const { change } = await renderDialog(editing, [editing])
+
+    expect((await screen.findAllByText('BT 默认下载路径')).length).toBeGreaterThan(0)
+    await fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+
+    await waitFor(() => expect(change).toHaveBeenCalledOnce())
+    expect(change.mock.calls[0][0].bt_save_path).toBe('/media/Raw/AnimeBT')
+  })
+
+  it('未勾选 BT 站点默认时路径输入禁用', async () => {
+    const editing = createDownloader('普通下载器')
+    await renderDialog(editing, [editing])
+
+    expect((await screen.findAllByText('BT 默认下载路径')).length).toBeGreaterThan(0)
+    expect(document.querySelector('.v-text-field input')).toBeDisabled()
+  })
+
   it('勾选 BT 站点默认时清除其它下载器的同名标记并回传结果', async () => {
     const existing = createDownloader('PT下载器', { bt_default: true })
     const editing = createDownloader('BT下载器')
