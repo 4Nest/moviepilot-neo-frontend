@@ -140,11 +140,6 @@
       "count": 2
     }
   },
-  "src/components/dialog/AboutDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
   "src/components/dialog/AlistConfigDialog.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
