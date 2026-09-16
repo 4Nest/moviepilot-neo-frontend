@@ -11,12 +11,12 @@ import { useDisplay } from 'vuetify'
 import { formatFileSize } from '@/@core/utils/formatters'
 import { useI18n } from 'vue-i18n'
 import { usePWA } from '@/composables/usePWA'
+import { useConfirm } from '@/composables/useConfirm'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
-import { useUserStore, useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 import noImage from '@images/no-image.jpeg'
 
@@ -43,13 +43,12 @@ const { availableHeight } = useAvailableHeight(135, 300)
 // 提示框
 const $toast = useToast()
 
+// 确认框
+const createConfirm = useConfirm()
+
 // 路由
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
-const canManage = computed(() =>
-  hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'manage'),
-)
 let syncingRouteQuery = false
 let fetchDataRequestSeed = 0
 let mobileFetchDataRequestSeed = 0
@@ -229,6 +228,9 @@ const searchHintList = ref<string[]>([])
 
 // 加载状态
 const loading = ref(false)
+
+// 清空记录中状态
+const clearing = ref(false)
 
 // 总条数
 const totalItems = ref(0)
@@ -635,6 +637,51 @@ async function refreshDataAfterOperation(mobileSelection: TransferHistory[] = []
   if (currentPage.value <= lastAvailablePage) return
 
   await router.replace(createHistoryUrl(false, lastAvailablePage))
+}
+
+// 当前布局下是否已加载整理记录，用于控制清空入口可用性。
+const hasHistoryRecords = computed(() => {
+  return (isDesktop.value ? dataList.value.length : mobileDataList.value.length) > 0
+})
+
+// 清空记录后刷新视图：退出批量模式、清空选择与当前操作记录，保留搜索词与筛选。
+async function refreshAfterClear() {
+  currentHistory.value = undefined
+  if (isMobile.value) {
+    resetMobileHistory()
+    return
+  }
+  selected.value = []
+  await refreshDataFromRouteQuery()
+}
+
+// 清空全部整理记录，仅删除记录，不影响已整理的文件。
+async function clearAllHistory() {
+  if (clearing.value || !hasHistoryRecords.value) return
+
+  const confirmed = await createConfirm({
+    type: 'error',
+    title: t('transferHistory.clearConfirmTitle'),
+    content: t('transferHistory.clearConfirmContent'),
+    confirmText: t('transferHistory.actions.clearAll'),
+  })
+  if (!confirmed) return
+
+  try {
+    clearing.value = true
+    const result: { [key: string]: any } = await api.delete('history/empty/transfer')
+    if (!result.success) {
+      $toast.error(t('transferHistory.clearFailed', { message: result.message || '' }))
+      return
+    }
+    $toast.success(t('transferHistory.clearSuccess', { count: ensureNumber(result.data?.deleted, 0) }))
+    await refreshAfterClear()
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('transferHistory.clearFailed', { message: error instanceof Error ? error.message : '' }))
+  } finally {
+    clearing.value = false
+  }
 }
 
 // 根据 type 返回不同的图标
@@ -1062,6 +1109,14 @@ const toggleGroupSelection = (checked: boolean | null, items: readonly any[]) =>
 }
 
 const historyDynamicIcon = computed(() => 'mdi-timer-sand-paused')
+const clearHistoryMenuItem = computed<DynamicButtonMenuItem>(() => ({
+  titleKey: 'transferHistory.actions.clearAll',
+  icon: 'mdi-delete-sweep-outline',
+  color: 'error',
+  disabled: clearing.value || !hasHistoryRecords.value,
+  action: clearAllHistory,
+}))
+
 const historyDynamicMenuItems = computed(() => {
   if (!appMode.value) return undefined
 
@@ -1076,7 +1131,6 @@ const historyDynamicMenuItems = computed(() => {
           total: mobileBatchTotalCount.value,
         },
         icon: 'mdi-checkbox-multiple-marked-outline',
-        permission: 'manage',
         disabled: true,
         action: () => {},
       },
@@ -1085,93 +1139,68 @@ const historyDynamicMenuItems = computed(() => {
           ? 'transferHistory.actions.deselectAll'
           : 'transferHistory.actions.selectAll',
         icon: isAllMobileHistorySelected.value ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked',
-        permission: 'manage',
         disabled: mobileBatchTotalCount.value === 0,
         action: () => {
           if (isAllMobileHistorySelected.value) {
             deselectAllMobileHistory()
             return
           }
-
           selectAllMobileHistory()
         },
       },
-    ]
-
-    items.push(
       {
         titleKey: 'transferHistory.actions.batchRedo',
         icon: 'mdi-redo-variant',
         color: 'success',
-        permission: 'manage',
         disabled: !hasSelectedHistory,
-        action: () => {
-          retransferBatch()
-        },
+        action: () => retransferBatch(),
       },
       {
         titleKey: 'transferHistory.actions.batchDelete',
         icon: 'mdi-trash-can-outline',
         color: 'error',
-        permission: 'manage',
         disabled: !hasSelectedHistory,
-        action: () => {
-          removeHistoryBatch()
-        },
+        action: () => removeHistoryBatch(),
       },
-    )
-
-    items.push({
-      titleKey: 'transferHistory.actions.exitBatchMode',
-      icon: 'mdi-close',
-      permission: 'manage',
-      action: exitMobileBatchMode,
-    })
-
+      clearHistoryMenuItem.value,
+      {
+        titleKey: 'transferHistory.actions.exitBatchMode',
+        icon: 'mdi-close',
+        action: exitMobileBatchMode,
+      },
+    ]
     return items
   }
 
-  if (selected.value.length === 0) return undefined
+  if (selected.value.length === 0) return [clearHistoryMenuItem.value]
 
-  const items: DynamicButtonMenuItem[] = [
+  return [
     {
       titleKey: 'dialog.transferQueue.title',
       icon: 'mdi-timer-sand-paused',
       color: 'primary',
-      permission: 'manage',
       action: openTransferQueueDialog,
     },
-  ]
-
-  items.push(
     {
       titleKey: 'transferHistory.actions.batchRedo',
       icon: 'mdi-redo-variant',
       color: 'success',
-      permission: 'manage',
-      action: () => {
-        retransferBatch()
-      },
+      action: () => retransferBatch(),
     },
     {
       titleKey: 'transferHistory.actions.batchDelete',
       icon: 'mdi-trash-can-outline',
       color: 'error',
-      permission: 'manage',
-      action: () => {
-        removeHistoryBatch()
-      },
+      action: () => removeHistoryBatch(),
     },
-  )
-
-  return items
+    clearHistoryMenuItem.value,
+  ]
 })
 
 useDynamicButton({
   icon: historyDynamicIcon,
   onClick: openTransferQueueDialog,
   menuItems: historyDynamicMenuItems,
-  permission: 'manage',
   show: computed(() => appMode.value),
 })
 
@@ -1234,6 +1263,20 @@ onUnmounted(() => {
             />
           </VCol>
           <VCol cols="4" md="6" class="text-end">
+            <VTooltip :text="t('transferHistory.actions.clearAll')" location="top">
+              <template #activator="{ props }">
+                <VBtn
+                  v-bind="props"
+                  icon="mdi-delete-sweep-outline"
+                  variant="text"
+                  color="error"
+                  :loading="clearing"
+                  :disabled="!hasHistoryRecords || clearing"
+                  :aria-label="t('transferHistory.actions.clearAll')"
+                  @click="clearAllHistory"
+                />
+              </template>
+            </VTooltip>
             <VBtnGroup variant="outlined" divided rounded>
               <VBtn :icon="group ? 'mdi-format-list-bulleted' : 'mdi-format-list-group'" @click="group = !group" />
             </VBtnGroup>
@@ -1464,7 +1507,17 @@ onUnmounted(() => {
         style="margin-block: 0"
       />
       <VBtn
-        v-if="canManage"
+        icon="mdi-delete-sweep-outline"
+        color="error"
+        :loading="clearing"
+        :disabled="!hasHistoryRecords || clearing"
+        :aria-label="t('transferHistory.actions.clearAll')"
+        :title="t('transferHistory.actions.clearAll')"
+        variant="text"
+        class="settings-icon-button transfer-history-mobile-titlebar__clear"
+        @click="clearAllHistory"
+      />
+      <VBtn
         icon="mdi-checkbox-multiple-marked-outline"
         :color="mobileBatchMode ? 'primary' : 'gray'"
         :aria-label="
@@ -1665,7 +1718,7 @@ onUnmounted(() => {
 
   <!-- 非 app 模式下的 FAB 按钮 -->
   <Teleport to="body" v-if="!appMode && route.path === '/history'">
-    <div v-if="isRefreshed && canManage" class="compact-fab-stack compact-fab-stack--history">
+    <div v-if="isRefreshed" class="compact-fab-stack compact-fab-stack--history">
       <VFab
         v-if="selected.length > 0"
         icon="mdi-trash-can-outline"

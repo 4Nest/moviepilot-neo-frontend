@@ -129,8 +129,6 @@ async function renderList(
     onRequest?: (url: URL) => void
     response?: DownloadingInfo[] | ((url: URL) => DownloadingInfo[] | Promise<DownloadingInfo[]>)
     status?: number
-    superUser?: boolean
-    userName?: string
   } = {},
 ) {
   server.use(downloadingListHandler(options.response ?? [], options.status ?? 200, options.onRequest))
@@ -138,12 +136,6 @@ async function renderList(
     props: {
       active: props.active ?? true,
       name: props.name ?? 'primary',
-    },
-    initialState: {
-      user: {
-        superUser: options.superUser ?? false,
-        userName: options.userName ?? 'tester',
-      },
     },
     global: {
       stubs: {
@@ -170,8 +162,8 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
-describe('DownloadingListView loading and ownership', () => {
-  it('queries the selected downloader and filters a normal user by either owner field', async () => {
+describe('DownloadingListView loading and listing', () => {
+  it('queries the selected downloader and shows every task', async () => {
     const requested = vi.fn()
     await renderList(
       { name: 'qb-main' },
@@ -189,25 +181,9 @@ describe('DownloadingListView loading and ownership', () => {
     expect(screen.getByText('Own by name|qb-main')).toBeInTheDocument()
     expect(screen.getByText('Own by id|qb-main').parentElement).toHaveAttribute('data-item-key', 'own-id')
     expect(screen.getByText('Own by name|qb-main').parentElement).toHaveAttribute('data-item-key', 'Own by name')
-    expect(screen.queryByText('Other task|qb-main')).not.toBeInTheDocument()
+    expect(screen.getByText('Other task|qb-main')).toBeInTheDocument()
     expect(requested).toHaveBeenCalledOnce()
     expect(requested.mock.calls[0][0].searchParams.get('name')).toBe('qb-main')
-  })
-
-  it('lets a superuser see every task', async () => {
-    await renderList(
-      { name: 'transmission' },
-      {
-        response: [
-          downloading('own', 'Own task'),
-          downloading('other', 'Other task', { userid: 'other', username: 'other' }),
-        ],
-        superUser: true,
-      },
-    )
-
-    expect(await screen.findByText('Own task|transmission')).toBeInTheDocument()
-    expect(screen.getByText('Other task|transmission')).toBeInTheDocument()
   })
 
   it('replaces the loading state with the successful empty state', async () => {
@@ -259,7 +235,6 @@ describe('DownloadingListView refresh ownership', () => {
       `,
     })
     await renderWithProviders(Host, {
-      initialState: { user: { superUser: true, userName: 'admin' } },
       global: {
         stubs: {
           DownloadingCard: DownloadingCardStub,

@@ -1,33 +1,24 @@
 <script setup lang="ts">
 import { NavMenu } from '@/@layouts/types'
 import { getNavMenus } from '@/router/i18n-menu'
-import { usePluginSidebarNavStore, useUserStore } from '@/stores'
+import { usePluginSidebarNavStore } from '@/stores'
 import { useI18n } from 'vue-i18n'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
-import { buildUserPermissionContext, filterMenusByPermission } from '@/utils/permission'
 
 // 国际化
 const { t } = useI18n()
 
-const userStore = useUserStore()
 const pluginSidebarNavStore = usePluginSidebarNavStore()
-
-// 获取用户权限信息
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
 
 // 应用分组（以header分组）
 const appGroups = ref<Record<string, NavMenu[]>>({})
 
-/** 按菜单 header 聚合当前内置与插件入口，并保持与桌面侧栏一致的权限过滤结果。 */
+/** 按菜单 header 聚合当前内置与插件入口，并保持与桌面侧栏一致。 */
 function categorizeApps() {
-  const allMenus = getNavMenus(t)
-  const filteredMenus = filterMenusByPermission(allMenus, userPermissions.value)
-  let menus = filteredMenus.filter((item: NavMenu) => !item.footer)
+  let menus = getNavMenus(t).filter((item: NavMenu) => !item.footer)
 
   if (pluginSidebarNavStore.items.length > 0) {
-    const pluginNavMenus = filterPluginSidebarNavEntries(pluginSidebarNavStore.items, t, userPermissions.value).map(
-      e => e.navMenu,
-    )
+    const pluginNavMenus = filterPluginSidebarNavEntries(pluginSidebarNavStore.items, t).map(e => e.navMenu)
     menus = [...menus, ...pluginNavMenus]
   }
 
@@ -45,7 +36,7 @@ function categorizeApps() {
 }
 
 let appGroupsMounted = false
-watch([() => pluginSidebarNavStore.items, userPermissions], () => {
+watch(() => pluginSidebarNavStore.items, () => {
   if (appGroupsMounted) categorizeApps()
 })
 

@@ -6,8 +6,6 @@ import {
   type SeasonSubscribeModes,
   useMediaSubscribe,
 } from '@/composables/useMediaSubscribe'
-import { useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { computed, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
@@ -24,7 +22,7 @@ export type NativeSubscribeResult =
   | { success: true }
   | {
       success: false
-      code: 'INVALID_MEDIA' | 'PERMISSION_DENIED'
+      code: 'INVALID_MEDIA'
       message: string
     }
 
@@ -116,18 +114,14 @@ function getSubscribeRecordMediaId(subscribe: Subscribe) {
 export function usePluginNativeSubscribe(): NativeSubscribe {
   const { t } = useI18n()
   const $toast = useToast()
-  const userStore = useUserStore()
   const media = shallowRef<MediaInfo>()
   const isSubscribed = ref(false)
   const isExists = ref(false)
   const subscribedSeasons = ref<number[]>([])
   const subscribedSeasonModes = ref<SeasonSubscribeModes>({})
-  const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-  const canSubscribe = computed(() => hasPermission(userPermissions.value, 'subscribe'))
 
   const subscribeActions = useMediaSubscribe({
     media: () => media.value,
-    canSubscribe: () => canSubscribe.value,
     isSubscribed,
     isExists: () => isExists.value,
     subscribedSeasons,
@@ -186,7 +180,7 @@ export function usePluginNativeSubscribe(): NativeSubscribe {
   }
 
   /** 显示宿主拒绝原因，并返回插件可用于 fallback 的结构化结果。 */
-  function rejectNativeSubscribe(code: 'INVALID_MEDIA' | 'PERMISSION_DENIED', message: string): NativeSubscribeResult {
+  function rejectNativeSubscribe(code: 'INVALID_MEDIA', message: string): NativeSubscribeResult {
     $toast.error(message)
     return { success: false, code, message }
   }
@@ -196,9 +190,6 @@ export function usePluginNativeSubscribe(): NativeSubscribe {
     const normalized = normalizeNativeSubscribeMedia(input)
     if (!normalized.success) {
       return rejectNativeSubscribe('INVALID_MEDIA', t(`subscribe.native.${normalized.reason}`))
-    }
-    if (!canSubscribe.value) {
-      return rejectNativeSubscribe('PERMISSION_DENIED', t('subscribe.native.permissionDenied'))
     }
 
     media.value = normalized.media

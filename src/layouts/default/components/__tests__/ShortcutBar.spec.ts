@@ -15,14 +15,7 @@ async function probeShortcutGroups() {
       return () => null
     },
   })
-  await renderWithProviders(Probe, {
-    initialState: {
-      user: {
-        superUser: true,
-        permissions: {},
-      },
-    },
-  })
+  await renderWithProviders(Probe)
   return groups
 }
 

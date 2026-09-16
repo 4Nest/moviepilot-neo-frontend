@@ -50,6 +50,17 @@ Object.defineProperty(window, 'matchMedia', {
   writable: true,
 })
 
+function ensureStorageClear(storage: Storage | undefined) {
+  if (storage && typeof storage.clear !== 'function') {
+    Object.defineProperty(storage, 'clear', { configurable: true, value: vi.fn() })
+  }
+}
+
+ensureStorageClear(globalThis.localStorage)
+ensureStorageClear(globalThis.sessionStorage)
+ensureStorageClear(window.localStorage)
+ensureStorageClear(window.sessionStorage)
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
@@ -58,8 +69,8 @@ afterEach(() => {
   cleanup()
   abortAllRequests()
   server.resetHandlers()
-  localStorage.clear()
-  sessionStorage.clear()
+  if (typeof localStorage?.clear === 'function') localStorage.clear()
+  if (typeof sessionStorage?.clear === 'function') sessionStorage.clear()
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()

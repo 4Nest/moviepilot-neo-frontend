@@ -5,9 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
-import { useUserStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 
 import { getSubscribeMovieTabs, getSubscribeTvTabs } from '@/router/i18n-menu'
 
@@ -15,7 +13,6 @@ import { getSubscribeMovieTabs, getSubscribeTvTabs } from '@/router/i18n-menu'
 const { t } = useI18n()
 
 const route = useRoute()
-const userStore = useUserStore()
 const { appMode } = usePWA()
 
 // 非默认标签页和弹窗按需加载，避免进入订阅列表时同步下载分享/统计相关代码。
@@ -205,10 +202,8 @@ function selectSubscribeSort(value: SubscribeSortBy) {
 const filterActivator = computed(() => '[data-menu-activator="filter-btn"]')
 const searchActivator = computed(() => '[data-menu-activator="share-filter-btn"]')
 
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canAdmin = computed(() => hasPermission(userPermissions.value, 'admin'))
-const showDefaultRuleAction = computed(() => activeTab.value === 'mysub' && canAdmin.value)
-const showSubscribeHistoryAction = computed(() => showDefaultRuleAction.value && canAdmin.value)
+const showDefaultRuleAction = computed(() => activeTab.value === 'mysub')
+const showSubscribeHistoryAction = showDefaultRuleAction
 
 function openDefaultRuleDialog() {
   openSharedDialog(
@@ -327,14 +322,12 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
             total: subscribeBatchState.value.totalCount,
           },
           icon: 'mdi-checkbox-multiple-marked-outline',
-          permission: 'subscribe',
           disabled: true,
           action: () => {},
         },
         {
           titleKey: subscribeBatchState.value.allSelected ? 'subscribe.batchDeselectAll' : 'subscribe.batchSelectAll',
           icon: subscribeBatchState.value.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked',
-          permission: 'subscribe',
           disabled: subscribeBatchState.value.totalCount === 0,
           action: toggleSubscribeBatchSelectAll,
         },
@@ -342,7 +335,6 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
           titleKey: 'subscribe.batchEnable',
           icon: 'mdi-play',
           color: 'success',
-          permission: 'subscribe',
           disabled: !hasSelectedSubscribes,
           action: batchEnableSelectedSubscribes,
         },
@@ -350,7 +342,6 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
           titleKey: 'subscribe.batchPause',
           icon: 'mdi-pause',
           color: 'info',
-          permission: 'subscribe',
           disabled: !hasSelectedSubscribes,
           action: batchPauseSelectedSubscribes,
         },
@@ -358,14 +349,12 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
           titleKey: 'subscribe.batchDelete',
           icon: 'mdi-delete',
           color: 'error',
-          permission: 'subscribe',
           disabled: !hasSelectedSubscribes,
           action: batchDeleteSelectedSubscribes,
         },
         {
           titleKey: 'subscribe.exitBatchMode',
           icon: 'mdi-close',
-          permission: 'subscribe',
           action: exitSubscribeBatchMode,
         },
       ]
@@ -378,7 +367,6 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
         titleKey: 'dialog.subscribeHistory.title',
         titleParams: { type: subType },
         icon: 'mdi-history',
-        permission: 'admin',
         action: openSubscribeHistoryDialog,
       })
     }
@@ -386,7 +374,6 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
     items.push({
       titleKey: 'dialog.subscribeEdit.titleDefault',
       icon: 'mdi-clipboard-edit-outline',
-      permission: 'admin',
       action: openDefaultRuleDialog,
     })
 
@@ -422,7 +409,6 @@ useDynamicButton({
   icon: subscribeDynamicIcon,
   onClick: handleSubscribeDynamicAction,
   menuItems: subscribeDynamicMenuItems,
-  permission: 'subscribe',
   show: computed(() => appMode.value && (subscribeBatchState.value.enabled || showDefaultRuleAction.value)),
 })
 
@@ -440,7 +426,6 @@ registerHeaderTab({
       color: filterButtonColor,
       class: 'settings-icon-button',
       dataAttr: 'filter-btn',
-      permission: 'subscribe',
       action: () => {
         filterSubscribeDialog.value = true
       },
@@ -451,7 +436,6 @@ registerHeaderTab({
       variant: 'text',
       color: computed(() => (subscribeSortMode.value ? 'warning' : 'gray')),
       class: 'settings-icon-button',
-      permission: 'subscribe',
       action: toggleSubscribeSortMode,
       show: computed(() => activeTab.value === 'mysub'),
     },
@@ -460,7 +444,6 @@ registerHeaderTab({
       variant: 'text',
       color: computed(() => (subscribeBatchState.value.enabled ? 'primary' : 'gray')),
       class: 'settings-icon-button',
-      permission: 'subscribe',
       action: () => {
         if (subscribeBatchState.value.enabled) {
           exitSubscribeBatchMode()
@@ -477,7 +460,6 @@ registerHeaderTab({
       color: computed(() => (shareKeywordInput.value ? 'primary' : 'gray')),
       class: 'settings-icon-button',
       dataAttr: 'share-filter-btn',
-      permission: 'subscribe',
       action: () => {
         searchShareDialog.value = true
       },

@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   dynamicButton: vi.fn(),
-  hasPermission: vi.fn(),
   openNewFolderDialog: vi.fn(),
 }))
 
@@ -19,15 +18,6 @@ vi.mock('@/composables/usePWA', () => ({
 vi.mock('@/composables/useDynamicButton', () => ({
   useDynamicButton: (...args: unknown[]) => mocks.dynamicButton(...args),
 }))
-
-vi.mock('@/utils/permission', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/utils/permission')>()
-  return {
-    ...actual,
-    buildUserPermissionContext: vi.fn(() => ({})),
-    hasPermission: (...args: unknown[]) => mocks.hasPermission(...args),
-  }
-})
 
 vi.mock('vue-router', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-router')>()
@@ -120,8 +110,6 @@ function mountBrowser() {
 
 describe('FileBrowser drag lifecycle', () => {
   beforeEach(() => {
-    mocks.hasPermission.mockReset()
-    mocks.hasPermission.mockReturnValue(false)
     mocks.openNewFolderDialog.mockReset()
     localStorage.setItem('fileBrowser.showDirTree', 'true')
   })
@@ -210,8 +198,6 @@ describe('FileBrowser drag lifecycle', () => {
 
 describe('FileBrowser state and child contracts', () => {
   beforeEach(() => {
-    mocks.hasPermission.mockReset()
-    mocks.hasPermission.mockReturnValue(false)
     mocks.openNewFolderDialog.mockReset()
   })
 
@@ -277,8 +263,7 @@ describe('FileBrowser state and child contracts', () => {
     expect(wrapper.getComponent(FileNavigatorStub).props('items')).toEqual(items)
   })
 
-  it('moves the new-folder entry to the permission-gated floating action', () => {
-    mocks.hasPermission.mockReturnValue(true)
+  it('moves the new-folder entry to the floating action on the filemanager route', () => {
     const wrapper = mountBrowser()
 
     expect(wrapper.getComponent(FileToolbarStub).props('showNewFolderButton')).toBe(false)

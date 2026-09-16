@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
 import { copyToClipboard } from '@/@core/utils/navigator'
-import type { User } from '@/api/types'
 
 export interface WizardData {
   basic: {
@@ -587,17 +586,17 @@ export function useSetupWizard() {
     switch (currentStep.value) {
       case 1: // 基础设置
         if (!wizardData.value.basic.username) {
-          errors.push(t('dialog.userAddEdit.usernameRequired'))
+          errors.push(t('setupWizard.basic.usernameRequired'))
         }
         // 密码是可选的，但如果输入了密码则需要验证
         if (wizardData.value.basic.password) {
           if (wizardData.value.basic.password.length < 6) {
-            errors.push(t('dialog.userAddEdit.passwordMinLength'))
+            errors.push(t('setupWizard.basic.passwordMinLength'))
           }
           if (!wizardData.value.basic.confirmPassword) {
-            errors.push(t('dialog.userAddEdit.confirmPasswordRequired'))
+            errors.push(t('setupWizard.basic.confirmPasswordRequired'))
           } else if (wizardData.value.basic.password !== wizardData.value.basic.confirmPassword) {
-            errors.push(t('dialog.userAddEdit.passwordMismatch'))
+            errors.push(t('setupWizard.basic.passwordMismatch'))
           }
         }
         if (!wizardData.value.basic.apiToken) {
@@ -965,30 +964,10 @@ export function useSetupWizard() {
   async function updateUserPassword() {
     if (wizardData.value.basic.username && wizardData.value.basic.password) {
       try {
-        // 获取当前用户信息
-        const currentUser: User = await api.get('user/current')
-
-        if (currentUser) {
-          // 更新现有用户的密码
-          const userData = {
-            name: wizardData.value.basic.username,
-            password: wizardData.value.basic.password,
-            is_active: currentUser.is_active,
-            is_superuser: currentUser.is_superuser,
-          }
-
-          await api.put(`user/${currentUser.id}`, userData)
-        } else {
-          // 如果用户不存在，创建新用户（通常不会发生）
-          const userData = {
-            name: wizardData.value.basic.username,
-            password: wizardData.value.basic.password,
-            is_active: true,
-            is_superuser: true,
-          }
-
-          await api.post('user/', userData)
-        }
+        // 唯一 admin 账号，直接更新当前用户密码
+        await api.put('user/current', {
+          password: wizardData.value.basic.password,
+        })
       } catch (error) {
         console.error('Update user password failed:', error)
         throw error
@@ -1017,7 +996,7 @@ export function useSetupWizard() {
       // 如果输入了密码，验证密码一致性
       if (wizardData.value.basic.password) {
         if (wizardData.value.basic.password !== wizardData.value.basic.confirmPassword) {
-          $toast.error(t('dialog.userAddEdit.passwordMismatch'))
+          $toast.error(t('setupWizard.basic.passwordMismatch'))
           return false
         }
         // 更新用户密码

@@ -32,7 +32,6 @@ interface RemoveSubscribeOptions {
 
 interface UseMediaSubscribeOptions {
   media: () => MediaInfo | undefined
-  canSubscribe: () => boolean
   isSubscribed?: Ref<boolean>
   isExists?: () => boolean
   seasonsSubscribed?: Ref<{ [key: number]: boolean }>
@@ -267,8 +266,6 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
 
   // 查询系统默认订阅配置。
   async function queryDefaultSubscribeConfig(): Promise<SubscribeConfig | undefined> {
-    if (!options.canSubscribe()) return undefined
-
     try {
       const media = currentMedia()
       const subscribeConfigUrl =

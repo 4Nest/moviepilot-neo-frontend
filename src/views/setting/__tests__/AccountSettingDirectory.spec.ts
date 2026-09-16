@@ -1,8 +1,10 @@
+import SharedDialogHost from '@/components/dialog/SharedDialogHost.vue'
+import { closeSharedDialog } from '@/composables/useSharedDialog'
 import AccountSettingDirectory from '@/views/setting/AccountSettingDirectory.vue'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { defineComponent } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -84,6 +86,35 @@ async function renderDirectorySettings() {
   })
 }
 
+vi.mock('@/components/dialog/CategoryEditDialog.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  // 分类弹窗替身:模拟原文保存(仅 emit save)与可视化保存(emit save + close)两条路径
+  // __esModule 确保 defineAsyncComponent 正确解包 default 导出
+  return {
+    __esModule: true,
+    default: defineComponent({
+      name: 'CategoryEditDialogStub',
+      emits: ['close', 'save'],
+      setup(_, { emit }) {
+        return () =>
+          h('div', { 'data-testid': 'category-edit-dialog-stub' }, [
+            h('button', { onClick: () => emit('save') }, '仅保存原文'),
+            h(
+              'button',
+              {
+                onClick: () => {
+                  emit('save')
+                  emit('close')
+                },
+              },
+              '可视化保存',
+            ),
+          ])
+      },
+    }),
+  }
+})
+
 describe('mounted local disk empty directory cleanup setting', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset()
@@ -139,5 +170,58 @@ describe('mounted local disk empty directory cleanup setting', () => {
         }),
       )
     })
+  })
+})
+
+describe('分类策略弹窗关闭行为', () => {
+  beforeEach(() => {
+    mocks.apiGet.mockReset()
+    mocks.apiPost.mockReset()
+    mocks.toastError.mockReset()
+    mocks.toastSuccess.mockReset()
+  })
+
+  afterEach(() => {
+    closeSharedDialog()
+  })
+
+  async function openCategoryDialogStub() {
+    mockSettings(null)
+    const wrapper = defineComponent({
+      components: { AccountSettingDirectory, SharedDialogHost },
+      template: '<div><AccountSettingDirectory /><SharedDialogHost /></div>',
+    })
+    renderWithProviders(wrapper, {
+      global: {
+        stubs: {
+          VAceEditor: AceEditorStub,
+        },
+      },
+    })
+    await fireEvent.click(await screen.findByRole('button', { name: '分类策略' }))
+    return screen.findByTestId('category-edit-dialog-stub')
+  }
+
+  it('原文保存仅触发 save 事件时弹窗保持打开并刷新分类配置', async () => {
+    const stub = await openCategoryDialogStub()
+    mocks.apiGet.mockClear()
+
+    await fireEvent.click(within(stub).getByRole('button', { name: '仅保存原文' }))
+
+    await waitFor(() => {
+      expect(mocks.apiGet).toHaveBeenCalledWith('media/category')
+    })
+    expect(screen.getByTestId('category-edit-dialog-stub')).toBeInTheDocument()
+  })
+
+  it('可视化保存触发 save + close 事件后弹窗关闭', async () => {
+    const stub = await openCategoryDialogStub()
+
+    await fireEvent.click(within(stub).getByRole('button', { name: '可视化保存' }))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('category-edit-dialog-stub')).not.toBeInTheDocument()
+    })
+    expect(mocks.apiGet).toHaveBeenCalledWith('media/category')
   })
 })

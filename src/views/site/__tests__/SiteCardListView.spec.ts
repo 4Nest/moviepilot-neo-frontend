@@ -1,7 +1,6 @@
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import type { Site, SiteStatistic, SiteUserData } from '@/api/types'
 import SiteCardListView from '@/views/site/SiteCardListView.vue'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createSite, createSiteStatistic, createSiteUserData } from '@tests/support/factories/site'
@@ -160,7 +159,6 @@ interface RenderListOptions {
   appMode?: boolean
   initialRoute?: string
   listStatus?: number | (() => number)
-  manage?: boolean
   sites?: Site[]
   statistics?: SiteStatistic[]
   statisticsStatus?: number
@@ -181,12 +179,6 @@ async function renderList(options: RenderListOptions = {}) {
 
   return renderWithProviders(options.useKeepAlive ? KeepAliveHost : SiteCardListView, {
     initialRoute: options.initialRoute ?? '/site',
-    initialState: {
-      user: {
-        permissions: { ...DEFAULT_PERMISSIONS, manage: options.manage ?? true },
-        superUser: false,
-      },
-    },
     global: {
       stubs: {
         IconBtn: IconButtonStub,
@@ -484,8 +476,8 @@ describe('SiteCardListView', () => {
     await waitFor(() => expect(listRequests).toHaveBeenCalledTimes(2))
   })
 
-  it('shows management actions only on the site route for users with manage permission', async () => {
-    await renderList({ manage: false, sites: [createSite()] })
+  it('shows management actions only on the site route', async () => {
+    await renderList({ initialRoute: '/dashboard', sites: [createSite()] })
     expect(await screen.findByTestId(/^site-card-/)).toBeInTheDocument()
     expect(unref(getDynamicButtonConfig().show)).toBe(false)
     expect(document.querySelector('.compact-fab-stack')).not.toBeInTheDocument()

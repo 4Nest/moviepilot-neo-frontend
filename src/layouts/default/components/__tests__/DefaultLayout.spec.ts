@@ -10,11 +10,6 @@ interface SidebarStoreMock {
   items: PluginSidebarNavItem[]
 }
 
-interface UserStoreMock {
-  permissions: Record<string, unknown>
-  superUser: boolean
-}
-
 const mocks = vi.hoisted(() => ({
   emptyComponent: { template: '<div><slot /></div>' },
   ensureSidebarNav: vi.fn(),
@@ -24,7 +19,6 @@ const mocks = vi.hoisted(() => ({
     template: '<span data-testid="vertical-nav-link">{{ item.title }}</span>',
   },
   sidebarStore: undefined as SidebarStoreMock | undefined,
-  userStore: undefined as UserStoreMock | undefined,
   verticalNavLayout: { template: '<div><slot name="vertical-nav-content" /></div>' },
 }))
 
@@ -48,22 +42,10 @@ vi.mock('@/stores', async () => {
     ensureSidebarNav: mocks.ensureSidebarNav,
     items: [] as PluginSidebarNavItem[],
   })
-  mocks.userStore = reactive({
-    permissions: {
-      admin: false,
-      discovery: true,
-      features: {},
-      manage: false,
-      search: true,
-      subscribe: true,
-    },
-    superUser: false,
-  })
 
   return {
     useGlobalSettingsStore: () => ({ get: vi.fn(() => false) }),
     usePluginSidebarNavStore: () => mocks.sidebarStore,
-    useUserStore: () => mocks.userStore,
   }
 })
 
@@ -110,15 +92,6 @@ describe('DefaultLayout', () => {
     mocks.ensureSidebarNav.mockReset()
     mocks.ensureSidebarNav.mockResolvedValue(undefined)
     mocks.sidebarStore!.items = []
-    mocks.userStore!.permissions = {
-      admin: false,
-      discovery: true,
-      features: {},
-      manage: false,
-      search: true,
-      subscribe: true,
-    }
-    mocks.userStore!.superUser = false
   })
 
   it('removes theme customizer listeners while sidebar loading is still pending', async () => {
@@ -204,49 +177,5 @@ describe('DefaultLayout', () => {
 
     expect(wrapper.text()).toContain('New plugin')
     expect(wrapper.text()).not.toContain('Old plugin')
-  })
-
-  it('rebuilds plugin links when permissions change after mount', async () => {
-    mocks.sidebarStore!.items = [
-      {
-        icon: 'mdi-puzzle-outline',
-        nav_key: 'main',
-        order: 1,
-        plugin_id: 'visible',
-        section: 'system',
-        title: 'Visible plugin',
-      },
-      {
-        icon: 'mdi-puzzle-outline',
-        nav_key: 'main',
-        order: 2,
-        plugin_id: 'hidden',
-        section: 'system',
-        title: 'Hidden plugin',
-      },
-    ]
-    const wrapper = shallowMount(DefaultLayout, {
-      global: {
-        renderStubDefaultSlot: true,
-        stubs: {
-          IconBtn: mocks.emptyComponent as Component,
-          RouterLink: mocks.emptyComponent as Component,
-          VerticalNavLayout: mocks.verticalNavLayout,
-          VerticalNavLink: mocks.navLink,
-        },
-      },
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Visible plugin')
-    expect(wrapper.text()).toContain('Hidden plugin')
-
-    mocks.userStore!.permissions = {
-      ...mocks.userStore!.permissions,
-      features: { 'plugin.hidden.main': false },
-    }
-    await nextTick()
-
-    expect(wrapper.text()).not.toContain('Hidden plugin')
   })
 })

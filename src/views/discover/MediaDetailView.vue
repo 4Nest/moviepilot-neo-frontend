@@ -17,10 +17,8 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import { formatSeasonLabel } from '@/@core/utils/season'
 import router from '@/router'
 import { isNullOrEmptyObject } from '@/@core/utils'
-import { useUserStore } from '@/stores'
 import { useTheme } from 'vuetify'
 import { useI18n } from 'vue-i18n'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { useGlobalSettingsStore } from '@/stores'
 import { openMediaServerItem, openDoubanApp } from '@/utils/appDeepLink'
 import { openSharedDialog } from '@/composables/useSharedDialog'
@@ -52,12 +50,6 @@ const mediaProps = defineProps({
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
-
-// 用户 Store
-const userStore = useUserStore()
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canSearch = computed(() => hasPermission(userPermissions.value, 'search'))
-const canSubscribe = computed(() => hasPermission(userPermissions.value, 'subscribe'))
 
 // 获取主题信息
 const theme = useTheme()
@@ -747,7 +739,6 @@ function onSubscribeEditRemove() {
 
 const subscribeActions = useMediaSubscribe({
   media: () => mediaDetail.value,
-  canSubscribe: () => canSubscribe.value,
   isSubscribed,
   isExists: () => Boolean(existsItemId.value),
   seasonsSubscribed,
@@ -862,7 +853,7 @@ onUnmounted(() => {
           </span>
         </div>
         <div class="media-actions">
-          <VBtn v-if="hasMediaIdentity() && canSearch" variant="tonal" color="primary" class="media-action-button">
+          <VBtn v-if="hasMediaIdentity()" variant="tonal" color="primary" class="media-action-button">
             <template #prepend>
               <VIcon icon="mdi-magnify" />
             </template>
@@ -879,7 +870,7 @@ onUnmounted(() => {
             </VMenu>
           </VBtn>
           <VBtn
-            v-if="hasMediaIdentity() && canSearch"
+            v-if="hasMediaIdentity()"
             variant="tonal"
             color="info"
             class="media-action-button"
@@ -891,7 +882,7 @@ onUnmounted(() => {
             {{ t('media.actions.searchSubtitle') }}
           </VBtn>
           <VBtn
-            v-if="canSubscribe && (mediaDetail.type === '电影' || hasMediaIdentity())"
+            v-if="mediaDetail.type === '电影' || hasMediaIdentity()"
             class="media-action-button"
             :color="getSubscribeColor"
             variant="tonal"
@@ -1084,7 +1075,6 @@ onUnmounted(() => {
                           {{ getExistText(season.season_number || 0) }}
                         </VChip>
                         <IconBtn
-                          v-if="canSubscribe"
                           class="ms-1"
                           :color="seasonsSubscribed[season.season_number || 0] ? 'error' : 'warning'"
                           variant="text"

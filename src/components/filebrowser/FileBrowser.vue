@@ -7,8 +7,7 @@ import { storageIconDict } from '@/api/constants'
 import type { AxiosInstance } from 'axios'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
-import { useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
+
 
 // LocalStorage keys
 const SORT_KEY = 'fileBrowser.sort'
@@ -44,10 +43,6 @@ const props = defineProps({
 const emit = defineEmits(['pathchanged'])
 const route = useRoute()
 const { appMode } = usePWA()
-const userStore = useUserStore()
-const canManage = computed(() =>
-  hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'manage'),
-)
 const toolbarRef = ref<InstanceType<typeof FileToolbar> | null>(null)
 
 const fileIcons = {
@@ -143,15 +138,13 @@ function openNewFolderDialog() {
   toolbarRef.value?.openNewFolderDialog()
 }
 
-const showFloatingNewFolderAction = computed(() => route.path === '/filemanager' && canManage.value)
+const showFloatingNewFolderAction = computed(() => route.path === '/filemanager')
 
 useDynamicButton({
   icon: 'mdi-folder-plus-outline',
   onClick: openNewFolderDialog,
-  permission: 'manage',
   show: computed(() => appMode.value && showFloatingNewFolderAction.value),
 })
-
 // 加载次数
 const loading = ref(0)
 

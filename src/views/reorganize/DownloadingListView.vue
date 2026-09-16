@@ -4,7 +4,6 @@ import type { DownloadingInfo } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import DownloadingCard from '@/components/cards/DownloadingCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useUserStore } from '@/stores'
 import { useI18n } from 'vue-i18n'
 import { useBackground } from '@/composables/useBackground'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
@@ -18,9 +17,6 @@ const props = defineProps<{
   name: string
   active?: boolean
 }>()
-
-// 用户 Store
-const userStore = useUserStore()
 
 // 数据列表
 const dataList = ref<DownloadingInfo[]>([])
@@ -37,15 +33,6 @@ async function fetchData() {
     console.error(error)
   }
 }
-
-// 管理员显示全部下载任务，普通用户仅显示本人任务
-const filteredDataList = computed(() => {
-  // 从 Store 中获取用户信息
-  const superUser = userStore.superUser
-  const userName = userStore.userName
-  if (superUser) return dataList.value
-  else return dataList.value.filter(data => data.userid === userName || data.username === userName)
-})
 
 // 每个下载器独立持有刷新身份，非活动标签不占用轮询资源。
 useConditionalDataRefresh(
@@ -66,8 +53,8 @@ useKeepAliveRefresh(fetchData, {
 <template>
   <LoadingBanner v-if="!isRefreshed" class="mt-12" />
   <ProgressiveCardGrid
-    v-if="filteredDataList.length > 0"
-    :items="filteredDataList"
+    v-if="dataList.length > 0"
+    :items="dataList"
     :get-item-key="item => item.hash || item.name"
     :min-item-width="320"
     :estimated-item-height="230"
@@ -77,7 +64,7 @@ useKeepAliveRefresh(fetchData, {
     </template>
   </ProgressiveCardGrid>
   <NoDataFound
-    v-if="filteredDataList.length === 0 && isRefreshed"
+    v-if="dataList.length === 0 && isRefreshed"
     error-code="404"
     :error-title="t('downloading.noTask')"
     :error-description="t('downloading.noTaskDescription')"

@@ -1,7 +1,6 @@
 import AppCenter from '@/pages/appcenter.vue'
 import type { PluginSidebarNavItem } from '@/api/types'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
-import { useUserStore } from '@/stores/user'
 import { screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { server } from '@tests/support/msw/server'
@@ -34,7 +33,7 @@ function sidebarNavHandler(items: PluginSidebarNavItem[]) {
   return http.get(SIDEBAR_NAV_URL, () => HttpResponse.json(items))
 }
 
-async function renderAppCenter(items: PluginSidebarNavItem[], permissions: Record<string, unknown> = {}) {
+async function renderAppCenter(items: PluginSidebarNavItem[]) {
   server.use(sidebarNavHandler(items))
   return renderWithProviders(AppCenter, {
     global: {
@@ -43,70 +42,19 @@ async function renderAppCenter(items: PluginSidebarNavItem[], permissions: Recor
       },
     },
     initialRoute: '/apps',
-    initialState: {
-      user: {
-        permissions: {
-          admin: false,
-          discovery: true,
-          features: {},
-          manage: false,
-          search: true,
-          subscribe: true,
-          ...permissions,
-        },
-        superUser: false,
-      },
-    },
     stubActions: false,
   })
 }
 
 describe('app center plugin navigation', () => {
-  it('uses the shared category, admin and feature permission semantics', async () => {
-    await renderAppCenter(
-      [
-        createNavItem({ permission: null, plugin_id: 'open', title: 'Open plugin' }),
-        createNavItem({ permission: 'manage', plugin_id: 'category-denied', title: 'Category denied plugin' }),
-        createNavItem({ permission: 'admin', plugin_id: 'admin-denied', title: 'Admin denied plugin' }),
-        createNavItem({ permission: 'discovery', plugin_id: 'feature-denied', title: 'Feature denied plugin' }),
-        createNavItem({ permission: 'discovery', plugin_id: 'allowed', title: 'Allowed plugin' }),
-      ],
-      {
-        admin: true,
-        discovery: true,
-        features: {
-          'plugin.allowed.main': true,
-          'plugin.feature-denied.main': false,
-        },
-        manage: false,
-      },
-    )
+  it('renders every plugin nav entry from the shared snapshot', async () => {
+    await renderAppCenter([
+      createNavItem({ plugin_id: 'open', title: 'Open plugin' }),
+      createNavItem({ plugin_id: 'another', title: 'Another plugin' }),
+    ])
 
     expect(await screen.findByText('Open plugin')).toBeInTheDocument()
-    expect(screen.getByText('Allowed plugin')).toBeInTheDocument()
-    expect(screen.queryByText('Category denied plugin')).not.toBeInTheDocument()
-    expect(screen.queryByText('Admin denied plugin')).not.toBeInTheDocument()
-    expect(screen.queryByText('Feature denied plugin')).not.toBeInTheDocument()
-
-    const userStore = useUserStore()
-    userStore.setPermissions({
-      admin: true,
-      discovery: true,
-      features: {
-        'plugin.allowed.main': true,
-        'plugin.feature-denied.main': true,
-      },
-      manage: true,
-      search: true,
-      subscribe: true,
-    })
-    userStore.setSuperUser(true)
-
-    await waitFor(() => {
-      expect(screen.getByText('Category denied plugin')).toBeInTheDocument()
-      expect(screen.getByText('Admin denied plugin')).toBeInTheDocument()
-      expect(screen.getByText('Feature denied plugin')).toBeInTheDocument()
-    })
+    expect(screen.getByText('Another plugin')).toBeInTheDocument()
   })
 
   it('updates an already mounted consumer after the shared snapshot is force-refreshed', async () => {

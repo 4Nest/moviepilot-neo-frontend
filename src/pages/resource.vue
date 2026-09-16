@@ -13,8 +13,6 @@ import { useI18n } from 'vue-i18n'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
-import { useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { SearchReplaceBatchCollector, isSearchReplaceBatchEvent } from '@/utils/searchStream'
 import { getCurrentLocale } from '@/plugins/i18n'
 import { useTorrentFilter } from '@/composables/useTorrentFilter'
@@ -23,11 +21,6 @@ import { useTorrentFilter } from '@/composables/useTorrentFilter'
 const { t } = useI18n()
 
 const { appMode } = usePWA()
-const userStore = useUserStore()
-const canSearch = computed(() =>
-  hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'search'),
-)
-
 
 // 使用筛选 composable
 const torrentFilter = useTorrentFilter()
@@ -253,7 +246,6 @@ function toggleViewType() {
 useDynamicButton({
   icon: viewToggleIcon,
   onClick: toggleViewType,
-  permission: 'search',
   show: computed(() => appMode.value && isRefreshed.value),
 })
 
@@ -1319,7 +1311,7 @@ onUnmounted(() => {
     <LoadingBanner v-else-if="!isRefreshed && !isSearchLoading" />
 
     <Teleport to="body" v-if="route.path === '/resource'">
-      <div v-if="isRefreshed && !appMode && canSearch" class="compact-fab-stack">
+      <div v-if="isRefreshed && !appMode" class="compact-fab-stack">
         <VFab
           :icon="viewToggleIcon"
           color="primary"

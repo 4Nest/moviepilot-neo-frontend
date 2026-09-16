@@ -8,9 +8,6 @@ import api from '@/api'
 import router from '@/router'
 import LoginMfaStep from '@/components/auth/LoginMfaStep.vue'
 import { bufferToBase64Url, base64UrlToUint8Array } from '@/@core/utils/navigator'
-
-import { getNavMenus } from '@/router/i18n-menu'
-import { buildUserPermissionContext, filterMenusByPermission } from '@/utils/permission'
 import type { ApiResponse } from '@/api/types'
 import { loadRemoteComponentFromModule, type RemoteModule } from '@/utils/federationLoader'
 import type { MfaMethod } from '@/types/auth'
@@ -27,8 +24,6 @@ const loginVisualProfile = computed(() => getLoginVisualProfile(loginTheme.name.
 const authStore = useAuthStore()
 //用户 Store
 const userStore = useUserStore()
-// 获取有权限的菜单
-const navMenus = computed(() => getNavMenus(t))
 
 // 表单
 const form = ref({
@@ -270,12 +265,10 @@ interface PassKeyStartResponse {
 
 interface PassKeyFinishResponse {
   access_token: string
-  super_user: boolean
   user_id: number
   user_name: string
   avatar: string
   level: number
-  permissions: Record<string, boolean>
   wizard: boolean
 }
 
@@ -465,11 +458,7 @@ async function loginWithPassKey(isConditional = false) {
 }
 
 // 登录后处理
-async function afterLogin(
-  superuser: boolean,
-  userPayload: userState,
-  filteredMenus: ReturnType<typeof filterMenusByPermission>,
-) {
+async function afterLogin(userPayload: userState) {
   const originalPath = authStore.originalPath
   authStore.setOriginalPath(null)
 
@@ -481,8 +470,7 @@ async function afterLogin(
     if (originalPath && originalPath !== '/' && router.resolve(originalPath).path !== '/login') {
       await router.push(originalPath)
     } else {
-      // 跳转到第一个有权限的菜单
-      await router.push(filteredMenus[0].to)
+      await router.push('/dashboard')
     }
   }
 }
@@ -490,21 +478,11 @@ async function afterLogin(
 // 处理登录成功
 async function handleLoginSuccess(response: PassKeyFinishResponse) {
   const userPayload: userState = {
-    superUser: response.super_user,
     userID: response.user_id,
     userName: response.user_name,
     avatar: response.avatar,
     level: response.level,
-    permissions: response.permissions,
     wizard: response.wizard,
-  }
-
-  const userPermissions = buildUserPermissionContext(userPayload.superUser, userPayload.permissions)
-
-  const filteredMenus = filterMenusByPermission(navMenus.value, userPermissions)
-  if (filteredMenus.length === 0) {
-    errorMessage.value = t('login.noPermission')
-    return
   }
 
   const authPayLoad: authState = {
@@ -515,7 +493,7 @@ async function handleLoginSuccess(response: PassKeyFinishResponse) {
   authStore.login(authPayLoad)
   userStore.loginUser(userPayload)
 
-  await afterLogin(userPayload.superUser, userPayload, filteredMenus)
+  await afterLogin(userPayload)
 }
 
 async function requestPasswordLogin(): Promise<PassKeyFinishResponse> {

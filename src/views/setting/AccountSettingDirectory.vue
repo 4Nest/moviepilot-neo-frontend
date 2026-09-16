@@ -79,6 +79,7 @@ const activeRenameMediaType = ref<RenameMediaType>('movie')
 const renameFormatEditorRef = ref<InstanceType<typeof RenameFormatEditor> | null>(null)
 
 // 打开共享分类编辑弹窗，保存后刷新本页分类配置。
+// closeOn 不含 save:进阶页保存原文仅触发 save,弹窗需保持打开;可视化保存由弹窗自身 emit close 关闭。
 function openCategoryDialog() {
   openSharedDialog(
     CategoryEditDialog,
@@ -86,7 +87,7 @@ function openCategoryDialog() {
     {
       save: loadMediaCategories,
     },
-    { closeOn: ['close', 'save', 'update:modelValue'] },
+    { closeOn: ['close', 'update:modelValue'] },
   )
 }
 

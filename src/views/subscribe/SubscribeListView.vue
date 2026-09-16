@@ -5,7 +5,6 @@ import type { Subscribe } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import SubscribeCard from '@/components/cards/SubscribeCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useUserStore } from '@/stores'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 import { useConfirm } from '@/composables/useConfirm'
@@ -21,18 +20,11 @@ const { t } = useI18n()
 // 响应式断点用于切换订阅卡片网格密度。
 const display = useDisplay()
 
-// 用户 Store
-const userStore = useUserStore()
-
 // 提示框
 const $toast = useToast()
 
 // 确认框
 const createConfirm = useConfirm()
-
-// 从 Store 中获取用户信息
-const superUser = userStore.superUser
-const userName = userStore.userName
 
 // 输入参数
 const props = defineProps({
@@ -235,10 +227,6 @@ watch(
   () => {
     const nextDisplayList = dataList.value.filter(data => {
       if (data.type !== props.type) {
-        return false
-      }
-
-      if (!superUser && data.username !== userName) {
         return false
       }
 

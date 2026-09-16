@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   appMode: false,
+  createConfirm: vi.fn(),
   desktop: true,
   dynamicButtonConfig: undefined as Record<string, unknown> | undefined,
   openSharedDialog: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   progressStart: vi.fn(),
   progressStop: vi.fn(),
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -29,7 +31,12 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('vue-toastification', () => ({
-  useToast: () => ({ error: mocks.toastError }),
+  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  default: { install: () => {} },
+  useConfirm: () => mocks.createConfirm,
 }))
 
 vi.mock('vuetify', async importOriginal => {
@@ -312,10 +319,6 @@ async function renderHistory(initialRoute = '/history') {
           GLOBAL_IMAGE_CACHE: false,
         },
       },
-      user: {
-        permissions: ['manage'],
-        superUser: true,
-      },
     },
   })
 }
@@ -364,6 +367,7 @@ describe('TransferHistoryView', () => {
       id: 1,
       updateProps: vi.fn(),
     }))
+    mocks.createConfirm.mockResolvedValue(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -724,7 +728,103 @@ describe('TransferHistoryView', () => {
     expect(dialog.options).toEqual({ closeOn: ['close', 'done'] })
     await dialog.events.done()
     expect(historyCalls).toBeGreaterThan(1)
-    expect(getDynamicMenuItems()).toBeUndefined()
+    expect(getDynamicMenuItems()?.map(item => item.titleKey)).toEqual(['transferHistory.actions.clearAll'])
+  })
+
+  it('renders a clear-all button that stays disabled while the list is empty', async () => {
+    await renderHistory()
+
+    const clearButton = await screen.findByRole('button', { name: '清空记录' })
+    expect(clearButton).toBeDisabled()
+
+    await fireEvent.click(clearButton)
+    expect(mocks.createConfirm).not.toHaveBeenCalled()
+    expect(mocks.apiDelete).not.toHaveBeenCalled()
+  })
+
+  it('clears every record after confirmation, toasts the deleted count, and reloads the list', async () => {
+    const histories = [createHistory(1, '记录甲'), createHistory(2, '记录乙')]
+    let historyCalls = 0
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      historyCalls += 1
+      return Promise.resolve(historyCalls === 1 ? historyResponse(histories) : historyResponse([]))
+    })
+    mocks.apiDelete.mockResolvedValue({ data: { deleted: 2 }, success: true })
+
+    await renderHistory()
+    expect(await screen.findByText('记录甲')).toBeInTheDocument()
+    const clearButton = screen.getByRole('button', { name: '清空记录' })
+    expect(clearButton).toBeEnabled()
+
+    await fireEvent.click(clearButton)
+
+    expect(mocks.createConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmText: '清空记录',
+        content: expect.stringMatching(/与当前搜索\/筛选无关.*不影响已整理的文件.*不可撤销/),
+        title: '清空整理记录',
+        type: 'error',
+      }),
+    )
+
+    await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalledWith('history/empty/transfer'))
+    await waitFor(() => expect(historyCalls).toBe(2))
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已清空 2 条整理记录')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not call the clear API when the confirmation is cancelled', async () => {
+    mocks.createConfirm.mockResolvedValue(false)
+    let historyCalls = 0
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      historyCalls += 1
+      return Promise.resolve(historyResponse([createHistory(1, '保留记录')]))
+    })
+
+    await renderHistory()
+    expect(await screen.findByText('保留记录')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: '清空记录' }))
+    await flushPromises()
+
+    expect(mocks.apiDelete).not.toHaveBeenCalled()
+    expect(historyCalls).toBe(1)
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('shows a failure toast without refreshing when the clear request fails', async () => {
+    let historyCalls = 0
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      historyCalls += 1
+      return Promise.resolve(historyResponse([createHistory(1, '失败现场')]))
+    })
+    mocks.apiDelete.mockRejectedValue(new Error('boom'))
+
+    await renderHistory()
+    expect(await screen.findByText('失败现场')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: '清空记录' }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('清空失败：boom'))
+    expect(historyCalls).toBe(1)
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('registers the clear-all action in every appMode dynamic menu branch', async () => {
+    mocks.desktop = false
+
+    await renderHistory()
+
+    expect(getDynamicMenuItems()?.map(item => item.titleKey)).toEqual(['transferHistory.actions.clearAll'])
+
+    await fireEvent.click(screen.getByRole('button', { name: '批量选择' }))
+    const batchKeys = getDynamicMenuItems()?.map(item => item.titleKey) ?? []
+    expect(batchKeys).toContain('transferHistory.actions.clearAll')
+    expect(batchKeys.indexOf('transferHistory.actions.clearAll')).toBeLessThan(
+      batchKeys.indexOf('transferHistory.actions.exitBatchMode'),
+    )
+    expect(screen.getByRole('button', { name: '清空记录' })).toBeInTheDocument()
   })
 
 

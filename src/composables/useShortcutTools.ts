@@ -1,12 +1,5 @@
 import type { Component } from 'vue'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { useUserStore } from '@/stores'
-import {
-  buildUserPermissionContext,
-  filterItemsByPermission,
-  hasItemPermission,
-  type PermissionProtectedItem,
-} from '@/utils/permission'
 import { useI18n } from 'vue-i18n'
 
 const NameTestView = defineAsyncComponent(() => import('@/views/system/NameTestView.vue'))
@@ -22,7 +15,7 @@ const ShortcutToolDialog = defineAsyncComponent(() => import('@/components/dialo
 // 定时服务在捷径与仪表板中共用的图标，避免两个入口的视觉语义漂移。
 export const SCHEDULER_SHORTCUT_ICON = 'mdi-list-box'
 
-export type ShortcutToolItem = PermissionProtectedItem & {
+export type ShortcutToolItem = {
   bodyClass?: string
   cardClass?: string
   component?: Component
@@ -44,8 +37,6 @@ const PINNED_SHORTCUT_ORDER = ['nameTest', 'words', 'logging']
 /** 提供顶部捷径与仪表板共用的工具定义和打开逻辑。 */
 export function useShortcutTools() {
   const { t } = useI18n()
-  const userStore = useUserStore()
-  const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
 
   const shortcuts: ShortcutToolItem[] = [
     {
@@ -128,24 +119,20 @@ export function useShortcutTools() {
       component: ModuleTestView,
       titleText: t('shortcut.system.subtitle'),
     },
-  ].map(item => ({ ...item, permission: 'admin' }))
-
-  const visibleShortcuts = computed(() => filterItemsByPermission(shortcuts, userPermissions.value))
+  ]
 
   // 固定在捷径按钮左侧的独立图标按钮（按 PINNED_SHORTCUT_ORDER 排序）
   const pinnedShortcuts = computed(() =>
-    PINNED_SHORTCUT_ORDER.map(dialog => visibleShortcuts.value.find(item => item.dialog === dialog)).filter(
+    PINNED_SHORTCUT_ORDER.map(dialog => shortcuts.find(item => item.dialog === dialog)).filter(
       (item): item is ShortcutToolItem => Boolean(item),
     ),
   )
 
   // 捷径菜单中仅保留未固定的工具
-  const menuShortcuts = computed(() => visibleShortcuts.value.filter(item => !item.pinned))
+  const menuShortcuts = computed(() => shortcuts.filter(item => !item.pinned))
 
   /** 打开工具对应的共享弹窗。 */
   function openShortcutDialog(item: ShortcutToolItem) {
-    if (!hasItemPermission(item, userPermissions.value)) return
-
     if (item.customDialog) {
       openSharedDialog(item.customDialog, {}, {}, { closeOn: ['close', 'update:modelValue'] })
       return
@@ -173,6 +160,6 @@ export function useShortcutTools() {
     menuShortcuts,
     openShortcutDialog,
     pinnedShortcuts,
-    visibleShortcuts,
+    visibleShortcuts: computed(() => shortcuts),
   }
 }

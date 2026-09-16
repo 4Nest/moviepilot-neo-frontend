@@ -70,7 +70,6 @@ function getDynamicButtonConfig() {
     icon: string
     color?: string
     onClick: () => void
-    permission: string
     show: ComputedRef<boolean>
   }
 }
@@ -101,7 +100,6 @@ describe('Downloading page history action', () => {
     expect(document.querySelector('.compact-fab')).not.toBeInTheDocument()
     expect(dynamicButton.icon).toBe('mdi-history')
     expect(dynamicButton.color).toBeUndefined()
-    expect(dynamicButton.permission).toBe('manage')
     expect(unref(dynamicButton.show)).toBe(true)
 
     dynamicButton.onClick()

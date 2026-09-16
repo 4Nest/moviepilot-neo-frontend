@@ -187,9 +187,7 @@ registerHeaderTab({
     {
       icon: 'mdi-order-alphabetical-ascending',
       variant: 'text',
-      color: 'grey',
       class: 'settings-icon-button',
-      permission: 'discovery',
       action: openOrderConfigDialog,
     },
   ],

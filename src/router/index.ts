@@ -1,15 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { configureNProgress } from '@/api/nprogress'
-import { useAuthStore, usePluginSidebarNavStore, useUserStore } from '@/stores'
+import { useAuthStore } from '@/stores'
 import { setNavigatingState as setRequestNavigatingState } from '@/utils/requestOptimizer'
-import {
-  buildPluginPermissionFeatureKey,
-  buildUserPermissionContext,
-  hasItemPermission,
-  PERMISSION_FEATURE,
-  type PermissionProtectedItem,
-  type UserPermissionKey,
-} from '@/utils/permission'
 
 // Nprogress
 configureNProgress()
@@ -27,9 +19,8 @@ const router = createRouter({
       path: '/',
       redirect: () => {
         const authStore = useAuthStore()
-        const userStore = useUserStore()
         if (!authStore.token) return '/login'
-        return userStore.superUser ? '/dashboard' : '/apps'
+        return '/dashboard'
       },
     },
     {
@@ -42,7 +33,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'admin',
           },
         },
         {
@@ -51,8 +41,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'discovery',
-            feature: PERMISSION_FEATURE.DISCOVERY_RECOMMEND,
           },
         },
         {
@@ -61,8 +49,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'discovery',
-            feature: PERMISSION_FEATURE.DISCOVERY_EXPLORE,
           },
         },
         {
@@ -71,8 +57,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'search',
-            feature: PERMISSION_FEATURE.SEARCH_RESOURCE,
           },
         },
         {
@@ -82,8 +66,6 @@ const router = createRouter({
             keepAlive: true,
             keepAliveKey: 'subscribe-movie',
             requiresAuth: true,
-            permission: 'subscribe',
-            feature: PERMISSION_FEATURE.SUBSCRIBE_MOVIE,
             subType: '电影',
           },
         },
@@ -94,8 +76,6 @@ const router = createRouter({
             keepAlive: true,
             keepAliveKey: 'subscribe-tv',
             requiresAuth: true,
-            permission: 'subscribe',
-            feature: PERMISSION_FEATURE.SUBSCRIBE_TV,
             subType: '电视剧',
           },
         },
@@ -104,8 +84,6 @@ const router = createRouter({
           component: () => import('../pages/subscribe-share.vue'),
           meta: {
             requiresAuth: true,
-            permission: 'subscribe',
-            feature: PERMISSION_FEATURE.SUBSCRIBE_SHARE,
           },
         },
         {
@@ -114,8 +92,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'manage',
-            feature: PERMISSION_FEATURE.MANAGE_WORKFLOW,
           },
         },
         {
@@ -124,8 +100,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'manage',
-            feature: PERMISSION_FEATURE.MANAGE_DOWNLOADING,
           },
         },
         {
@@ -134,8 +108,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'manage',
-            feature: PERMISSION_FEATURE.MANAGE_HISTORY,
             hideFooter: true,
           },
         },
@@ -145,17 +117,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'manage',
-            feature: PERMISSION_FEATURE.MANAGE_SITE,
-          },
-        },
-        {
-          path: '/user',
-          component: () => import('../pages/user.vue'),
-          meta: {
-            keepAlive: true,
-            requiresAuth: true,
-            permission: 'admin',
           },
         },
         {
@@ -172,7 +133,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'admin',
           },
         },
         {
@@ -189,7 +149,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'admin',
           },
         },
         {
@@ -200,8 +159,6 @@ const router = createRouter({
             keepAlive: true,
             keepAliveByFullPath: true,
             requiresAuth: true,
-            permission: 'discovery',
-            feature: PERMISSION_FEATURE.DISCOVERY_EXPLORE,
           },
         },
         {
@@ -225,8 +182,6 @@ const router = createRouter({
           component: () => import('../pages/media.vue'),
           meta: {
             requiresAuth: true,
-            permission: 'discovery',
-            feature: PERMISSION_FEATURE.DISCOVERY_EXPLORE,
           },
         },
         {
@@ -235,8 +190,6 @@ const router = createRouter({
           meta: {
             keepAlive: true,
             requiresAuth: true,
-            permission: 'manage',
-            feature: PERMISSION_FEATURE.MANAGE_FILEMANAGER,
             hideFooter: true,
           },
         },
@@ -263,7 +216,6 @@ const router = createRouter({
           component: () => import('../pages/setup.vue'),
           meta: {
             requiresAuth: true,
-            permission: 'admin',
           },
         },
         {
@@ -274,32 +226,6 @@ const router = createRouter({
     },
   ],
 })
-
-async function getRoutePermission(to: any): Promise<PermissionProtectedItem> {
-  if (to.meta.permission) {
-    return {
-      permission: to.meta.permission as UserPermissionKey,
-      feature: to.meta.feature,
-    }
-  }
-
-  if (to.name !== 'plugin-app') {
-    return {}
-  }
-
-  const pluginId = String(to.params.pluginId || '')
-  const navKey = String(to.params.navKey || 'main')
-  const pluginSidebarNavStore = usePluginSidebarNavStore()
-  await pluginSidebarNavStore.ensureSidebarNav()
-
-  const navItem = pluginSidebarNavStore.items.find(item => item.plugin_id === pluginId && item.nav_key === navKey)
-  if (!navItem) return {}
-
-  return {
-    permission: (navItem.permission || undefined) as UserPermissionKey | undefined,
-    feature: buildPluginPermissionFeatureKey(pluginId, navKey),
-  }
-}
 
 // 路由导航守卫
 router.beforeEach(async (to: any, from: any, next: any) => {
@@ -316,24 +242,6 @@ router.beforeEach(async (to: any, from: any, next: any) => {
     // 用户未登录，重定向到登录页
     setRequestNavigatingState(false)
     next('/login')
-  } else if (to.meta.requiresAuth) {
-    const routePermission = await getRoutePermission(to)
-    if (!routePermission.permission && !routePermission.feature) {
-      next()
-      return
-    }
-
-    const userStore = useUserStore()
-    const allowed = hasItemPermission(
-      routePermission,
-      buildUserPermissionContext(userStore.superUser, userStore.permissions),
-    )
-    if (!allowed) {
-      setRequestNavigatingState(false)
-      next('/apps')
-      return
-    }
-    next()
   } else {
     next()
   }

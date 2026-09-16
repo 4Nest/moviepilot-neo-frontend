@@ -26,14 +26,14 @@ const confirmPasswordError = computed(() => {
 })
 
 const passwordErrorMessage = computed(() => {
-  if (passwordError.value) return t('dialog.userAddEdit.passwordMinLength')
+  if (passwordError.value) return t('setupWizard.basic.passwordMinLength')
   return ''
 })
 
 const confirmPasswordErrorMessage = computed(() => {
   if (!wizardData.value.basic.password) return ''
-  if (!wizardData.value.basic.confirmPassword) return t('dialog.userAddEdit.confirmPasswordRequired')
-  if (confirmPasswordError.value) return t('dialog.userAddEdit.passwordMismatch')
+  if (!wizardData.value.basic.confirmPassword) return t('setupWizard.basic.confirmPasswordRequired')
+  if (confirmPasswordError.value) return t('setupWizard.basic.passwordMismatch')
   return ''
 })
 
@@ -53,7 +53,7 @@ const usernameError = computed(() => {
 })
 
 const usernameErrorMessage = computed(() => {
-  if (usernameError.value) return t('dialog.userAddEdit.usernameRequired')
+  if (usernameError.value) return t('setupWizard.basic.usernameRequired')
   return ''
 })
 </script>

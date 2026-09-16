@@ -2,13 +2,11 @@
 import { useToast } from 'vue-toastification'
 import { numberValidator } from '@/@validators'
 import api from '@/api'
-import type { DownloaderConf, FilterRuleGroup, Site, Subscribe, TransferDirectoryConf } from '@/api/types'
+import type { DownloaderConf, FilterRuleGroup, Site, Subscribe, SubscribeVersionRule, SubscribeVersionSettings, TransferDirectoryConf } from '@/api/types'
 import { useDisplay } from 'vuetify'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from 'vue-i18n'
 import { qualityOptions, resolutionOptions, effectOptions } from '@/api/constants'
-import { useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { formatSeason } from '@/@core/utils/formatters'
 
 // 从变更请求异常中提取可展示消息，并为非标准错误提供稳定兜底。
@@ -23,10 +21,6 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
 
 // i18n
 const { t } = useI18n()
-const userStore = useUserStore()
-const canAdmin = computed(() =>
-  hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'admin'),
-)
 
 // 显示器宽度
 const display = useDisplay()
@@ -39,6 +33,10 @@ const props = defineProps({
   subid: Number,
   default: Boolean,
   type: String,
+  // 指定编辑的版本 ID；多版本订阅由版本选择页传入
+  versionId: String,
+  // 新增版本模式：打开时基于当前订阅设置创建一个新版本
+  addVersion: Boolean,
 })
 
 // 定义触发的自定义事件
@@ -58,24 +56,106 @@ const selectSitesOptions = ref<{ [key: number]: string }[]>([])
 // 所有规则组列表
 const filterRuleGroups = ref<FilterRuleGroup[]>([])
 
+// 版本编辑状态：每个版本保存完整设置快照，运行进度永不进入写请求
+const versionRules = ref<SubscribeVersionRule[]>([])
+const activeVersionId = ref<string | null>(null)
+// 版本规则是否已从服务端加载完成:加载前不渲染依赖规则数量的开关,避免闪烁
+const versionRulesLoaded = ref(false)
+
+const versionSettingKeys: (keyof SubscribeVersionSettings)[] = [
+  'keyword', 'filter', 'include', 'exclude', 'quality', 'resolution', 'effect',
+  'total_episode', 'start_episode', 'sites', 'downloader', 'best_version',
+  'best_version_full', 'save_path', 'search_imdbid', 'manual_total_episode',
+  'custom_words', 'media_category', 'filter_groups', 'episode_group',
+]
+
+function makeVersionId() {
+  // crypto.randomUUID 仅在安全上下文可用；局域网 IP 访问等场景降级为随机 ID
+  return globalThis.crypto?.randomUUID?.() ?? `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+function settingsFromSubscribe(value: Subscribe): SubscribeVersionSettings {
+  const settings = {} as SubscribeVersionSettings
+  for (const key of versionSettingKeys) settings[key] = value[key] as never
+  settings.sites = [...(value.sites ?? [])]
+  settings.filter_groups = [...(value.filter_groups ?? [])]
+  return settings
+}
+
+function ensureVersionRules(value: Subscribe) {
+  const existing = value.version_rules ?? []
+  if (existing.length) {
+    versionRules.value = JSON.parse(JSON.stringify(existing)) as SubscribeVersionRule[]
+    activeVersionId.value = versionRules.value[0].id
+    return
+  }
+  const id = makeVersionId()
+  versionRules.value = [{ id, name: '默认版本', enabled: true, settings: settingsFromSubscribe(value) }]
+  activeVersionId.value = id
+}
+
+const activeVersion = computed(() => versionRules.value.find(rule => rule.id === activeVersionId.value))
+const activeVersionSettings = computed(() => activeVersion.value?.settings)
+
+// 版本名称就地编辑：默认纯文本展示，点击切换为输入框
+const editingVersionName = ref(false)
+const versionNameInput = ref<HTMLInputElement | null>(null)
+let versionNameOriginal = ''
+
+async function startEditVersionName() {
+  if (!activeVersion.value) return
+  versionNameOriginal = activeVersion.value.name
+  editingVersionName.value = true
+  await nextTick()
+  versionNameInput.value?.focus()
+  versionNameInput.value?.select()
+}
+
+function finishEditVersionName() {
+  // 留空时恢复原名称，版本名不能为空
+  if (activeVersion.value && !activeVersion.value.name.trim()) {
+    activeVersion.value.name = versionNameOriginal
+  }
+  editingVersionName.value = false
+}
+
+function cancelEditVersionName() {
+  if (activeVersion.value) activeVersion.value.name = versionNameOriginal
+  editingVersionName.value = false
+}
+
+function syncActiveVersionToForm() {
+  if (!activeVersionSettings.value) return
+  Object.assign(subscribeForm.value, JSON.parse(JSON.stringify(activeVersionSettings.value)) as Partial<Subscribe>)
+}
+
+function syncFormToActiveVersion() {
+  if (!activeVersion.value) return
+  activeVersion.value.settings = settingsFromSubscribe(subscribeForm.value)
+}
+
+// 新增版本：基于当前表单设置创建完整设置快照，不复制任何运行事实
+function addVersion() {
+  syncFormToActiveVersion()
+  const id = makeVersionId()
+  versionRules.value.push({
+    id,
+    name: t('dialog.subscribeEdit.newVersion'),
+    enabled: true,
+    release_group: activeVersion.value?.release_group,
+    settings: settingsFromSubscribe(subscribeForm.value),
+  })
+  activeVersionId.value = id
+  syncActiveVersionToForm()
+}
+
+
 // 订阅编辑表单
 const subscribeForm = ref<Subscribe>({
   id: props.subid ?? 0,
-  name: '',
-  year: '',
-  type: '',
-  tmdbid: 0,
-  state: '',
-  last_update: '',
-  username: '',
-  sites: [],
-  best_version: undefined,
-  best_version_full: undefined,
-  current_priority: 0,
-  downloader: '',
-  date: '',
-  show_edit_dialog: false,
-  episode_group: '',
+  name: '', year: '', type: '', tmdbid: 0,
+  state: '', last_update: '', username: '', sites: [],
+  best_version: undefined, best_version_full: undefined, current_priority: 0,
+  downloader: '', date: '', show_edit_dialog: false, episode_group: '',
 })
 
 // 提示框
@@ -161,8 +241,6 @@ async function loadDownloaderSetting() {
 
 // 加载规则组
 async function queryFilterRuleGroups() {
-  if (!canAdmin.value) return
-
   try {
     const result: { [key: string]: any } = await api.get('system/setting/UserFilterRuleGroups')
     filterRuleGroups.value = result.data?.value ?? []
@@ -181,37 +259,28 @@ const filterRuleGroupOptions = computed(() => {
 
 // 调用API修改订阅
 async function updateSubscribeInfo() {
+  // 版本数据尚未从服务端加载时禁止保存，避免提交空数组清空已有版本
+  if (!versionRules.value.length) {
+    $toast.error(t('dialog.subscribeEdit.versionNotLoaded'))
+    return
+  }
+  syncFormToActiveVersion()
   const displayName = getSubscribeDisplayName()
   try {
-    const result: { [key: string]: any } = await api.put('subscribe/', subscribeForm.value)
-    // 提示
+    const payload = { ...subscribeForm.value, version_rules: JSON.parse(JSON.stringify(versionRules.value)) as SubscribeVersionRule[], version_mode: 'all' as const }
+    const result: { [key: string]: unknown } = await api.put('subscribe/', payload)
     if (result.success) {
       $toast.success(t('dialog.subscribeEdit.updateSuccess', { name: displayName }))
-      // 通知父组件刷新
-      emit('save', subscribeForm.value)
+      emit('save', payload)
     } else {
-      $toast.error(
-        t('dialog.subscribeEdit.updateFailed', {
-          name: displayName,
-          message: result.message ?? t('subscribe.requestFailed'),
-        }),
-      )
+      $toast.error(t('dialog.subscribeEdit.updateFailed', { name: displayName, message: result.message ?? t('subscribe.requestFailed') }))
     }
   } catch (e) {
-    console.log(e)
-    $toast.error(
-      t('dialog.subscribeEdit.updateFailed', {
-        name: displayName,
-        message: getRequestErrorMessage(e, t('subscribe.requestFailed')),
-      }),
-    )
+    $toast.error(t('dialog.subscribeEdit.updateFailed', { name: displayName, message: getRequestErrorMessage(e, t('subscribe.requestFailed')) }))
   }
 }
-
 // 设置用户设置的默认订阅规则
 async function saveDefaultSubscribeConfig() {
-  if (!canAdmin.value) return
-
   const typeName = getDefaultSubscribeTypeName()
   try {
     let subscribe_config_url = ''
@@ -289,9 +358,18 @@ async function getSubscribeInfo() {
   try {
     const result: Subscribe = await api.get(`subscribe/${props.subid}`)
     subscribeForm.value = result
+    ensureVersionRules(result)
+    if (props.addVersion) {
+      addVersion()
+    } else if (props.versionId && versionRules.value.some(rule => rule.id === props.versionId)) {
+      activeVersionId.value = props.versionId
+    }
+    syncActiveVersionToForm()
     subscribeForm.value.best_version = subscribeForm.value.best_version === 1
     subscribeForm.value.best_version_full = subscribeForm.value.best_version_full === 1
     subscribeForm.value.search_imdbid = subscribeForm.value.search_imdbid === 1
+    subscribeForm.value.skip_library_check = subscribeForm.value.skip_library_check === 1
+    versionRulesLoaded.value = true
     // 加载剧集组
     if (subscribeForm.value.type == '电视剧') getEpisodeGroups()
   } catch (e) {
@@ -309,35 +387,25 @@ async function removeSubscribe() {
   if (!isConfirmed) return
   const displayName = getSubscribeDisplayName()
   try {
-    const result: { [key: string]: any } = await api.delete(`subscribe/${props.subid}`)
-
+    const result: { [key: string]: unknown } = await api.delete(`subscribe/${props.subid}`)
     if (result.success) {
       $toast.success(`${displayName} ${t('subscribe.cancelSuccess')}`)
-      // 通知父组件刷新
       emit('remove')
     } else {
-      $toast.error(
-        `${displayName} ${t('subscribe.cancelFailed', {
-          message: result.message ?? t('subscribe.requestFailed'),
-        })}`,
-      )
+      $toast.error(`${displayName} ${t('subscribe.cancelFailed', { message: result.message ?? t('subscribe.requestFailed') })}`)
     }
   } catch (e) {
-    console.log(e)
-    $toast.error(
-      `${displayName} ${t('subscribe.cancelFailed', {
-        message: getRequestErrorMessage(e, t('subscribe.requestFailed')),
-      })}`,
-    )
+    $toast.error(`${displayName} ${t('subscribe.cancelFailed', { message: getRequestErrorMessage(e, t('subscribe.requestFailed')) })}`)
   }
 }
 
 // 查询下载目录
 async function loadDownloadDirectories() {
   try {
-    const result: { [key: string]: any } = await api.get('system/setting/public/Directories')
-    if (result.success && result.data?.value) {
-      downloadDirectories.value = result.data.value
+    const result: { [key: string]: unknown } = await api.get('system/setting/public/Directories')
+    if (result.success && typeof result.data === 'object' && result.data !== null && 'value' in result.data) {
+      const value = result.data.value
+      if (Array.isArray(value)) downloadDirectories.value = value as TransferDirectoryConf[]
     }
   } catch (error) {
     console.log(error)
@@ -381,10 +449,30 @@ onMounted(() => {
           <VIcon icon="mdi-clipboard-list-outline" class="me-2" />
         </template>
         <VCardTitle>
-          {{ props.default ? t('dialog.subscribeEdit.titleDefault') : t('dialog.subscribeEdit.titleEdit') }}
+          {{ props.default ? t('dialog.subscribeEdit.titleDefault') : props.addVersion ? t('dialog.subscribeEdit.titleAddVersion') : t('dialog.subscribeEdit.titleEdit') }}
         </VCardTitle>
         <VCardSubtitle v-if="!props.default">
           {{ getSubscribeDisplayName() }}
+          <template v-if="activeVersion">
+            <span class="mx-1">·</span><input
+              v-if="editingVersionName"
+              ref="versionNameInput"
+              v-model="activeVersion.name"
+              class="version-name-input text-primary"
+              :size="Math.max(activeVersion.name.length + 2, 8)"
+              :aria-label="t('dialog.subscribeEdit.versionName')"
+              @blur="finishEditVersionName"
+              @keyup.enter="finishEditVersionName"
+              @keyup.esc="cancelEditVersionName"
+            /><span
+              v-else
+              class="text-primary version-name-label"
+              role="button"
+              tabindex="0"
+              @click="startEditVersionName"
+              @keydown.enter="startEditVersionName"
+            >{{ activeVersion.name }}<VIcon icon="mdi-pencil" size="12" class="version-name-edit-icon" /><VTooltip activator="parent" location="top">{{ t('dialog.subscribeEdit.versionNameHint') }}</VTooltip></span>
+          </template>
         </VCardSubtitle>
         <VCardSubtitle v-else>
           {{ props.type }}
@@ -528,6 +616,14 @@ onMounted(() => {
                       persistent-hint
                     />
                   </VCol>
+                  <VCol v-if="(props.default || versionRulesLoaded) && versionRules.length <= 1" cols="12" md="4">
+                    <VSwitch
+                      v-model="subscribeForm.skip_library_check"
+                      :label="t('dialog.subscribeEdit.skipLibraryCheck')"
+                      :hint="t('dialog.subscribeEdit.skipLibraryCheckHint')"
+                      persistent-hint
+                    />
+                  </VCol>
                   <VCol v-if="props.default" cols="12" md="4">
                     <VSwitch
                       v-model="subscribeForm.show_edit_dialog"
@@ -541,6 +637,17 @@ onMounted(() => {
             </VWindowItem>
             <VWindowItem value="advance">
               <div>
+                <VRow v-if="!props.default && activeVersion">
+                  <VCol cols="12">
+                    <VTextField
+                      v-model="activeVersion.release_group"
+                      :label="t('dialog.subscribeEdit.releaseGroup')"
+                      :hint="t('dialog.subscribeEdit.releaseGroupHint')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-account-group-outline"
+                    />
+                  </VCol>
+                </VRow>
                 <VRow>
                   <VCol cols="12" md="6">
                     <VTextField
@@ -596,15 +703,6 @@ onMounted(() => {
                       prepend-inner-icon="mdi-calendar"
                     />
                   </VCol>
-                  <VCol cols="12" v-if="!props.default">
-                    <VTextField
-                      v-model="subscribeForm.media_category"
-                      :label="t('dialog.subscribeEdit.mediaCategory')"
-                      :hint="t('dialog.subscribeEdit.mediaCategoryHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-tag"
-                    />
-                  </VCol>
                 </VRow>
                 <VRow v-if="!props.default">
                   <VCol cols="12">
@@ -631,7 +729,7 @@ onMounted(() => {
         <VBtn
           color="primary"
           variant="flat"
-          @click=";`${props.default ? saveDefaultSubscribeConfig() : updateSubscribeInfo()}`"
+          @click="props.default ? saveDefaultSubscribeConfig() : updateSubscribeInfo()"
           prepend-icon="mdi-content-save"
           class="px-5"
         >
@@ -641,3 +739,35 @@ onMounted(() => {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+// 版本名称就地编辑：默认与副标题文本一致，铅笔图标提示可点击，悬停浮出底色
+.version-name-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.version-name-label:hover {
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+.version-name-edit-icon {
+  opacity: 0.7;
+}
+
+// 编辑态输入框：贴合副标题字号的内联输入，仅底部一条主题色细线
+.version-name-input {
+  padding: 1px 2px;
+  border: none;
+  border-block-end: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+</style>

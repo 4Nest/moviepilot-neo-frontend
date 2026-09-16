@@ -64,7 +64,6 @@ interface MultiSeasonInput {
 
 interface HarnessOptions {
   actionSeason?: number | null
-  canSubscribe?: boolean
   isExists?: boolean
   isSubscribed?: boolean
   media?: MediaInfo
@@ -87,7 +86,6 @@ async function renderSubscribeHarness(options: HarnessOptions = {}) {
       const subscribedSeasonModes = ref<SeasonSubscribeModes>({ ...(options.modes ?? {}) })
       const checkResult = ref('idle')
       const actions = useMediaSubscribe({
-        canSubscribe: () => options.canSubscribe ?? true,
         getSubscribeStatusKey: season => `status:${season ?? 'all'}`,
         isExists: () => options.isExists ?? false,
         isSubscribed,
@@ -153,7 +151,6 @@ async function renderSubscribeHarness(options: HarnessOptions = {}) {
   return renderWithProviders(Harness, {
     initialState: {
       user: {
-        superUser: false,
         userName: 'tester',
       },
     },

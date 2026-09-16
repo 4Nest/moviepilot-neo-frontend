@@ -202,14 +202,12 @@ describe('glass overlay material styles', () => {
     )
   })
 
-  it('reuses the menu overlay material for toast and assistant bubbles', () => {
+  it('reuses the menu overlay material for toasts', () => {
     const styles = readFileSync(resolve(cwd(), 'src/styles/themes/glass.scss'), 'utf8')
 
+    // assistant-fab 组件已移除,仅保留 toast 复用菜单材质的契约
     expect(styles).toMatch(
-      /:where\(\.Vue-Toastification__toast, \.agent-assistant-fab__bubble\)\s*\{[\s\S]*?backdrop-filter:\s*var\(--glass-overlay-backdrop-filter\)\s*!important;[\s\S]*?background-color:\s*var\(--glass-overlay-surface\)\s*!important;/,
-    )
-    expect(styles).toMatch(
-      /\.agent-assistant-fab__bubbles::before\s*\{[\s\S]*?background-color:\s*var\(--glass-overlay-surface\)\s*!important;/,
+      /:where\(\.Vue-Toastification__toast\)\s*\{[\s\S]*?backdrop-filter:\s*var\(--glass-overlay-backdrop-filter\)\s*!important;[\s\S]*?background-color:\s*var\(--glass-overlay-surface\)\s*!important;/,
     )
   })
 

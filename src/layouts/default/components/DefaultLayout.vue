@@ -10,22 +10,13 @@ import UserProfile from './UserProfile.vue'
 import QuickAccess from './QuickAccess.vue'
 import HeaderTab from './HeaderTab.vue'
 import ThemeCustomizer from '@/components/theme/ThemeCustomizer.vue'
-import { usePluginSidebarNavStore, useUserStore } from '@/stores'
+import { usePluginSidebarNavStore } from '@/stores'
 import { getNavMenus } from '@/router/i18n-menu'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
 import { NavMenu } from '@/@layouts/types'
 import { useDisplay } from 'vuetify'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  buildUserPermissionContext,
-  filterItemsByPermission,
-  filterMenusByPermission,
-  hasItemPermission,
-  hasPermission,
-  type UserPermissionFeatureKey,
-  type UserPermissionKey,
-} from '@/utils/permission'
 import { usePullDownGesture } from '@/composables/usePullDownGesture'
 import { usePWA } from '@/composables/usePWA'
 import OfflinePage from './OfflinePage.vue'
@@ -47,12 +38,8 @@ const router = useRouter()
 const themeLayout = ref(readThemeCustomizerSettings().layout)
 const showThemeCustomizer = ref(false)
 
-// 用户 Store
-const userStore = useUserStore()
+// 插件侧边栏导航 Store
 const pluginSidebarNavStore = usePluginSidebarNavStore()
-// 获取用户权限信息
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canAdmin = computed(() => hasPermission(userPermissions.value, 'admin'))
 
 // 开始菜单项
 const startMenus = ref<NavMenu[]>([])
@@ -113,8 +100,6 @@ interface DynamicHeaderTabButton {
   size?: string
   class?: string
   action?: () => void
-  permission?: UserPermissionKey
-  feature?: UserPermissionFeatureKey
   show?: boolean | ComputedRef<boolean>
   loading?: boolean | ComputedRef<boolean>
   dataAttr?: string
@@ -124,8 +109,6 @@ interface DynamicHeaderTabItem {
   title: string
   icon?: string
   tab: string
-  permission?: UserPermissionKey
-  feature?: UserPermissionFeatureKey
 }
 
 interface DynamicHeaderTab {
@@ -202,7 +185,7 @@ watch(
 const visibleDynamicHeaderTabItems = computed(() => {
   if (!dynamicHeaderTab.value || dynamicHeaderTab.value.routePath !== route.path) return []
 
-  return filterItemsByPermission(dynamicHeaderTab.value.items, userPermissions.value)
+  return dynamicHeaderTab.value.items
 })
 
 // 当前路由是否注册了动态标签页。
@@ -214,10 +197,9 @@ const showDynamicHeaderTab = computed(() => hasDynamicHeaderTab.value && !showHo
 const visibleDynamicHeaderButtons = computed(() => {
   if (!hasDynamicHeaderTab.value) return []
 
-  const visibleButtons = (dynamicHeaderTab.value?.appendButtons ?? []).filter(
+  return (dynamicHeaderTab.value?.appendButtons ?? []).filter(
     button => resolveMaybeRefValue(button.show, true) !== false,
   )
-  return filterItemsByPermission(visibleButtons, userPermissions.value)
 })
 
 const visibleHorizontalHeaderButtons = computed(() => {
@@ -239,14 +221,12 @@ onUnmounted(() => {
 const canUsePullGesture = () => {
   // 检查是否在dashboard页面
   const isDashboard = route.path === '/dashboard' || route.path === '/'
-  // 检查是否是管理员
-  const isAdmin = canAdmin.value
   // 检查插件快速访问面板是否已显示
   const quickAccessOpen = showPluginQuickAccess.value
   // 检查是否离线
   const offline = isOffline.value
 
-  return isDashboard && isAdmin && !quickAccessOpen && !offline
+  return isDashboard && !quickAccessOpen && !offline
 }
 
 // 使用下拉手势 composable
@@ -276,12 +256,10 @@ const {
   },
 })
 
-/** 根据菜单分组标题获取当前用户可见的菜单项。 */
+/** 根据菜单分组标题获取菜单项。 */
 const getMenuList = (header: string) => {
   // 使用国际化菜单
-  const menus = getNavMenus(t)
-  const filteredMenus = filterMenusByPermission(menus, userPermissions.value)
-  return filteredMenus.filter((item: NavMenu) => item.header === header)
+  return getNavMenus(t).filter((item: NavMenu) => item.header === header)
 }
 
 const getMenuIdentity = (item: NavMenu) => `${item.title}-${JSON.stringify(item.to ?? null)}`
@@ -362,10 +340,8 @@ function resolveHeaderButtonLoading(button: DynamicHeaderTabButton) {
   return resolveMaybeRefValue(button.loading, false)
 }
 
-/** 校验权限后执行动态头部按钮动作。 */
+/** 执行动态头部按钮动作。 */
 function handleHeaderButtonClick(button: DynamicHeaderTabButton) {
-  if (!hasItemPermission(button, userPermissions.value)) return
-
   button.action?.()
 }
 
@@ -397,7 +373,7 @@ function getHorizontalNavTabs(item: NavMenu): DynamicHeaderTabItem[] {
     return visibleDynamicHeaderTabItems.value
   }
 
-  return filterItemsByPermission(item.tabs ?? [], userPermissions.value)
+  return item.tabs ?? []
 }
 
 /** 在目标页面注册动态标签后应用此前暂存的标签切换。 */
@@ -432,11 +408,7 @@ onBeforeUnmount(() => {
 
 /** 将插件侧边栏菜单合并到对应的导航分组中。 */
 function appendPluginSidebarMenus() {
-  for (const { navMenu, section } of filterPluginSidebarNavEntries(
-    pluginSidebarNavStore.items,
-    t,
-    userPermissions.value,
-  )) {
+  for (const { navMenu, section } of filterPluginSidebarNavEntries(pluginSidebarNavStore.items, t)) {
     switch (section) {
       case 'start':
         startMenus.value.push(navMenu)
@@ -458,7 +430,7 @@ function appendPluginSidebarMenus() {
   }
 }
 
-/** 从当前内置菜单、权限上下文与插件快照重建所有侧栏分组。 */
+/** 从当前内置菜单与插件快照重建所有侧栏分组。 */
 function rebuildSidebarMenus() {
   startMenus.value = getMenuList(t('menu.start'))
   discoveryMenus.value = getMenuList(t('menu.discovery'))
@@ -469,7 +441,7 @@ function rebuildSidebarMenus() {
 }
 
 let sidebarMenusMounted = false
-watch([() => pluginSidebarNavStore.items, userPermissions], () => {
+watch(() => pluginSidebarNavStore.items, () => {
   if (sidebarMenusMounted) rebuildSidebarMenus()
 })
 
@@ -520,7 +492,7 @@ onMounted(async () => {
         class="theme-navbar-row d-flex h-16 align-center mx-1"
         :class="{ 'theme-navbar-row--horizontal': showHorizontalThemeNav }"
       >
-        <RouterLink v-if="showHorizontalThemeNav" :to="canAdmin ? '/dashboard' : '/apps'" class="theme-horizontal-logo">
+        <RouterLink v-if="showHorizontalThemeNav" to="/dashboard" class="theme-horizontal-logo">
           <NeoLogoMark class="brand-logo-mark" />
           <span class="theme-horizontal-logo__text moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
         </RouterLink>
@@ -543,7 +515,7 @@ onMounted(async () => {
           <!-- 👉 Horizontal Search Bar -->
           <SearchBar v-if="showHorizontalThemeNav" />
           <!-- 👉 Shortcuts -->
-          <ShortcutBar v-if="canAdmin" />
+          <ShortcutBar />
           <!-- 👉 Notification -->
           <UserNofification />
           <!-- 👉 UserProfile -->

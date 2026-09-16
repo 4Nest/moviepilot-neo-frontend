@@ -1,5 +1,4 @@
 import DashboardPage from '@/pages/dashboard.vue'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { renderWithProviders } from '@tests/support/render'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -222,12 +221,6 @@ function deferred<T>() {
 async function renderDashboard() {
   return renderWithProviders(DashboardPage, {
     initialRoute: '/dashboard',
-    initialState: {
-      user: {
-        permissions: { ...DEFAULT_PERMISSIONS, discovery: true },
-        superUser: true,
-      },
-    },
   })
 }
 

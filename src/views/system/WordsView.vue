@@ -6,8 +6,6 @@ import { useTheme } from 'vuetify'
 import { configureAceEditorPadding } from '@/utils/aceEditor'
 import type { Ace } from 'ace-builds'
 
-const Draggable = defineAsyncComponent(() => import('vuedraggable').then(module => module.default))
-
 const { t } = useI18n()
 const $toast = useToast()
 const { global: globalTheme } = useTheme()
@@ -16,16 +14,7 @@ const WORDS_LINE_NUMBERS_STORAGE_KEY = 'MP_WORDS_SHOW_LINE_NUMBERS'
 const WORDS_SYNTAX_HIGHLIGHTING_STORAGE_KEY = 'MP_WORDS_SYNTAX_HIGHLIGHTING'
 
 type TextSectionKey = 'identifiers' | 'releaseGroups' | 'customization' | 'excludeWords'
-type WordSectionKey = TextSectionKey | 'episodeRules'
-
-interface EpisodeFormatRule {
-  _localId: string
-  name: string
-  enabled: boolean
-  order: number
-  pattern: string
-  min_file_size_mb: number
-}
+type WordSectionKey = TextSectionKey | 'sync'
 
 interface WordSectionDefinition {
   color: string
@@ -46,7 +35,6 @@ const customIdentifiers = ref('')
 const customReleaseGroups = ref('')
 const customization = ref('')
 const transferExcludeWords = ref('')
-const episodeFormatRules = ref<EpisodeFormatRule[]>([])
 const activeSection = ref<WordSectionKey>('identifiers')
 const expandedHelp = ref<string | null>(null)
 const saving = ref(false)
@@ -102,7 +90,6 @@ const savedTextValues = reactive<Record<TextSectionKey, string>>({
   customization: '',
   excludeWords: '',
 })
-const savedEpisodeRules = ref('[]')
 
 const textSectionModels: Record<TextSectionKey, typeof customIdentifiers> = {
   identifiers: customIdentifiers,
@@ -168,12 +155,12 @@ const wordSections = computed<WordSectionDefinition[]>(() => [
     title: t('setting.words.transferExcludeWords'),
   },
   {
-    color: 'primary',
-    description: t('setting.words.episodeFormatRuleDesc'),
-    icon: 'mdi-format-list-numbered',
-    key: 'episodeRules',
-    shortTitle: t('setting.words.episodeFormatRuleShort'),
-    title: t('setting.words.episodeFormatRule'),
+    color: 'warning',
+    description: t('setting.words.syncDesc'),
+    icon: 'mdi-cloud-sync-outline',
+    key: 'sync',
+    shortTitle: t('setting.words.syncShort'),
+    title: t('setting.words.syncTitle'),
   },
 ])
 
@@ -181,7 +168,7 @@ const activeSectionDefinition = computed(
   () => wordSections.value.find(section => section.key === activeSection.value) ?? wordSections.value[0],
 )
 
-const isTextSection = computed(() => activeSection.value !== 'episodeRules')
+const isTextSection = computed(() => activeSection.value !== 'sync')
 
 const activeTextValue = computed({
   get: () => (isTextSection.value ? textSectionModels[activeSection.value as TextSectionKey].value : ''),
@@ -221,81 +208,32 @@ const activeTextHint = computed(() => {
 })
 
 const activeGuideTitle = computed(() =>
-  activeSection.value === 'identifiers'
-    ? t('setting.words.formatTitle')
-    : activeSection.value === 'episodeRules'
-      ? t('setting.words.episodeFormatRuleGuideTitle')
-      : t('setting.words.guideTitle'),
+  activeSection.value === 'identifiers' ? t('setting.words.formatTitle') : t('setting.words.guideTitle'),
 )
 
-const activeGuideContent = computed(() => {
-  if (activeSection.value === 'identifiers') return t('setting.words.formatContent')
-  if (activeSection.value === 'episodeRules') return t('setting.words.episodeFormatRuleGuideContent')
-  return activeTextHint.value
-})
+const activeGuideContent = computed(() =>
+  activeSection.value === 'identifiers' ? t('setting.words.formatContent') : activeTextHint.value,
+)
 
 // 仅在提示内容能补充行内说明时展示折叠面板，避免捷径弹窗内重复出现相同文案。
-const shouldShowGuidePanel = computed(
-  () => activeSection.value === 'identifiers' || activeSection.value === 'episodeRules',
-)
+const shouldShowGuidePanel = computed(() => activeSection.value === 'identifiers')
 
-/** 生成仅供前端拖拽列表使用的稳定规则标识。 */
-function createEpisodeRuleLocalId() {
-  return `episode-rule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-/** 将后端规则或空白模板转换为带本地标识的可编辑规则。 */
-function createEpisodeRule(rule?: Partial<Omit<EpisodeFormatRule, '_localId'>>): EpisodeFormatRule {
-  return {
-    _localId: createEpisodeRuleLocalId(),
-    name: rule?.name ?? '',
-    enabled: rule?.enabled ?? true,
-    order: rule?.order ?? episodeFormatRules.value.length + 1,
-    pattern: rule?.pattern ?? '',
-    min_file_size_mb: rule?.min_file_size_mb ?? 500,
-  }
-}
-
-/** 规范化后端返回的集数定位规则列表。 */
-function normalizeEpisodeFormatRules(
-  rules: Array<Partial<Omit<EpisodeFormatRule, '_localId'>> & { _localId?: string }> = [],
-) {
-  return rules.map(rule => createEpisodeRule(rule))
-}
-
-/** 构建后端保存集数定位规则所需的有序载荷。 */
-function buildEpisodeFormatRulePayload() {
-  return episodeFormatRules.value.map((rule, index) => ({
-    name: rule.name,
-    enabled: rule.enabled,
-    order: index + 1,
-    pattern: rule.pattern,
-    min_file_size_mb: Number(rule.min_file_size_mb) || 0,
-  }))
-}
-
-/** 将集数定位规则序列化，用于判断当前内容是否有未保存修改。 */
-function serializeEpisodeFormatRules() {
-  return JSON.stringify(buildEpisodeFormatRulePayload())
-}
 
 /** 统计多行词表中非空配置的数量。 */
 function countConfiguredLines(value: string) {
   return value.split('\n').filter(line => line.trim().length > 0).length
 }
 
-/** 返回指定词表分类当前配置条目数。 */
+/** 返回指定词表分类当前配置条目数;远程同步分类不统计词条。 */
 function getSectionCount(section: WordSectionKey) {
-  return section === 'episodeRules'
-    ? episodeFormatRules.value.length
-    : countConfiguredLines(textSectionModels[section].value)
+  if (section === 'sync') return 0
+  return countConfiguredLines(textSectionModels[section].value)
 }
 
-/** 判断指定词表分类是否存在未保存修改。 */
+/** 判断指定词表分类是否存在未保存修改;远程同步分类设置独立保存,无脏状态。 */
 function isSectionDirty(section: WordSectionKey) {
-  return section === 'episodeRules'
-    ? serializeEpisodeFormatRules() !== savedEpisodeRules.value
-    : textSectionModels[section].value !== savedTextValues[section]
+  if (section === 'sync') return false
+  return textSectionModels[section].value !== savedTextValues[section]
 }
 
 const activeSectionDirty = computed(() => isSectionDirty(activeSection.value))
@@ -310,16 +248,6 @@ function selectSection(section: WordSectionKey) {
   expandedHelp.value = null
 }
 
-/** 新增一条空白集数定位规则并滚动到规则编辑分类。 */
-function addEpisodeRule() {
-  episodeFormatRules.value.push(createEpisodeRule())
-  activeSection.value = 'episodeRules'
-}
-
-/** 删除指定位置的集数定位规则。 */
-function deleteEpisodeRule(index: number) {
-  episodeFormatRules.value.splice(index, 1)
-}
 
 /** 查询一个多行词表配置，并同步其已保存快照。 */
 async function queryTextSection(section: TextSectionKey) {
@@ -356,57 +284,13 @@ async function saveTextSection(section: TextSectionKey) {
   return false
 }
 
-/** 查询集数定位规则，并同步其已保存快照。 */
-async function queryEpisodeFormatRules() {
-  try {
-    const result: { [key: string]: any } = await api.get('system/setting/public/EpisodeFormatRuleTable')
-    episodeFormatRules.value = normalizeEpisodeFormatRules(result?.data?.value ?? [])
-    savedEpisodeRules.value = serializeEpisodeFormatRules()
-  } catch (error) {
-    console.log(error)
-  }
-}
-
-/** 校验并保存集数定位规则。 */
-async function saveEpisodeFormatRules() {
-  for (const rule of episodeFormatRules.value) {
-    if (!rule.name || !rule.pattern) {
-      $toast.error(t('setting.words.episodeFormatRuleEmptyError'))
-      return false
-    }
-  }
-
-  try {
-    const payload = buildEpisodeFormatRulePayload()
-    const result: { [key: string]: any } = await api.post('system/setting/EpisodeFormatRuleTable', payload)
-
-    if (result.success) {
-      episodeFormatRules.value.forEach((rule, index) => {
-        rule.order = payload[index].order
-        rule.min_file_size_mb = payload[index].min_file_size_mb
-      })
-      savedEpisodeRules.value = serializeEpisodeFormatRules()
-      $toast.success(t('setting.words.episodeFormatRuleSaveSuccess'))
-      return true
-    }
-
-    $toast.error(result.message || t('setting.words.episodeFormatRuleSaveFailed'))
-  } catch (error) {
-    console.log(error)
-    $toast.error(t('setting.words.episodeFormatRuleSaveFailed'))
-  }
-
-  return false
-}
-
 /** 保存当前正在编辑的词表分类。 */
 async function saveActiveSection() {
   if (saving.value) return
 
   saving.value = true
   try {
-    if (activeSection.value === 'episodeRules') await saveEpisodeFormatRules()
-    else await saveTextSection(activeSection.value)
+    await saveTextSection(activeSection.value as TextSectionKey)
   } finally {
     saving.value = false
   }
@@ -414,24 +298,143 @@ async function saveActiveSection() {
 
 /** 将当前分类恢复为最近一次成功加载或保存的内容。 */
 function resetActiveSection() {
-  if (activeSection.value === 'episodeRules') {
-    const savedRules = JSON.parse(savedEpisodeRules.value) as Array<Omit<EpisodeFormatRule, '_localId'>>
-    episodeFormatRules.value = normalizeEpisodeFormatRules(savedRules)
-    return
-  }
-
-  textSectionModels[activeSection.value].value = savedTextValues[activeSection.value]
+  textSectionModels[activeSection.value as TextSectionKey].value =
+    savedTextValues[activeSection.value as TextSectionKey]
 }
 
-/** 拖拽调整规则顺序后沿用原有行为立即保存。 */
-async function onEpisodeRuleDragEnd() {
-  if (saving.value) return
+// ---- 词表远程同步(多源、追加模式) ----
+interface WordsSyncSource {
+  url: string
+  enabled: boolean
+  interval_days: number
+  tables: string[]
+  last_sync?: string | null
+  last_status?: string | null
+  last_message?: string | null
+}
 
-  saving.value = true
+// 远程同步内容:词表标识 -> [{ source, lines }]
+type SyncedWordsMap = Record<string, Array<{ source: string; lines: string[] }>>
+
+const syncSources = ref<WordsSyncSource[]>([])
+const syncedWords = ref<SyncedWordsMap>({})
+const savingSyncSources = ref(false)
+const syncingUrl = ref<string | null>(null)
+const syncingAll = ref(false)
+
+const SYNC_TABLE_OPTIONS: Array<{ id: string; section: TextSectionKey }> = [
+  { id: 'identifiers', section: 'identifiers' },
+  { id: 'releaseGroups', section: 'releaseGroups' },
+  { id: 'customization', section: 'customization' },
+  { id: 'excludeWords', section: 'excludeWords' },
+]
+
+/** 指定词表的远程同步行总数。 */
+function syncedCountFor(section: TextSectionKey) {
+  return (syncedWords.value[section] ?? []).reduce((sum, item) => sum + item.lines.length, 0)
+}
+
+/** 指定词表的远程同步来源列表(分源展示)。 */
+function syncedSourcesFor(section: TextSectionKey) {
+  return syncedWords.value[section] ?? []
+}
+
+function sourceStatusText(source: WordsSyncSource) {
+  if (!source.last_sync) return t('setting.words.syncNever')
+  const status =
+    source.last_status === 'success'
+      ? t('setting.words.syncStatusSuccess')
+      : source.last_status === 'skipped'
+        ? t('setting.words.syncStatusSkipped')
+        : t('setting.words.syncStatusPartial')
+  return `${source.last_sync} · ${status}`
+}
+
+/** 加载同步源列表。 */
+async function loadSyncSources() {
   try {
-    await saveEpisodeFormatRules()
+    const result: { [key: string]: any } = await api.get('system/words/sync/status')
+    syncSources.value = result?.data?.sources ?? []
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+/** 加载各词表的远程同步内容(单独展示,不进编辑框)。 */
+async function loadSyncedWords() {
+  try {
+    const result: { [key: string]: any } = await api.get('system/words/synced')
+    syncedWords.value = result?.data ?? {}
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+/** 保存同步源列表。 */
+async function saveSyncSources(showToast = true) {
+  savingSyncSources.value = true
+  try {
+    const payload = syncSources.value.map(source => ({
+      url: source.url.trim(),
+      enabled: source.enabled,
+      interval_days: Number(source.interval_days) || 7,
+      tables: source.tables,
+      last_sync: source.last_sync ?? null,
+      last_status: source.last_status ?? null,
+      last_message: source.last_message ?? null,
+    }))
+    const result: { [key: string]: any } = await api.post('system/setting/WordsSyncSources', payload)
+    if (result.success) {
+      if (showToast) $toast.success(t('setting.words.syncSettingsSaved'))
+    } else {
+      $toast.error(result.message || t('setting.words.syncSettingsSaveFailed'))
+    }
+  } catch (error) {
+    console.log(error)
+    $toast.error(t('setting.words.syncSettingsSaveFailed'))
   } finally {
-    saving.value = false
+    savingSyncSources.value = false
+  }
+}
+
+/** 添加一个空白同步源。 */
+function addSyncSource() {
+  syncSources.value.push({
+    url: '',
+    enabled: true,
+    interval_days: 7,
+    tables: SYNC_TABLE_OPTIONS.map(item => item.id),
+  })
+}
+
+/** 删除同步源并保存。 */
+async function removeSyncSource(index: number) {
+  syncSources.value.splice(index, 1)
+  await saveSyncSources(false)
+  $toast.success(t('setting.words.syncSourceRemoved'))
+}
+
+/** 同步指定源(缺省全部),完成后刷新远程词表展示。 */
+async function runSync(source?: WordsSyncSource) {
+  if (syncingAll.value || syncingUrl.value) return
+  if (source) syncingUrl.value = source.url
+  else syncingAll.value = true
+  try {
+    const result: { [key: string]: any } = await api.post('system/words/sync', null, {
+      params: source ? { source_url: source.url } : {},
+    })
+    if (result.success) {
+      $toast.success(t('setting.words.syncSuccess', { message: result.message || '' }))
+    } else {
+      $toast.error(result.message || t('setting.words.syncFailed'))
+    }
+    await Promise.all([loadSyncSources(), loadSyncedWords()])
+  } catch (error) {
+    console.log(error)
+    $toast.error(t('setting.words.syncFailed'))
+  } finally {
+    syncingUrl.value = null
+    syncingAll.value = false
   }
 }
 
@@ -441,7 +444,8 @@ onMounted(() => {
     queryTextSection('releaseGroups'),
     queryTextSection('customization'),
     queryTextSection('excludeWords'),
-    queryEpisodeFormatRules(),
+    loadSyncSources(),
+    loadSyncedWords(),
   ])
 })
 </script>
@@ -473,7 +477,18 @@ onMounted(() => {
           </span>
 
           <span class="words-sidebar-state">
-            <small>{{ t('setting.words.entryCount', { count: getSectionCount(section.key) }) }}</small>
+            <small>
+              {{
+                section.key === 'sync'
+                  ? syncSources.length === 0
+                    ? t('setting.words.syncAutoOff')
+                    : t('setting.words.syncSourcesSummary', {
+                        total: syncSources.length,
+                        enabled: syncSources.filter(s => s.enabled).length,
+                      })
+                  : t('setting.words.entryCount', { count: getSectionCount(section.key) })
+              }}
+            </small>
             <VIcon
               :icon="isSectionDirty(section.key) ? 'mdi-circle-medium' : 'mdi-check'"
               :color="isSectionDirty(section.key) ? 'warning' : 'success'"
@@ -576,86 +591,146 @@ onMounted(() => {
               <VIcon icon="mdi-information-outline" size="17" />
               <span>{{ activeTextHint }}</span>
             </div>
+
+            <div v-if="syncedCountFor(activeSection as TextSectionKey) > 0" class="words-remote-block">
+              <div class="words-remote-header">
+                <VIcon icon="mdi-cloud-sync-outline" size="17" />
+                <span>
+                  {{
+                    t('setting.words.syncRemoteSummary', {
+                      count: syncedCountFor(activeSection as TextSectionKey),
+                      sources: syncedSourcesFor(activeSection as TextSectionKey).length,
+                    })
+                  }}
+                </span>
+              </div>
+              <div
+                v-for="item in syncedSourcesFor(activeSection as TextSectionKey)"
+                :key="item.source"
+                class="words-remote-source"
+              >
+                <div class="words-remote-source-url" :title="item.source">{{ item.source }}</div>
+                <pre class="words-remote-lines">{{ item.lines.join('\n') }}</pre>
+              </div>
+            </div>
           </template>
 
           <template v-else>
-            <div class="words-rule-toolbar">
-              <span>{{ t('setting.words.ruleCount', { count: activeSectionCount }) }}</span>
-              <VBtn variant="outlined" prepend-icon="mdi-plus" @click="addEpisodeRule">
-                {{ t('setting.words.episodeFormatRuleAdd') }}
-              </VBtn>
-            </div>
+            <div class="words-sync-panel">
+              <div class="words-sync-toolbar">
+                <VBtn variant="outlined" prepend-icon="mdi-plus" @click="addSyncSource">
+                  {{ t('setting.words.syncAddSource') }}
+                </VBtn>
+                <VBtn
+                  color="primary"
+                  variant="flat"
+                  prepend-icon="mdi-sync"
+                  :loading="syncingAll"
+                  :disabled="syncSources.length === 0"
+                  @click="runSync()"
+                >
+                  {{ t('setting.words.syncAll') }}
+                </VBtn>
+              </div>
 
-            <Draggable
-              v-model="episodeFormatRules"
-              handle=".episode-rule-drag"
-              item-key="_localId"
-              tag="div"
-              :component-data="{ class: 'episode-rule-list' }"
-              @end="onEpisodeRuleDragEnd"
-            >
-              <template #item="{ element, index }">
-                <article class="episode-rule-card">
-                  <div class="episode-rule-card-header">
-                    <IconBtn
-                      icon="mdi-drag-vertical"
-                      variant="text"
-                      class="episode-rule-drag cursor-move"
-                      :aria-label="t('setting.words.dragToSort')"
-                    />
-                    <VSwitch
-                      v-model="element.enabled"
-                      color="primary"
-                      density="compact"
-                      hide-details
-                      :label="t('common.enable')"
-                      class="episode-rule-enabled"
-                    />
-                  </div>
+              <div v-if="syncSources.length === 0" class="words-sync-empty">
+                <VIcon icon="mdi-cloud-sync-outline" size="36" />
+                <span>{{ t('setting.words.syncNoSource') }}</span>
+              </div>
 
+              <article v-for="(source, index) in syncSources" :key="index" class="words-sync-source">
+                <div class="words-sync-source-head">
                   <VTextField
-                    v-model="element.name"
-                    :label="t('setting.words.episodeFormatRuleName')"
-                    hide-details="auto"
+                    v-model="source.url"
+                    class="words-sync-source-url"
                     density="comfortable"
-                    required
-                    class="episode-rule-name"
-                  />
-                  <VTextField
-                    v-model="element.pattern"
-                    :label="t('setting.words.episodeFormatRulePattern')"
+                    variant="outlined"
                     hide-details="auto"
-                    density="comfortable"
-                    required
-                    class="episode-rule-pattern"
-                  />
-                  <VTextField
-                    v-model.number="element.min_file_size_mb"
-                    :label="t('setting.words.episodeFormatRuleMinSize')"
-                    type="number"
-                    min="0"
-                    hide-details="auto"
-                    density="comfortable"
-                    required
-                    class="episode-rule-size"
+                    :label="t('setting.words.syncUrl')"
+                    :placeholder="t('setting.words.syncUrlPlaceholder')"
                   />
                   <IconBtn
                     variant="text"
                     color="error"
-                    class="episode-rule-delete"
                     :aria-label="t('common.delete')"
-                    @click.stop="deleteEpisodeRule(index)"
+                    @click.stop="removeSyncSource(index)"
                   >
                     <VIcon icon="mdi-delete-outline" />
                     <VTooltip activator="parent" location="top">{{ t('common.delete') }}</VTooltip>
                   </IconBtn>
-                </article>
-              </template>
-            </Draggable>
+                </div>
 
-            <div v-if="episodeFormatRules.length === 0" class="words-empty-state">
-              <VIcon icon="mdi-format-list-numbered" size="36" />
-              <span>{{ t('setting.words.noRules') }}</span>
+                <div class="words-sync-source-row">
+                  <VSwitch
+                    v-model="source.enabled"
+                    class="words-sync-enabled"
+                    color="primary"
+                    density="compact"
+                    hide-details
+                    :label="t('setting.words.syncEnabled')"
+                  />
+                  <VTextField
+                    v-model.number="source.interval_days"
+                    class="words-sync-interval"
+                    type="number"
+                    min="1"
+                    density="comfortable"
+                    variant="outlined"
+                    hide-details
+                    :label="t('setting.words.syncIntervalDays')"
+                  />
+                </div>
+
+                <div class="words-sync-source-tables">
+                  <span class="words-sync-tables-label">{{ t('setting.words.syncTables') }}</span>
+                  <VChip
+                    v-for="option in SYNC_TABLE_OPTIONS"
+                    :key="option.id"
+                    class="words-sync-table-chip"
+                    :class="{ 'words-sync-table-chip--active': source.tables.includes(option.id) }"
+                    variant="outlined"
+                    size="small"
+                    @click="
+                      source.tables.includes(option.id)
+                        ? source.tables.splice(source.tables.indexOf(option.id), 1)
+                        : source.tables.push(option.id)
+                    "
+                  >
+                    {{ wordSections.find(s => s.key === option.section)?.shortTitle }}
+                  </VChip>
+                </div>
+
+                <div class="words-sync-source-actions">
+                  <VBtn
+                    size="small"
+                    variant="tonal"
+                    prepend-icon="mdi-content-save"
+                    :loading="savingSyncSources"
+                    @click="saveSyncSources()"
+                  >
+                    {{ t('setting.words.syncSaveSettings') }}
+                  </VBtn>
+                  <VBtn
+                    size="small"
+                    color="primary"
+                    variant="flat"
+                    prepend-icon="mdi-sync"
+                    :loading="syncingUrl === source.url"
+                    :disabled="!source.url || source.tables.length === 0"
+                    @click="saveSyncSources(false).then(() => runSync(source))"
+                  >
+                    {{ t('setting.words.syncNow') }}
+                  </VBtn>
+                  <span class="words-sync-last text-caption text-medium-emphasis">
+                    {{ t('setting.words.syncLastSync') }}: {{ sourceStatusText(source) }}
+                  </span>
+                </div>
+              </article>
+
+              <div class="words-inline-hint">
+                <VIcon icon="mdi-information-outline" size="17" />
+                <span>{{ t('setting.words.syncFileHint') }}</span>
+              </div>
             </div>
           </template>
 
@@ -681,7 +756,7 @@ onMounted(() => {
           </VExpansionPanels>
         </div>
 
-        <footer class="words-editor-footer">
+        <footer v-if="activeSection !== 'sync'" class="words-editor-footer">
           <div class="words-footer-state" :class="{ 'words-footer-state--dirty': activeSectionDirty }">
             <VIcon :icon="activeSectionDirty ? 'mdi-circle-medium' : 'mdi-check-circle-outline'" size="18" />
             <span>{{ activeSectionDirty ? t('setting.words.unsaved') : t('setting.words.saved') }}</span>
@@ -788,6 +863,111 @@ onMounted(() => {
   inset-inline-start: 0;
 }
 
+.words-sync-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.words-sync-empty {
+  display: flex;
+  min-block-size: 8rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--words-separator-color);
+  border-radius: var(--app-surface-radius);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.words-sync-source {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--words-separator-color);
+  border-radius: var(--app-surface-radius);
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.words-sync-source-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.words-sync-source-url {
+  flex: 1 1 auto;
+}
+
+.words-sync-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.words-sync-source-tables {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.words-sync-tables-label {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8125rem;
+}
+
+.words-sync-table-chip--active {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+
+.words-sync-table-chip {
+  cursor: pointer;
+}
+
+.words-remote-block {
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed var(--words-separator-color);
+  border-radius: var(--app-surface-radius);
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+.words-remote-header {
+  display: flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8125rem;
+  gap: 0.35rem;
+}
+
+.words-remote-source-url {
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.words-remote-lines {
+  overflow: auto;
+  max-block-size: 10rem;
+  border-radius: calc(var(--app-surface-radius) - 2px);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  font-size: 0.75rem;
+  margin-block: 0.25rem 0.5rem;
+  margin-inline: 0;
+  padding: 0.5rem 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .words-section-icon {
   flex: 0 0 auto;
 }
@@ -876,6 +1056,52 @@ onMounted(() => {
   line-height: 1.55;
 }
 
+.words-sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-inline-size: 36rem;
+  padding: 0.5rem 0;
+}
+
+.words-sync-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.words-sync-enabled {
+  flex: 0 0 auto;
+}
+
+.words-sync-interval {
+  flex: 0 1 10rem;
+  min-inline-size: 8rem;
+}
+
+.words-sync-interval :deep(input[type='number']::-webkit-outer-spin-button),
+.words-sync-interval :deep(input[type='number']::-webkit-inner-spin-button) {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.words-sync-interval :deep(input[type='number']) {
+  appearance: textfield;
+}
+
+.words-sync-actions,
+.words-sync-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.words-sync-last {
+  white-space: nowrap;
+}
+
 .words-save-state,
 .words-footer-state {
   display: flex;
@@ -899,8 +1125,7 @@ onMounted(() => {
   padding: 0 1.5rem 1.25rem;
 }
 
-.words-field-meta,
-.words-rule-toolbar {
+.words-field-meta {
   display: flex;
   min-block-size: 2.5rem;
   align-items: center;
@@ -927,8 +1152,7 @@ onMounted(() => {
 
 @media (width <= 599.98px) {
   /* 窄屏下工具行允许换行，避免开关被截断 */
-  .words-field-meta,
-  .words-rule-toolbar {
+  .words-field-meta {
     flex-wrap: wrap;
     gap: 0.4rem 0.8rem;
   }
@@ -1128,72 +1352,6 @@ onMounted(() => {
   margin-inline-start: auto;
 }
 
-.episode-rule-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.episode-rule-card {
-  display: grid;
-  align-items: start;
-  border: 1px solid var(--words-separator-color);
-  border-radius: var(--app-surface-radius);
-  background: transparent;
-  gap: 0.75rem;
-  grid-template-areas:
-    'toolbar name size delete'
-    'pattern pattern pattern pattern';
-  grid-template-columns: max-content minmax(10rem, 1fr) minmax(9rem, 11rem) max-content;
-  padding: 0.85rem;
-}
-
-.episode-rule-card-header {
-  display: flex;
-  min-block-size: 3.5rem;
-  align-items: center;
-  gap: 0.3rem;
-  grid-area: toolbar;
-}
-
-.episode-rule-enabled {
-  flex: 0 0 auto;
-}
-
-.episode-rule-enabled :deep(.v-label) {
-  display: none;
-}
-
-.episode-rule-name {
-  grid-area: name;
-}
-
-.episode-rule-pattern {
-  grid-area: pattern;
-}
-
-.episode-rule-size {
-  grid-area: size;
-}
-
-.episode-rule-delete {
-  align-self: center;
-  grid-area: delete;
-  justify-self: end;
-}
-
-.words-empty-state {
-  display: flex;
-  min-block-size: 10rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--words-separator-color);
-  border-radius: var(--app-surface-radius);
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
 @media (width <= 959.98px) {
   .words-view {
     flex: 1 1 auto;
@@ -1317,39 +1475,6 @@ onMounted(() => {
 
   .words-text-editor {
     block-size: 18rem;
-  }
-
-  .words-rule-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-    margin-block-end: 1rem;
-  }
-
-  .words-rule-toolbar .v-btn {
-    inline-size: 100%;
-  }
-
-  .episode-rule-card {
-    grid-template-areas:
-      'toolbar delete'
-      'name name'
-      'pattern pattern'
-      'size size';
-    grid-template-columns: minmax(0, 1fr) max-content;
-    gap: 0.75rem;
-    padding: 0.95rem;
-  }
-
-  .episode-rule-card-header {
-    justify-content: flex-start;
-  }
-
-  .episode-rule-delete {
-    margin-inline-start: 0;
-  }
-
-  .episode-rule-enabled :deep(.v-label) {
-    display: inline-flex;
   }
 
   .words-editor-footer {

@@ -10,8 +10,7 @@ import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useD
 import { useI18n } from 'vue-i18n'
 import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
+
 import { useDisplay, useTheme } from 'vuetify'
 
 const ContentToggleSettingsDialog = defineAsyncComponent(
@@ -25,10 +24,7 @@ const { t } = useI18n()
 const { appMode } = usePWA()
 const display = useDisplay()
 const vuetifyTheme = useTheme()
-const userStore = useUserStore()
-const userPermissionContext = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canAdmin = computed(() => hasPermission(userPermissionContext.value, 'admin'))
-const canDiscovery = computed(() => hasPermission(userPermissionContext.value, 'discovery'))
+
 
 // 路由
 const route = useRoute()
@@ -319,8 +315,7 @@ const dashboardGridItems = computed<DashboardGridItem[]>(() =>
     .filter(
       item =>
         enableConfig.value[buildPluginDashboardId(item.id, item.key)] &&
-        item.cols &&
-        (item.id !== 'mediaRecommend' || canDiscovery.value),
+        item.cols,
     )
     .map(item => {
       const id = buildPluginDashboardId(item.id, item.key)
@@ -975,7 +970,6 @@ const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undef
       title: isLayoutEditing.value ? t('dashboard.exitEditMode') : t('dashboard.editLayout'),
       icon: isLayoutEditing.value ? 'mdi-check' : 'mdi-view-dashboard-edit',
       color: 'primary',
-      permission: 'admin',
       action: toggleDashboardLayoutEditing,
     },
   ]
@@ -985,7 +979,6 @@ const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undef
       title: t('dashboard.resetLayout'),
       icon: 'mdi-restore',
       color: 'warning',
-      permission: 'admin',
       action: resetDashboardGridLayout,
     })
   }
@@ -994,7 +987,6 @@ const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undef
     title: t('dashboard.settings'),
     icon: 'mdi-tune',
     color: 'info',
-    permission: 'admin',
     action: openDashboardSettings,
   })
 
@@ -1004,7 +996,6 @@ const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undef
 useDynamicButton({
   icon: 'mdi-view-dashboard-edit',
   menuItems: dashboardDynamicButtonMenuItems,
-  permission: 'admin',
   show: computed(() => appMode.value && route.path === '/dashboard'),
 })
 
@@ -1764,7 +1755,7 @@ onBeforeUnmount(() => {
   </div>
 
   <Teleport to="body" v-if="!appMode && route.path === '/dashboard'">
-    <div v-if="canAdmin" class="compact-fab-stack">
+    <div class="compact-fab-stack">
       <VFab
         icon="mdi-tune"
         color="info"

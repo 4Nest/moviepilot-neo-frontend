@@ -26,7 +26,6 @@ function openDownloadHistoryDialog() {
 useDynamicButton({
   icon: 'mdi-history',
   onClick: openDownloadHistoryDialog,
-  permission: 'manage',
   show: computed(() => appMode.value),
 })
 

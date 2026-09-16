@@ -2,7 +2,6 @@ import type { Plugin, PluginRating } from '@/api/types'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import PluginCardListView from '@/views/plugin/PluginCardListView.vue'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { getActiveRequestsCount } from '@/utils/requestOptimizer'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { server } from '@tests/support/msw/server'
@@ -389,12 +388,6 @@ async function renderList(responses: ListResponses = {}) {
   registerListHandlers(responses)
   return renderWithProviders(PluginCardListView, {
     initialRoute: '/plugins',
-    initialState: {
-      user: {
-        permissions: DEFAULT_PERMISSIONS,
-        superUser: true,
-      },
-    },
     global: {
       stubs: {
         LoadingBanner: LoadingBannerStub,

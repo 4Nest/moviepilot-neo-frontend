@@ -83,12 +83,6 @@ class IntersectionObserverMock implements IntersectionObserver {
   }
 }
 
-/** 渲染媒体卡片时可覆盖的用户权限状态。 */
-interface RenderCardOptions {
-  permissions?: Record<string, boolean>
-  superUser?: boolean
-}
-
 interface ControlledImageRequest {
   /** 模拟当前 VImg 请求失败。 */
   fail: () => void
@@ -133,23 +127,12 @@ function createControlledImageStub(requests: ControlledImageRequest[]) {
   })
 }
 
-/** 使用指定媒体信息和用户权限渲染媒体卡片。 */
-async function renderCard(media: MediaInfo, options: RenderCardOptions = {}) {
+/** 使用指定媒体信息渲染媒体卡片。 */
+async function renderCard(media: MediaInfo) {
   return renderWithProviders(MediaCard, {
     props: {
       media,
       width: '9rem',
-    },
-    initialState: {
-      user: {
-        permissions: options.permissions ?? {
-          discovery: true,
-          manage: false,
-          search: true,
-          subscribe: true,
-        },
-        superUser: options.superUser ?? true,
-      },
     },
   })
 }
@@ -249,9 +232,7 @@ describe('MediaCard', () => {
       data: () => ({ media }),
       template: '<div><MediaCard :media="media" width="9rem" /><MediaCard :media="media" width="9rem" /></div>',
     }
-    const { container } = await renderWithProviders(Harness, {
-      initialState: { user: { superUser: true } },
-    })
+    const { container } = await renderWithProviders(Harness)
 
     expect(getStatusObservers()).toHaveLength(2)
     getStatusObservers().forEach(observer => observer.trigger())
@@ -599,7 +580,6 @@ describe('MediaCard', () => {
     const VImgStub = createControlledImageStub(requests)
     const { container } = await renderWithProviders(MediaCard, {
       props: { media, width: '9rem' },
-      initialState: { user: { superUser: true } },
       global: { stubs: { VImg: VImgStub } },
     })
 
@@ -634,7 +614,6 @@ describe('MediaCard', () => {
     const requests: ControlledImageRequest[] = []
     const { container } = await renderWithProviders(MediaCard, {
       props: { media: createMediaInfo({ poster_path: undefined, tmdb_id: 9553 }), width: '9rem' },
-      initialState: { user: { superUser: true } },
       global: { stubs: { VImg: createControlledImageStub(requests) } },
     })
 
@@ -650,7 +629,6 @@ describe('MediaCard', () => {
     const mediaB = createMediaInfo({ poster_path: '/original/b.jpg', title: '媒体 B', tmdb_id: 9555 })
     const { container, rerender } = await renderWithProviders(MediaCard, {
       props: { media: mediaA, width: '9rem' },
-      initialState: { user: { superUser: true } },
       global: { stubs: { VImg: createControlledImageStub(requests) } },
     })
 
@@ -699,29 +677,12 @@ describe('MediaCard', () => {
     }
     const { container } = await renderWithProviders(MediaCard, {
       props: { media, width: '9rem' },
-      initialState: { user: { superUser: true } },
       global: { stubs: { VIcon: VIconStub, VImg: VImgStub } },
     })
 
     await fireEvent.click(container.querySelector('[aria-label="图片加载成功"]') as HTMLElement)
 
     await waitFor(() => expect(container.querySelector('[data-icon="mdi-alpha-a-circle"]')).not.toBeNull())
-  })
-
-  it('hides search and subscribe actions when the user lacks both permissions', async () => {
-    const { container } = await renderCard(createMediaInfo({ tmdb_id: 9601 }), {
-      permissions: {
-        discovery: true,
-        manage: false,
-        search: false,
-        subscribe: false,
-      },
-      superUser: false,
-    })
-
-    await fireEvent.mouseEnter(getHoverArea(container))
-
-    expect(getActionButtons(container)).toHaveLength(0)
   })
 
   it('uses first tap to reveal details, second tap to route, and outside pointerdown to collapse', async () => {

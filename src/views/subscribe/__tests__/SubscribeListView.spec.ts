@@ -220,9 +220,7 @@ interface RenderListOptions {
   sortMode?: boolean
   statusFilter?: string
   subid?: string
-  superUser?: boolean
   type?: SubscribeMediaType
-  userName?: string
 }
 
 async function renderList(options: RenderListOptions = {}) {
@@ -246,12 +244,6 @@ async function renderList(options: RenderListOptions = {}) {
       statusFilter: options.statusFilter ?? 'all',
       subid: options.subid ?? '',
       type,
-    },
-    initialState: {
-      user: {
-        superUser: options.superUser ?? false,
-        userName: options.userName ?? 'tester',
-      },
     },
     global: {
       stubs: {
@@ -293,7 +285,7 @@ beforeEach(() => {
 })
 
 describe('SubscribeListView loading and filtering', () => {
-  it('loads exact endpoints and restricts a normal user by owner and media type', async () => {
+  it('loads exact endpoints and shows every owner while retaining type defense', async () => {
     const listRequested = vi.fn()
     const orderRequested = vi.fn()
     await renderList({
@@ -303,22 +295,11 @@ describe('SubscribeListView loading and filtering', () => {
     })
 
     expect(await screen.findByText('Own movie')).toBeInTheDocument()
-    expect(screen.queryByText('Other movie')).not.toBeInTheDocument()
+    expect(screen.getByText('Other movie')).toBeInTheDocument()
     expect(screen.queryByText('Own TV')).not.toBeInTheDocument()
     expect(orderRequested.mock.calls[0][0].href).toBe(subscribeApiUrls.orderConfig('电影'))
     expect(listRequested.mock.calls[0][0].href).toBe(subscribeApiUrls.list)
     expect(screen.getByTestId('sort-by-state')).toHaveTextContent('date')
-  })
-
-  it('lets a superuser see subscriptions from every owner while retaining type defense', async () => {
-    await renderList({
-      listResponse: [movie(1, 'Own movie'), movie(2, 'Other movie', { username: 'other' }), tv(3, 'Other TV')],
-      superUser: true,
-    })
-
-    expect(await screen.findByText('Own movie')).toBeInTheDocument()
-    expect(screen.getByText('Other movie')).toBeInTheDocument()
-    expect(screen.queryByText('Other TV')).not.toBeInTheDocument()
   })
 
   it('normalizes keyword filtering', async () => {

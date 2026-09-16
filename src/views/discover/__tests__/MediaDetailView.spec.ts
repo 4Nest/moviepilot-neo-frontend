@@ -125,7 +125,6 @@ interface RenderDetailOptions {
   movieSubscribe?: Partial<Subscribe>
   notExists?: NotExistMediaInfo[]
   notExistsStatus?: number
-  permissions?: Record<string, boolean>
   selectedSites?: number[]
   setupHandlers?: () => void
   sites?: Site[]
@@ -178,15 +177,6 @@ async function renderDetail(options: RenderDetailOptions = {}) {
           GLOBAL_IMAGE_CACHE: false,
           TMDB_IMAGE_DOMAIN: 'image.tmdb.example.com',
         },
-      },
-      user: {
-        permissions: options.permissions ?? {
-          discovery: true,
-          manage: false,
-          search: true,
-          subscribe: true,
-        },
-        superUser: false,
       },
     },
     props: {
@@ -424,15 +414,6 @@ describe('MediaDetailView detail and actions', () => {
     expect(screen.getByLabelText('人物入口 anilist')).toHaveAttribute('data-api-path', 'anilist/credits/154587')
     expect(screen.getByLabelText('媒体入口 推荐')).toHaveAttribute('data-api-path', 'anilist/recommend/154587')
     expect(screen.queryByLabelText('媒体入口 类似')).not.toBeInTheDocument()
-  })
-
-  it('hides search and subscribe actions without permissions', async () => {
-    await renderDetail({ permissions: { discovery: true, manage: false, search: false, subscribe: false } })
-
-    expect(await screen.findByRole('heading', { name: /详情测试电影/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /搜索资源/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /搜索字幕/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^订阅$/ })).not.toBeInTheDocument()
   })
 
   it('routes subtitle searches directly when no sites are enabled', async () => {

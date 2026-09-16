@@ -11,6 +11,49 @@ export interface ManualScrapeOptions {
 }
 
 // 订阅
+export interface SubscribeVersionSettings {
+  keyword?: string
+  filter?: string
+  include?: string
+  exclude?: string
+  quality?: string
+  resolution?: string
+  effect?: string
+  total_episode?: number
+  start_episode?: number
+  sites: number[]
+  downloader?: string
+  best_version?: boolean | number
+  best_version_full?: boolean | number
+  save_path?: string
+  search_imdbid?: boolean | number
+  manual_total_episode?: boolean | number
+  custom_words?: string
+  media_category?: string
+  filter_groups: string[]
+  episode_group?: string
+}
+
+export interface SubscribeVersionRule {
+  id: string
+  name: string
+  enabled: boolean
+  release_group?: string
+  settings: SubscribeVersionSettings
+}
+
+export interface SubscribeVersionProgress {
+  state?: string
+  last_update?: string
+  lack_episode?: number
+  note?: unknown
+  current_priority?: number
+  episode_priority: Record<string, number>
+  completed: boolean
+}
+
+// 订阅
+// 订阅
 export interface Subscribe {
   // 订阅ID
   id: number
@@ -60,15 +103,19 @@ export interface Subscribe {
   effect?: string
   // 总集数
   total_episode?: number
+  // 多版本订阅规则及服务端隔离运行进度
+  version_rules?: SubscribeVersionRule[]
+  version_mode?: 'any' | 'all'
+  version_progress?: Record<string, SubscribeVersionProgress>
   // 开始集数
   start_episode?: number
   // 缺失集数
   lack_episode?: number
-  // 已完成集数（普通订阅 = 已入库集数，洗版订阅 = 起始集前 + [start, total] 范围内 priority==100 命中数）
+  // 已完成集数
   completed_episode?: number
   // 附加信息
   note?: string | number[]
-  // 状态：N-新建 R-订阅中 P-待定 S-暂停
+  // 状态
   state: string
   // 最后更新时间
   last_update: string
@@ -76,12 +123,11 @@ export interface Subscribe {
   username: string
   // 订阅站点
   sites: number[]
-  // 是否洗版，数字或者boolean
-  best_version: any
-  // 是否只洗全集整包，数字或者boolean
-  best_version_full?: any
-  // 使用 imdbid 搜索
-  search_imdbid?: any
+  best_version?: boolean | number | string
+  best_version_full?: boolean | number | string
+  search_imdbid?: boolean | number | string
+  // 是否跳过媒体库存在检测
+  skip_library_check?: boolean | number | string
   // 当前优先级
   current_priority: number
   // 洗版时已下载剧集的优先级状态
@@ -103,6 +149,7 @@ export interface Subscribe {
   // 下载器
   downloader?: string
   // 自定义剧集组
+  manual_total_episode?: boolean | number
   episode_group?: string
 }
 
@@ -821,7 +868,6 @@ export interface PluginSidebarNavItem {
   title: string
   icon: string
   section: 'start' | 'discovery' | 'subscribe' | 'organize' | 'system'
-  permission?: 'subscribe' | 'discovery' | 'search' | 'manage' | 'admin' | null
   order: number
 }
 
@@ -1064,20 +1110,12 @@ export interface User {
   id: number
   // 用户名称
   name: string
-  // 用户密码
-  password: string
   // 用户邮箱
   email: string
-  // 是否激活
-  is_active: boolean
-  // 是否管理员
-  is_superuser: boolean
   // 头像
   avatar: string
   // 是否开启二次验证
   is_otp: boolean
-  // 用户权限 json
-  permissions: { [key: string]: any }
   // 用户个性化设置 json
   settings: { [key: string]: string | null }
   // 昵称

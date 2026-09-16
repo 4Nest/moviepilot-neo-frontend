@@ -22,7 +22,6 @@ import {
   THEME_CUSTOMIZER_OPEN_EVENT,
   type ThemeCustomizerSettings,
 } from '@/composables/useThemeCustomizer'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 
 const AboutDialog = defineAsyncComponent(() => import('@/components/dialog/AboutDialog.vue'))
 const CustomCssDialog = defineAsyncComponent(() => import('@/components/dialog/CustomCssDialog.vue'))
@@ -162,7 +161,6 @@ async function pollServiceStatus() {
 
 // 执行重启操作
 async function restart() {
-  if (!canAdmin.value) return
 
   // 设置重启状态
   isRestarting.value = true
@@ -195,7 +193,6 @@ async function restart() {
 
 // 显示重启确认对话框
 async function showRestartDialog() {
-  if (!canAdmin.value) return
 
   const isConfirmed = await createConfirm({
     type: 'warn',
@@ -210,7 +207,7 @@ async function showRestartDialog() {
 
 /** 显示站点认证共享弹窗。 */
 function showSiteAuthDialog() {
-  if (!canAdmin.value || userLevel.value >= 2) return
+  if (userLevel.value >= 2) return
 
   siteAuthDialogController?.close()
   siteAuthDialogController = openSharedDialog(
@@ -225,7 +222,6 @@ function showSiteAuthDialog() {
 
 /** 显示关于共享弹窗。 */
 function showAboutDialog() {
-  if (!canAdmin.value) return
 
   openSharedDialog(AboutDialog, {}, {}, { closeOn: ['close', 'update:modelValue'] })
 }
@@ -238,9 +234,6 @@ function siteAuthDone() {
 }
 
 // 从用户 Store中获取信息
-const superUser = computed(() => userStore.superUser)
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canAdmin = computed(() => hasPermission(userPermissions.value, 'admin'))
 const userName = computed(() => userStore.userName)
 const avatar = computed(() => userStore.avatar || avatar1)
 const userLevel = computed(() => userStore.level)
@@ -398,7 +391,6 @@ function handleThemeCustomizerSettingsChange(event: Event) {
 
 // 获取自定义 CSS
 async function getCustomCSS() {
-  if (!canAdmin.value) return
 
   try {
     const result: { [key: string]: any } = await api.get('system/setting/UserCustomCSS')
@@ -417,7 +409,6 @@ async function getCustomCSS() {
 
 /** 打开自定义 CSS 共享弹窗。 */
 function showCustomCssDialog() {
-  if (!canAdmin.value) return
 
   customCssDialogController?.close()
   customCssDialogController = openSharedDialog(
@@ -459,7 +450,6 @@ function showThemeCustomizerDrawer() {
 
 /** 保存自定义 CSS。 */
 async function saveCustomCSS(css: string) {
-  if (!canAdmin.value) return
 
   customCSS.value = css
   try {
@@ -508,7 +498,7 @@ const getThemeIcon = computed(() => {
 })
 
 onMounted(() => {
-  if (canAdmin.value) getCustomCSS()
+  getCustomCSS()
   window.addEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerSettingsChange)
 
   // 初始化透明度设置
@@ -555,9 +545,6 @@ onUnmounted(() => {
             </VAvatar>
           </template>
           <div>
-            <span class="text-primary text-sm font-medium d-block">
-              {{ superUser ? t('user.admin') : t('user.normal') }}
-            </span>
             <span class="text-high-emphasis text-lg font-weight-bold">
               {{ userName }}
             </span>
@@ -574,7 +561,6 @@ onUnmounted(() => {
           </VListItem>
 
           <VListItem
-            v-if="canAdmin"
             link
             @click="isAdvancedMode ? router.push('/setting') : router.push('/setup-wizard')"
             class="mb-1 rounded-lg"
@@ -587,7 +573,7 @@ onUnmounted(() => {
           </VListItem>
 
           <!-- 👉 Site Auth -->
-          <VListItem v-if="userLevel < 2 && canAdmin" link @click="showSiteAuthDialog" class="mb-1 rounded-lg" hover>
+          <VListItem v-if="userLevel < 2" link @click="showSiteAuthDialog" class="mb-1 rounded-lg" hover>
             <template #prepend>
               <VIcon icon="mdi-lock-check-outline" />
             </template>
@@ -681,7 +667,7 @@ onUnmounted(() => {
                 </template>
               </VListItem>
 
-              <VListItem v-if="canAdmin" @click="showCustomCssDialog">
+              <VListItem @click="showCustomCssDialog">
                 <template #prepend>
                   <VIcon icon="mdi-palette" />
                 </template>
@@ -702,7 +688,7 @@ onUnmounted(() => {
           </VListItem>
 
           <!-- 👉 About -->
-          <VListItem v-if="canAdmin" @click="showAboutDialog" class="mb-1 rounded-lg" hover>
+          <VListItem @click="showAboutDialog" class="mb-1 rounded-lg" hover>
             <template #prepend>
               <VIcon icon="mdi-information-outline" />
             </template>
@@ -710,10 +696,10 @@ onUnmounted(() => {
           </VListItem>
 
           <!-- Divider -->
-          <VDivider v-if="canAdmin" class="my-3" />
+          <VDivider class="my-3" />
 
           <!-- 👉 restart -->
-          <VListItem v-if="canAdmin" @click="showRestartDialog" class="mb-1 rounded-lg" hover>
+          <VListItem @click="showRestartDialog" class="mb-1 rounded-lg" hover>
             <template #prepend>
               <VIcon icon="mdi-restart" />
             </template>

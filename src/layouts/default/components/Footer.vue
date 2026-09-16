@@ -3,13 +3,6 @@ import { getNavMenus } from '@/router/i18n-menu'
 import { useDisplay } from 'vuetify'
 import { NavMenu } from '@/@layouts/types'
 import { useI18n } from 'vue-i18n'
-import { useUserStore } from '@/stores'
-import {
-  buildUserPermissionContext,
-  filterItemsByPermission,
-  filterMenusByPermission,
-  hasItemPermission,
-} from '@/utils/permission'
 import { useLaunchLoading } from '@/composables/useLaunchLoading'
 import { usePWA } from '@/composables/usePWA'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
@@ -33,30 +26,8 @@ const isEnglish = computed(() => locale.value === 'en-US')
 
 const route = useRoute()
 
-// 用户Store
-const userStore = useUserStore()
-
-// 获取用户权限信息
-const userPermissions = computed(() => {
-  // 确保用户已认证且信息已加载
-  if (!userStore || userStore.userID === -1) {
-    return {
-      is_superuser: false,
-      discovery: false,
-      search: false,
-      subscribe: false,
-      manage: false,
-    }
-  }
-
-  return buildUserPermissionContext(userStore.superUser, userStore.permissions)
-})
-
 // 获取导航菜单
-const navMenus = computed(() => {
-  const allMenus = getNavMenus(t)
-  return filterMenusByPermission(allMenus, userPermissions.value)
-})
+const navMenus = computed(() => getNavMenus(t))
 
 // 根据当前路径获取匹配的菜单路径
 function getMenuPathFromRoute(path: string): string {
@@ -69,11 +40,13 @@ const currentMenu = ref<string>(getMenuPathFromRoute(route.path))
 
 // 过滤出底部菜单项
 const footerMenus = computed(() => {
-  // 获取所有有权限的菜单
-  const allAuthorizedMenus = navMenus.value
+  // 底部导航只承接字符串路径菜单
+  const allMenus = navMenus.value.filter(
+    (menu): menu is NavMenu & { to: string } => typeof menu.to === 'string',
+  )
 
   // 优先获取有 footer: true 属性的菜单
-  const footerMenusWithProperty = allAuthorizedMenus.filter((menu: NavMenu) => menu.footer === true)
+  const footerMenusWithProperty = allMenus.filter(menu => menu.footer === true)
 
   // 设置期望的底部菜单数量（不包括"更多"按钮）
   // 一般来说，底部导航栏显示 3-4 个主要功能比较合适
@@ -86,8 +59,8 @@ const footerMenus = computed(() => {
 
   // 如果不够，从没有 footer 属性或 footer 为 false 的菜单中补充
   // 优先选择一些常用的功能菜单
-  const nonFooterMenus = allAuthorizedMenus.filter(
-    (menu: NavMenu) =>
+  const nonFooterMenus = allMenus.filter(
+    menu =>
       menu.footer !== true &&
       // 排除已经在 footerMenusWithProperty 中的菜单
       !footerMenusWithProperty.some(footerMenu => footerMenu.to === menu.to),
@@ -96,12 +69,12 @@ const footerMenus = computed(() => {
   // 计算还需要多少个菜单
   const needCount = expectedFooterMenuCount - footerMenusWithProperty.length
 
-  // 合并菜单：优先显示有 footer 属性的，然后按菜单定义顺序添加其他菜单
+  // 合并菜单：优先显示有 footer 属性的，然后按菜单定义顺序补充其他菜单
   let finalMenus = [...footerMenusWithProperty, ...nonFooterMenus.slice(0, needCount)]
 
-  // 确保至少有一个菜单显示，如果都没有权限，则显示第一个有权限的菜单
-  if (finalMenus.length === 0 && allAuthorizedMenus.length > 0) {
-    finalMenus = [allAuthorizedMenus[0]]
+  // 确保至少有一个菜单显示
+  if (finalMenus.length === 0 && allMenus.length > 0) {
+    finalMenus = [allMenus[0]]
   }
 
   return finalMenus
@@ -123,8 +96,6 @@ watch(
 interface DynamicButton {
   icon: string
   action: () => void
-  permission?: DynamicButtonMenuItem['permission']
-  feature?: DynamicButtonMenuItem['feature']
   show: boolean
   routePath?: string // 添加路径属性，用于标识哪个路由注册的
   menuItems?: DynamicButtonMenuItem[]
@@ -172,14 +143,13 @@ const showDynamicButton = computed(() => {
   return (
     dynamicButton.value &&
     dynamicButton.value.show &&
-    hasItemPermission(dynamicButton.value, userPermissions.value) &&
     // 确保只在注册的路由路径下显示按钮
     (!dynamicButton.value.routePath || dynamicButton.value.routePath === route.path)
   )
 })
 
 const visibleDynamicButtonMenuItems = computed(() => {
-  return filterItemsByPermission(dynamicButton.value?.menuItems ?? [], userPermissions.value)
+  return dynamicButton.value?.menuItems ?? []
 })
 
 const hasDynamicButtonMenu = computed(() => visibleDynamicButtonMenuItems.value.length > 0)
@@ -211,14 +181,14 @@ function resolveDynamicMenuItemTitle(item: DynamicButtonMenuItem) {
 
 // 处理页面注册的动态按钮主操作点击。
 function handleDynamicButtonClick() {
-  if (!dynamicButton.value || !hasItemPermission(dynamicButton.value, userPermissions.value)) return
+  if (!dynamicButton.value) return
 
   dynamicButton.value.action()
 }
 
 // 处理页面注册的动态按钮菜单项点击。
 function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
-  if (item.disabled || !hasItemPermission(item, userPermissions.value)) return
+  if (item.disabled) return
 
   item.action()
 }
@@ -247,7 +217,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
                 :value="menu.to"
               >
                 <div class="btn-content">
-                  <VIcon :icon="menu.icon" size="32"></VIcon>
+                  <VIcon :icon="(menu.icon as string)" size="32"></VIcon>
                   <span v-if="!isEnglish" class="text-xs">{{ menu.title }}</span>
                 </div>
               </VBtn>

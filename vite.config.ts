@@ -292,6 +292,13 @@ export default defineConfig(({ command, mode, isPreview }) => ({
         url: 'http://localhost/',
       },
     },
+    // Node 25 默认启用内置 webstorage,--localstorage-file 缺省时 localStorage 是无方法空壳,
+    // 会遮蔽 jsdom 的 Storage 实现;worker 禁用后由 jsdom 正常提供
+    poolOptions: {
+      forks: {
+        execArgv: ['--no-experimental-webstorage'],
+      },
+    },
     include: ['src/**/__tests__/**/*.spec.ts', 'tests/config/**/*.spec.ts'],
     restoreMocks: true,
     server: {
@@ -305,7 +312,6 @@ export default defineConfig(({ command, mode, isPreview }) => ({
     coverage: {
       include: [
         'src/utils/recommendSources.ts',
-        'src/utils/permission.ts',
         'src/utils/pluginSidebarNav.ts',
         'src/utils/requestOptimizer.ts',
         'src/utils/sseManager.ts',
@@ -637,12 +643,6 @@ export default defineConfig(({ command, mode, isPreview }) => ({
           functions: 85,
           lines: 85,
           statements: 85,
-        },
-        'src/utils/permission.ts': {
-          branches: 75,
-          functions: 80,
-          lines: 80,
-          statements: 80,
         },
         'src/utils/pluginSidebarNav.ts': {
           branches: 85,

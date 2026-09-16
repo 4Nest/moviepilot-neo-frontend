@@ -1,6 +1,5 @@
 import RecommendPage from '@/pages/recommend.vue'
 import type { RecommendSource } from '@/api/types'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
@@ -57,15 +56,9 @@ interface SharedDialogEvents {
   'update:modelValue': (value: boolean) => void
 }
 
-async function renderRecommend(options: { superUser?: boolean; discovery?: boolean } = {}) {
+async function renderRecommend() {
   return renderWithProviders(RecommendPage, {
     initialRoute: '/recommend',
-    initialState: {
-      user: {
-        permissions: { ...DEFAULT_PERMISSIONS, discovery: options.discovery ?? true },
-        superUser: options.superUser ?? false,
-      },
-    },
     global: {
       stubs: {
         MediaCardSlideView: MediaCardSlideViewStub,
@@ -93,12 +86,6 @@ function keepAliveHarness() {
 async function renderKeptAliveRecommend() {
   return renderWithProviders(keepAliveHarness(), {
     initialRoute: '/recommend',
-    initialState: {
-      user: {
-        permissions: { ...DEFAULT_PERMISSIONS, discovery: true },
-        superUser: false,
-      },
-    },
     global: {
       stubs: {
         MediaCardSlideView: MediaCardSlideViewStub,
@@ -323,20 +310,6 @@ describe('recommend page', () => {
     thirdDialogEvents['update:modelValue'](false)
     await user.click(settingsButton)
     expect(mocks.closeDialog).toHaveBeenCalledOnce()
-  })
-
-  it.each([
-    { discovery: false, superUser: false, visible: false },
-    { discovery: false, superUser: true, visible: true },
-  ])('applies discovery permission to the desktop settings entry', async ({ discovery, superUser, visible }) => {
-    const sourcesRequested = vi.fn()
-    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true }))
-    server.use(recommendSourcesHandler([], 200, sourcesRequested))
-
-    await renderRecommend({ discovery, superUser })
-    await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-
-    expect(Boolean(document.querySelector('.compact-fab'))).toBe(visible)
   })
 
   it('keeps built-in content when remote requests fail', async () => {

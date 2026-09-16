@@ -66,10 +66,7 @@ async function renderWordsView() {
 
 describe('WordsView editor preferences', () => {
   beforeEach(() => {
-    mocks.apiGet.mockImplementation((endpoint: string) => {
-      if (endpoint.includes('EpisodeFormatRuleTable')) return Promise.resolve({ data: { value: [] } })
-      return Promise.resolve({ data: { value: ['alpha', 'beta'] } })
-    })
+    mocks.apiGet.mockResolvedValue({ data: { value: ['alpha', 'beta'] } })
     mocks.apiPost.mockResolvedValue({ success: true })
     mocks.aceSetMode.mockClear()
     mocks.aceSetPadding.mockClear()

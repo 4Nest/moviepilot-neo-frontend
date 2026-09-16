@@ -15,6 +15,7 @@ import { getDisplayImageUrl } from '@/utils/imageUtils'
 const SubscribeEditDialog = defineAsyncComponent(() => import('../dialog/SubscribeEditDialog.vue'))
 const SubscribeFilesDialog = defineAsyncComponent(() => import('../dialog/SubscribeFilesDialog.vue'))
 const SubscribeShareDialog = defineAsyncComponent(() => import('../dialog/SubscribeShareDialog.vue'))
+const SubscribeVersionsDialog = defineAsyncComponent(() => import('../dialog/SubscribeVersionsDialog.vue'))
 
 // 显示器宽度
 const display = useDisplay()
@@ -72,10 +73,13 @@ function isTvSubscribe(media?: Subscribe) {
   return media?.type === '电视剧' || media?.type === 'tv' || !!media?.season || !!media?.total_episode
 }
 
-// 已下载集数：total_episode - lack_episode
+// 已下载集数:普通订阅用 total_episode - lack_episode;多版本订阅的父行 lack 不维护,
+// 取后端按各版本下载事实(note 并集)派生的 completed_episode。
 const downloadedEpisode = computed(() => {
   const total = props.media?.total_episode || 0
   if (!total) return 0
+  if ((props.media?.version_rules?.length ?? 0) > 0)
+    return Math.min(Math.max(props.media?.completed_episode ?? 0, 0), total)
   return Math.min(Math.max(total - (props.media?.lack_episode || 0), 0), total)
 })
 
@@ -117,6 +121,14 @@ const bestVersionBadge = computed(() => {
     full: isEnabledFlag(props.media?.best_version_full),
   }
 })
+
+// 多版本订阅状态
+const versionRules = computed(() => props.media?.version_rules ?? [])
+const hasMultipleVersions = computed(() => versionRules.value.length > 1)
+const versionCount = computed(() => versionRules.value.length)
+const completedVersionCount = computed(
+  () => versionRules.value.filter(rule => props.media?.version_progress?.[rule.id]?.completed === true).length,
+)
 
 // 已洗版集数：取后端派生字段 completed_episode
 const completedEpisode = computed(() => {
@@ -255,17 +267,37 @@ async function shareSubscribe() {
   openSharedDialog(SubscribeShareDialog, { sub: props.media }, {}, { closeOn: ['close'] })
 }
 
-// 编辑订阅响应
-async function editSubscribeDialog() {
+// 编辑订阅响应：可定位到具体版本或直接进入新增版本模式
+async function editSubscribeDialog(versionId?: string, addVersion = false) {
   openSharedDialog(
     SubscribeEditDialog,
-    { subid: props.media?.id },
+    { subid: props.media?.id, versionId, addVersion },
     {
       remove: onSubscribeEditRemove,
       save: onSubscribeEditSave,
     },
     { closeOn: ['close', 'save', 'remove'] },
   )
+}
+
+// 多版本订阅的版本选择页
+function openVersionsDialog() {
+  openSharedDialog(
+    SubscribeVersionsDialog,
+    { subscribe: props.media },
+    {
+      select: (versionId: string) => editSubscribeDialog(versionId),
+      add: () => editSubscribeDialog(undefined, true),
+      save: () => emit('save'),
+    },
+    { closeOn: ['close', 'select', 'add'] },
+  )
+}
+
+// 编辑入口：多版本订阅先进入版本选择页
+function openSubscribeEntry() {
+  if (hasMultipleVersions.value) openVersionsDialog()
+  else editSubscribeDialog()
 }
 
 // 获得mediaid
@@ -306,7 +338,15 @@ const dropdownItems = computed(() => [
     value: 1,
     props: {
       prependIcon: 'mdi-file-edit-outline',
-      click: editSubscribeDialog,
+      click: openSubscribeEntry,
+    },
+  },
+  {
+    title: t('subscribe.addVersion'),
+    value: 9,
+    props: {
+      prependIcon: 'mdi-layers-plus',
+      click: () => editSubscribeDialog(undefined, true),
     },
   },
   {
@@ -421,8 +461,8 @@ function handleCardClick() {
     // 批量模式下触发选择事件
     emit('select')
   } else {
-    // 非批量模式下打开编辑弹窗
-    editSubscribeDialog()
+    // 非批量模式下：多版本订阅先进入版本选择页，单版本直接编辑
+    openSubscribeEntry()
   }
 }
 </script>
@@ -505,15 +545,7 @@ function handleCardClick() {
                   </VImg>
                   <div class="subscribe-card-mobile-image-scrim subscribe-card-background"></div>
 
-                  <div v-if="props.media?.username || lastUpdateText" class="subscribe-card-mobile-image-meta">
-                    <div
-                      v-if="props.media?.username"
-                      class="subscribe-card-mobile-image-meta__item subscribe-card-mobile-image-meta__user"
-                      :title="props.media?.username"
-                    >
-                      <VIcon icon="mdi-account" size="14" />
-                      <span>{{ props.media?.username }}</span>
-                    </div>
+                  <div v-if="lastUpdateText" class="subscribe-card-mobile-image-meta">
                     <div
                       v-if="lastUpdateText"
                       class="subscribe-card-mobile-image-meta__item subscribe-card-mobile-image-meta__updated"
@@ -531,6 +563,10 @@ function handleCardClick() {
                         class="subscribe-card-mobile-season"
                       >
                         {{ formatSeasonLabel(props.media?.season, t('media.specials')) }}
+                      </span>
+                      <span v-if="hasMultipleVersions" class="subscribe-card-mobile-versions">
+                        <VIcon icon="mdi-layers-triple-outline" size="13" />
+                        {{ versionCount }}
                       </span>
                     </div>
                   </div>
@@ -590,7 +626,7 @@ function handleCardClick() {
                 </div>
               </template>
 
-              <div v-else>
+              <div v-else class="flex grow flex-col">
                 <VCardText class="flex items-center pt-3 pb-2">
                   <div
                     class="h-auto w-12 flex-shrink-0 overflow-hidden rounded-md relative"
@@ -615,7 +651,7 @@ function handleCardClick() {
                     </div>
                   </div>
                 </VCardText>
-                <VCardText class="flex min-w-0 justify-space-between align-center flex-wrap px-3">
+                <VCardText class="flex min-w-0 justify-space-between align-center flex-wrap px-3 mt-auto">
                   <div class="flex min-w-0 max-w-full align-center">
                     <VIcon
                       v-if="props.media?.total_episode && props.sortable"
@@ -638,28 +674,22 @@ function handleCardClick() {
                         {{ subscribeProgressTooltip }}
                       </VTooltip>
                     </div>
-                    <VIcon
-                      v-if="props.media?.username && props.sortable"
-                      icon="mdi-account"
-                      size="small"
-                      color="white"
-                      class="flex-shrink-0 me-1"
-                    />
-                    <IconBtn
-                      v-else-if="props.media?.username"
-                      icon="mdi-account"
-                      size="small"
-                      color="white"
-                      class="flex-shrink-0"
-                    />
-                    <!-- 用户名过长时限制在卡片宽度内，并用省略号展示剩余内容 -->
-                    <span
-                      v-if="props.media?.username"
-                      class="min-w-0 truncate text-subtitle-2 text-white"
-                      :title="props.media?.username"
-                    >
-                      {{ props.media?.username }}
-                    </span>
+                    <!-- 多版本提示套用进度项模式：图标 + 已完成版本数/总版本数 -->
+                    <template v-if="hasMultipleVersions">
+                      <VIcon
+                        v-if="props.sortable"
+                        icon="mdi-layers-triple-outline"
+                        size="16"
+                        color="white"
+                        class="flex-shrink-0 me-1"
+                      />
+                      <IconBtn v-else size="small" class="flex-shrink-0" color="white">
+                        <VIcon icon="mdi-layers-triple-outline" size="16" />
+                      </IconBtn>
+                      <div class="flex-shrink-0 text-subtitle-2 me-2 text-white">
+                        {{ completedVersionCount }} / {{ versionCount }}
+                      </div>
+                    </template>
                   </div>
                 </VCardText>
                 <!-- 右下角元数据：暂停 / 待定时替换"x 天前"为状态文案 -->
@@ -766,16 +796,6 @@ function handleCardClick() {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 
-.subscribe-card-mobile-image-meta__user {
-  flex: 1 1 auto;
-}
-
-.subscribe-card-mobile-image-meta__user span {
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .subscribe-card-mobile-image-meta__updated {
   flex-shrink: 0;
@@ -940,6 +960,24 @@ function handleCardClick() {
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 22%);
   box-shadow: 0 2px 8px rgba(255, 255, 255, 15%);
+}
+
+// 移动端多版本标识：与洗版徽标同一材质的药丸，内联在标题旁
+.subscribe-card-mobile-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: 0.375rem;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 60%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 50%);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  vertical-align: middle;
 }
 
 @media (width <= 599px) {

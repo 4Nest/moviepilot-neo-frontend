@@ -112,7 +112,7 @@ function getDialogCall(index = 0) {
   const [, props, events, options] = mocks.openSharedDialog.mock.calls[index] as [
     unknown,
     Record<string, unknown>,
-    Record<string, () => void>,
+    Record<string, (...args: any[]) => void>,
     Record<string, unknown>,
   ]
   return { events, options, props }
@@ -132,7 +132,8 @@ describe('SubscribeCard display and progress', () => {
 
     expect(screen.getByText(media.name)).toBeInTheDocument()
     expect(screen.getByText('2025')).toBeInTheDocument()
-    expect(screen.getByText(media.username)).toHaveAttribute('title', media.username)
+    // 唯一 admin 模式下卡片不再展示用户名
+    expect(screen.queryByText(media.username)).not.toBeInTheDocument()
     const image = container.querySelector<HTMLImageElement>('img')
     expect(image).not.toBeNull()
     expect((image as HTMLImageElement).src).toContain('system/cache/image?url=')
@@ -298,12 +299,43 @@ describe('SubscribeCard interaction boundaries', () => {
     expect(container.querySelector('.absolute.top-1.right-4 .v-btn')).not.toBeInTheDocument()
   })
 
+  it('routes multi-version cards through the version picker and shows the version badge', async () => {
+    const versionRules = [
+      { id: 'v-sakura', name: '桜都', enabled: true, settings: {} },
+      { id: 'v-nest', name: 'NEST', enabled: true, settings: {} },
+    ] as Subscribe['version_rules']
+    const { container, media } = await renderCard({ version_rules: versionRules, version_mode: 'all' })
+    const card = container.querySelector('.subscribe-card') as HTMLElement
+    // 卡片在元信息带提示多版本完成度
+    expect(screen.getByText('0 / 2')).toBeInTheDocument()
+
+    // 点击卡片打开版本选择页而非直接编辑
+    await fireEvent.click(card)
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    const picker = getDialogCall()
+    expect(picker.props).toEqual({ subscribe: media })
+    expect(picker.options).toEqual({ closeOn: ['close', 'select', 'add'] })
+
+    // 选择版本后进入对应版本的编辑页
+    picker.events.select('v-nest')
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledTimes(2))
+    expect(getDialogCall(1).props).toEqual({ subid: media.id, versionId: 'v-nest', addVersion: false })
+  })
+
+  it('opens the edit dialog in add-version mode from the card menu', async () => {
+    const { container, media } = await renderCard()
+
+    await chooseMenuItem(container, '新增版本')
+
+    expect(getDialogCall().props).toEqual({ subid: media.id, versionId: undefined, addVersion: true })
+  })
+
   it('opens page-selected editing and forwards only save and remove events', async () => {
     const { emitted, media } = await renderCard({ page_open: true })
 
     await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
     const dialog = getDialogCall()
-    expect(dialog.props).toEqual({ subid: media.id })
+    expect(dialog.props).toEqual({ subid: media.id, versionId: undefined, addVersion: false })
     expect(dialog.options).toEqual({ closeOn: ['close', 'save', 'remove'] })
 
     dialog.events.save()

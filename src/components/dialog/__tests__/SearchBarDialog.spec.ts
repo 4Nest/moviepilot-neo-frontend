@@ -1,5 +1,4 @@
 import SearchBarDialog from '@/components/dialog/SearchBarDialog.vue'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
@@ -10,19 +9,6 @@ async function renderSearchBar() {
     props: {
       modelValue: true,
       showActivator: true,
-    },
-    initialState: {
-      user: {
-        permissions: {
-          ...DEFAULT_PERMISSIONS,
-          admin: false,
-          discovery: true,
-          manage: false,
-          search: false,
-          subscribe: false,
-        },
-        superUser: false,
-      },
     },
   })
 }

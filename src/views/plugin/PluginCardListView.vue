@@ -12,14 +12,12 @@ import { usePWA } from '@/composables/usePWA'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { usePluginSidebarNavStore, useUserStore } from '@/stores'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
+import { usePluginSidebarNavStore } from '@/stores'
 
 // 国际化
 const { t } = useI18n()
 
 const route = useRoute()
-const userStore = useUserStore()
 const pluginSidebarNavStore = usePluginSidebarNavStore()
 
 /** 用户保存的插件与文件夹混合顺序。 */
@@ -84,7 +82,7 @@ registerHeaderTab({
       ),
       class: 'settings-icon-button',
       dataAttr: 'installed-filter-btn',
-      permission: 'admin',
+
       action: () => {
         filterInstalledPluginDialog.value = true
       },
@@ -95,7 +93,7 @@ registerHeaderTab({
       variant: 'text',
       color: computed(() => (sortMode.value ? 'warning' : 'gray')),
       class: 'settings-icon-button',
-      permission: 'admin',
+
       action: () => {
         sortMode.value = !sortMode.value
       },
@@ -107,7 +105,7 @@ registerHeaderTab({
       color: computed(() => (isFilterFormEmpty.value ? 'gray' : 'primary')),
       class: 'settings-icon-button',
       dataAttr: 'market-filter-btn',
-      permission: 'admin',
+
       action: () => {
         filterMarketPluginDialog.value = true
       },
@@ -119,7 +117,7 @@ registerHeaderTab({
       color: 'gray',
       class: 'settings-icon-button',
       loading: computed(() => isMarketRefreshing.value),
-      permission: 'admin',
+
       action: () => {
         refreshMarket()
       },
@@ -130,7 +128,7 @@ registerHeaderTab({
       variant: 'text',
       color: 'gray',
       class: 'settings-icon-button',
-      permission: 'admin',
+
       action: () => {
         backToMain()
       },
@@ -1322,11 +1320,9 @@ function openMarketSettingDialog() {
 }
 
 const showSearchAction = computed(() => activeTab.value === 'installed' || activeTab.value === 'market')
-const canAdmin = computed(() =>
-  hasPermission(buildUserPermissionContext(userStore.superUser, userStore.permissions), 'admin'),
-)
-const showNewFolderAction = computed(() => activeTab.value === 'installed' && !currentFolder.value && canAdmin.value)
-const showMarketSettingAction = computed(() => activeTab.value === 'market' && canAdmin.value)
+
+const showNewFolderAction = computed(() => activeTab.value === 'installed' && !currentFolder.value)
+const showMarketSettingAction = computed(() => activeTab.value === 'market')
 
 const pluginDynamicMenuItems = computed(() => {
   if (!appMode.value) return undefined
@@ -1336,7 +1332,7 @@ const pluginDynamicMenuItems = computed(() => {
     {
       titleKey: 'plugin.searchPlugins',
       icon: 'mdi-magnify',
-      permission: 'admin',
+
       action: openPluginSearchDialog,
     },
   ]
@@ -1345,7 +1341,7 @@ const pluginDynamicMenuItems = computed(() => {
     items.push({
       titleKey: 'plugin.newFolder',
       icon: 'mdi-folder-plus',
-      permission: 'admin',
+
       action: showNewFolderDialog,
     })
   }
@@ -1354,7 +1350,7 @@ const pluginDynamicMenuItems = computed(() => {
     items.push({
       titleKey: 'dialog.pluginMarketSetting.title',
       icon: 'mdi-store-cog',
-      permission: 'admin',
+
       action: openMarketSettingDialog,
     })
   }
@@ -1366,7 +1362,7 @@ useDynamicButton({
   icon: 'mdi-magnify',
   onClick: openPluginSearchDialog,
   menuItems: pluginDynamicMenuItems,
-  permission: 'admin',
+
   show: computed(() => appMode.value && showSearchAction.value && isRefreshed.value),
 })
 
@@ -2152,7 +2148,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
 
   <!-- 插件搜索图标 -->
   <Teleport to="body" v-if="route.path === '/plugins'">
-    <div v-if="isRefreshed && !appMode && showSearchAction && canAdmin" class="compact-fab-stack">
+    <div v-if="isRefreshed && !appMode && showSearchAction" class="compact-fab-stack">
       <VFab
         v-if="showMarketSettingAction"
         icon="mdi-store-cog"

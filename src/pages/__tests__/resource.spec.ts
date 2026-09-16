@@ -1,6 +1,5 @@
 import type { Context, SubtitleInfo } from '@/api/types'
 import ResourcePage from '@/pages/resource.vue'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { defineComponent, nextTick } from 'vue'
@@ -241,12 +240,6 @@ const pageStubs = {
 async function renderResource(initialRoute: { path: string; query?: Record<string, string> } = { path: '/resource' }) {
   return renderWithProviders(ResourcePage, {
     initialRoute,
-    initialState: {
-      user: {
-        permissions: { ...DEFAULT_PERMISSIONS, search: true },
-        superUser: false,
-      },
-    },
     stubActions: false,
     global: { stubs: pageStubs },
   })

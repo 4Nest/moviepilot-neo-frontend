@@ -5,6 +5,8 @@ import type { CategoryConfig } from '@/api/types'
 import { useToast } from 'vue-toastification'
 import { useI18n } from 'vue-i18n'
 import { useDisplay } from 'vuetify'
+import { useConfirm } from '@/composables/useConfirm'
+import { configureAceEditorPadding } from '@/utils/aceEditor'
 
 // 显示器宽度
 const display = useDisplay()
@@ -22,6 +24,20 @@ const loading = ref(false)
 const saving = ref(false)
 const toast = useToast()
 const { t } = useI18n()
+
+// 确认框
+const createConfirm = useConfirm()
+
+// 进阶(YAML 原文)编辑状态
+const rawContent = ref('')
+const rawLoaded = ref(false)
+const rawLoading = ref(false)
+const rawDirty = ref(false)
+const rawStale = ref(false)
+const visualStale = ref(false)
+const rawError = ref('')
+// 恢复模板加载中(独立标志,仅遮罩/禁用交互,不卸载编辑器以免丢失撤销栈)
+const restoring = ref(false)
 
 const generateId = () => {
   return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now()
@@ -140,16 +156,20 @@ const countryOptions = [
   { title: '新西兰 (NZ)', value: 'NZ' },
 ]
 
-const fetchConfig = async () => {
+const fetchConfig = async (): Promise<boolean> => {
   loading.value = true
   try {
     const res: any = await api.get('media/category/config')
     if (res && res.data) {
       parseConfig(res.data)
+      return true
     }
+    toast.error(t('setting.category.loadFailed'))
+    return false
   } catch (e) {
     console.error(e)
     toast.error(t('setting.category.loadFailed'))
+    return false
   } finally {
     loading.value = false
   }
@@ -335,8 +355,11 @@ const saveConfig = async () => {
     })
 
     const res: any = await api.post('media/category/config', payload)
+
     if (res && res.success) {
       toast.success(t('setting.category.saveSuccess'))
+      // 可视化保存移除了注释,进阶页原文已过期
+      rawStale.value = true
       emit('save')
       emit('close')
     } else {
@@ -349,6 +372,119 @@ const saveConfig = async () => {
     saving.value = false
   }
 }
+
+// 拉取 category.yaml 原文
+const fetchRawConfig = async () => {
+  rawLoading.value = true
+  rawError.value = ''
+  try {
+    const res: any = await api.get('media/category/config/raw')
+    if (res && res.success) {
+      rawContent.value = res.data?.content ?? ''
+      rawLoaded.value = true
+      rawDirty.value = false
+      rawStale.value = false
+    } else {
+      rawError.value = res?.message || 'Error'
+      toast.error(t('setting.category.rawLoadFailed', { message: res?.message || 'Error' }))
+    }
+  } catch (e) {
+    console.error(e)
+    rawError.value = 'Network or Config Error'
+    toast.error(t('setting.category.rawLoadFailed', { message: 'Network or Config Error' }))
+  } finally {
+    rawLoading.value = false
+  }
+}
+
+// 保存分派:可视化页走结构化保存,进阶页保存原文
+const onSave = () => {
+  if (saving.value) return
+  if (activeTab.value === 'advanced') {
+    if (rawLoading.value || restoring.value || !rawLoaded.value) return
+    saveRawConfig()
+  } else {
+    saveConfig()
+  }
+}
+
+// 保存 category.yaml 原文(保留注释),成功后不关闭对话框
+const saveRawConfig = async () => {
+  saving.value = true
+  try {
+    const res: any = await api.put('media/category/config/raw', { content: rawContent.value })
+    if (res && res.success) {
+      toast.success(t('setting.category.rawSaveSuccess'))
+      rawDirty.value = false
+      // 原文保存后可视化页配置已过期
+      visualStale.value = true
+      emit('save')
+    } else {
+      rawError.value = res?.message || 'Error'
+      toast.error(t('setting.category.saveFailed', { message: res?.message || 'Error' }))
+    }
+  } catch (e) {
+    console.error(e)
+    rawError.value = 'Network or Config Error'
+    toast.error(t('setting.category.saveFailed', { message: 'Network or Config Error' }))
+  } finally {
+    saving.value = false
+  }
+}
+
+// 恢复默认模板:确认后仅填充编辑器,不落盘
+const restoreTemplate = async () => {
+  const isConfirmed = await createConfirm({
+    type: 'warn',
+    title: t('setting.category.restoreConfirmTitle'),
+    content: t('setting.category.restoreConfirmMessage'),
+  })
+  if (!isConfirmed) return
+  restoring.value = true
+  try {
+    const res: any = await api.get('media/category/config/raw/template')
+    if (res && res.success) {
+      rawContent.value = res.data?.content ?? ''
+      rawLoaded.value = true
+      rawDirty.value = true
+      rawError.value = ''
+    } else {
+      toast.error(t('setting.category.rawLoadFailed', { message: res?.message || 'Error' }))
+    }
+  } catch (e) {
+    console.error(e)
+    toast.error(t('setting.category.rawLoadFailed', { message: 'Network or Config Error' }))
+  } finally {
+    restoring.value = false
+  }
+}
+
+// 页签切换:首次进入进阶页拉取原文;原文过期时重拉(有未保存修改需先确认);可视化配置过期时回到可视化页重新拉取
+watch(activeTab, async tab => {
+  if (tab === 'advanced') {
+    if (!rawLoaded.value) {
+      await fetchRawConfig()
+    } else if (rawStale.value) {
+      // 有未保存的原文修改时,重拉前先确认,避免静默覆盖
+      if (rawDirty.value) {
+        const isConfirmed = await createConfirm({
+          type: 'warn',
+          title: t('setting.category.discardRawChangesTitle'),
+          content: t('setting.category.discardRawChangesMessage'),
+        })
+        if (!isConfirmed) {
+          // 取消:保留当前编辑内容,清除过期标记避免重复确认
+          rawStale.value = false
+          return
+        }
+      }
+      await fetchRawConfig()
+    }
+  } else if (visualStale.value) {
+    const refreshed = await fetchConfig()
+    if (refreshed) visualStale.value = false
+  }
+})
 
 onMounted(() => {
   fetchConfig()
@@ -380,6 +516,11 @@ onMounted(() => {
           <VTab value="tv">
             <VIcon icon="mdi-television" class="me-2" />
             {{ t('setting.category.tv') }}
+          </VTab>
+          <VTab value="advanced">
+            <VIcon icon="mdi-file-code-outline" class="me-2" />
+            {{ t('setting.category.advanced') }}
+            <span v-if="rawDirty" class="ms-1">●</span>
           </VTab>
         </VTabs>
 
@@ -607,18 +748,57 @@ onMounted(() => {
               {{ t('setting.category.addTv') }}
             </VBtn>
           </VWindowItem>
+
+          <VWindowItem value="advanced">
+            <VAlert type="info" variant="tonal" density="compact" class="mb-4">
+              {{ t('setting.category.advancedHint') }}
+            </VAlert>
+
+            <div v-if="rawLoading" class="d-flex justify-center align-center" style="min-block-size: 300px">
+              <VProgressCircular indeterminate color="primary" size="64" />
+            </div>
+            <template v-else>
+              <div class="position-relative">
+                <VAceEditor
+                  v-model:value="rawContent"
+                  lang="yaml"
+                  theme="monokai"
+                  class="rounded min-h-[30rem]"
+                  @init="configureAceEditorPadding"
+                  @update:value="rawDirty = true"
+                />
+                <VOverlay :model-value="restoring" contained persistent class="align-center justify-center">
+                  <VProgressCircular indeterminate color="primary" size="64" />
+                </VOverlay>
+              </div>
+              <VAlert v-if="rawError" type="error" variant="tonal" density="compact" class="mt-4">
+                {{ rawError }}
+              </VAlert>
+            </template>
+          </VWindowItem>
         </VWindow>
       </VCardText>
 
       <VCardActions class="app-dialog-actions">
+        <VBtn
+          v-if="activeTab === 'advanced'"
+          color="error"
+          variant="tonal"
+          prepend-icon="mdi-restore"
+          :disabled="rawLoading || restoring || saving"
+          @click="restoreTemplate"
+        >
+          {{ t('setting.category.restoreTemplate') }}
+        </VBtn>
         <VSpacer />
         <VBtn
           color="primary"
           variant="flat"
           :loading="saving"
+          :disabled="activeTab === 'advanced' && (rawLoading || restoring || !rawLoaded || saving)"
           prepend-icon="mdi-content-save"
           class="px-5"
-          @click="saveConfig"
+          @click="onSave"
         >
           {{ t('common.save') }}
         </VBtn>

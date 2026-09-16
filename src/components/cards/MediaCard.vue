@@ -12,9 +12,8 @@ import api from '@/api'
 import { formatRating } from '@/@core/utils/formatters'
 import type { MediaInfo, Site, Subscribe } from '@/api/types'
 import router from '@/router'
-import { useUserStore, useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore } from '@/stores'
 import { mediaTypeDict } from '@/api/constants'
-import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import {
   getMediaSubscribeId,
@@ -49,12 +48,6 @@ const props = defineProps({
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
-
-// 用户 Store
-const userStore = useUserStore()
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-const canSearch = computed(() => hasPermission(userPermissions.value, 'search'))
-const canSubscribe = computed(() => hasPermission(userPermissions.value, 'subscribe'))
 
 // 图片加载状态
 const isImageLoaded = ref(false)
@@ -483,7 +476,6 @@ function getMediaTypeText(type: string | undefined) {
 
 const subscribeActions = useMediaSubscribe({
   media: () => props.media,
-  canSubscribe: () => canSubscribe.value,
   isSubscribed,
   isExists: () => isExists.value,
   subscribedSeasons,
@@ -587,10 +579,9 @@ onBeforeUnmount(() => {
             </p>
             <div v-if="props.media?.collection_id" class="mb-3" @click.stop=""></div>
             <div v-else class="flex align-center justify-between">
-              <IconBtn v-if="canSearch" icon="mdi-magnify" color="white" size="small" @click.stop="clickSearch" />
+              <IconBtn icon="mdi-magnify" color="white" size="small" @click.stop="clickSearch" />
               <VSpacer />
               <IconBtn
-                v-if="canSubscribe"
                 :icon="isSubscribed ? 'mdi-heart' : 'mdi-heart-outline'"
                 :color="isSubscribed ? 'error' : 'white'"
                 size="small"

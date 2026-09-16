@@ -3,12 +3,10 @@ import api from '@/api'
 import type { Site, Plugin, Subscribe } from '@/api/types'
 import { getNavMenus, getSettingTabs } from '@/router/i18n-menu'
 import { NavMenu } from '@/@layouts/types'
-import { useUserStore } from '@/stores'
 import SearchSiteDialog from '@/components/dialog/SearchSiteDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { useDisplay } from 'vuetify'
 import { VDialog, VMenu } from 'vuetify/components'
-import { buildUserPermissionContext, hasPermission, filterMenusByPermission } from '@/utils/permission'
 
 // 显示器宽度
 const display = useDisplay()
@@ -29,34 +27,6 @@ const props = withDefaults(
 
 // 路由
 const router = useRouter()
-
-// 用户 Store
-const userStore = useUserStore()
-
-// 当前用户名
-const userName = userStore.userName
-const userPermissions = computed(() => buildUserPermissionContext(userStore.superUser, userStore.permissions))
-
-// 权限检查
-const hasSearchPermission = computed(() => {
-  return hasPermission(userPermissions.value, 'search')
-})
-
-const hasDiscoveryPermission = computed(() => {
-  return hasPermission(userPermissions.value, 'discovery')
-})
-
-const hasSubscribePermission = computed(() => {
-  return hasPermission(userPermissions.value, 'subscribe')
-})
-
-const hasManagePermission = computed(() => {
-  return hasPermission(userPermissions.value, 'manage')
-})
-
-const hasAdminPermission = computed(() => {
-  return hasPermission(userPermissions.value, 'admin')
-})
 
 // 所有订阅数据
 const SubscribeItems = ref<Subscribe[]>([])
@@ -220,8 +190,6 @@ function getMenus(): NavMenu[] {
         to: item.to,
         header: item.header,
         admin: item.admin,
-        permission: item.permission,
-        feature: item.feature,
       }),
   )
   // 设置标签页
@@ -234,7 +202,6 @@ function getMenus(): NavMenu[] {
         to: `/setting?tab=${item.tab}`,
         header: '',
         admin: true,
-        permission: 'admin',
         description: item.description,
       }),
   )
@@ -246,18 +213,12 @@ function getMenus(): NavMenu[] {
 const matchedMenuItems = computed(() => {
   if (!searchWord.value) return []
   const lowerWord = (searchWord.value as string).toLowerCase()
-  const menuItems = getMenus()
-  if (menuItems) {
-    // 先根据用户权限过滤菜单
-    const filteredMenus = filterMenusByPermission(menuItems, userPermissions.value)
-    // 再根据搜索词过滤
-    return filteredMenus.filter(
-      item =>
-        item.title.toLowerCase().includes(lowerWord) ||
-        (item.description && item.description.toLowerCase().includes(lowerWord)),
-    )
-  }
-  return []
+  // 根据搜索词过滤菜单
+  return getMenus().filter(
+    item =>
+      item.title.toLowerCase().includes(lowerWord) ||
+      (item.description && item.description.toLowerCase().includes(lowerWord)),
+  )
 })
 
 // 所有插件（已安装）
@@ -279,7 +240,6 @@ async function fetchInstalledPlugins() {
 // 匹配的插件列表
 const matchedPluginItems = computed(() => {
   if (!searchWord.value) return []
-  if (!hasAdminPermission.value) return []
   const lowerWord = (searchWord.value as string).toLowerCase()
   return pluginItems.value.filter((item: Plugin) => {
     if (!item.plugin_name && !item.plugin_desc) return false
@@ -333,11 +293,8 @@ const openSiteDialog = (type: 'torrent' | 'subtitle' = 'torrent') => {
 // 匹配的订阅列表
 const matchedSubscribeItems = computed(() => {
   if (!searchWord.value) return []
-  if (!hasSubscribePermission.value) return []
   const lowerWord = (searchWord.value as string).toLowerCase()
-  return SubscribeItems.value.filter((item: Subscribe) => {
-    return (item.name.toLowerCase().includes(lowerWord) && (userStore.superUser || userName === item.username)) || false
-  })
+  return SubscribeItems.value.filter((item: Subscribe) => item.name.toLowerCase().includes(lowerWord))
 })
 
 /** 使用选中的站点执行当前资源类型搜索。 */
@@ -353,7 +310,7 @@ function searchSites(sites: number[]) {
 
 /** 使用当前关键词搜索站点资源。 */
 function searchTorrent() {
-  if (!searchWord.value || !hasSearchPermission.value) return
+  if (!searchWord.value) return
   // 记录搜索词
   saveRecentSearches(searchWord.value)
   // 跳转到搜索页面
@@ -371,7 +328,7 @@ function searchTorrent() {
 
 /** 使用当前关键词搜索字幕资源。 */
 function searchSubtitle() {
-  if (!searchWord.value || !hasSearchPermission.value) return
+  if (!searchWord.value) return
   saveRecentSearches(searchWord.value)
   router.push({
     path: '/resource',
@@ -387,7 +344,7 @@ function searchSubtitle() {
 
 /** 跳转到指定类型的媒体搜索结果页。 */
 function searchMedia(searchType: MediaSearchType) {
-  if (!searchWord.value || !hasDiscoveryPermission.value) return
+  if (!searchWord.value) return
   saveRecentSearches(searchWord.value)
   router.push({
     path: '/browse/media/search',
@@ -484,20 +441,11 @@ watch(dialog, async isOpen => {
 defineExpose({ focusSearchInput })
 
 onMounted(() => {
-  // 根据权限加载不同的数据
-  if (hasAdminPermission.value) {
-    fetchInstalledPlugins()
-  }
-  if (hasSubscribePermission.value) {
-    fetchSubscribes()
-  }
+  fetchInstalledPlugins()
+  fetchSubscribes()
   loadRecentSearches()
-  if (hasSearchPermission.value) {
-    loadUserSitePreferences()
-    if (hasManagePermission.value) {
-      queryAllSites()
-    }
-  }
+  loadUserSitePreferences()
+  queryAllSites()
 })
 </script>
 <template>
@@ -560,7 +508,6 @@ onMounted(() => {
         <!-- 有搜索词时显示搜索入口和匹配结果 -->
         <VList lines="two" v-if="searchWord" class="search-list pa-0 py-2">
           <!-- 媒体搜索入口 -->
-          <template v-if="hasDiscoveryPermission">
             <VListSubheader class="font-weight-medium text-uppercase px-4">
               {{ t('common.media') }}
             </VListSubheader>
@@ -612,10 +559,8 @@ onMounted(() => {
                 </VBtnToggle>
               </div>
             </VListItem>
-          </template>
 
           <VListItem
-            v-if="hasSubscribePermission"
             density="comfortable"
             link
             @click="searchSubscribeShares"
@@ -634,7 +579,6 @@ onMounted(() => {
           </VListItem>
 
           <VListItem
-            v-if="hasManagePermission"
             density="comfortable"
             link
             @click="searchHistory"
@@ -744,7 +688,6 @@ onMounted(() => {
           </template>
 
           <!-- 站点资源搜索 -->
-          <template v-if="hasSearchPermission">
             <VDivider class="mx-4 my-2 search-divider" />
             <VListSubheader class="font-weight-medium text-uppercase px-4">
               {{ t('dialog.searchBar.siteResources') }}
@@ -765,7 +708,6 @@ onMounted(() => {
               </VListItemSubtitle>
               <template #append>
                 <VBtn
-                  v-if="hasManagePermission"
                   size="x-small"
                   variant="tonal"
                   color="primary"
@@ -792,7 +734,6 @@ onMounted(() => {
               </VListItemSubtitle>
               <template #append>
                 <VBtn
-                  v-if="hasManagePermission"
                   size="x-small"
                   variant="tonal"
                   color="primary"
@@ -803,7 +744,6 @@ onMounted(() => {
                 </VBtn>
               </template>
             </VListItem>
-          </template>
         </VList>
 
         <!-- 无搜索词时显示空状态 -->

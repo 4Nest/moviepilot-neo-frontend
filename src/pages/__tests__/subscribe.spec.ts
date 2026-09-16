@@ -1,6 +1,5 @@
 import SubscribePage from '@/pages/subscribe.vue'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
-import { DEFAULT_PERMISSIONS } from '@/utils/permission'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { computed, defineComponent, h, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
@@ -169,8 +168,6 @@ interface RenderSubscribeOptions {
   appMode?: boolean
   initialRoute?: string
   subType?: '电影' | '电视剧'
-  subscribePermission?: boolean
-  superUser?: boolean
 }
 
 async function renderSubscribe(options: RenderSubscribeOptions = {}) {
@@ -180,15 +177,6 @@ async function renderSubscribe(options: RenderSubscribeOptions = {}) {
   return renderWithProviders(SubscribePage, {
     initialRoute: options.initialRoute ?? `/subscribe/${subType === '电影' ? 'movie' : 'tv'}`,
     initialRouteMeta: { subType },
-    initialState: {
-      user: {
-        permissions: {
-          ...DEFAULT_PERMISSIONS,
-          subscribe: options.subscribePermission ?? true,
-        },
-        superUser: options.superUser ?? false,
-      },
-    },
     global: {
       stubs: {
         SubscribeListView: SubscribeListViewStub,
@@ -322,7 +310,8 @@ describe('subscribe page', () => {
     expect(getListOutput('list sort mode')).toHaveTextContent('true')
     expect(getListOutput('list sort by')).toHaveTextContent('custom')
     expect(unref(batchButton.color)).toBe('gray')
-    expect(unref(getDynamicButtonConfig().show)).toBe(false)
+    expect(unref(getDynamicButtonConfig().show)).toBe(true)
+    expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-history')
   })
 
   it('delegates PWA batch actions to the list public API', async () => {
@@ -369,8 +358,8 @@ describe('subscribe page', () => {
     expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-clipboard-edit-outline')
   })
 
-  it('exposes administrator history and default-rule actions on desktop and PWA', async () => {
-    const { unmount } = await renderSubscribe({ superUser: true })
+  it('exposes history and default-rule actions on desktop and PWA', async () => {
+    const { unmount } = await renderSubscribe()
 
     await waitFor(() => expect(document.querySelectorAll('.compact-fab button')).toHaveLength(2))
     const [historyButton, defaultRuleButton] = document.querySelectorAll<HTMLButtonElement>('.compact-fab button')
@@ -386,7 +375,7 @@ describe('subscribe page', () => {
     )
     unmount()
 
-    await renderSubscribe({ appMode: true, superUser: true })
+    await renderSubscribe({ appMode: true })
     const dynamicButton = getDynamicButtonConfig()
     expect(unref(dynamicButton.show)).toBe(true)
     expect(unref(dynamicButton.icon)).toBe('mdi-history')

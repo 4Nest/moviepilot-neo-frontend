@@ -1,3 +1,4 @@
+import type { Subscribe, SubscribeVersionRule } from '@/api/types'
 import SubscribeEditDialog from '@/components/dialog/SubscribeEditDialog.vue'
 import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
@@ -43,21 +44,17 @@ interface DialogProps {
   default?: boolean
   subid?: number
   type?: SubscribeMediaType
+  versionId?: string
+  addVersion?: boolean
 }
 
-async function renderDialog(props: DialogProps, superUser = true) {
+async function renderDialog(props: DialogProps) {
   const events = {
     close: vi.fn(),
     remove: vi.fn(),
     save: vi.fn(),
   }
   const result = await renderWithProviders(SubscribeEditDialog, {
-    initialState: {
-      user: {
-        superUser,
-        userName: superUser ? 'admin' : 'member',
-      },
-    },
     props: {
       modelValue: true,
       ...props,
@@ -114,6 +111,73 @@ describe('SubscribeEditDialog', () => {
     await user.click(screen.getByLabelText('指定剧集组'))
     expect(await screen.findByText('官方特别排序')).toBeInTheDocument()
     expect(screen.getByText('2 季 • 24 集')).toBeInTheDocument()
+  })
+
+  it('binds the release-group field to the active version selected from the versions dialog', async () => {
+    const record = createSubscribe({
+      id: 812,
+      name: '字幕组版本剧',
+      season: 1,
+      tmdbid: 8120,
+      type: '电视剧',
+      version_rules: [
+        { id: 'v-a', name: '默认版本', enabled: true, release_group: 'VCB-Studio', settings: {} as SubscribeVersionRule['settings'] },
+        { id: 'v-b', name: '字幕组B', enabled: true, release_group: 'LoliHouse', settings: {} as SubscribeVersionRule['settings'] },
+      ],
+    })
+    const updated = vi.fn()
+    server.use(subscribeDetailsHandler(812, record), updateSubscribeHandler({ success: true }, 200, updated))
+    useDialogOptions({ tmdbId: 8120 })
+    const user = userEvent.setup()
+    await renderDialog({ subid: 812, versionId: 'v-b' })
+    await screen.findByText('字幕组版本剧 S01')
+
+    await user.click(screen.getByRole('tab', { name: '进阶' }))
+    // 字段跟随 versionId 指定的活动版本
+    const releaseGroup = screen.getByLabelText('字幕组')
+    expect(releaseGroup).toHaveValue('LoliHouse')
+
+    // 输入直写 activeVersion.release_group,随保存提交且不串扰其他版本
+    await user.clear(releaseGroup)
+    await user.type(releaseGroup, 'NEST')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    const payload = updated.mock.calls[0][0] as Subscribe
+    expect(payload.version_rules?.find(rule => rule.id === 'v-b')?.release_group).toBe('NEST')
+    expect(payload.version_rules?.find(rule => rule.id === 'v-a')?.release_group).toBe('VCB-Studio')
+  })
+
+  it('copies the release group into a newly added version', async () => {
+    const record = createSubscribe({
+      id: 813,
+      name: '新增版本字幕组电影',
+      tmdbid: 8130,
+      type: '电影',
+      version_rules: [
+        { id: 'v-a', name: '默认版本', enabled: true, release_group: 'VCB-Studio', settings: {} as SubscribeVersionRule['settings'] },
+      ],
+    })
+    const updated = vi.fn()
+    server.use(subscribeDetailsHandler(813, record), updateSubscribeHandler({ success: true }, 200, updated))
+    useDialogOptions()
+    const user = userEvent.setup()
+    await renderDialog({ addVersion: true, subid: 813 })
+    await screen.findByText('新增版本字幕组电影')
+
+    await user.click(screen.getByRole('tab', { name: '进阶' }))
+    // 新版本复制当前版本字幕组,用户可在此基础上修改
+    const releaseGroup = screen.getByLabelText('字幕组')
+    expect(releaseGroup).toHaveValue('VCB-Studio')
+    await user.clear(releaseGroup)
+    await user.type(releaseGroup, '桜都')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    const payload = updated.mock.calls[0][0] as Subscribe
+    expect(payload.version_rules).toHaveLength(2)
+    expect(payload.version_rules?.find(rule => rule.id === 'v-a')?.release_group).toBe('VCB-Studio')
+    expect(payload.version_rules?.find(rule => rule.id !== 'v-a')?.release_group).toBe('桜都')
   })
 
   it('keeps movie titles free of season suffixes and skips episode groups', async () => {
@@ -200,26 +264,7 @@ describe('SubscribeEditDialog', () => {
     expect(await screen.findByText('高优先级')).toBeInTheDocument()
   })
 
-  it('allows non-admin users to read public defaults but not private rules or save them', async () => {
-    const configRequested = vi.fn()
-    const rulesRequested = vi.fn()
-    const saved = vi.fn()
-    server.use(
-      defaultSubscribeConfigHandler('电视剧', createSubscribe({ id: 0, type: '电视剧' }), 200, configRequested),
-      saveDefaultSubscribeConfigHandler('电视剧', { success: true }, 200, saved),
-    )
-    useDialogOptions({ onFilterRuleGroups: rulesRequested })
-    const { events } = await renderDialog({ default: true, type: '电视剧' }, false)
-
-    await waitFor(() => expect(configRequested).toHaveBeenCalledOnce())
-    expect(rulesRequested).not.toHaveBeenCalled()
-    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
-
-    expect(saved).not.toHaveBeenCalled()
-    expect(events.save).not.toHaveBeenCalled()
-  })
-
-  it.each(['电影', '电视剧'] as const)('loads and saves %s default configuration as an administrator', async type => {
+  it.each(['电影', '电视剧'] as const)('loads and saves %s default configuration', async type => {
     const configRequested = vi.fn()
     const saved = vi.fn()
     server.use(
@@ -296,7 +341,6 @@ describe('SubscribeEditDialog', () => {
     await user.keyboard('{Escape}')
     await chooseOption('指定剧集组', '完整剧集组')
     await chooseOption('指定季', '第 2 季')
-    await user.type(screen.getByLabelText('自定义类别'), '纪录片')
     await user.type(screen.getByLabelText('自定义识别词'), '测试词 => 正式词')
 
     const closeButton = document.querySelector<HTMLButtonElement>('.v-card-item button')
@@ -316,7 +360,6 @@ describe('SubscribeEditDialog', () => {
       exclude: '预告',
       filter_groups: ['完整规则组'],
       include: '国语',
-      media_category: '纪录片',
       quality: 'Remux',
       resolution: '1080[pi]|x1080',
       save_path: '/完整目录',
@@ -473,5 +516,35 @@ describe('SubscribeEditDialog', () => {
 
     await waitFor(() => expect(updated).toHaveBeenCalledOnce())
     consoleError.mockRestore()
+  })
+
+  it.each([
+    ['secure context', true],
+    ['insecure context without crypto.randomUUID', false],
+  ])('opens in add-version mode with its own title and saves default + new version together (%s)', async (_case, hasRandomUuid) => {
+    if (!hasRandomUuid) vi.stubGlobal('crypto', { ...globalThis.crypto, randomUUID: undefined })
+    const record = createSubscribe({ id: 820, name: '新增版本测试剧', tmdbid: 8200, version_mode: 'any', version_rules: [] })
+    const updated = vi.fn()
+    server.use(subscribeDetailsHandler(record.id, record), updateSubscribeHandler({ success: true }, 200, updated))
+    useDialogOptions({ tmdbId: 8200 })
+    const { events } = await renderDialog({ subid: record.id, addVersion: true })
+
+    // 新增版本模式使用独立标题
+    await screen.findByText('新增版本')
+    // 等待订阅加载并创建默认版本 + 新版本（副标题显示当前版本名）
+    const versionLabel = await screen.findByText('新版本')
+
+    // 副标题版本名点击后就地编辑，改名后失焦生效
+    await fireEvent.click(versionLabel)
+    const nameInput = await screen.findByLabelText('版本名称')
+    await fireEvent.update(nameInput, 'NEST')
+    await fireEvent.blur(nameInput)
+
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    const payload = updated.mock.calls[0][0] as { version_mode?: string; version_rules?: { name: string; enabled: boolean }[] }
+    expect(payload.version_mode).toBe('all')
+    expect(payload.version_rules?.map(rule => rule.name)).toEqual(['默认版本', 'NEST'])
+    expect(events.save).toHaveBeenCalledOnce()
   })
 })

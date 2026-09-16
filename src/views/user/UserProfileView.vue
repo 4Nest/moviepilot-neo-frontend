@@ -41,25 +41,18 @@ const currentAvatar = ref(avatar1)
 // 当前用户名
 const currentUserName = ref('')
 
-// 当前用户信息
 const accountInfo = ref<User>({
   id: 0,
   name: '',
-  password: '',
   email: '',
-  is_active: false,
-  is_superuser: false,
   avatar: '',
   is_otp: false,
-  permissions: {},
   settings: {},
   nickname: '',
 })
 
 // PassKey列表
 const passkeyList = ref<PassKey[]>([])
-
-const securityMenu = ref(false)
 
 // 验证密码
 const verifyPassword = ref('')
@@ -79,7 +72,6 @@ let verifyPasswordDialogController: ReturnType<typeof openSharedDialog> | null =
 
 // 打开共享 OTP 管理弹窗，并把状态变更回写到用户资料。
 function openOtpDialog() {
-  securityMenu.value = false
   otpDialogController?.close()
   otpDialogController = openSharedDialog(
     OTPAuthDialog,
@@ -101,7 +93,6 @@ function openOtpDialog() {
 
 // 打开共享 PassKey 管理弹窗，并同步最新 PassKey 列表。
 function openPasskeyDialog() {
-  securityMenu.value = false
   passkeyDialogController?.close()
   passkeyDialogController = openSharedDialog(
     PasskeyDialog,
@@ -190,7 +181,7 @@ function restoreCurrentAvatar() {
 // 加载当前用户信息
 async function fetchUserInfo() {
   try {
-    const result: User = await api.get(`user/${userStore.userName}`)
+    const result: User = await api.get('user/current')
     if (result) {
       accountInfo.value = result
       accountInfo.value.avatar = accountInfo.value.avatar ? accountInfo.value.avatar : avatar1
@@ -206,13 +197,9 @@ async function fetchUserInfo() {
 }
 
 // 保存账户信息
-async function saveAccountInfo() {
+function saveAccountInfo() {
   if (isSaving.value) {
     $toast.error(t('profile.savingInProgress'))
-    return
-  }
-  if (!currentUserName.value) {
-    $toast.error(t('profile.usernameRequired'))
     return
   }
   if (newPassword.value || confirmPassword.value) {
@@ -220,54 +207,48 @@ async function saveAccountInfo() {
       $toast.error(t('profile.passwordMismatch'))
       return
     }
-    accountInfo.value.password = newPassword.value
   }
-
-  // 将nickname保存到settings中，后端可以直接处理JSON对象
-  if (!accountInfo.value.settings) {
-    accountInfo.value.settings = {}
+  // 修改密码前需要验证当前登录密码
+  if (newPassword.value) {
+    withPasswordVerification(t('profile.accountSecurity'), t('profile.confirmToChangePassword'), () => {
+      doSaveAccountInfo()
+    })
+    return
   }
-  accountInfo.value.settings.nickname = accountInfo.value.nickname ?? ''
+  doSaveAccountInfo()
+}
 
-  const oldUserName = accountInfo.value.name
+// 执行账户信息保存，仅回传允许修改的字段
+async function doSaveAccountInfo() {
   const oldAvatar = accountInfo.value.avatar
   accountInfo.value.avatar = currentAvatar.value
-  accountInfo.value.name = currentUserName.value
   isSaving.value = true
   try {
-    // 创建一个临时对象来保存用户数据，确保所有字段都会发送
-    const userData = { ...accountInfo.value }
+    // 昵称等扩展信息保存在 settings 中，后端可以直接处理JSON对象
+    const payload: { [key: string]: any } = {
+      email: accountInfo.value.email,
+      avatar: currentAvatar.value,
+      settings: { ...accountInfo.value.settings, nickname: accountInfo.value.nickname ?? '' },
+    }
+    if (newPassword.value) {
+      payload.password = newPassword.value
+    }
 
-    const result: { [key: string]: any } = await api.put('user/', userData)
+    const result: { [key: string]: any } = await api.put('user/current', payload)
 
     if (result.success) {
-      if (oldUserName !== currentUserName.value) {
-        $toast.success(t('profile.usernameChangeSuccess', { oldName: oldUserName, newName: currentUserName.value }))
-        // 更新本地用户名显示
-        userStore.setUserName(currentUserName.value)
-      } else {
-        $toast.success(t('profile.saveSuccess'))
-      }
+      $toast.success(t('profile.saveSuccess'))
+      // 清空密码输入框
+      newPassword.value = ''
+      confirmPassword.value = ''
       // 更新本地头像显示
       if (oldAvatar !== currentAvatar.value) {
         userStore.setAvatar(currentAvatar.value)
       }
     } else {
-      if (oldAvatar !== currentAvatar.value) {
-        $toast.error(
-          t('profile.saveFailedWithNameChange', {
-            oldName: oldUserName,
-            newName: currentUserName.value,
-            message: result.message,
-          }),
-        )
-      } else {
-        $toast.error(t('profile.saveFailed', { message: result.message }))
-      }
+      $toast.error(t('profile.saveFailed', { message: result.message }))
       // 失败缓存值还原
-      currentUserName.value = accountInfo.value.name
-      accountInfo.value.name = oldUserName
-      currentAvatar.value = accountInfo.value.avatar
+      currentAvatar.value = oldAvatar
       accountInfo.value.avatar = oldAvatar
     }
   } catch (error) {
@@ -339,15 +320,26 @@ watch(
 <template>
   <div>
     <VRow>
-      <VCol cols="12">
-        <VCard :title="t('profile.personalInfo')">
-          <VCardText class="flex">
+      <!-- 👉 账号概览 -->
+      <VCol cols="12" md="4">
+        <VCard :title="t('profile.accountOverview')">
+          <VCardText class="d-flex flex-column align-center gap-4">
             <!-- 👉 Avatar -->
-            <VAvatar rounded="lg" size="100" class="me-6" :image="currentAvatar" />
+            <VAvatar rounded="lg" size="120" :image="currentAvatar" />
+
+            <!-- 👉 Username（只读） -->
+            <VTextField
+              v-model="currentUserName"
+              density="comfortable"
+              readonly
+              class="w-100"
+              :label="t('user.username')"
+              prepend-inner-icon="mdi-account"
+            />
 
             <!-- 👉 Upload Photo -->
-            <form class="flex flex-col justify-center gap-5">
-              <div class="flex flex-wrap gap-2">
+            <form class="w-100">
+              <div class="flex flex-wrap justify-center gap-2">
                 <VBtn color="primary" @click="refInputEl?.click()">
                   <VIcon icon="mdi-cloud-upload-outline" />
                   <span v-if="display.mdAndUp.value" class="ms-2">{{ t('profile.uploadNewAvatar') }}</span>
@@ -371,65 +363,55 @@ watch(
                   <VIcon icon="mdi-image-sync-outline" />
                   <span v-if="display.mdAndUp.value" class="ms-2">{{ t('common.default') }}</span>
                 </VBtn>
-
-                <VMenu v-model="securityMenu" :close-on-content-click="false">
-                  <template #activator="{ props }">
-                    <VBtn color="primary" variant="tonal" v-bind="props" :aria-label="t('profile.accountSecurity')">
-                      <VIcon icon="mdi-shield-key" />
-                      <span v-if="display.mdAndUp.value" class="ms-2">
-                        {{ t('profile.accountSecurity') }}
-                      </span>
-                      <VIcon icon="mdi-menu-down" class="ms-1" />
-                    </VBtn>
-                  </template>
-                  <VList>
-                    <VListItem @click="openOtpDialog">
-                      <template #prepend>
-                        <VIcon icon="mdi-cellphone-key" />
-                      </template>
-                      <VListItemTitle>{{ t('profile.authenticatorManagement') }}</VListItemTitle>
-                      <VListItemSubtitle>
-                        {{ t('profile.otpSecondFactor') }}
-                      </VListItemSubtitle>
-                      <template #append>
-                        <VChip v-if="accountInfo.is_otp" color="success" size="small">{{ t('profile.enabled') }}</VChip>
-                      </template>
-                    </VListItem>
-                    <VListItem @click="openPasskeyDialog">
-                      <template #prepend>
-                        <VIcon icon="material-symbols:passkey" />
-                      </template>
-                      <VListItemTitle>{{ t('profile.passkeyManagement') }}</VListItemTitle>
-                      <VListItemSubtitle>
-                        {{ t('profile.passkeyPasswordless') }}
-                      </VListItemSubtitle>
-                      <template #append>
-                        <VChip v-if="passkeyList.length > 0" color="success" size="small">
-                          {{ t('profile.keysCount', { count: passkeyList.length }) }}
-                        </VChip>
-                      </template>
-                    </VListItem>
-                  </VList>
-                </VMenu>
               </div>
 
-              <p class="text-body-1 mb-0">{{ t('profile.avatarFormatTip') }}</p>
+              <p class="text-body-1 text-center mb-0 mt-4">{{ t('profile.avatarFormatTip') }}</p>
             </form>
           </VCardText>
 
+          <!-- 👉 账号安全入口 -->
+          <VDivider class="my-2">
+            <span>{{ t('profile.accountSecurity') }}</span>
+          </VDivider>
+
+          <VList>
+            <VListItem @click="openOtpDialog">
+              <template #prepend>
+                <VIcon icon="mdi-cellphone-key" />
+              </template>
+              <VListItemTitle>{{ t('profile.authenticatorManagement') }}</VListItemTitle>
+              <VListItemSubtitle>
+                {{ t('profile.otpSecondFactor') }}
+              </VListItemSubtitle>
+              <template #append>
+                <VChip v-if="accountInfo.is_otp" color="success" size="small">{{ t('profile.enabled') }}</VChip>
+              </template>
+            </VListItem>
+            <VListItem @click="openPasskeyDialog">
+              <template #prepend>
+                <VIcon icon="material-symbols:passkey" />
+              </template>
+              <VListItemTitle>{{ t('profile.passkeyManagement') }}</VListItemTitle>
+              <VListItemSubtitle>
+                {{ t('profile.passkeyPasswordless') }}
+              </VListItemSubtitle>
+              <template #append>
+                <VChip v-if="passkeyList.length > 0" color="success" size="small">
+                  {{ t('profile.keysCount', { count: passkeyList.length }) }}
+                </VChip>
+              </template>
+            </VListItem>
+          </VList>
+        </VCard>
+      </VCol>
+
+      <!-- 👉 资料与安全表单 -->
+      <VCol cols="12" md="8">
+        <VCard :title="t('profile.personalInfo')">
           <VCardText>
             <!-- 👉 Form -->
-            <VForm class="mt-6">
+            <VForm class="mt-2">
               <VRow>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="currentUserName"
-                    density="comfortable"
-                    readonly
-                    :label="t('user.username')"
-                    prepend-inner-icon="mdi-account"
-                  />
-                </VCol>
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="accountInfo.email"
@@ -438,6 +420,16 @@ watch(
                     :label="t('user.email')"
                     type="email"
                     prepend-inner-icon="mdi-email"
+                  />
+                </VCol>
+                <VCol cols="12" md="6">
+                  <VTextField
+                    v-model="accountInfo.nickname"
+                    density="comfortable"
+                    clearable
+                    :label="t('profile.nickname')"
+                    :placeholder="t('profile.nicknamePlaceholder')"
+                    prepend-inner-icon="mdi-card-account-details"
                   />
                 </VCol>
                 <VCol cols="12" md="6">
@@ -464,16 +456,6 @@ watch(
                     :label="t('user.confirmPassword')"
                     prepend-inner-icon="mdi-lock-check"
                     @click:append-inner="isConfirmPasswordVisible = !isConfirmPasswordVisible"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="accountInfo.nickname"
-                    density="comfortable"
-                    clearable
-                    :label="t('profile.nickname')"
-                    :placeholder="t('profile.nicknamePlaceholder')"
-                    prepend-inner-icon="mdi-card-account-details"
                   />
                 </VCol>
               </VRow>

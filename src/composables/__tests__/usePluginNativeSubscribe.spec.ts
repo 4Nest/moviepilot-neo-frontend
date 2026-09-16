@@ -47,8 +47,8 @@ vi.mock('@/composables/useMediaSubscribe', async importOriginal => {
   }
 })
 
-/** 在完整应用插件环境中创建原生订阅回调，便于验证权限与响应式状态。 */
-async function renderNativeSubscribeHarness(subscribePermission = true) {
+/** 在完整应用插件环境中创建原生订阅回调，便于验证响应式状态。 */
+async function renderNativeSubscribeHarness() {
   let nativeSubscribe: NativeSubscribe | undefined
   const Harness = defineComponent({
     name: 'PluginNativeSubscribeHarness',
@@ -62,13 +62,6 @@ async function renderNativeSubscribeHarness(subscribePermission = true) {
   await renderWithProviders(Harness, {
     initialState: {
       user: {
-        permissions: {
-          discovery: true,
-          manage: false,
-          search: true,
-          subscribe: subscribePermission,
-        },
-        superUser: false,
         userName: 'tester',
       },
     },
@@ -177,19 +170,6 @@ describe('plugin native subscribe flow', () => {
 
     expect(result).toMatchObject({ code: 'INVALID_MEDIA', success: false })
     expect(mocks.toastError).toHaveBeenCalledWith('无法打开原生订阅：请提供有效的媒体数据源 ID。')
-    expect(mocks.handleSubscribe).not.toHaveBeenCalled()
-  })
-
-  it('returns a structured fallback result when the user lacks subscribe permission', async () => {
-    const nativeSubscribe = await renderNativeSubscribeHarness(false)
-    const result = await nativeSubscribe({ title: '无权限', tmdb_id: 700, type: '电影' })
-
-    expect(result).toEqual({
-      code: 'PERMISSION_DENIED',
-      message: '当前用户没有订阅权限。',
-      success: false,
-    })
-    expect(mocks.apiGet).not.toHaveBeenCalled()
     expect(mocks.handleSubscribe).not.toHaveBeenCalled()
   })
 })
