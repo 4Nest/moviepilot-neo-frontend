@@ -139,8 +139,8 @@ export function useVersionChecker() {
     // 如果已经显示过通知,说明已经检查过了
     if (isUpdateToastShown) return
 
-    // 版本一致，无需操作
-    if (latestVersion === currentVersion.value) {
+    // 构建提交仅用于追溯资产，不应触发缓存版本不一致提示
+    if (currentVersion.value.split('+', 1)[0] === latestVersion.split('+', 1)[0]) {
       console.log('[VersionChecker] 版本号一致，无需操作')
       return
     }

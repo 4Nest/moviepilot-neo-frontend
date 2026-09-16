@@ -14,6 +14,16 @@ describe('useVersionChecker', () => {
     mocks.toastInfo.mockClear()
   })
 
+  it('忽略发布资产附加的构建提交元数据', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { checkVersion } = useVersionChecker()
+
+    await checkVersion(`${__APP_VERSION__}+1bd48e397c967e694a09af0fc8731bf7dc5ba86f`)
+
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+    expect(consoleLog).toHaveBeenCalledWith('[VersionChecker] 版本号一致，无需操作')
+  })
+
   it('没有可用 Service Worker 时保留版本不一致的清缓存兜底', async () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
     const { checkVersion } = useVersionChecker()
