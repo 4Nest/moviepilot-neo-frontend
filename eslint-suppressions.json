@@ -79,29 +79,10 @@
   },
   "src/api/types.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 39
+      "count": 35
     },
     "@typescript-eslint/no-wrapper-object-types": {
       "count": 2
-    }
-  },
-  "src/components/agent/AgentAssistantEntry.vue": {
-    "no-useless-escape": {
-      "count": 1
-    },
-    "sonarjs/super-linear-regex": {
-      "count": 1
-    }
-  },
-  "src/components/agent/AgentAssistantPanel.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 10
-    },
-    "sonarjs/no-ignored-exceptions": {
-      "count": 5
     }
   },
   "src/components/cards/DirectoryCard.vue": {
@@ -180,14 +161,6 @@
       "count": 4
     }
   },
-  "src/components/dialog/CategoryEditDialog.vue": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 16
-    },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
-    }
-  },
   "src/components/dialog/ContentToggleSettingsDialog.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -217,11 +190,6 @@
   "src/components/dialog/MediaInfoDialog.vue": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "src/components/dialog/NotificationChannelInfoDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
     }
   },
   "src/components/dialog/PasskeyDialog.vue": {
@@ -288,7 +256,7 @@
   },
   "src/components/dialog/SubscribeEditDialog.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 8
+      "count": 5
     }
   },
   "src/components/dialog/SubscribeHistoryDialog.vue": {
@@ -581,7 +549,7 @@
   },
   "src/composables/useSetupWizard.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 22
+      "count": 21
     },
     "sonarjs/no-duplicated-branches": {
       "count": 2
@@ -659,7 +627,7 @@
   },
   "src/pages/resource.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 6
+      "count": 3
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 3
@@ -695,7 +663,7 @@
   },
   "src/router/index.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 7
+      "count": 6
     }
   },
   "src/service-worker.ts": {
@@ -719,11 +687,6 @@
   },
   "src/stores/types.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/utils/agentAssistantBubble.ts": {
-    "@typescript-eslint/no-empty-object-type": {
       "count": 1
     }
   },
@@ -824,7 +787,7 @@
   },
   "src/views/reorganize/TransferHistoryView.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 11
+      "count": 9
     },
     "vue/no-v-text-v-html-on-component": {
       "count": 3
@@ -843,10 +806,7 @@
   },
   "src/views/setting/AccountSettingNotification.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 9
-    },
-    "sonarjs/no-all-duplicated-branches": {
-      "count": 1
+      "count": 8
     }
   },
   "src/views/setting/AccountSettingRule.vue": {
@@ -967,15 +927,7 @@
       "count": 1
     }
   },
-  "src/views/system/WordsView.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/views/user/UserProfileView.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }

@@ -3,7 +3,7 @@ import { closeSharedDialog } from '@/composables/useSharedDialog'
 import AccountSettingDirectory from '@/views/setting/AccountSettingDirectory.vue'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { defineComponent, h } from 'vue'
+import { defineComponent } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

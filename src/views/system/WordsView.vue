@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useTheme } from 'vuetify'
 import { configureAceEditorPadding } from '@/utils/aceEditor'
 import type { Ace } from 'ace-builds'
+import type { ApiResponse } from '@/api/types'
 
 const { t } = useI18n()
 const $toast = useToast()
@@ -252,7 +253,7 @@ function selectSection(section: WordSectionKey) {
 /** 查询一个多行词表配置，并同步其已保存快照。 */
 async function queryTextSection(section: TextSectionKey) {
   try {
-    const result: { [key: string]: any } = await api.get(textSectionSettings.value[section].endpoint)
+    const result = (await api.get(textSectionSettings.value[section].endpoint)) as ApiResponse<{ value?: string[] }>
     const value = Array.isArray(result?.data?.value) ? result.data.value.join('\n') : ''
     textSectionModels[section].value = value
     savedTextValues[section] = value
@@ -267,7 +268,7 @@ async function saveTextSection(section: TextSectionKey) {
 
   try {
     const value = textSectionModels[section].value
-    const result: { [key: string]: any } = await api.post(setting.endpoint, value.split('\n'))
+    const result = (await api.post(setting.endpoint, value.split('\n'))) as ApiResponse<unknown>
 
     if (result.success) {
       savedTextValues[section] = value
@@ -353,7 +354,7 @@ function sourceStatusText(source: WordsSyncSource) {
 /** 加载同步源列表。 */
 async function loadSyncSources() {
   try {
-    const result: { [key: string]: any } = await api.get('system/words/sync/status')
+    const result = (await api.get('system/words/sync/status')) as ApiResponse<{ sources?: WordsSyncSource[] }>
     syncSources.value = result?.data?.sources ?? []
   } catch (error) {
     console.log(error)
@@ -363,7 +364,7 @@ async function loadSyncSources() {
 /** 加载各词表的远程同步内容(单独展示,不进编辑框)。 */
 async function loadSyncedWords() {
   try {
-    const result: { [key: string]: any } = await api.get('system/words/synced')
+    const result = (await api.get('system/words/synced')) as ApiResponse<SyncedWordsMap>
     syncedWords.value = result?.data ?? {}
   } catch (error) {
     console.log(error)
@@ -383,7 +384,7 @@ async function saveSyncSources(showToast = true) {
       last_status: source.last_status ?? null,
       last_message: source.last_message ?? null,
     }))
-    const result: { [key: string]: any } = await api.post('system/setting/WordsSyncSources', payload)
+    const result = (await api.post('system/setting/WordsSyncSources', payload)) as ApiResponse<unknown>
     if (result.success) {
       if (showToast) $toast.success(t('setting.words.syncSettingsSaved'))
     } else {
@@ -420,9 +421,9 @@ async function runSync(source?: WordsSyncSource) {
   if (source) syncingUrl.value = source.url
   else syncingAll.value = true
   try {
-    const result: { [key: string]: any } = await api.post('system/words/sync', null, {
+    const result = (await api.post('system/words/sync', null, {
       params: source ? { source_url: source.url } : {},
-    })
+    })) as ApiResponse<unknown>
     if (result.success) {
       $toast.success(t('setting.words.syncSuccess', { message: result.message || '' }))
     } else {

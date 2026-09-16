@@ -42,7 +42,7 @@ jobs:
         run: |
           yarn --frozen-lockfile
           yarn build
-          echo "$frontend_version+$GITHUB_SHA" > dist/version.txt
+          echo "$frontend_version" > dist/version.txt
           zip -r dist.zip dist
           cp dist.zip "dist-${GITHUB_SHA}.zip"
 

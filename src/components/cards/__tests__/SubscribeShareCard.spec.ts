@@ -138,6 +138,19 @@ describe('SubscribeShareCard', () => {
     expect(mocks.routerPush).not.toHaveBeenCalled()
   })
 
+  it('toggles selection without opening a dialog in batch mode', async () => {
+    const media = createSubscribeShare()
+    const { container, emitted } = await renderWithProviders(SubscribeShareCard, {
+      props: { batchMode: true, media, selected: true },
+    })
+
+    await fireEvent.click(container.querySelector('.v-card') as HTMLElement)
+
+    expect(emitted('toggle-select')).toHaveLength(1)
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(container.querySelector('.share-card--selected')).not.toBeNull()
+  })
+
   it('opens the fork dialog with the exact media and replaces it with editing after fork success', async () => {
     const { container, media } = await renderCard()
     const card = container.querySelector<HTMLElement>('.v-card')

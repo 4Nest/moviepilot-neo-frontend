@@ -36,6 +36,8 @@ describe('前端测试 workflow', () => {
   it('按提交 SHA 发布不可变前端资产且不删除共享版本 Release', () => {
     const workflow = readFileSync(buildWorkflowPath, 'utf8')
 
+    expect(workflow).toContain('echo "$frontend_version" > dist/version.txt')
+    expect(workflow).not.toContain('echo "$frontend_version+$GITHUB_SHA" > dist/version.txt')
     expect(workflow).toContain('cp dist.zip "dist-${GITHUB_SHA}.zip"')
     expect(workflow).toContain('"dist-${GITHUB_SHA}.zip"')
     expect(workflow).toContain('gh release upload "$frontend_version"')

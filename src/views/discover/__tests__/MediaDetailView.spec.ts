@@ -606,6 +606,17 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
     expect(await screen.findByRole('button', { name: /已订阅/ })).toBeInTheDocument()
   })
 
+  it.each([
+    ['Douban', createSubscribeTv({ douban_id: 'db-8702', source: 'douban', tmdb_id: undefined }), createSubscribe({ doubanid: 'db-8702', season: 1, type: '电视剧' })],
+    ['Bangumi', createSubscribeTv({ bangumi_id: 8703, source: 'bangumi', tmdb_id: undefined }), createSubscribe({ bangumiid: 8703, season: 1, type: '电视剧' })],
+  ])('matches %s subscriptions without relying on a TMDB identity', async (_label, media, subscribe) => {
+    media.season_info = [createMediaSeason({ season_number: 1 })]
+
+    await renderDetail({ media, mediaId: getMediaSubscribeId(media), subscribes: [subscribe], type: '电视剧' })
+
+    expect(await screen.findByRole('button', { name: /已全部订阅/ })).toBeInTheDocument()
+  })
+
   it('does not report all default seasons subscribed when an extra season replaces a missing one', async () => {
     const media = createSubscribeTv({
       season_info: [createMediaSeason({ season_number: 1 }), createMediaSeason({ season_number: 2 })],

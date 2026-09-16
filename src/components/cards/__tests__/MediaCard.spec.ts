@@ -521,6 +521,47 @@ describe('MediaCard', () => {
 
   it.each([
     [
+      'Douban',
+      createMediaInfo({ douban_id: 'db-9554', source: 'douban', tmdb_id: undefined, type: '电视剧' }),
+      'douban:db-9554',
+      { doubanid: 'db-9554' },
+      { doubanid: 'other' },
+    ],
+    [
+      'Bangumi',
+      createMediaInfo({ bangumi_id: 9555, source: 'bangumi', tmdb_id: undefined, type: '电视剧' }),
+      'bangumi:9555',
+      { bangumiid: 9555 },
+      { bangumiid: 9999 },
+    ],
+  ])(
+    'matches legacy %s identity when collecting subscribed TV seasons',
+    async (_label, media, mediaId, identity, otherIdentity) => {
+      server.use(
+        querySubscribeByMediaHandler(mediaId, { id: 97, season: 2 }),
+        mediaExistsHandler({ data: { item: {} }, success: false }),
+        subscribeListHandler([
+          { id: 97, season: 2, type: '电视剧', ...identity },
+          { id: 98, season: 9, type: '电视剧', ...otherIdentity },
+        ]),
+        http.get(new URL('system/setting/public/DefaultTvSubscribeConfig', API_BASE_URL).href, () =>
+          HttpResponse.json({ data: { value: {} }, success: true }),
+        ),
+      )
+      const { container } = await renderCard(media)
+      getStatusObservers()[0]?.trigger()
+      await waitFor(() => expect(getActionButtons(container).at(-1)).toHaveClass('text-error'))
+
+      await fireEvent.mouseEnter(getHoverArea(container))
+      await fireEvent.click(getActionButtons(container).at(-1) as HTMLButtonElement)
+
+      await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+      const [, dialogProps] = mocks.openSharedDialog.mock.calls[0] as [unknown, Record<string, unknown>]
+      expect(dialogProps).toMatchObject({ subscribedSeasons: [2] })
+    },
+  )
+  it.each([
+    [
       'structured TMDB identity',
       createMediaInfo({
         media_id: 'series-9554',

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import draggable from 'vuedraggable'
 import api from '@/api'
-import type { CategoryConfig } from '@/api/types'
+import type { ApiResponse, CategoryConfig, CategoryRule } from '@/api/types'
 import { useToast } from 'vue-toastification'
 import { useI18n } from 'vue-i18n'
 import { useDisplay } from 'vuetify'
@@ -43,10 +43,18 @@ const generateId = () => {
   return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now()
 }
 
+interface EditableCategoryRule {
+  genre_ids: string[]
+  original_language: string[]
+  production_countries?: string[]
+  origin_country?: string[]
+  release_year?: string
+}
+
 interface CategoryItem {
   id: string
   name: string
-  rule: any
+  rule: EditableCategoryRule
 }
 
 const movieList = ref<CategoryItem[]>([])
@@ -159,8 +167,8 @@ const countryOptions = [
 const fetchConfig = async (): Promise<boolean> => {
   loading.value = true
   try {
-    const res: any = await api.get('media/category/config')
-    if (res && res.data) {
+    const res = (await api.get('media/category/config')) as ApiResponse<CategoryConfig>
+    if (res.data) {
       parseConfig(res.data)
       return true
     }
@@ -176,91 +184,34 @@ const fetchConfig = async (): Promise<boolean> => {
 }
 
 const parseConfig = (data: CategoryConfig) => {
-  // 将对象 { "Name": { ... } } 转换为数组 [ { id: uuid, name: "Name", rule: { ... } } ]
-  movieList.value = []
-  if (data.movie) {
-    for (const [key, value] of Object.entries(data.movie)) {
-      // 为了UI一致性处理 genre_ids 为数组或字符串，但 API 发送的是字符串
-      const rule = { ...value }
-      if (rule.genre_ids && typeof rule.genre_ids === 'string') {
-        // UI 多选预期为数组，检查输入。实际上 VAutocomplete 多选预期数组。我们需要将字符串分割为数组。
-        // @ts-ignore
-        rule.genre_ids = rule.genre_ids.split(',')
-      } else {
-        // @ts-ignore
-        rule.genre_ids = []
-      }
+  movieList.value = Object.entries(data.movie ?? {}).map(([name, rule]) => ({
+    id: generateId(),
+    name,
+    rule: {
+      genre_ids: rule.genre_ids?.split(',') ?? [],
+      original_language: rule.original_language?.split(',') ?? [],
+      production_countries: rule.production_countries?.split(',') ?? [],
+      release_year: rule.release_year,
+    },
+  }))
 
-      // 处理语种
-      if (rule.original_language && typeof rule.original_language === 'string') {
-        // @ts-ignore
-        rule.original_language = rule.original_language.split(',')
-      } else {
-        // @ts-ignore
-        rule.original_language = []
-      }
-
-      // 处理制片国家/地区
-      if (rule.production_countries && typeof rule.production_countries === 'string') {
-        // @ts-ignore
-        rule.production_countries = rule.production_countries.split(',')
-      } else {
-        // @ts-ignore
-        rule.production_countries = []
-      }
-
-      movieList.value.push({
-        id: generateId(),
-        name: key,
-        rule: rule as any,
-      })
-    }
-  }
-
-  tvList.value = []
-  if (data.tv) {
-    for (const [key, value] of Object.entries(data.tv)) {
-      const rule = { ...value }
-      if (rule.genre_ids && typeof rule.genre_ids === 'string') {
-        // @ts-ignore
-        rule.genre_ids = rule.genre_ids.split(',')
-      } else {
-        // @ts-ignore
-        rule.genre_ids = []
-      }
-
-      // 处理语种
-      if (rule.original_language && typeof rule.original_language === 'string') {
-        // @ts-ignore
-        rule.original_language = rule.original_language.split(',')
-      } else {
-        // @ts-ignore
-        rule.original_language = []
-      }
-
-      // 处理发行国家/地区
-      if (rule.origin_country && typeof rule.origin_country === 'string') {
-        // @ts-ignore
-        rule.origin_country = rule.origin_country.split(',')
-      } else {
-        // @ts-ignore
-        rule.origin_country = []
-      }
-
-      tvList.value.push({
-        id: generateId(),
-        name: key,
-        rule: rule as any,
-      })
-    }
-  }
+  tvList.value = Object.entries(data.tv ?? {}).map(([name, rule]) => ({
+    id: generateId(),
+    name,
+    rule: {
+      genre_ids: rule.genre_ids?.split(',') ?? [],
+      original_language: rule.original_language?.split(',') ?? [],
+      origin_country: rule.origin_country?.split(',') ?? [],
+      release_year: rule.release_year,
+    },
+  }))
 }
 
 const addMovieItem = () => {
   movieList.value.push({
     id: generateId(),
     name: '新分类',
-    rule: { genre_ids: [] as any },
+    rule: { genre_ids: [], original_language: [], production_countries: [] },
   })
 }
 
@@ -272,7 +223,7 @@ const addTvItem = () => {
   tvList.value.push({
     id: generateId(),
     name: '新分类',
-    rule: { genre_ids: [] as any },
+    rule: { genre_ids: [], original_language: [], origin_country: [] },
   })
 }
 
@@ -290,71 +241,30 @@ const saveConfig = async () => {
     }
 
     movieList.value.forEach(item => {
-      if (item.name) {
-        const rule = { ...item.rule }
-        // 将 genre_ids 数组转换回字符串
-        if (Array.isArray(rule.genre_ids) && rule.genre_ids.length > 0) {
-          rule.genre_ids = rule.genre_ids.join(',')
-        } else {
-          // @ts-ignore
-          rule.genre_ids = null
-        }
-
-        // 将 original_language 数组转换回字符串
-        if (Array.isArray(rule.original_language) && rule.original_language.length > 0) {
-          rule.original_language = rule.original_language.join(',')
-        } else {
-          rule.original_language = undefined
-        }
-
-        // 将 production_countries 数组转换回字符串
-        if (Array.isArray(rule.production_countries) && rule.production_countries.length > 0) {
-          rule.production_countries = rule.production_countries.join(',')
-        } else {
-          rule.production_countries = undefined
-        }
-
-        // 清理空字符串
-        if (!rule.release_year) rule.release_year = undefined
-
-        // @ts-ignore
-        payload.movie[item.name] = rule
+      if (!item.name) return
+      const rule: CategoryRule = {
+        genre_ids: item.rule.genre_ids.length ? item.rule.genre_ids.join(',') : undefined,
+        original_language: item.rule.original_language.length ? item.rule.original_language.join(',') : undefined,
+        production_countries: item.rule.production_countries?.length
+          ? item.rule.production_countries.join(',')
+          : undefined,
+        release_year: item.rule.release_year || undefined,
       }
+      payload.movie![item.name] = rule
     })
 
     tvList.value.forEach(item => {
-      if (item.name) {
-        const rule = { ...item.rule }
-        if (Array.isArray(rule.genre_ids) && rule.genre_ids.length > 0) {
-          rule.genre_ids = rule.genre_ids.join(',')
-        } else {
-          // @ts-ignore
-          rule.genre_ids = null
-        }
-
-        // 将 original_language 数组转换回字符串
-        if (Array.isArray(rule.original_language) && rule.original_language.length > 0) {
-          rule.original_language = rule.original_language.join(',')
-        } else {
-          rule.original_language = undefined
-        }
-
-        // 将 origin_country 数组转换回字符串
-        if (Array.isArray(rule.origin_country) && rule.origin_country.length > 0) {
-          rule.origin_country = rule.origin_country.join(',')
-        } else {
-          rule.origin_country = undefined
-        }
-
-        // 清理空字符串
-        if (!rule.release_year) rule.release_year = undefined
-
-        // @ts-ignore
-        payload.tv[item.name] = rule
+      if (!item.name) return
+      const rule: CategoryRule = {
+        genre_ids: item.rule.genre_ids.length ? item.rule.genre_ids.join(',') : undefined,
+        original_language: item.rule.original_language.length ? item.rule.original_language.join(',') : undefined,
+        origin_country: item.rule.origin_country?.length ? item.rule.origin_country.join(',') : undefined,
+        release_year: item.rule.release_year || undefined,
       }
+      payload.tv![item.name] = rule
     })
 
-    const res: any = await api.post('media/category/config', payload)
+    const res = (await api.post('media/category/config', payload)) as ApiResponse<unknown>
 
     if (res && res.success) {
       toast.success(t('setting.category.saveSuccess'))
@@ -378,7 +288,7 @@ const fetchRawConfig = async () => {
   rawLoading.value = true
   rawError.value = ''
   try {
-    const res: any = await api.get('media/category/config/raw')
+    const res = (await api.get('media/category/config/raw')) as ApiResponse<{ content?: string }>
     if (res && res.success) {
       rawContent.value = res.data?.content ?? ''
       rawLoaded.value = true
@@ -412,7 +322,7 @@ const onSave = () => {
 const saveRawConfig = async () => {
   saving.value = true
   try {
-    const res: any = await api.put('media/category/config/raw', { content: rawContent.value })
+    const res = (await api.put('media/category/config/raw', { content: rawContent.value })) as ApiResponse<unknown>
     if (res && res.success) {
       toast.success(t('setting.category.rawSaveSuccess'))
       rawDirty.value = false
@@ -442,7 +352,7 @@ const restoreTemplate = async () => {
   if (!isConfirmed) return
   restoring.value = true
   try {
-    const res: any = await api.get('media/category/config/raw/template')
+    const res = (await api.get('media/category/config/raw/template')) as ApiResponse<{ content?: string }>
     if (res && res.success) {
       rawContent.value = res.data?.content ?? ''
       rawLoaded.value = true

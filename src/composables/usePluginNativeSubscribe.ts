@@ -6,7 +6,7 @@ import {
   type SeasonSubscribeModes,
   useMediaSubscribe,
 } from '@/composables/useMediaSubscribe'
-import { computed, ref, shallowRef } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 

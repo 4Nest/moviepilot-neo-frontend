@@ -134,7 +134,7 @@ function syncFormToActiveVersion() {
 }
 
 // 新增版本：基于当前表单设置创建完整设置快照，不复制任何运行事实
-function addVersion() {
+function appendVersion() {
   syncFormToActiveVersion()
   const id = makeVersionId()
   versionRules.value.push({
@@ -360,7 +360,7 @@ async function getSubscribeInfo() {
     subscribeForm.value = result
     ensureVersionRules(result)
     if (props.addVersion) {
-      addVersion()
+      appendVersion()
     } else if (props.versionId && versionRules.value.some(rule => rule.id === props.versionId)) {
       activeVersionId.value = props.versionId
     }

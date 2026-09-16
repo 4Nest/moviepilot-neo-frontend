@@ -2,7 +2,7 @@
 import { useToast } from 'vue-toastification'
 import { VForm } from 'vuetify/lib/components/index.mjs'
 import api from '@/api'
-import type { User, PassKey } from '@/api/types'
+import type { ApiResponse, User, PassKey } from '@/api/types'
 import avatar1 from '@images/avatars/avatar-1.png'
 import { useDisplay } from 'vuetify'
 import { useUserStore } from '@/stores'
@@ -225,7 +225,12 @@ async function doSaveAccountInfo() {
   isSaving.value = true
   try {
     // 昵称等扩展信息保存在 settings 中，后端可以直接处理JSON对象
-    const payload: { [key: string]: any } = {
+    const payload: {
+      avatar: string
+      email: string
+      password?: string
+      settings: User['settings']
+    } = {
       email: accountInfo.value.email,
       avatar: currentAvatar.value,
       settings: { ...accountInfo.value.settings, nickname: accountInfo.value.nickname ?? '' },
@@ -234,7 +239,7 @@ async function doSaveAccountInfo() {
       payload.password = newPassword.value
     }
 
-    const result: { [key: string]: any } = await api.put('user/current', payload)
+    const result = (await api.put('user/current', payload)) as ApiResponse<unknown>
 
     if (result.success) {
       $toast.success(t('profile.saveSuccess'))
@@ -294,7 +299,7 @@ async function confirmVerifyPassword(password = verifyPassword.value) {
 // 获取PassKey列表
 async function fetchPassKeyList() {
   try {
-    const result: { [key: string]: any } = await api.get('mfa/passkey/list')
+    const result = (await api.get('mfa/passkey/list')) as ApiResponse<PassKey[]>
     if (result.success) {
       passkeyList.value = result.data || []
     }

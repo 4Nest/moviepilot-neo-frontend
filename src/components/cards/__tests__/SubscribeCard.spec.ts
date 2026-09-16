@@ -112,7 +112,7 @@ function getDialogCall(index = 0) {
   const [, props, events, options] = mocks.openSharedDialog.mock.calls[index] as [
     unknown,
     Record<string, unknown>,
-    Record<string, (...args: any[]) => void>,
+    Record<string, (...args: unknown[]) => void>,
     Record<string, unknown>,
   ]
   return { events, options, props }
