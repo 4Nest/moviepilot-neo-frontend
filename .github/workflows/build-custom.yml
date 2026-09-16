@@ -40,29 +40,25 @@ jobs:
 
       - name: Build frontend
         run: |
-          yarn
+          yarn --frozen-lockfile
           yarn build
-          echo "$frontend_version" > dist/version.txt
+          echo "$frontend_version+$GITHUB_SHA" > dist/version.txt
           zip -r dist.zip dist
+          cp dist.zip "dist-${GITHUB_SHA}.zip"
 
-      # 与官方一致：重建版本 tag 并发布 dist.zip；tag 指向 custom 构建提交
-      - name: Delete Release
-        uses: dev-drprasad/delete-tag-and-release@v1.1
-        continue-on-error: true
-        with:
-          tag_name: ${{ env.frontend_version }}
-          delete_release: true
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.frontend_version }}
-          name: ${{ env.frontend_version }}
-          draft: false
-          prerelease: false
-          make_latest: true
-          files: |
-            dist.zip
+      # dist-<commit>.zip 是镜像构建使用的不可变资产；dist.zip 仅保留给人工下载与兼容旧流程。
+      # 不删除版本 Release，避免后端构建在删除与重建之间下载到旧资产或 404 页面。
+      - name: Publish immutable frontend assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$frontend_version" >/dev/null 2>&1; then
+            gh release create "$frontend_version" \
+              --target "$GITHUB_SHA" \
+              --title "$frontend_version" \
+              --latest
+          fi
+          gh release upload "$frontend_version" \
+            dist.zip \
+            "dist-${GITHUB_SHA}.zip" \
+            --clobber

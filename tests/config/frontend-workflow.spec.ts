@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const workflowPath = resolve(process.cwd(), '.github/workflows/test.yml')
+const buildWorkflowPath = resolve(process.cwd(), '.github/workflows/build-custom.yml')
 const testingGuidePath = resolve(process.cwd(), 'docs/testing.md')
 const codeQualityGuidePath = resolve(process.cwd(), 'docs/code-quality.md')
 
@@ -30,6 +31,16 @@ describe('前端测试 workflow', () => {
     expect(qualityJob).toContain('run: yarn typecheck')
     expect(qualityJob).toContain('run: yarn test:coverage')
     expect(workflow).not.toContain('\n  unit-tests:\n')
+  })
+
+  it('按提交 SHA 发布不可变前端资产且不删除共享版本 Release', () => {
+    const workflow = readFileSync(buildWorkflowPath, 'utf8')
+
+    expect(workflow).toContain('cp dist.zip "dist-${GITHUB_SHA}.zip"')
+    expect(workflow).toContain('"dist-${GITHUB_SHA}.zip"')
+    expect(workflow).toContain('gh release upload "$frontend_version"')
+    expect(workflow).toContain('--clobber')
+    expect(workflow).not.toContain('dev-drprasad/delete-tag-and-release')
   })
 
   it('文档使用当前测试 job 名称和触发范围', () => {
