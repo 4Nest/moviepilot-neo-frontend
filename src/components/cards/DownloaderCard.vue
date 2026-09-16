@@ -144,6 +144,13 @@ onUnmounted(() => {
               color="success"
               class="me-1"
             />
+            <VBadge
+              v-if="props.downloader.bt_default && props.downloader.enabled"
+              dot
+              inline
+              color="info"
+              class="me-1"
+            />
             <span class="app-card-summary__title text-h6">{{ downloader.name }}</span>
           </div>
           <div v-if="downloaderDict[downloader.type] && props.downloader.enabled" class="app-card-summary__meta text-sm">

@@ -51,6 +51,7 @@ const downloaderInfo = ref<DownloaderConf>({
   name: '',
   type: '',
   default: false,
+  bt_default: false,
   enabled: false,
   config: {},
   path_mapping: [],
@@ -161,6 +162,14 @@ async function saveDownloaderInfo() {
       }
     })
   }
+  if (downloaderInfo.value.bt_default) {
+    props.downloaders.forEach(item => {
+      if (item.bt_default && item !== props.downloader) {
+        item.bt_default = false
+        $toast.info(t('downloader.btDefaultChanged'))
+      }
+    })
+  }
   downloaderInfoDialog.value = false
   emit('change', downloaderInfo.value, props.downloader.name)
   emit('done')
@@ -206,13 +215,22 @@ onMounted(() => {
         <VCardText>
           <VForm ref="downloaderForm">
             <VRow>
-              <VCol cols="12" md="6">
+              <VCol cols="12" md="4">
                 <VSwitch v-model="downloaderInfo.enabled" :label="t('downloader.enabled')" />
               </VCol>
-              <VCol cols="12" md="6">
+              <VCol cols="12" md="4">
                 <VSwitch
                   v-model="downloaderInfo.default"
                   :label="t('downloader.default')"
+                  :disabled="!downloaderInfo.enabled"
+                />
+              </VCol>
+              <VCol cols="12" md="4">
+                <VSwitch
+                  v-model="downloaderInfo.bt_default"
+                  :label="t('downloader.btDefault')"
+                  :hint="t('downloader.btDefaultHint')"
+                  persistent-hint
                   :disabled="!downloaderInfo.enabled"
                 />
               </VCol>

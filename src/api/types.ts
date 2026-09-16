@@ -552,9 +552,9 @@ export interface TmdbEpisode {
   // 评分
   vote_average?: number
   // 演职人员
-  crew: Object[]
+  crew: object[]
   // 嘉宾
-  guest_stars: Object[]
+  guest_stars: object[]
 }
 
 // TMDB人物信息
@@ -1450,6 +1450,8 @@ export interface DownloaderConf {
   type: string
   // 是否默认
   default: boolean
+  // 是否 BT(公开)站点默认
+  bt_default?: boolean
   // 配置
   config: { [key: string]: any }
   // 是否启用
