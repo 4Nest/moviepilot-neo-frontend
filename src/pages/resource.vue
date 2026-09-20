@@ -526,6 +526,8 @@ function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
         ? `search/media/${encodeURIComponent(params.keyword)}/stream`
         : 'search/title/stream',
   )
+  // NEO 前端固定简体中文；后端仍依赖 locale 选择搜索结果语言。
+  setSearchParam(url.searchParams, 'locale', 'zh-CN')
 
   if (params.result_type === 'subtitle' && isMediaSearch) {
     setSearchParam(url.searchParams, 'mtype', params.type)
