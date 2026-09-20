@@ -7,7 +7,7 @@ import AniListView from '@/views/discover/AniListView.vue'
 import ExtraSourceView from '@/views/discover/ExtraSourceView.vue'
 import { DiscoverSource } from '@/api/types'
 import api from '@/api'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 

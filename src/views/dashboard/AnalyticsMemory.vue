@@ -4,7 +4,7 @@ import { hexToRgb } from '@layouts/utils'
 import api from '@/api'
 import type { DashboardMemoryInfo } from '@/api/types'
 import { formatDashboardFileSize, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 

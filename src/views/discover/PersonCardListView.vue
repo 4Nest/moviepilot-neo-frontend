@@ -4,7 +4,7 @@ import type { Person } from '@/api/types'
 import PersonCard from '@/components/cards/PersonCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import NoDataFound from '@/components/states/NoDataFound.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 

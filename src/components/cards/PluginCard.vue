@@ -7,7 +7,7 @@ import { getLogoUrl } from '@/utils/imageUtils'
 import { usePluginCardAccent } from '@/composables/usePluginCardAccent'
 import { formatDownloadCount } from '@/@core/utils/formatters'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
 

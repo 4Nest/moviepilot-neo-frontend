@@ -20,7 +20,7 @@ import {
 import { useBackground } from '@/composables/useBackground'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 import ProgressDialog from './ProgressDialog.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { useGlobalSettingsStore } from '@/stores'
 

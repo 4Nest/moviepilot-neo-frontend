@@ -2,8 +2,9 @@ import type { Context } from '@/api/types'
 import { useTorrentFilter } from '@/composables/useTorrentFilter'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('vue-i18n', () => ({
+vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
+  useChineseText: () => ({ t: (key: string) => key }),
 }))
 
 interface TorrentOverrides {

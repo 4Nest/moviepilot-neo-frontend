@@ -1,9 +1,9 @@
 import type { PluginSidebarNavItem } from '@/api/types'
 import { filterPluginSidebarNavEntries, navMenuFromPluginSidebarItem } from '@/utils/pluginSidebarNav'
-import type { Composer } from 'vue-i18n'
+import type { TextTranslator } from '@/composables/useChineseText'
 import { describe, expect, it } from 'vitest'
 
-const t = ((key: string) => key) as Composer['t']
+const t = ((key: string) => key) as TextTranslator
 
 function createNavItem(overrides: Partial<PluginSidebarNavItem> = {}): PluginSidebarNavItem {
   return {

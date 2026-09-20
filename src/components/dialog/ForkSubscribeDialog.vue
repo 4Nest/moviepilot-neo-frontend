@@ -5,7 +5,7 @@ import { SubscribeShare } from '@/api/types'
 
 import { useToast } from 'vue-toastification'
 import { VBtn } from 'vuetify/lib/components/index.mjs'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 

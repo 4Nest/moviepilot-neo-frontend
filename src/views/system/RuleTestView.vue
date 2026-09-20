@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { requiredValidator } from '@/@validators'
 import api from '@/api'
 import type { ApiResponse, FilterRuleGroup, RuleTestData } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 interface PipelineStep {
   icon: string

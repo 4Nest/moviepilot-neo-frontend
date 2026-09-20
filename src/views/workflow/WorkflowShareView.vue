@@ -4,7 +4,7 @@ import type { WorkflowShare } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import WorkflowShareCard from '@/components/cards/WorkflowShareCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
 const { t } = useI18n()

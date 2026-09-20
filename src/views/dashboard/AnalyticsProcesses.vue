@@ -2,7 +2,7 @@
 import { formatSeconds } from '@/@core/utils/formatters'
 import api from '@/api'
 import type { Process } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 
 // 国际化

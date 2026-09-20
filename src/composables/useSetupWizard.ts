@@ -1,9 +1,10 @@
 import { ref, computed } from 'vue'
 import { useToast } from 'vue-toastification'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import api from '@/api'
+import { useChineseText } from '@/composables/useChineseText'
+import api, { getApiErrorMessage } from '@/api'
 import { copyToClipboard } from '@/@core/utils/navigator'
+import type { NotificationChannelType, NotificationConf, NotificationScene } from '@/api/types'
 
 export interface WizardData {
   basic: {
@@ -18,7 +19,6 @@ export interface WizardData {
     githubToken: string
   }
   siteAuth: {
-    auxiliaryAuthEnable: boolean
     site: string
     params: Record<string, string | number>
   }
@@ -41,11 +41,12 @@ export interface WizardData {
     switchs: any[]
   }
   notification: {
-    type: string
+    id?: string
+    type: NotificationChannelType | ''
     name: string
     enabled: boolean
-    config: any
-    switchs: any[]
+    config: Record<string, string | undefined>
+    switchs: NotificationScene[]
   }
   preferences: {
     quality: string
@@ -98,7 +99,6 @@ export interface ValidationErrorState {
   }
 }
 
-
 // 全局状态，所有组件共享
 const currentStep = ref(1)
 const totalSteps = 7
@@ -139,7 +139,6 @@ const wizardData = ref<WizardData>({
     githubToken: '',
   },
   siteAuth: {
-    auxiliaryAuthEnable: false,
     site: '',
     params: {},
   },
@@ -210,7 +209,7 @@ const validationErrors = ref<ValidationErrorState>({
 })
 
 export function useSetupWizard() {
-  const { t } = useI18n()
+  const { t } = useChineseText()
   const router = useRouter()
   const $toast = useToast()
 
@@ -231,11 +230,7 @@ export function useSetupWizard() {
       'trimemedia': 'TrimeMediaModule',
       'ugreen': 'UgreenModule',
     },
-    // 通知映射
-    notification: {
-      'telegram': 'TelegramModule',
-      'wechat': 'WechatModule',
-    },
+    // 通知使用未保存配置直接调用真实发送接口，不依赖已加载模块。
   }
 
   // 步骤标题
@@ -316,7 +311,7 @@ export function useSetupWizard() {
   }
 
   // 选择通知
-  function selectNotification(type: string) {
+  function selectNotification(type: NotificationChannelType) {
     if (wizardData.value.notification.type === type) {
       // 重复点击已选中的类型，取消选择
       wizardData.value.notification.type = ''
@@ -578,7 +573,6 @@ export function useSetupWizard() {
     }
   }
 
-
   // 验证当前步骤的必输项
   function validateCurrentStep(): { isValid: boolean; errors: string[] } {
     const errors: string[] = []
@@ -832,41 +826,37 @@ export function useSetupWizard() {
     }
   }
 
-  // 消息通知连通性测试
+  // 使用未保存配置发送真实测试通知
   async function testNotificationConnectivity() {
     try {
       connectivityTest.value.testProgress = 30
       connectivityTest.value.testMessage = t('setupWizard.testingNotification')
 
-      // 等待设置生效
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      connectivityTest.value.testProgress = 60
-      connectivityTest.value.testMessage = t('setupWizard.checkingNotification')
-
-      // 获取正确的模块ID
       const notificationType = wizardData.value.notification.type
       if (!notificationType) {
         return { success: false, message: t('setupWizard.notificationNotSelected') }
       }
 
-      const moduleid =
-        typeToModuleMapping.notification[notificationType as keyof typeof typeToModuleMapping.notification]
-      if (!moduleid) {
-        return { success: false, message: t('setupWizard.unsupportedNotificationType', { type: notificationType }) }
+      connectivityTest.value.testProgress = 60
+      connectivityTest.value.testMessage = t('setupWizard.checkingNotification')
+      const notification: NotificationConf = {
+        name: wizardData.value.notification.name,
+        type: notificationType,
+        enabled: wizardData.value.notification.enabled,
+        config: { ...wizardData.value.notification.config },
+        switchs: [...wizardData.value.notification.switchs],
       }
-
-      const result: { [key: string]: any } = await api.get(`system/moduletest/${moduleid}`)
+      const result: { success: boolean; message?: string } = await api.post('system/notification/test', notification)
       connectivityTest.value.testProgress = 100
-
-      if (result.success) {
-        return { success: true, message: null }
-      } else {
-        return { success: false, message: result.message || t('setupWizard.notificationTestFailed') }
-      }
+      return result.success
+        ? { success: true, message: null }
+        : { success: false, message: result.message || t('setupWizard.notificationTestFailed') }
     } catch (error) {
       console.error('Notification test failed:', error)
-      return { success: false, message: (error as Error).message || t('setupWizard.notificationTestFailed') }
+      return {
+        success: false,
+        message: getApiErrorMessage(error) || t('setupWizard.notificationTestFailed'),
+      }
     }
   }
 
@@ -1056,14 +1046,6 @@ export function useSetupWizard() {
   // 保存用户站点认证设置
   async function saveSiteAuthSettings() {
     try {
-      const envResponse: { [key: string]: any } = await api.post('system/env', {
-        AUXILIARY_AUTH_ENABLE: wizardData.value.siteAuth.auxiliaryAuthEnable,
-      })
-
-      if (!envResponse.success) {
-        return false
-      }
-
       if (!wizardData.value.siteAuth.site) {
         return true
       }
@@ -1154,6 +1136,7 @@ export function useSetupWizard() {
         const switchs = [...(wizardData.value.notification.switchs || [])]
 
         const notification = {
+          id: wizardData.value.notification.id,
           name: wizardData.value.notification.name,
           type: wizardData.value.notification.type,
           enabled: wizardData.value.notification.enabled,
@@ -1242,7 +1225,6 @@ export function useSetupWizard() {
         if (result.data.GITHUB_TOKEN) {
           wizardData.value.basic.githubToken = result.data.GITHUB_TOKEN
         }
-        wizardData.value.siteAuth.auxiliaryAuthEnable = Boolean(result.data.AUXILIARY_AUTH_ENABLE)
         if (result.data.SUPERUSER) {
           wizardData.value.basic.username = result.data.SUPERUSER
         }
@@ -1332,6 +1314,7 @@ export function useSetupWizard() {
       const result: { [key: string]: any } = await api.get('system/setting/Notifications')
       if (result.success && result.data?.value && result.data.value.length > 0) {
         const notification = result.data.value[0]
+        wizardData.value.notification.id = notification.id
         wizardData.value.notification.type = notification.type
         wizardData.value.notification.name = notification.name
         wizardData.value.notification.enabled = notification.enabled

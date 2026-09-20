@@ -5,7 +5,7 @@ import api from '@/api'
 import type { Subscribe, SubscribeShare } from '@/api/types'
 import { useDisplay } from 'vuetify'
 import { formatSeason } from '@/@core/utils/formatters'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 多语言支持
 const { t } = useI18n()

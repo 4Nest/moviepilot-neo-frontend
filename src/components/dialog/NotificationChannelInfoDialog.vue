@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { NotificationConf } from '@/api/types'
+import api, { getApiErrorMessage } from '@/api'
+import type { ApiResponse, NotificationConf } from '@/api/types'
 import { useToast } from 'vue-toastification'
 import { cloneDeep } from 'lodash-es'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 显示器宽度
@@ -33,6 +34,27 @@ const emit = defineEmits(['update:modelValue', 'close', 'change', 'done'])
 
 // 提示框
 const $toast = useToast()
+const testing = ref(false)
+
+/** 提取后端校验或发送失败原因。 */
+function getErrorMessage(error: unknown): string {
+  return getApiErrorMessage(error) || t('setting.notification.testFailed')
+}
+
+/** 使用弹窗内尚未保存的配置发送真实测试消息。 */
+async function testNotification() {
+  ensureWechatConfigDefaults(notificationInfo.value)
+  testing.value = true
+  try {
+    const result = (await api.post('system/notification/test', notificationInfo.value)) as ApiResponse
+    if (result.success) $toast.success(result.message || t('setting.notification.testSuccess'))
+    else $toast.error(result.message || t('setting.notification.testFailed'))
+  } catch (error) {
+    $toast.error(getErrorMessage(error))
+  } finally {
+    testing.value = false
+  }
+}
 
 // 通知详情弹窗
 const notificationInfoDialog = computed({
@@ -46,7 +68,7 @@ const notificationInfoDialog = computed({
 // 通知详情
 const notificationInfo = ref<NotificationConf>({
   name: '',
-  type: '',
+  type: 'telegram',
   enabled: false,
   config: {},
 })
@@ -63,7 +85,6 @@ const notificationTypes = [
   { value: '其它', title: t('notificationSwitch.other') },
 ]
 
-
 /** 补齐企业微信通知的默认配置。 */
 function ensureWechatConfigDefaults(notification: NotificationConf) {
   if (notification.type !== 'wechat') {
@@ -79,7 +100,6 @@ function ensureWechatConfigDefaults(notification: NotificationConf) {
     notification.config.WECHAT_BOT_WS_URL = 'wss://openws.work.weixin.qq.com'
   }
 }
-
 
 const isWechatBotMode = computed({
   get: () => notificationInfo.value.config?.WECHAT_MODE === 'bot',
@@ -119,8 +139,6 @@ function saveNotificationInfo() {
   emit('done')
 }
 
-
-
 onMounted(() => {
   openNotificationInfoDialog()
 })
@@ -134,246 +152,254 @@ onMounted(() => {
     max-width="40rem"
     :fullscreen="!display.mdAndUp.value"
   >
-      <VCard>
-        <VCardItem class="py-2">
-          <template #prepend>
-            <VIcon icon="mdi-cog" class="me-2" />
-          </template>
-          <VCardTitle>{{ t('common.config') }}</VCardTitle>
-          <VCardSubtitle>{{ props.notification.name }}</VCardSubtitle>
-        </VCardItem>
-        <VDialogCloseBtn v-model="notificationInfoDialog" />
-        <VDivider />
-        <VCardText>
-          <VForm>
-            <VRow>
-              <VCol cols="12" md="6">
-                <VSwitch v-model="notificationInfo.enabled" :label="t('notification.enabled')" />
-              </VCol>
-              <VCol cols="12">
-                <VAutocomplete
-                  v-model="notificationInfo.switchs"
-                  :items="notificationTypes"
-                  :label="t('notification.type')"
-                  :hint="t('notification.typeHint')"
-                  multiple
-                  clearable
-                  chips
-                  persistent-hint
-                  prepend-inner-icon="mdi-bell-outline"
-                />
-              </VCol>
-            </VRow>
-            <VRow v-if="notificationInfo.type == 'wechat'">
-              <VCol cols="12" md="6">
-                <VTextField
-                  v-model="notificationInfo.name"
-                  :label="t('notification.name')"
-                  :placeholder="t('notification.name')"
-                  :hint="t('notification.nameHint')"
-                  persistent-hint
-                  prepend-inner-icon="mdi-label"
-                />
-              </VCol>
-              <VCol cols="12" md="6">
-                <VSwitch
-                  v-model="isWechatBotMode"
-                  :label="t('notification.wechat.useBotMode')"
-                  :hint="t('notification.wechat.useBotModeHint')"
-                  persistent-hint
-                  color="primary"
-                />
-              </VCol>
-              <template v-if="isWechatBotMode">
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_BOT_ID"
-                    :label="t('notification.wechat.botId')"
-                    :hint="t('notification.wechat.botIdHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-robot"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_BOT_SECRET"
-                    :label="t('notification.wechat.botSecret')"
-                    :hint="t('notification.wechat.botSecretHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-key"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_BOT_CHAT_ID"
-                    :label="t('notification.wechat.botChatId')"
-                    :placeholder="t('notification.wechat.botChatIdPlaceholder')"
-                    :hint="t('notification.wechat.botChatIdHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-chat-processing"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_BOT_WS_URL"
-                    :label="t('notification.wechat.botWsUrl')"
-                    :hint="t('notification.wechat.botWsUrlHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-lan-connect"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_ADMINS"
-                    :label="t('notification.wechat.admins')"
-                    :placeholder="t('notification.wechat.adminsPlaceholder')"
-                    :hint="t('notification.wechat.adminsHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-account-supervisor"
-                  />
-                </VCol>
-              </template>
-              <template v-else>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_CORPID"
-                    :label="t('notification.wechat.corpId')"
-                    :hint="t('notification.wechat.corpIdHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-domain"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_APP_ID"
-                    :label="t('notification.wechat.appId')"
-                    :hint="t('notification.wechat.appIdHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-application"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_APP_SECRET"
-                    :label="t('notification.wechat.appSecret')"
-                    :hint="t('notification.wechat.appSecretHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-key"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_PROXY"
-                    :label="t('notification.wechat.proxy')"
-                    :hint="t('notification.wechat.proxyHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-server-network"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_TOKEN"
-                    :label="t('notification.wechat.token')"
-                    :hint="t('notification.wechat.tokenHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-key-variant"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_ENCODING_AESKEY"
-                    :label="t('notification.wechat.encodingAesKey')"
-                    :hint="t('notification.wechat.encodingAesKeyHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-lock"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="notificationInfo.config.WECHAT_ADMINS"
-                    :label="t('notification.wechat.admins')"
-                    :placeholder="t('notification.wechat.adminsPlaceholder')"
-                    :hint="t('notification.wechat.adminsHint')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-account-supervisor"
-                  />
-                </VCol>
-              </template>
-            </VRow>
-            <VRow v-else-if="notificationInfo.type == 'telegram'">
+    <VCard>
+      <VCardItem class="py-2">
+        <template #prepend>
+          <VIcon icon="mdi-cog" class="me-2" />
+        </template>
+        <VCardTitle>{{ t('common.config') }}</VCardTitle>
+        <VCardSubtitle>{{ props.notification.name }}</VCardSubtitle>
+      </VCardItem>
+      <VDialogCloseBtn v-model="notificationInfoDialog" />
+      <VDivider />
+      <VCardText>
+        <VForm>
+          <VRow>
+            <VCol cols="12" md="6">
+              <VSwitch v-model="notificationInfo.enabled" :label="t('notification.enabled')" />
+            </VCol>
+            <VCol cols="12">
+              <VAutocomplete
+                v-model="notificationInfo.switchs"
+                :items="notificationTypes"
+                :label="t('notification.type')"
+                :hint="t('notification.typeHint')"
+                multiple
+                clearable
+                chips
+                persistent-hint
+                prepend-inner-icon="mdi-bell-outline"
+              />
+            </VCol>
+          </VRow>
+          <VRow v-if="notificationInfo.type == 'wechat'">
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.name"
+                :label="t('notification.name')"
+                :placeholder="t('notification.name')"
+                :hint="t('notification.nameHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="isWechatBotMode"
+                :label="t('notification.wechat.useBotMode')"
+                :hint="t('notification.wechat.useBotModeHint')"
+                persistent-hint
+                color="primary"
+              />
+            </VCol>
+            <template v-if="isWechatBotMode">
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.name"
-                  :label="t('notification.name')"
-                  :placeholder="t('notification.name')"
-                  :hint="t('notification.nameHint')"
+                  v-model="notificationInfo.config.WECHAT_BOT_ID"
+                  :label="t('notification.wechat.botId')"
+                  :hint="t('notification.wechat.botIdHint')"
                   persistent-hint
-                  prepend-inner-icon="mdi-label"
+                  prepend-inner-icon="mdi-robot"
                 />
               </VCol>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.config.TELEGRAM_TOKEN"
-                  :label="t('notification.telegram.token')"
-                  :hint="t('notification.telegram.tokenHint')"
+                  v-model="notificationInfo.config.WECHAT_BOT_SECRET"
+                  type="password"
+                  :label="t('notification.wechat.botSecret')"
+                  :hint="t('notification.wechat.botSecretHint')"
                   persistent-hint
                   prepend-inner-icon="mdi-key"
                 />
               </VCol>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.config.TELEGRAM_CHAT_ID"
-                  :label="t('notification.telegram.chatId')"
-                  :hint="t('notification.telegram.chatIdHint')"
+                  v-model="notificationInfo.config.WECHAT_BOT_CHAT_ID"
+                  :label="t('notification.wechat.botChatId')"
+                  :placeholder="t('notification.wechat.botChatIdPlaceholder')"
+                  :hint="t('notification.wechat.botChatIdHint')"
                   persistent-hint
-                  prepend-inner-icon="mdi-chat"
+                  prepend-inner-icon="mdi-chat-processing"
                 />
               </VCol>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.config.TELEGRAM_USERS"
-                  :label="t('notification.telegram.users')"
-                  :placeholder="t('notification.telegram.usersPlaceholder')"
-                  :hint="t('notification.telegram.usersHint')"
+                  v-model="notificationInfo.config.WECHAT_BOT_WS_URL"
+                  :label="t('notification.wechat.botWsUrl')"
+                  :hint="t('notification.wechat.botWsUrlHint')"
                   persistent-hint
-                  prepend-inner-icon="mdi-account-group"
+                  prepend-inner-icon="mdi-lan-connect"
                 />
               </VCol>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.config.TELEGRAM_ADMINS"
-                  :label="t('notification.telegram.admins')"
-                  :placeholder="t('notification.telegram.adminsPlaceholder')"
-                  :hint="t('notification.telegram.adminsHint')"
+                  v-model="notificationInfo.config.WECHAT_ADMINS"
+                  :label="t('notification.wechat.admins')"
+                  :placeholder="t('notification.wechat.adminsPlaceholder')"
+                  :hint="t('notification.wechat.adminsHint')"
                   persistent-hint
                   prepend-inner-icon="mdi-account-supervisor"
                 />
               </VCol>
+            </template>
+            <template v-else>
               <VCol cols="12" md="6">
                 <VTextField
-                  v-model="notificationInfo.config.API_URL"
-                  :label="t('notification.telegram.apiUrl')"
-                  :placeholder="t('notification.telegram.apiUrlPlaceholder')"
-                  :hint="t('notification.telegram.apiUrlHint')"
+                  v-model="notificationInfo.config.WECHAT_CORPID"
+                  :label="t('notification.wechat.corpId')"
+                  :hint="t('notification.wechat.corpIdHint')"
                   persistent-hint
-                  prepend-inner-icon="mdi-web"
+                  prepend-inner-icon="mdi-domain"
                 />
               </VCol>
-            </VRow>
-          </VForm>
-        </VCardText>
-        <VCardActions class="app-dialog-actions">
-          <VSpacer />
-          <VBtn
-            color="primary"
-            variant="flat"
-            @click="saveNotificationInfo"
-            prepend-icon="mdi-content-save"
-            class="px-5"
-          >
-            {{ t('common.confirm') }}
-          </VBtn>
-        </VCardActions>
-      </VCard>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_APP_ID"
+                  :label="t('notification.wechat.appId')"
+                  :hint="t('notification.wechat.appIdHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-application"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_APP_SECRET"
+                  type="password"
+                  :label="t('notification.wechat.appSecret')"
+                  :hint="t('notification.wechat.appSecretHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-key"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_PROXY"
+                  :label="t('notification.wechat.proxy')"
+                  :hint="t('notification.wechat.proxyHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-server-network"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_TOKEN"
+                  type="password"
+                  :label="t('notification.wechat.token')"
+                  :hint="t('notification.wechat.tokenHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-key-variant"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_ENCODING_AESKEY"
+                  type="password"
+                  :label="t('notification.wechat.encodingAesKey')"
+                  :hint="t('notification.wechat.encodingAesKeyHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-lock"
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VTextField
+                  v-model="notificationInfo.config.WECHAT_ADMINS"
+                  :label="t('notification.wechat.admins')"
+                  :placeholder="t('notification.wechat.adminsPlaceholder')"
+                  :hint="t('notification.wechat.adminsHint')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-account-supervisor"
+                />
+              </VCol>
+            </template>
+          </VRow>
+          <VRow v-else-if="notificationInfo.type == 'telegram'">
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.name"
+                :label="t('notification.name')"
+                :placeholder="t('notification.name')"
+                :hint="t('notification.nameHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.config.TELEGRAM_TOKEN"
+                type="password"
+                :label="t('notification.telegram.token')"
+                :hint="t('notification.telegram.tokenHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-key"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.config.TELEGRAM_CHAT_ID"
+                :label="t('notification.telegram.chatId')"
+                :hint="t('notification.telegram.chatIdHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-chat"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.config.TELEGRAM_USERS"
+                :label="t('notification.telegram.users')"
+                :placeholder="t('notification.telegram.usersPlaceholder')"
+                :hint="t('notification.telegram.usersHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-account-group"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.config.TELEGRAM_ADMINS"
+                :label="t('notification.telegram.admins')"
+                :placeholder="t('notification.telegram.adminsPlaceholder')"
+                :hint="t('notification.telegram.adminsHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-account-supervisor"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="notificationInfo.config.API_URL"
+                :label="t('notification.telegram.apiUrl')"
+                :placeholder="t('notification.telegram.apiUrlPlaceholder')"
+                :hint="t('notification.telegram.apiUrlHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-web"
+              />
+            </VCol>
+          </VRow>
+        </VForm>
+      </VCardText>
+      <VCardActions class="app-dialog-actions">
+        <VBtn
+          color="secondary"
+          variant="tonal"
+          :loading="testing"
+          @click="testNotification"
+          prepend-icon="mdi-send-check-outline"
+        >
+          {{ t('setting.notification.sendTest') }}
+        </VBtn>
+        <VSpacer />
+        <VBtn color="primary" variant="flat" @click="saveNotificationInfo" prepend-icon="mdi-content-save" class="px-5">
+          {{ t('common.confirm') }}
+        </VBtn>
+      </VCardActions>
+    </VCard>
   </VDialog>
 </template>

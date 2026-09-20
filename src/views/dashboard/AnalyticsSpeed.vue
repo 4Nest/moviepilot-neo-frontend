@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { DownloaderInfo } from '@/api/types'
 import { formatDashboardFileSize, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 
 // 国际化

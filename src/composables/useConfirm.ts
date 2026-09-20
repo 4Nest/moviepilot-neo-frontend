@@ -1,7 +1,5 @@
-import { ref } from 'vue'
 import { createApp } from 'vue'
-import i18n from '@/plugins/i18n'
-import vuetify from '@/plugins/vuetify'
+import { translate } from '@/composables/useChineseText'
 import ConfirmDialog from '@/@core/components/ConfirmDialog.vue'
 import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
 
@@ -25,18 +23,17 @@ async function createConfirmDialog(options: ConfirmOptions = {}) {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    // 处理国际化
-    const i18nOptions = {
+    const dialogOptions = {
       ...options,
-      title: options.title || i18n.global.t('common.confirm'),
-      confirmText: options.confirmText || i18n.global.t('common.confirm'),
-      cancelText: options.cancelText || i18n.global.t('common.cancel'),
+      title: options.title || translate('common.confirm'),
+      confirmText: options.confirmText || translate('common.confirm'),
+      cancelText: options.cancelText || translate('common.cancel'),
     }
 
     // 创建应用实例
     const app = createApp(ConfirmDialog, {
       modelValue: true,
-      ...i18nOptions,
+      ...dialogOptions,
       'onUpdate:modelValue': (val: boolean) => {
         if (!val) {
           cleanup()
@@ -55,9 +52,6 @@ async function createConfirmDialog(options: ConfirmOptions = {}) {
     // 注册必要的组件
     app.component('VDialogCloseBtn', DialogCloseBtn)
 
-    // 使用插件
-    app.use(vuetify)
-    app.use(i18n)
 
     // 挂载应用
     app.mount(container)

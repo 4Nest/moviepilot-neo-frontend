@@ -6,7 +6,7 @@ import { getDisplayImageUrl } from '@/utils/imageUtils'
 import { formatDateDifference } from '@core/utils/formatters'
 import noImage from '@images/no-image.jpeg'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 
 const emit = defineEmits(['close'])

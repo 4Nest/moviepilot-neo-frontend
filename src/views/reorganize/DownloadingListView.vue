@@ -4,7 +4,7 @@ import type { DownloadingInfo } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import DownloadingCard from '@/components/cards/DownloadingCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 

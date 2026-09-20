@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import api from '@/api'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { configureAceEditorPadding } from '@/utils/aceEditor'
 

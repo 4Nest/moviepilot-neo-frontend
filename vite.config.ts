@@ -8,8 +8,6 @@ import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
 import vuetify from 'vite-plugin-vuetify'
 import { VitePWA } from 'vite-plugin-pwa'
-import VueI18n from '@intlify/unplugin-vue-i18n/vite'
-import { resolve } from 'node:path'
 import federation from '@originjs/vite-plugin-federation'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import { readFileSync } from 'node:fs'
@@ -69,12 +67,16 @@ export default defineConfig(({ command, mode, isPreview }) => ({
       dts: !isTestMode(mode),
     }),
     AutoImport({
-      imports: ['vue', 'vue-router', '@vueuse/core', '@vueuse/math', 'pinia', 'vue-i18n'],
+      imports: [
+        'vue',
+        'vue-router',
+        '@vueuse/core',
+        '@vueuse/math',
+        'pinia',
+        { '@/composables/useChineseText': ['useI18n'] },
+      ],
       vueTemplate: true,
       dts: !isTestMode(mode),
-    }),
-    VueI18n({
-      include: [resolve(__dirname, 'src/locales/*.ts')],
     }),
     !isTestMode(mode) &&
       federation({

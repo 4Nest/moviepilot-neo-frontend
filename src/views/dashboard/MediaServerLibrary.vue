@@ -6,7 +6,7 @@ import DashboardRetryButton from '@/components/misc/DashboardRetryButton.vue'
 import DashboardMediaState from '@/components/misc/DashboardMediaState.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useDashboardSnapshot } from '@/composables/useDashboardSnapshot'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
 const { t } = useI18n()

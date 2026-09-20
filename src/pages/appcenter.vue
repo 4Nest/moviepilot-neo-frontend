@@ -2,7 +2,7 @@
 import { NavMenu } from '@/@layouts/types'
 import { getNavMenus } from '@/router/i18n-menu'
 import { usePluginSidebarNavStore } from '@/stores'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
 
 // 国际化

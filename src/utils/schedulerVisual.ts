@@ -32,7 +32,6 @@ const schedulerVisualRules: SchedulerVisualRule[] = [
   { ids: ['plugin_market_refresh'], names: ['插件市场'], icon: 'mdi-puzzle-outline', color: '#ff704d', rgb: '255, 112, 77' },
   { ids: ['subscribe_calendar_cache'], names: ['订阅日历'], icon: 'mdi-calendar-refresh-outline', color: '#3f8cff', rgb: '63, 140, 255' },
   { ids: ['full_gc'], names: ['内存回收'], icon: 'mdi-memory', color: '#25b6c8', rgb: '37, 182, 200' },
-  { ids: ['agent_heartbeat'], names: ['智能体'], icon: 'mdi-robot-outline', color: '#9b6cf3', rgb: '155, 108, 243' },
   { ids: ['usage_report'], names: ['统计上报'], icon: 'mdi-chart-line', color: '#42c336', rgb: '66, 195, 54' },
   { ids: ['workflow'], providers: ['工作流'], icon: 'mdi-source-branch', color: '#3f8cff', rgb: '63, 140, 255' },
   { ids: ['plugin'], icon: 'mdi-puzzle-outline', color: '#ff704d', rgb: '255, 112, 77' },

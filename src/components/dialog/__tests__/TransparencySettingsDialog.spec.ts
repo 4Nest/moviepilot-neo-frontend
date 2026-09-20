@@ -30,7 +30,7 @@ vi.mock('@/composables/useTransparencySettings', () => ({
   }),
 }))
 
-vi.mock('vue-i18n', () => ({
+vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }))
 

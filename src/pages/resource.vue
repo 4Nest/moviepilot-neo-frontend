@@ -9,12 +9,11 @@ import SubtitleCard from '@/components/cards/SubtitleCard.vue'
 import SubtitleItem from '@/components/cards/SubtitleItem.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import TorrentFilterBar from '@/components/filter/TorrentFilterBar.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 import { SearchReplaceBatchCollector, isSearchReplaceBatchEvent } from '@/utils/searchStream'
-import { getCurrentLocale } from '@/plugins/i18n'
 import { useTorrentFilter } from '@/composables/useTorrentFilter'
 
 // 国际化
@@ -553,7 +552,6 @@ function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
   if (requestToken) {
     setSearchParam(url.searchParams, '_ts', requestToken)
   }
-  setSearchParam(url.searchParams, 'locale', getCurrentLocale())
 
   return url.toString()
 }

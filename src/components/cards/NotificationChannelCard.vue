@@ -1,14 +1,39 @@
 <script setup lang="ts">
-import type { NotificationConf } from '@/api/types'
+import api, { getApiErrorMessage } from '@/api'
+import type { ApiResponse, NotificationConf } from '@/api/types'
 import { getLogoUrl } from '@/utils/imageUtils'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useCardAccentColor } from '@/composables/useCardAccentColor'
+import { useToast } from 'vue-toastification'
 
-const NotificationChannelInfoDialog = defineAsyncComponent(() => import('@/components/dialog/NotificationChannelInfoDialog.vue'))
+const NotificationChannelInfoDialog = defineAsyncComponent(
+  () => import('@/components/dialog/NotificationChannelInfoDialog.vue'),
+)
 
 const { t } = useI18n()
 const { accentRgb, imageRef, updateAccentColor } = useCardAccentColor()
+const $toast = useToast()
+const testing = ref(false)
+
+/** 提取后端校验或发送失败原因。 */
+function getErrorMessage(error: unknown): string {
+  return getApiErrorMessage(error) || t('setting.notification.testFailed')
+}
+
+/** 使用当前内存中的渠道配置发送一条真实测试消息。 */
+async function testNotification() {
+  testing.value = true
+  try {
+    const result = (await api.post('system/notification/test', props.notification)) as ApiResponse
+    if (result.success) $toast.success(result.message || t('setting.notification.testSuccess'))
+    else $toast.error(result.message || t('setting.notification.testFailed'))
+  } catch (error) {
+    $toast.error(getErrorMessage(error))
+  } finally {
+    testing.value = false
+  }
+}
 
 // 定义输入
 const props = defineProps({
@@ -67,6 +92,11 @@ function onClose() {
     :style="{ '--app-card-accent-rgb': accentRgb }"
     @click="openNotificationInfoDialog"
   >
+    <span class="app-card-top-action absolute top-3" style="right: 5.5rem">
+      <IconBtn :loading="testing" :aria-label="t('setting.notification.sendTest')" @click.stop="testNotification">
+        <VIcon icon="mdi-send-check-outline" />
+      </IconBtn>
+    </span>
     <span class="app-card-top-action absolute top-3 right-12">
       <IconBtn @click.stop>
         <VIcon class="cursor-move" icon="mdi-drag" />

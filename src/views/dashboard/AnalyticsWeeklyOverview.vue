@@ -3,7 +3,7 @@ import { useTheme } from 'vuetify'
 import api from '@/api'
 import { hexToRgb } from '@layouts/utils'
 import { formatDashboardCount, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
 const { t } = useI18n()

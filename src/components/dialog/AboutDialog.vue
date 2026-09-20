@@ -2,7 +2,7 @@
 import api from '@/api'
 import MarkdownIt from 'markdown-it'
 import mdLinkAttributes from 'markdown-it-link-attributes'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const emit = defineEmits(['close'])
 
@@ -29,6 +29,15 @@ function renderMarkdown(value: string) {
 
 // 系统环境信息
 const systemEnv = ref<Record<string, string>>({})
+
+function visibleBuildValue(value?: string) {
+  return value && value !== 'unknown' ? value : ''
+}
+
+function shortSha(value?: string) {
+  const normalized = visibleBuildValue(value)
+  return normalized ? normalized.slice(0, 10) : ''
+}
 
 // 更新日志条目(GitHub Release)
 interface ReleaseInfo {
@@ -126,6 +135,22 @@ onMounted(() => {
                 <code>{{ systemEnv.FRONTEND_VERSION }}</code>
               </a>
             </dd>
+          </div>
+          <div v-if="visibleBuildValue(systemEnv.BACKEND_BUILD_SHA)" class="about-row">
+            <dt>后端构建</dt>
+            <dd><code>{{ shortSha(systemEnv.BACKEND_BUILD_SHA) }}</code></dd>
+          </div>
+          <div v-if="visibleBuildValue(systemEnv.FRONTEND_BUILD_SHA)" class="about-row">
+            <dt>前端构建</dt>
+            <dd><code>{{ shortSha(systemEnv.FRONTEND_BUILD_SHA) }}</code></dd>
+          </div>
+          <div v-if="visibleBuildValue(systemEnv.BUILD_CHANNEL)" class="about-row">
+            <dt>发布频道</dt>
+            <dd><code>{{ systemEnv.BUILD_CHANNEL }}</code></dd>
+          </div>
+          <div v-if="visibleBuildValue(systemEnv.BUILD_TIME)" class="about-row">
+            <dt>构建时间</dt>
+            <dd><code>{{ systemEnv.BUILD_TIME }}</code></dd>
           </div>
         </dl>
       </VCardText>

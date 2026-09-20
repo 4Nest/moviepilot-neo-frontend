@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { FileItem } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const props = defineProps({
   item: Object as PropType<FileItem>,

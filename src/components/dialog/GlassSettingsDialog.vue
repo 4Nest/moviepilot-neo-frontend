@@ -22,7 +22,7 @@ import {
 } from '@/utils/glassOptics'
 import { useGlassMobilePresentation } from '@/composables/useGlassPresentationCapabilities'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const props = withDefaults(
   defineProps<{

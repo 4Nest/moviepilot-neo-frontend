@@ -6,7 +6,7 @@ import type { SubtitleInfo } from '@/api/types'
 import { getCachedSiteIcon } from '@/utils/siteIconCache'
 import { downloadedSubtitleMap, markSubtitleDownloaded } from '@/utils/subtitleDownloadCache'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const AddSubtitleDownloadDialog = defineAsyncComponent(() => import('../dialog/AddSubtitleDownloadDialog.vue'))
 

@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
 import api from '@/api'
-import type { ScheduleInfo } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import type { ScheduleInfo, SchedulerHistory } from '@/api/types'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 import {
   getScheduleName,
@@ -24,6 +24,7 @@ const $toast = useToast()
 
 // 定时服务列表
 const schedulerList = ref<ScheduleInfo[]>([])
+const failedHistory = ref<SchedulerHistory[]>([])
 const { getScheduleProgressText, getScheduleProgressValue } = useScheduleProgress(
   schedulerList,
   'scheduler-service-progress',
@@ -38,6 +39,21 @@ async function loadSchedulerList() {
   } catch (e) {
     console.log(e)
   }
+}
+
+async function loadFailedHistory() {
+  try {
+    const res: SchedulerHistory[] = await api.get('dashboard/schedule/history', {
+      params: { failed_only: true, limit: 20 },
+    })
+    failedHistory.value = Array.isArray(res) ? res : []
+  } catch (e) {
+    console.log(e)
+  }
+}
+
+function openMainLog() {
+  window.open(`${import.meta.env.VITE_API_BASE_URL}system/logging?length=-1`, '_blank', 'noopener,noreferrer')
 }
 
 /** 根据任务状态返回桌面端状态标签颜色。 */
@@ -80,18 +96,13 @@ function getMobileSchedulerStatusText(scheduler: ScheduleInfo) {
 }
 
 /** 执行指定定时服务，并在短延迟后刷新列表。 */
-function runCommand(id: string) {
+async function runCommand(id: string) {
   try {
-    // 异步提交
-    api.get('system/runscheduler', {
-      params: {
-        jobid: id,
-      },
-    })
+    await api.get('system/runscheduler', { params: { jobid: id } })
     $toast.success(t('setting.scheduler.executeSuccess'))
-    // 1秒后刷新数据
     setTimeout(() => {
       loadSchedulerList()
+      loadFailedHistory()
     }, 1000)
   } catch (e) {
     console.log(e)
@@ -122,6 +133,8 @@ const { loading: schedulerLoading } = useDataRefresh(
   3000, // 3秒间隔，及时发现任务启停；运行中进度由独立轮询每秒刷新
   true, // 立即执行
 )
+
+useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 </script>
 
 <template>
@@ -180,6 +193,33 @@ const { loading: schedulerLoading } = useDataRefresh(
       <VProgressCircular indeterminate color="primary" size="22" width="2" />
       <p>{{ t('common.loadingText') }}</p>
     </div>
+  </VCard>
+
+  <VCard v-if="failedHistory.length" class="mt-4 d-none d-md-block">
+    <VCardItem>
+      <VCardTitle class="text-subtitle-1">最近失败</VCardTitle>
+    </VCardItem>
+    <VTable class="text-no-wrap">
+      <thead>
+        <tr>
+          <th scope="col">任务</th>
+          <th scope="col">失败时间</th>
+          <th scope="col">错误</th>
+          <th scope="col" />
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="history in failedHistory" :key="history.id">
+          <td>{{ history.name || history.job_id }}</td>
+          <td>{{ history.finished_at }}</td>
+          <td class="scheduler-error-cell" :title="history.error">{{ history.error || '未知错误' }}</td>
+          <td class="d-flex ga-2 align-center">
+            <VBtn size="small" variant="tonal" @click="runCommand(history.job_id)">重试</VBtn>
+            <VBtn size="small" variant="text" @click="openMainLog">查看日志</VBtn>
+          </td>
+        </tr>
+      </tbody>
+    </VTable>
   </VCard>
 
   <div class="mobile-scheduler-view d-md-none">
@@ -242,6 +282,19 @@ const { loading: schedulerLoading } = useDataRefresh(
       <p>{{ t('setting.scheduler.noService') }}</p>
     </div>
 
+    <section v-if="failedHistory.length" class="mobile-failure-list">
+      <h3>最近失败</h3>
+      <article v-for="history in failedHistory" :key="history.id" class="mobile-failure-card">
+        <strong>{{ history.name || history.job_id }}</strong>
+        <small>{{ history.finished_at }}</small>
+        <p>{{ history.error || '未知错误' }}</p>
+        <div class="d-flex ga-2">
+          <VBtn size="small" variant="tonal" @click="runCommand(history.job_id)">重试</VBtn>
+          <VBtn size="small" variant="text" @click="openMainLog">查看日志</VBtn>
+        </div>
+      </article>
+    </section>
+
     <footer v-if="schedulerLoading" class="mobile-scheduler-footer">
       <div class="mobile-scheduler-loading">
         <VProgressCircular indeterminate color="primary" size="18" width="2" />
@@ -283,6 +336,33 @@ const { loading: schedulerLoading } = useDataRefresh(
   font-size: 11px;
   gap: 12px;
   margin-block-start: 4px;
+}
+
+.scheduler-error-cell {
+  max-inline-size: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-failure-list {
+  display: grid;
+  gap: 12px;
+  margin-block-start: 20px;
+}
+
+.mobile-failure-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid rgba(var(--v-theme-error), 0.25);
+  border-radius: 16px;
+  background: rgba(var(--v-theme-error), 0.06);
+}
+
+.mobile-failure-card p {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  overflow-wrap: anywhere;
 }
 
 .scheduler-progress-meta span {

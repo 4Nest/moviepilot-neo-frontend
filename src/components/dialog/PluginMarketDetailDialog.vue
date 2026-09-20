@@ -5,7 +5,7 @@ import { formatDownloadCount } from '@/@core/utils/formatters'
 import PluginRatingDisplay from '@/components/common/PluginRatingDisplay.vue'
 import { getLogoUrl } from '@/utils/imageUtils'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useConfirm } from '@/composables/useConfirm'
 

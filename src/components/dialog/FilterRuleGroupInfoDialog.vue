@@ -5,7 +5,7 @@ import FilterRuleCard from '@/components/cards/FilterRuleCard.vue'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useToast } from 'vue-toastification'
 import { cloneDeep } from 'lodash-es'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 显示器宽度

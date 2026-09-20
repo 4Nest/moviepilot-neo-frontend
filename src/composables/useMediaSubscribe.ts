@@ -1,6 +1,6 @@
 import { defineAsyncComponent, ref, type Ref } from 'vue'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useChineseText } from '@/composables/useChineseText'
 import api from '@/api'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
 import { formatSeason } from '@/@core/utils/formatters'
@@ -146,7 +146,7 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
 
 // 封装媒体卡片与详情页共用的订阅交互。
 export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
-  const { t } = useI18n()
+  const { t } = useChineseText()
   const $toast = useToast()
   const createConfirm = useConfirm()
   const episodeGroup = ref('')

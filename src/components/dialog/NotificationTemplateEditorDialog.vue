@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { configureAceEditorPadding } from '@/utils/aceEditor'
 
 const { t } = useI18n()

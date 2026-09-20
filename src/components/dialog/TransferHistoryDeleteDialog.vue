@@ -16,6 +16,8 @@ const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
 }>()
 
+const { t } = useI18n()
+
 const visible = computed({
   get: () => props.modelValue,
   set: value => {
@@ -39,16 +41,16 @@ function selectDeleteMode(deleteSrc: boolean, deleteDest: boolean) {
       </VCardTitle>
       <div class="d-flex flex-column flex-lg-row justify-center my-3">
         <VBtn color="primary" class="mb-2 mx-2" @click="selectDeleteMode(false, false)">
-          {{ $t('transferHistory.deleteRecordOnly') }}
+          {{ t('transferHistory.deleteRecordOnly') }}
         </VBtn>
         <VBtn color="warning" class="mb-2 mx-2" @click="selectDeleteMode(true, false)">
-          {{ $t('transferHistory.deleteSourceOnly') }}
+          {{ t('transferHistory.deleteSourceOnly') }}
         </VBtn>
         <VBtn color="info" class="mb-2 mx-2" @click="selectDeleteMode(false, true)">
-          {{ $t('transferHistory.deleteDestOnly') }}
+          {{ t('transferHistory.deleteDestOnly') }}
         </VBtn>
         <VBtn color="error" class="mb-2 mx-2" @click="selectDeleteMode(true, true)">
-          {{ $t('transferHistory.deleteAll') }}
+          {{ t('transferHistory.deleteAll') }}
         </VBtn>
       </div>
     </VCard>

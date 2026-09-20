@@ -4,7 +4,7 @@ import { MediaInfo, MediaSeason, NotExistMediaInfo } from '@/api/types'
 import { PropType } from 'vue'
 import noImage from '@images/no-image.jpeg'
 import NoDataFound from '@/components/states/NoDataFound.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useGlobalSettingsStore } from '@/stores'
 import {
   getMediaSubscribeId,
@@ -29,7 +29,7 @@ type EpisodeGroupOption = {
 }
 
 // 国际化
-const { locale, t } = useI18n()
+const { t } = useI18n()
 const { mdAndUp } = useDisplay()
 
 // 定义事件
@@ -278,7 +278,7 @@ function getSeasonPoster(posterPath?: string) {
   return getDisplayImageUrl(posterUrl, globalSettings.GLOBAL_IMAGE_CACHE)
 }
 
-// 按当前界面语言格式化数据源返回的首播日期。
+// 按简体中文格式化数据源返回的首播日期。
 function formatAirDate(airDate: string) {
   if (!airDate) return ''
   const dateParts = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(airDate)
@@ -287,7 +287,7 @@ function formatAirDate(airDate: string) {
   const date = new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]))
   if (Number.isNaN(date.getTime())) return airDate
 
-  return new Intl.DateTimeFormat(locale.value, {
+  return new Intl.DateTimeFormat('zh-CN', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

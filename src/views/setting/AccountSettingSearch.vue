@@ -2,7 +2,7 @@
 import { useToast } from 'vue-toastification'
 import api from '@/api'
 import type { FilterRuleGroup, Site } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
 
 // 国际化

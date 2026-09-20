@@ -2,7 +2,7 @@
 import { bufferToBase64Url, base64UrlToUint8Array } from '@/@core/utils/navigator'
 import { useToast } from 'vue-toastification'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { formatDateDifference } from '@core/utils/formatters'
 import api from '@/api'
 import type { ApiResponse, PassKey } from '@/api/types'
@@ -22,7 +22,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits(['update:modelValue', 'update:passkeyList', 'verifyPassword'])
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const display = useDisplay()
 const $toast = useToast()
 
@@ -45,7 +45,7 @@ const passkeyTransactionToken = ref('')
 
 // 格式化日期
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString(locale.value)
+  return new Date(dateStr).toLocaleDateString('zh-CN')
 }
 
 // 获取PassKey列表

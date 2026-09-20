@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import api from '@/api'
 import type { ScheduleInfo, TransferQueue } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useBackground } from '@/composables/useBackground'
 import {
   getScheduleName,

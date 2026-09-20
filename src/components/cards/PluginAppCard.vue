@@ -6,7 +6,7 @@ import { usePluginCardAccent } from '@/composables/usePluginCardAccent'
 import { isNullOrEmptyObject } from '@/@core/utils'
 import { formatDownloadCount } from '@/@core/utils/formatters'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useConfirm } from '@/composables/useConfirm'
 

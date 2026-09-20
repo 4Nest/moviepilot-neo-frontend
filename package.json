@@ -99,7 +99,6 @@
     "@iconify-json/tabler": "^1.2.23",
     "@iconify/tools": "^4.0.4",
     "@iconify/vue": "^4.3.0",
-    "@intlify/unplugin-vue-i18n": "^6.0.3",
     "@originjs/vite-plugin-federation": "^1.4.1",
     "@pinia/testing": "1.0.3",
     "@tailwindcss/aspect-ratio": "^0.4.2",

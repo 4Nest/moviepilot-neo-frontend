@@ -1,5 +1,5 @@
 import type { RecommendSource } from '@/api/types'
-import i18n from '@/plugins/i18n'
+import { translate as chineseText } from '@/composables/useChineseText'
 import {
   createBuiltInRecommendSources,
   mergeExtraRecommendSources,
@@ -11,8 +11,8 @@ const translate = (key: string) => `translated:${key}`
 
 describe('recommendSources', () => {
   it('provides localized AniList ranking titles', () => {
-    expect(i18n.global.t('recommend.anilistTrendingNow')).toBe('AniList 当前趋势')
-    expect(i18n.global.t('recommend.anilistPopularThisSeason')).toBe('AniList 本季热门')
+    expect(chineseText('recommend.anilistTrendingNow')).toBe('AniList 当前趋势')
+    expect(chineseText('recommend.anilistPopularThisSeason')).toBe('AniList 本季热门')
   })
 
   it('creates the complete built-in source contract', () => {

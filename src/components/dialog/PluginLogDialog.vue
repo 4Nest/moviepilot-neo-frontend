@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Plugin } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 const LoggingView = defineAsyncComponent(() => import('@/views/system/LoggingView.vue'))

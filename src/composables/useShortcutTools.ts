@@ -1,6 +1,6 @@
 import type { Component } from 'vue'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { useI18n } from 'vue-i18n'
+import { useChineseText } from '@/composables/useChineseText'
 
 const NameTestView = defineAsyncComponent(() => import('@/views/system/NameTestView.vue'))
 const NetTestView = defineAsyncComponent(() => import('@/views/system/NetTestView.vue'))
@@ -36,7 +36,7 @@ const PINNED_SHORTCUT_ORDER = ['nameTest', 'words', 'logging']
 
 /** 提供顶部捷径与仪表板共用的工具定义和打开逻辑。 */
 export function useShortcutTools() {
-  const { t } = useI18n()
+  const { t } = useChineseText()
 
   const shortcuts: ShortcutToolItem[] = [
     {

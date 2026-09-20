@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const props = defineProps({
   modelValue: {

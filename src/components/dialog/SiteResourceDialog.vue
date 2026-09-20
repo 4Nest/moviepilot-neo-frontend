@@ -5,10 +5,10 @@ import { formatFileSize } from '@core/utils/formatters'
 import { useDisplay, useTheme } from 'vuetify'
 import AddDownloadDialog from '../dialog/AddDownloadDialog.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 // 响应式断点
 const display = useDisplay()
@@ -87,13 +87,7 @@ const categoryFieldLabel = computed(() => {
 })
 
 // 结果统计文案
-const resultSummaryText = computed(() => {
-  if (locale.value.startsWith('zh')) {
-    return `共 ${resourceTotalItems.value} 条结果`
-  }
-
-  return `${resourceTotalItems.value} results`
-})
+const resultSummaryText = computed(() => `共 ${resourceTotalItems.value} 条结果`)
 
 // 是否小屏幕
 const isMobileLayout = computed(() => display.smAndDown.value)

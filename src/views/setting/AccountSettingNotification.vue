@@ -1,9 +1,14 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
-import api from '@/api'
-import type { NotificationConf, NotificationSwitchConf } from '@/api/types'
+import api, { getApiErrorMessage } from '@/api'
+import type {
+  NotificationChannelType,
+  NotificationConf,
+  NotificationConfigDiagnostic,
+  NotificationSwitchConf,
+} from '@/api/types'
 import NotificationChannelCard from '@/components/cards/NotificationChannelCard.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { notificationSwitchDict } from '@/api/constants'
 import { useTheme } from 'vuetify'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
@@ -77,6 +82,7 @@ const editorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dar
 
 // 所有消息渠道
 const notifications = ref<NotificationConf[]>([])
+const invalidNotifications = ref<NotificationConfigDiagnostic[]>([])
 
 // 提示框
 const $toast = useToast()
@@ -127,7 +133,6 @@ const notificationTime = ref({
   end: '23:59',
 })
 
-
 let editorDialogController: ReturnType<typeof openSharedDialog> | null = null
 
 // 关闭通知模板共享弹窗，并同步本页的弹窗占用状态。
@@ -177,12 +182,13 @@ watch(editorTheme, theme => {
 })
 
 // 添加通知渠道
-function addNotification(notification: string) {
+function addNotification(notification: NotificationChannelType) {
   let name = `${t('setting.notification.channel')}${notifications.value.length + 1}`
   while (notifications.value.some(item => item.name === name)) {
     name = `${t('setting.notification.channel')}${parseInt(name.split(t('setting.notification.channel'))[1]) + 1}`
   }
   notifications.value.push({
+    id: crypto.randomUUID(),
     name: name,
     type: notification,
     enabled: false,
@@ -190,22 +196,54 @@ function addNotification(notification: string) {
   })
 }
 
+const notificationConfigFields: Record<NotificationChannelType, Set<string>> = {
+  telegram: new Set(['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_USERS', 'TELEGRAM_ADMINS', 'API_URL']),
+  wechat: new Set([
+    'WECHAT_MODE',
+    'WECHAT_CORPID',
+    'WECHAT_APP_ID',
+    'WECHAT_APP_SECRET',
+    'WECHAT_PROXY',
+    'WECHAT_TOKEN',
+    'WECHAT_ENCODING_AESKEY',
+    'WECHAT_BOT_ID',
+    'WECHAT_BOT_SECRET',
+    'WECHAT_BOT_CHAT_ID',
+    'WECHAT_BOT_WS_URL',
+    'WECHAT_ADMINS',
+  ]),
+}
+
+/** 丢弃历史未知字段，保留缺失字段供用户在编辑器中补齐。 */
+function normalizeNotification(item: NotificationConf): NotificationConf {
+  const allowedFields = notificationConfigFields[item.type]
+  const config = Object.fromEntries(Object.entries(item.config ?? {}).filter(([field]) => allowedFields.has(field)))
+
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    config,
+    switchs: item.switchs ?? [],
+    enabled: item.enabled,
+  }
+}
 // 移除通知渠道
 function removeNotification(notification: NotificationConf) {
   const index = notifications.value.indexOf(notification)
   if (index > -1) notifications.value.splice(index, 1)
 }
 
-
 // 调用API查询通知渠道设置
 async function loadNotificationSetting() {
   try {
     const result: { [key: string]: any } = await api.get('system/setting/Notifications')
-    notifications.value = (result.data?.value ?? []).filter((item: NotificationConf) =>
-      ['wechat', 'telegram'].includes(item.type),
-    )
+    notifications.value = (result.data?.value ?? [])
+      .filter((item: NotificationConf) => ['wechat', 'telegram'].includes(item.type))
+      .map(normalizeNotification)
+    invalidNotifications.value = result.data?.invalid ?? []
   } catch (error) {
-    console.log(error)
+    console.error(error)
   }
 }
 
@@ -232,7 +270,7 @@ async function saveTemplate(value = editorContent.value) {
     closeTemplateEditorDialog()
   } catch (error) {
     console.error(error)
-    $toast.error(t('setting.notification.templateSaveFailed'))
+    $toast.error(getApiErrorMessage(error) || t('setting.notification.templateSaveFailed'))
   }
 }
 
@@ -262,10 +300,11 @@ async function saveNotificationSetting() {
     const result: { [key: string]: any } = await api.post('system/setting/Notifications', notifications.value)
     if (result.success) {
       $toast.success(t('setting.notification.saveSuccess'))
-    } else $toast.error(t('setting.notification.saveFailed'))
+      invalidNotifications.value = []
+    } else $toast.error(result.message || t('setting.notification.saveFailed'))
   } catch (error) {
-    console.log(error)
-    $toast.error(t('setting.notification.saveFailed'))
+    console.error(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.notification.saveFailed'))
   }
 }
 
@@ -275,9 +314,10 @@ async function saveNotificationTime() {
     const result: { [key: string]: any } = await api.post('system/setting/NotificationSendTime', notificationTime.value)
     if (result.success) {
       $toast.success(t('setting.notification.timeSaveSuccess'))
-    } else $toast.error(t('setting.notification.timeSaveFailed'))
+    } else $toast.error(result.message || t('setting.notification.timeSaveFailed'))
   } catch (error) {
-    console.log(error)
+    console.error(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.notification.timeSaveFailed'))
   }
 }
 
@@ -317,9 +357,10 @@ async function saveNotificationSwitchs() {
       notificationSwitchs.value,
     )
     if (result.success) $toast.success(t('setting.notification.switchSaveSuccess'))
-    else $toast.error(t('setting.notification.switchSaveFailed'))
+    else $toast.error(result.message || t('setting.notification.switchSaveFailed'))
   } catch (error) {
-    console.log(error)
+    console.error(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.notification.switchSaveFailed'))
   }
 }
 
@@ -356,6 +397,18 @@ useSilentSettingRefresh(loadPageData, {
           <VCardTitle>{{ t('setting.notification.channels') }}</VCardTitle>
           <VCardSubtitle>{{ t('setting.notification.channelsDesc') }}</VCardSubtitle>
         </VCardItem>
+        <VCardText v-if="invalidNotifications.length" class="pb-0">
+          <VAlert type="warning" variant="tonal" density="compact" icon="mdi-alert-circle-outline">
+            <div class="font-weight-medium">{{ t('setting.notification.invalidConfigTitle') }}</div>
+            <ul class="mt-2 ps-5">
+              <li v-for="item in invalidNotifications" :key="item.id">
+                <strong>{{ item.name }}</strong>
+                <span>：{{ item.errors.join('；') }}</span>
+              </li>
+            </ul>
+            <div class="mt-2 text-body-2">{{ t('setting.notification.invalidConfigHint') }}</div>
+          </VAlert>
+        </VCardText>
         <VCardText>
           <Draggable
             v-model="notifications"

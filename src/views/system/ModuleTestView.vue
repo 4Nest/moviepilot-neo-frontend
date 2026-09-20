@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import api from '@/api'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useTheme } from 'vuetify'
 
 // 国际化

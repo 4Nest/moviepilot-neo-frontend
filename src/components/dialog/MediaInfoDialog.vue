@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Context } from '@/api/types'
 import MediaInfoCard from '../cards/MediaInfoCard.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 多语言支持
 const { t } = useI18n()

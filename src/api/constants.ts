@@ -1,4 +1,4 @@
-import i18n from '@/plugins/i18n'
+import { translate } from '@/composables/useChineseText'
 
 export const storageAttributes = [
   {
@@ -57,15 +57,15 @@ export const storageRemoteDict = storageAttributes.reduce(
 export const downloaderOptions = [
   {
     value: 'qbittorrent',
-    title: i18n.global.t('setting.system.qbittorrent'),
+    title: translate('setting.system.qbittorrent'),
   },
   {
     value: 'transmission',
-    title: i18n.global.t('setting.system.transmission'),
+    title: translate('setting.system.transmission'),
   },
   {
     value: 'rtorrent',
-    title: i18n.global.t('setting.system.rtorrent'),
+    title: translate('setting.system.rtorrent'),
   },
 ]
 
@@ -80,31 +80,31 @@ export const downloaderDict = downloaderOptions.reduce(
 export const mediaServerOptions = [
   {
     value: 'emby',
-    title: i18n.global.t('setting.system.emby'),
+    title: translate('setting.system.emby'),
   },
   {
     value: 'zspace',
-    title: i18n.global.t('setting.system.zspace'),
+    title: translate('setting.system.zspace'),
   },
   {
     value: 'jellyfin',
-    title: i18n.global.t('setting.system.jellyfin'),
+    title: translate('setting.system.jellyfin'),
   },
   {
     value: 'plex',
-    title: i18n.global.t('setting.system.plex'),
+    title: translate('setting.system.plex'),
   },
   {
     value: 'trimemedia',
-    title: i18n.global.t('setting.system.trimeMedia'),
+    title: translate('setting.system.trimeMedia'),
   },
   {
     value: 'ugreen',
-    title: i18n.global.t('setting.system.ugreen'),
+    title: translate('setting.system.ugreen'),
   },
   {
     value: 'mediavault',
-    title: i18n.global.t('setting.system.mediaVault'),
+    title: translate('setting.system.mediaVault'),
   },
 ]
 
@@ -117,88 +117,88 @@ export const mediaServerDict = mediaServerOptions.reduce(
 )
 
 export const innerFilterRules = [
-  { title: i18n.global.t('filterRules.specSub'), value: ' SPECSUB ' },
-  { title: i18n.global.t('filterRules.cnSub'), value: ' CNSUB ' },
-  { title: i18n.global.t('filterRules.cnVoi'), value: ' CNVOI ' },
-  { title: i18n.global.t('filterRules.gz'), value: ' GZ ' },
-  { title: i18n.global.t('filterRules.notCnVoi'), value: ' !CNVOI ' },
-  { title: i18n.global.t('filterRules.hkVoi'), value: ' HKVOI ' },
-  { title: i18n.global.t('filterRules.notHkVoi'), value: ' !HKVOI ' },
-  { title: i18n.global.t('filterRules.free'), value: ' FREE ' },
-  { title: i18n.global.t('filterRules.resolution4k'), value: ' 4K ' },
-  { title: i18n.global.t('filterRules.resolution1080p'), value: ' 1080P ' },
-  { title: i18n.global.t('filterRules.resolution720p'), value: ' 720P ' },
-  { title: i18n.global.t('filterRules.not720p'), value: ' !720P ' },
-  { title: i18n.global.t('filterRules.qualityBlu'), value: ' BLU ' },
-  { title: i18n.global.t('filterRules.notBlu'), value: ' !BLU ' },
-  { title: i18n.global.t('filterRules.qualityBluray'), value: ' BLURAY ' },
-  { title: i18n.global.t('filterRules.notBluray'), value: ' !BLURAY ' },
-  { title: i18n.global.t('filterRules.qualityUhd'), value: ' UHD ' },
-  { title: i18n.global.t('filterRules.notUhd'), value: ' !UHD ' },
-  { title: i18n.global.t('filterRules.qualityRemux'), value: ' REMUX ' },
-  { title: i18n.global.t('filterRules.notRemux'), value: ' !REMUX ' },
-  { title: i18n.global.t('filterRules.qualityWebdl'), value: ' WEBDL ' },
-  { title: i18n.global.t('filterRules.notWebdl'), value: ' !WEBDL ' },
-  { title: i18n.global.t('filterRules.quality60fps'), value: ' 60FPS ' },
-  { title: i18n.global.t('filterRules.not60fps'), value: ' !60FPS ' },
-  { title: i18n.global.t('filterRules.codecH265'), value: ' H265 ' },
-  { title: i18n.global.t('filterRules.notH265'), value: ' !H265 ' },
-  { title: i18n.global.t('filterRules.codecH264'), value: ' H264 ' },
-  { title: i18n.global.t('filterRules.notH264'), value: ' !H264 ' },
-  { title: i18n.global.t('filterRules.effectDolby'), value: ' DOLBY ' },
-  { title: i18n.global.t('filterRules.notDolby'), value: ' !DOLBY ' },
-  { title: i18n.global.t('filterRules.effectAtmos'), value: ' ATMOS ' },
-  { title: i18n.global.t('filterRules.notAtmos'), value: ' !ATMOS ' },
-  { title: i18n.global.t('filterRules.effectHdr'), value: ' HDR ' },
-  { title: i18n.global.t('filterRules.notHdr'), value: ' !HDR ' },
-  { title: i18n.global.t('filterRules.effectSdr'), value: ' SDR ' },
-  { title: i18n.global.t('filterRules.notSdr'), value: ' !SDR ' },
-  { title: i18n.global.t('filterRules.effect3d'), value: ' 3D ' },
-  { title: i18n.global.t('filterRules.not3d'), value: ' !3D ' },
+  { title: translate('filterRules.specSub'), value: ' SPECSUB ' },
+  { title: translate('filterRules.cnSub'), value: ' CNSUB ' },
+  { title: translate('filterRules.cnVoi'), value: ' CNVOI ' },
+  { title: translate('filterRules.gz'), value: ' GZ ' },
+  { title: translate('filterRules.notCnVoi'), value: ' !CNVOI ' },
+  { title: translate('filterRules.hkVoi'), value: ' HKVOI ' },
+  { title: translate('filterRules.notHkVoi'), value: ' !HKVOI ' },
+  { title: translate('filterRules.free'), value: ' FREE ' },
+  { title: translate('filterRules.resolution4k'), value: ' 4K ' },
+  { title: translate('filterRules.resolution1080p'), value: ' 1080P ' },
+  { title: translate('filterRules.resolution720p'), value: ' 720P ' },
+  { title: translate('filterRules.not720p'), value: ' !720P ' },
+  { title: translate('filterRules.qualityBlu'), value: ' BLU ' },
+  { title: translate('filterRules.notBlu'), value: ' !BLU ' },
+  { title: translate('filterRules.qualityBluray'), value: ' BLURAY ' },
+  { title: translate('filterRules.notBluray'), value: ' !BLURAY ' },
+  { title: translate('filterRules.qualityUhd'), value: ' UHD ' },
+  { title: translate('filterRules.notUhd'), value: ' !UHD ' },
+  { title: translate('filterRules.qualityRemux'), value: ' REMUX ' },
+  { title: translate('filterRules.notRemux'), value: ' !REMUX ' },
+  { title: translate('filterRules.qualityWebdl'), value: ' WEBDL ' },
+  { title: translate('filterRules.notWebdl'), value: ' !WEBDL ' },
+  { title: translate('filterRules.quality60fps'), value: ' 60FPS ' },
+  { title: translate('filterRules.not60fps'), value: ' !60FPS ' },
+  { title: translate('filterRules.codecH265'), value: ' H265 ' },
+  { title: translate('filterRules.notH265'), value: ' !H265 ' },
+  { title: translate('filterRules.codecH264'), value: ' H264 ' },
+  { title: translate('filterRules.notH264'), value: ' !H264 ' },
+  { title: translate('filterRules.effectDolby'), value: ' DOLBY ' },
+  { title: translate('filterRules.notDolby'), value: ' !DOLBY ' },
+  { title: translate('filterRules.effectAtmos'), value: ' ATMOS ' },
+  { title: translate('filterRules.notAtmos'), value: ' !ATMOS ' },
+  { title: translate('filterRules.effectHdr'), value: ' HDR ' },
+  { title: translate('filterRules.notHdr'), value: ' !HDR ' },
+  { title: translate('filterRules.effectSdr'), value: ' SDR ' },
+  { title: translate('filterRules.notSdr'), value: ' !SDR ' },
+  { title: translate('filterRules.effect3d'), value: ' 3D ' },
+  { title: translate('filterRules.not3d'), value: ' !3D ' },
 ]
 
 export const transferTypeOptions = [
-  { title: i18n.global.t('transferType.copy'), value: 'copy' },
-  { title: i18n.global.t('transferType.move'), value: 'move' },
-  { title: i18n.global.t('transferType.link'), value: 'link' },
-  { title: i18n.global.t('transferType.softlink'), value: 'softlink' },
+  { title: translate('transferType.copy'), value: 'copy' },
+  { title: translate('transferType.move'), value: 'move' },
+  { title: translate('transferType.link'), value: 'link' },
+  { title: translate('transferType.softlink'), value: 'softlink' },
 ]
 
 export const qualityOptions = ref([
   {
-    title: i18n.global.t('qualityOptions.all'),
+    title: translate('qualityOptions.all'),
     value: '',
   },
   {
-    title: i18n.global.t('qualityOptions.blurayOriginal'),
+    title: translate('qualityOptions.blurayOriginal'),
     value: 'Blu-?Ray.+VC-?1|Blu-?Ray.+AVC|UHD.+blu-?ray.+HEVC|MiniBD',
   },
   {
-    title: i18n.global.t('qualityOptions.remux'),
+    title: translate('qualityOptions.remux'),
     value: 'Remux',
   },
   {
-    title: i18n.global.t('qualityOptions.bluray'),
+    title: translate('qualityOptions.bluray'),
     value: 'Blu-?Ray',
   },
   {
-    title: i18n.global.t('qualityOptions.uhd'),
+    title: translate('qualityOptions.uhd'),
     value: 'UHD|UltraHD',
   },
   {
-    title: i18n.global.t('qualityOptions.webdl'),
+    title: translate('qualityOptions.webdl'),
     value: 'WEB-?DL|WEB-?RIP',
   },
   {
-    title: i18n.global.t('qualityOptions.hdtv'),
+    title: translate('qualityOptions.hdtv'),
     value: 'HDTV',
   },
   {
-    title: i18n.global.t('qualityOptions.h265'),
+    title: translate('qualityOptions.h265'),
     value: '[Hx].?265|HEVC',
   },
   {
-    title: i18n.global.t('qualityOptions.h264'),
+    title: translate('qualityOptions.h264'),
     value: '[Hx].?264|AVC',
   },
 ])
@@ -206,19 +206,19 @@ export const qualityOptions = ref([
 // 分辨率选择框数据
 export const resolutionOptions = ref([
   {
-    title: i18n.global.t('resolutionOptions.all'),
+    title: translate('resolutionOptions.all'),
     value: '',
   },
   {
-    title: i18n.global.t('resolutionOptions.4k'),
+    title: translate('resolutionOptions.4k'),
     value: '4K|2160p|x2160',
   },
   {
-    title: i18n.global.t('resolutionOptions.1080p'),
+    title: translate('resolutionOptions.1080p'),
     value: '1080[pi]|x1080',
   },
   {
-    title: i18n.global.t('resolutionOptions.720p'),
+    title: translate('resolutionOptions.720p'),
     value: '720[pi]|x720',
   },
 ])
@@ -226,23 +226,23 @@ export const resolutionOptions = ref([
 // 特效选择框数据
 export const effectOptions = ref([
   {
-    title: i18n.global.t('effectOptions.all'),
+    title: translate('effectOptions.all'),
     value: '',
   },
   {
-    title: i18n.global.t('effectOptions.dolbyVision'),
+    title: translate('effectOptions.dolbyVision'),
     value: 'Dolby[\\s.]+Vision|DOVI|[\\s.]+DV[\\s.]+',
   },
   {
-    title: i18n.global.t('effectOptions.dolbyAtmos'),
+    title: translate('effectOptions.dolbyAtmos'),
     value: 'Dolby[\\s.]*\\+?Atmos|Atmos',
   },
   {
-    title: i18n.global.t('effectOptions.hdr'),
+    title: translate('effectOptions.hdr'),
     value: '[\\s.]+HDR[\\s.]+|HDR10|HDR10\\+',
   },
   {
-    title: i18n.global.t('effectOptions.sdr'),
+    title: translate('effectOptions.sdr'),
     value: '[\\s.]+SDR[\\s.]+',
   },
 ])
@@ -250,23 +250,23 @@ export const effectOptions = ref([
 // 媒体类型选项
 export const mediaTypeOptions = [
   {
-    title: i18n.global.t('mediaType.movie'),
+    title: translate('mediaType.movie'),
     value: '电影',
   },
   {
-    title: i18n.global.t('mediaType.tv'),
+    title: translate('mediaType.tv'),
     value: '电视剧',
   },
   {
-    title: i18n.global.t('mediaType.anime'),
+    title: translate('mediaType.anime'),
     value: '动漫',
   },
   {
-    title: i18n.global.t('mediaType.collection'),
+    title: translate('mediaType.collection'),
     value: '合集',
   },
   {
-    title: i18n.global.t('mediaType.unknown'),
+    title: translate('mediaType.unknown'),
     value: '未知',
   },
 ]
@@ -283,35 +283,35 @@ export const mediaTypeDict = mediaTypeOptions.reduce(
 // 通知开关选项
 export const notificationSwitchOptions = [
   {
-    title: i18n.global.t('notificationSwitch.resourceDownload'),
+    title: translate('notificationSwitch.resourceDownload'),
     value: '资源下载',
   },
   {
-    title: i18n.global.t('notificationSwitch.organize'),
+    title: translate('notificationSwitch.organize'),
     value: '整理入库',
   },
   {
-    title: i18n.global.t('notificationSwitch.subscribe'),
+    title: translate('notificationSwitch.subscribe'),
     value: '订阅',
   },
   {
-    title: i18n.global.t('notificationSwitch.site'),
+    title: translate('notificationSwitch.site'),
     value: '站点',
   },
   {
-    title: i18n.global.t('notificationSwitch.mediaServer'),
+    title: translate('notificationSwitch.mediaServer'),
     value: '媒体服务器',
   },
   {
-    title: i18n.global.t('notificationSwitch.manual'),
+    title: translate('notificationSwitch.manual'),
     value: '手动处理',
   },
   {
-    title: i18n.global.t('notificationSwitch.plugin'),
+    title: translate('notificationSwitch.plugin'),
     value: '插件',
   },
   {
-    title: i18n.global.t('notificationSwitch.other'),
+    title: translate('notificationSwitch.other'),
     value: '其它',
   },
 ]
@@ -328,63 +328,63 @@ export const notificationSwitchDict = notificationSwitchOptions.reduce(
 // 操作步骤选项
 export const actionStepOptions = [
   {
-    title: i18n.global.t('actionStep.addDownload'),
+    title: translate('actionStep.addDownload'),
     value: '添加下载',
   },
   {
-    title: i18n.global.t('actionStep.addSubscribe'),
+    title: translate('actionStep.addSubscribe'),
     value: '添加订阅',
   },
   {
-    title: i18n.global.t('actionStep.fetchDownloads'),
+    title: translate('actionStep.fetchDownloads'),
     value: '获取下载任务',
   },
   {
-    title: i18n.global.t('actionStep.fetchMedias'),
+    title: translate('actionStep.fetchMedias'),
     value: '获取媒体数据',
   },
   {
-    title: i18n.global.t('actionStep.fetchRss'),
+    title: translate('actionStep.fetchRss'),
     value: '获取RSS资源',
   },
   {
-    title: i18n.global.t('actionStep.fetchTorrents'),
+    title: translate('actionStep.fetchTorrents'),
     value: '搜索站点资源',
   },
   {
-    title: i18n.global.t('actionStep.filterMedias'),
+    title: translate('actionStep.filterMedias'),
     value: '过滤媒体数据',
   },
   {
-    title: i18n.global.t('actionStep.filterTorrents'),
+    title: translate('actionStep.filterTorrents'),
     value: '过滤资源',
   },
   {
-    title: i18n.global.t('actionStep.scanFile'),
+    title: translate('actionStep.scanFile'),
     value: '扫描目录',
   },
   {
-    title: i18n.global.t('actionStep.scrapeFile'),
+    title: translate('actionStep.scrapeFile'),
     value: '刮削文件',
   },
   {
-    title: i18n.global.t('actionStep.sendEvent'),
+    title: translate('actionStep.sendEvent'),
     value: '发送事件',
   },
   {
-    title: i18n.global.t('actionStep.sendMessage'),
+    title: translate('actionStep.sendMessage'),
     value: '发送消息',
   },
   {
-    title: i18n.global.t('actionStep.transferFile'),
+    title: translate('actionStep.transferFile'),
     value: '整理文件',
   },
   {
-    title: i18n.global.t('actionStep.invokePlugin'),
+    title: translate('actionStep.invokePlugin'),
     value: '调用插件',
   },
   {
-    title: i18n.global.t('actionStep.note'),
+    title: translate('actionStep.note'),
     value: '备注',
   },
 ]

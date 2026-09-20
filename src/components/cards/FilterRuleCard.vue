@@ -2,7 +2,7 @@
 import { innerFilterRules } from '@/api/constants'
 import { CustomRule } from '@/api/types'
 import { cloneDeep } from 'lodash-es'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 获取i18n实例
 const { t } = useI18n()

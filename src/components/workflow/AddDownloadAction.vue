@@ -2,7 +2,7 @@
 import api from '@/api'
 import { DownloaderConf } from '@/api/types'
 import { Handle, Position } from '@vue-flow/core'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 

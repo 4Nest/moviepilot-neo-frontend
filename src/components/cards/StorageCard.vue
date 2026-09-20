@@ -12,7 +12,7 @@ import smb_png from '@images/misc/smb.png'
 import api from '@/api'
 import { useToast } from 'vue-toastification'
 import { isNullOrEmptyObject } from '@/@core/utils'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useCardAccentColor } from '@/composables/useCardAccentColor'
 

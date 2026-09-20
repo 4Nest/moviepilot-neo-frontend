@@ -11,7 +11,7 @@ import {
   type ThemeCustomizerTheme,
 } from '@/composables/useThemeCustomizer'
 import { usePWA } from '@/composables/usePWA'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useTheme } from 'vuetify'
 
 const emit = defineEmits<{

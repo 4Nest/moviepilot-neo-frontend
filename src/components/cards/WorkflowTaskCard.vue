@@ -3,7 +3,7 @@ import { Workflow } from '@/api/types'
 import { useToast } from 'vue-toastification'
 import { useConfirm } from '@/composables/useConfirm'
 import api from '@/api'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { formatDateDifference } from '@/@core/utils/formatters'
 

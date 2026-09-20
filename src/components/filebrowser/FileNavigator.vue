@@ -3,7 +3,7 @@ import type { PropType } from 'vue'
 import type { FileItem } from '@/api/types'
 import { useDisplay } from 'vuetify'
 import type { AxiosRequestConfig, AxiosInstance } from 'axios'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 
 // 国际化

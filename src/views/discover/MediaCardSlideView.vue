@@ -3,7 +3,7 @@ import api from '@/api'
 import type { MediaInfo } from '@/api/types'
 import MediaCard from '@/components/cards/MediaCard.vue'
 import VirtualSlideView from '@/components/slide/VirtualSlideView.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useIntersectionObserver, until } from '@vueuse/core'
 
 const { t } = useI18n()

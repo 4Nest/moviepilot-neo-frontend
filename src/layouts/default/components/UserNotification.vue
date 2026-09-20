@@ -5,7 +5,7 @@ import { appUnreadMessageCount, clearUnreadMessages } from '@/utils/badge'
 import { formatDateDifference } from '@core/utils/formatters'
 import { useBackground } from '@/composables/useBackground'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useConfirm } from '@/composables/useConfirm'
 
 type NotificationDisplayItem =
@@ -498,7 +498,7 @@ function toggleNotificationExpanded(item: SystemNotification) {
 }
 
 useDelayedSSE(
-  `${import.meta.env.VITE_API_BASE_URL}system/message?role=notification`,
+  `${import.meta.env.VITE_API_BASE_URL}system/message`,
   handleMessage,
   'user-notification',
   3000,

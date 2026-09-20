@@ -2,7 +2,7 @@ import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import LoginMfaStep from '@/components/auth/LoginMfaStep.vue'
 
-vi.mock('vue-i18n', () => ({
+vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }))
 

@@ -73,8 +73,7 @@ vi.mock('@/composables/usePullDownGesture', () => ({
   }),
 }))
 vi.mock('@/composables/usePWA', () => ({ usePWA: () => ({ appMode: { value: false } }) }))
-vi.mock('vue-i18n', async importOriginal => ({
-  ...(await importOriginal<typeof import('vue-i18n')>()),
+vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }))
 vi.mock('vue-router', async importOriginal => ({

@@ -2,7 +2,7 @@
 import { Handle, Position } from '@vue-flow/core'
 import api from '@/api'
 import { RecommendSource } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 

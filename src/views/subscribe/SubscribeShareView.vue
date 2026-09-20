@@ -4,7 +4,7 @@ import type { SubscribeShare } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import SubscribeShareCard from '@/components/cards/SubscribeShareCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 
 // 国际化

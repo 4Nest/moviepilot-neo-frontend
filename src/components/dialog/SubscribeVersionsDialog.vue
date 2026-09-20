@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { Subscribe, SubscribeVersionRule } from '@/api/types'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 import { useConfirm } from '@/composables/useConfirm'
 import { formatSeason } from '@/@core/utils/formatters'
@@ -65,6 +65,13 @@ function progressText(rule: SubscribeVersionRule) {
   const total = versionTotal(rule)
   if (!total) return ''
   return t('subscribe.subscribeProgressTooltip', { downloaded: downloadedEpisodes(rule), total })
+}
+
+function decisionText(rule: SubscribeVersionRule) {
+  const summary = versionProgress(rule)?.decision_summary
+  if (!summary) return ''
+  const counts = `搜索 ${summary.searched} · 匹配 ${summary.matched} · 下载 ${summary.downloaded}`
+  return [summary.target, counts, summary.reason].filter(Boolean).join(' · ')
 }
 
 // 完成满格,其余按已下载占比取整
@@ -235,6 +242,10 @@ function addVersion() {
                 rounded
               />
             </VListItemSubtitle>
+            <VListItemSubtitle v-if="decisionText(rule)" class="subscribe-version-decision">
+              <VIcon icon="mdi-filter-check-outline" size="14" />
+              <span>{{ decisionText(rule) }}</span>
+            </VListItemSubtitle>
             <template #append>
               <IconBtn
                 :size="actionBtnSize"
@@ -304,6 +315,22 @@ function addVersion() {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
+}
+
+.subscribe-version-decision {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-block-start: 0.25rem;
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 // 版本名占满剩余宽度并截断，状态徽章固定不被挤压

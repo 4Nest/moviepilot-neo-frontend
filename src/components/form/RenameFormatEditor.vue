@@ -2,7 +2,7 @@
 // 先注册 ace 主题/模式 URL（与全局懒加载路径一致，否则进阶模式主题回退默认浅色）
 import '@/ace-config'
 import { VAceEditor } from 'vue3-ace-editor'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { evalExpr, parseFormat, serializeTokens, type RenameToken } from './renameFormatTokens'
 

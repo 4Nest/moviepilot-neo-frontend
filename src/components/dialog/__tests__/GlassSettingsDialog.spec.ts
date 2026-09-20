@@ -55,7 +55,7 @@ vi.mock('@/composables/useThemeCustomizer', () => ({
   }),
 }))
 
-vi.mock('vue-i18n', () => ({
+vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }))
 

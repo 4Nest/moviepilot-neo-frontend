@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useRouter } from 'vue-router'
 import { useSetupWizard } from '@/composables/useSetupWizard'
 import BasicSettingsStep from '@/views/setup/BasicSettingsStep.vue'

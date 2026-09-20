@@ -4,7 +4,7 @@ import { doneNProgress, startNProgress } from '@/api/nprogress'
 import type { WorkflowShare } from '@/api/types'
 import WorkflowSummaryPreview from '@/components/workflow/WorkflowSummaryPreview.vue'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useGlobalSettingsStore } from '@/stores'
 
 // 国际化

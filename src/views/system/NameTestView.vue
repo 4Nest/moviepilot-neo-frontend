@@ -7,7 +7,7 @@ import type { Context, MediaInfo } from '@/api/types'
 import { getMediaSubscribeIdentity } from '@/composables/useMediaSubscribe'
 import { useNameTestSession } from '@/composables/useNameTestSession'
 import { useShortcutTools } from '@/composables/useShortcutTools'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 interface PipelineStep {
   icon: string

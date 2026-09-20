@@ -1,6 +1,6 @@
 import type { Context } from '@/api/types'
 import { cloneDeepWith } from 'lodash-es'
-import { useI18n } from 'vue-i18n'
+import { useChineseText } from '@/composables/useChineseText'
 
 // 卡片视图的分组数据类型
 interface SearchTorrent extends Context {
@@ -22,7 +22,7 @@ export interface FilterState {
 
 // useTorrentFilter composable
 export function useTorrentFilter() {
-  const { t } = useI18n()
+  const { t } = useChineseText()
 
   // 过滤表单
   const filterForm: Record<string, string[]> = reactive({

@@ -8,7 +8,7 @@ import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 import { createBuiltInRecommendSources, type RecommendViewSource } from '@/utils/recommendSources'
 import noImage from '@images/no-image.jpeg'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useRouter } from 'vue-router'
 
 const { t } = useI18n()

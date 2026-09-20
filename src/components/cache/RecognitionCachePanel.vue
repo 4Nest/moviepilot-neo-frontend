@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useToast } from 'vue-toastification'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import api from '@/api'
 import type { ApiResponse, RecognitionCacheData, RecognitionCacheItem } from '@/api/types'
 import { useConfirm } from '@/composables/useConfirm'

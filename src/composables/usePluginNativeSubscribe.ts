@@ -7,7 +7,7 @@ import {
   useMediaSubscribe,
 } from '@/composables/useMediaSubscribe'
 import { ref, shallowRef } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useChineseText } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 
 export interface NativeSubscribeMediaInfo extends Partial<MediaInfo> {
@@ -112,7 +112,7 @@ function getSubscribeRecordMediaId(subscribe: Subscribe) {
 
 /** 为插件联邦组件创建主程序原生订阅入口。 */
 export function usePluginNativeSubscribe(): NativeSubscribe {
-  const { t } = useI18n()
+  const { t } = useChineseText()
   const $toast = useToast()
   const media = shallowRef<MediaInfo>()
   const isSubscribed = ref(false)

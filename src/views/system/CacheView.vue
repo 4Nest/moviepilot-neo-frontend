@@ -2,7 +2,7 @@
 import { useToast } from 'vue-toastification'
 import api from '@/api'
 import type { TorrentCacheData, TorrentCacheItem } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { formatFileSize, formatDateDifference } from '@core/utils/formatters'
 import { useConfirm } from '@/composables/useConfirm'
 import { useGlobalSettingsStore } from '@/stores'

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { CustomRule, FilterRuleGroup } from '@/api/types'
 import filter_group_svg from '@images/svg/filter-group.svg'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useCardAccentColor } from '@/composables/useCardAccentColor'
 

@@ -1,6 +1,5 @@
 import FileNavigator from '@/components/filebrowser/FileNavigator.vue'
 import type { EndPoints, FileItem } from '@/api/types'
-import i18n from '@/plugins/i18n'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick } from 'vue'
 import type { AxiosInstance } from 'axios'
@@ -64,7 +63,6 @@ function mountNavigator(
       ...overrides,
     },
     global: {
-      plugins: [i18n],
       stubs: {
         VCard: { template: '<div class="file-navigator"><slot /></div>' },
         VIcon: true,

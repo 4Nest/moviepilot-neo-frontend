@@ -9,7 +9,7 @@ import api from '@/api'
 import WorkflowSidebar from '@/components/workflow/WorkflowSidebar.vue'
 import DropzoneBackground from '@/components/workflow/DropzoneBackground.vue'
 import ImportCodeDialog from '@/components/dialog/ImportCodeDialog.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 多语言支持
 const { t } = useI18n()

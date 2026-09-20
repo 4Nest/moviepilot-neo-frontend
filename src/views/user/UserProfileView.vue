@@ -6,7 +6,7 @@ import type { ApiResponse, User, PassKey } from '@/api/types'
 import avatar1 from '@images/avatars/avatar-1.png'
 import { useDisplay } from 'vuetify'
 import { useUserStore } from '@/stores'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
 const OTPAuthDialog = defineAsyncComponent(() => import('@/components/dialog/OTPAuthDialog.vue'))
@@ -14,7 +14,7 @@ const PasskeyDialog = defineAsyncComponent(() => import('@/components/dialog/Pas
 const VerifyPasswordDialog = defineAsyncComponent(() => import('@/components/dialog/VerifyPasswordDialog.vue'))
 
 // 国际化
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 // 显示器宽度
 const display = useDisplay()

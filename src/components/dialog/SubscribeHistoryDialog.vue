@@ -4,7 +4,7 @@ import { Subscribe } from '@/api/types'
 import { formatDateDifference } from '@core/utils/formatters'
 import { useDisplay } from 'vuetify'
 import ProgressDialog from './ProgressDialog.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { mediaTypeDict } from '@/api/constants'
 import { useToast } from 'vue-toastification'
 

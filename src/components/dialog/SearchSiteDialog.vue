@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Site } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 多语言支持

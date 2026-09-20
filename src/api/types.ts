@@ -42,6 +42,16 @@ export interface SubscribeVersionRule {
   settings: SubscribeVersionSettings
 }
 
+export interface SubscribeDecisionSummary {
+  target?: string
+  searched: number
+  matched: number
+  downloaded: number
+  result: string
+  reason?: string
+  updated_at: string
+}
+
 export interface SubscribeVersionProgress {
   state?: string
   last_update?: string
@@ -50,6 +60,7 @@ export interface SubscribeVersionProgress {
   current_priority?: number
   episode_priority: Record<string, number>
   completed: boolean
+  decision_summary?: SubscribeDecisionSummary
 }
 
 // 订阅
@@ -107,6 +118,7 @@ export interface Subscribe {
   version_rules?: SubscribeVersionRule[]
   version_mode?: 'any' | 'all'
   version_progress?: Record<string, SubscribeVersionProgress>
+  decision_summary?: SubscribeDecisionSummary
   // 开始集数
   start_episode?: number
   // 缺失集数
@@ -1289,6 +1301,18 @@ export interface ScheduleInfo {
   progress_detail?: ScheduleProgress
 }
 
+export interface SchedulerHistory {
+  id: number
+  job_id: string
+  name?: string
+  provider?: string
+  status: 'success' | 'failed'
+  success: number
+  started_at?: string
+  finished_at: string
+  error?: string
+}
+
 // 消息通知
 export interface NotificationSwitch {
   // 消息类型
@@ -1462,26 +1486,38 @@ export interface DownloaderConf {
   path_mapping?: Array<[storagePath: string, downloadPath: string]>
 }
 
+export type NotificationChannelType = 'telegram' | 'wechat'
+export type NotificationScene = '资源下载' | '整理入库' | '订阅' | '站点' | '媒体服务器' | '手动处理' | '插件' | '其它'
+export type NotificationScope = 'all' | 'user' | 'admin' | 'user,admin'
+
 // 通知配置
 export interface NotificationConf {
+  // 稳定标识，用于安全关联已保存凭证
+  id?: string
   // 名称
   name: string
   // 类型 telegram/wechat
-  type: string
+  type: NotificationChannelType
   // 配置
-  config: { [key: string]: any }
+  config: Record<string, string | undefined>
   // 场景开关
-  switchs?: string[]
+  switchs?: NotificationScene[]
   // 是否启用
   enabled: boolean
+}
+
+export interface NotificationConfigDiagnostic {
+  id: string
+  name: string
+  errors: string[]
 }
 
 // 通知场景开关配置
 export interface NotificationSwitchConf {
   // 场景名称
-  type: string
+  type: NotificationScene
   // 通知范围 all/user/admin
-  action: string
+  action: NotificationScope
 }
 
 // 存储配置

@@ -3,7 +3,6 @@ import router from '@/router'
 import { useAuthStore } from '@/stores'
 import { initializeRequestOptimizer } from '@/utils/requestOptimizer'
 import { useGlobalOfflineStatus } from '@/composables/useOfflineStatus'
-import { getCurrentLocale } from '@/plugins/i18n'
 
 // 创建axios实例
 const api = axios.create({
@@ -35,9 +34,6 @@ api.interceptors.request.use(config => {
   if (authStore.token) {
     config.headers.Authorization = `Bearer ${authStore.token}`
   }
-  const locale = getCurrentLocale()
-  config.headers['X-MoviePilot-Locale'] = locale
-  config.headers['Accept-Language'] = locale
   return config
 })
 
@@ -60,6 +56,31 @@ interface LocalizedApiPayload {
   detail_i18n?: unknown
   message?: unknown
   message_i18n?: unknown
+}
+/** 从未知请求错误中安全提取后端文本或 Pydantic 校验消息。 */
+export function getApiErrorMessage(error: unknown): string | undefined {
+  let payload: unknown
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = error.response
+    if (typeof response === 'object' && response !== null && 'data' in response) payload = response.data
+  }
+
+  if (typeof payload === 'object' && payload !== null) {
+    if ('message' in payload && typeof payload.message === 'string' && payload.message) return payload.message
+    if ('detail' in payload) {
+      const detail = payload.detail
+      if (typeof detail === 'string' && detail) return detail
+      if (Array.isArray(detail)) {
+        for (const item of detail) {
+          if (typeof item === 'object' && item !== null && 'msg' in item && typeof item.msg === 'string') {
+            return item.msg
+          }
+        }
+      }
+    }
+  }
+
+  return error instanceof Error && error.message ? error.message : undefined
 }
 
 /** 前端展示默认使用后端提供的多语言消息，同时不改变后端接口兼容字段。 */

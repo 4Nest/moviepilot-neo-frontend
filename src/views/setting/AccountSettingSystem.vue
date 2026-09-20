@@ -7,7 +7,7 @@ import { DownloaderConf, MediaServerConf } from '@/api/types'
 import DownloaderCard from '@/components/cards/DownloaderCard.vue'
 import MediaServerCard from '@/components/cards/MediaServerCard.vue'
 import { copyToClipboard } from '@/@core/utils/navigator'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { downloaderOptions, mediaServerOptions } from '@/api/constants'
 import { useDisplay } from 'vuetify'
 
@@ -42,7 +42,6 @@ const SystemSettings = ref<any>({
   // 高级系统设置
   Advanced: {
     // 全局
-    AUXILIARY_AUTH_ENABLE: false,
     GLOBAL_IMAGE_CACHE: false,
     SUBSCRIBE_STATISTIC_SHARE: true,
     PLUGIN_STATISTIC_SHARE: true,
@@ -160,6 +159,7 @@ const $toast = useToast()
 const advancedDialog = ref(false)
 
 const savingBasic = ref(false)
+const savingAdvanced = ref(false)
 const rustAccelAvailable = ref(false)
 
 const rustAccelHint = computed(() =>
@@ -350,16 +350,22 @@ async function saveBasicSettings() {
 
 // 保存高级设置
 async function saveAdvancedSettings() {
-  if (!rustAccelAvailable.value) SystemSettings.value.Advanced.RUST_ACCEL = false
-  cleanEmptyFields(SystemSettings.value.Advanced, ['LOG_FILE_FORMAT'])
+  if (savingAdvanced.value) return
+  savingAdvanced.value = true
+  try {
+    if (!rustAccelAvailable.value) SystemSettings.value.Advanced.RUST_ACCEL = false
+    cleanEmptyFields(SystemSettings.value.Advanced, ['LOG_FILE_FORMAT'])
 
-  // 同时保存高级设置和刮削开关设置
-  const advancedResult = await saveSystemSetting(SystemSettings.value.Advanced)
-  const scrapingResult = await saveScrapingSwitchs()
+    // 同时保存高级设置和刮削开关设置
+    const advancedResult = await saveSystemSetting(SystemSettings.value.Advanced)
+    const scrapingResult = await saveScrapingSwitchs()
 
-  if (advancedResult && scrapingResult) {
-    advancedDialog.value = false
-    $toast.success(t('setting.system.advancedSaveSuccess'))
+    if (advancedResult && scrapingResult) {
+      advancedDialog.value = false
+      $toast.success(t('setting.system.advancedSaveSuccess'))
+    }
+  } finally {
+    savingAdvanced.value = false
   }
 }
 
@@ -832,14 +838,6 @@ useSilentSettingRefresh(
           <VWindowItem value="system">
             <div>
               <VRow>
-                <VCol cols="12" md="6">
-                  <VSwitch
-                    v-model="SystemSettings.Advanced.AUXILIARY_AUTH_ENABLE"
-                    :label="t('setting.system.auxAuthEnable')"
-                    :hint="t('setting.system.auxAuthEnableHint')"
-                    persistent-hint
-                  />
-                </VCol>
                 <VCol cols="12" md="6">
                   <VSwitch
                     v-model="SystemSettings.Advanced.GLOBAL_IMAGE_CACHE"
@@ -1464,7 +1462,15 @@ useSilentSettingRefresh(
       </VCardText>
       <VCardActions class="app-dialog-actions">
         <VSpacer />
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-content-save" @click="saveAdvancedSettings" class="px-5">
+        <VBtn
+          color="primary"
+          variant="flat"
+          prepend-icon="mdi-content-save"
+          :loading="savingAdvanced"
+          :disabled="savingAdvanced"
+          @click="saveAdvancedSettings"
+          class="px-5"
+        >
           {{ t('common.save') }}
         </VBtn>
       </VCardActions>
@@ -1473,7 +1479,6 @@ useSilentSettingRefresh(
 </template>
 
 <style scoped>
-
 .setting-actions {
   display: flex;
   align-items: center;
@@ -1484,5 +1489,4 @@ useSilentSettingRefresh(
 .setting-actions__secondary {
   flex-shrink: 0;
 }
-
 </style>

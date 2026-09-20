@@ -7,7 +7,6 @@ import { createApp, defineAsyncComponent } from 'vue'
 import vuetify from '@/plugins/vuetify'
 import router from '@/router'
 import pinia from '@/stores/index'
-import i18n from '@/plugins/i18n'
 
 // 3. 全局组件
 import App from '@/App.vue'
@@ -116,7 +115,6 @@ app
     hideProgressBar: true,
   })
   .use(ConfirmDialog)
-  .use(i18n)
 
 // UI 通知依赖安装完成后立即绑定更新监听并启动唯一的 Service Worker 注册。
 void initializeServiceWorker()

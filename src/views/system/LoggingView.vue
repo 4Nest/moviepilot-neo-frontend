@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useTheme } from 'vuetify'
 import { useBackground } from '@/composables/useBackground'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'

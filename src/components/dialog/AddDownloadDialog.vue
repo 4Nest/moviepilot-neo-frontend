@@ -12,7 +12,7 @@ import type {
 } from '@/api/types'
 import { formatFileSize } from '@/@core/utils/formatters'
 import { VCardTitle } from 'vuetify/lib/components/index.mjs'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 import { numberValidator } from '@/@validators'
 import { useGlobalSettingsStore } from '@/stores'

@@ -5,7 +5,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSubscribe } from '@tests/support/factories/subscribe'
 import {
   deleteSubscribeByIdHandler,
-  resetSubscribeByIdHandler,
+  subscribeRecoveryActionHandler,
   searchSubscribeByIdHandler,
   updateSubscribeStatusHandler,
 } from '@tests/support/msw/handlers/subscribe'
@@ -462,27 +462,25 @@ describe('SubscribeCard item operations', () => {
   })
 
   it.each([
-    ['success', true, 200, { success: true }, 'success', '卡片测试媒体 重置成功！'],
+    ['success', true, 200, { success: true }, 'success', '订阅进度已清空'],
     ['confirmation cancellation', false, 200, { success: true }, null, null],
-    [
-      'business failure',
-      true,
-      200,
-      { message: 'rejected', success: false },
-      'error',
-      '卡片测试媒体 重置失败：rejected',
-    ],
+    ['business failure', true, 200, { message: 'rejected', success: false }, 'error', 'rejected'],
     ['HTTP failure', true, 500, { message: 'server down', success: false }, 'error', '请求失败，请稍后重试'],
   ] as const)(
-    'handles reset %s without speculative state',
+    'handles clear-progress %s without speculative state',
     async (_case, confirmed, status, response, toastType, message) => {
       const requested = vi.fn()
       mocks.confirm.mockResolvedValue(confirmed)
       const { container, emitted, media } = await renderCard({ state: 'S' })
-      server.use(resetSubscribeByIdHandler(media.id, response, status, requested))
+      server.use(subscribeRecoveryActionHandler(media.id, 'clear-progress', response, status, requested))
 
-      await chooseMenuItem(container, '重置')
-      await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+      await chooseMenuItem(container, '清空订阅进度')
+      await waitFor(() =>
+        expect(mocks.confirm).toHaveBeenCalledWith({
+          title: '清空订阅进度',
+          content: '将清空已下载记录、版本进度和完成状态；未入库内容可能再次下载。是否继续？',
+        }),
+      )
 
       if (confirmed) await waitFor(() => expect(requested).toHaveBeenCalledOnce())
       else expect(requested).not.toHaveBeenCalled()
@@ -503,6 +501,23 @@ describe('SubscribeCard item operations', () => {
       }
     },
   )
+
+  it.each([
+    ['重新计算进度', 'recompute-progress', '进度已重新计算'],
+    ['强制重新搜索一次', 'force-search', '已提交强制搜索'],
+  ] as const)('submits %s through its dedicated endpoint', async (label, action, successMessage) => {
+    const requested = vi.fn()
+    mocks.confirm.mockResolvedValue(true)
+    const { container, emitted, media } = await renderCard({ state: 'S' })
+    server.use(subscribeRecoveryActionHandler(media.id, action, { success: true }, 200, requested))
+
+    await chooseMenuItem(container, label)
+
+    await waitFor(() => expect(requested).toHaveBeenCalledOnce())
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(successMessage)
+    expect(container.querySelector('.subscribe-card')).toHaveClass('subscribe-card-paused')
+    expect(emitted('save')).toHaveLength(1)
+  })
 
   it.each([
     ['success', 200, { success: true }, true, null],

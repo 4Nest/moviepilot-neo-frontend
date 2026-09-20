@@ -6,7 +6,7 @@ import { formatSeasonLabel } from '@/@core/utils/season'
 import api from '@/api'
 import type { Subscribe } from '@/api/types'
 import router from '@/router'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { useGlobalSettingsStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
@@ -129,6 +129,12 @@ const versionCount = computed(() => versionRules.value.length)
 const completedVersionCount = computed(
   () => versionRules.value.filter(rule => props.media?.version_progress?.[rule.id]?.completed === true).length,
 )
+const decisionSummaryText = computed(() => {
+  const summary = props.media?.decision_summary
+  if (!summary) return ''
+  const counts = `搜索 ${summary.searched} · 匹配 ${summary.matched} · 下载 ${summary.downloaded}`
+  return [summary.target, counts, summary.reason].filter(Boolean).join(' · ')
+})
 
 // 已洗版集数：取后端派生字段 completed_episode
 const completedEpisode = computed(() => {
@@ -238,28 +244,44 @@ async function toggleSubscribeStatus(state: 'R' | 'S') {
 }
 
 // 重置订阅
-async function resetSubscribe() {
-  // 确认
+type RecoveryAction = 'recompute-progress' | 'clear-progress' | 'force-search'
+
+const recoveryActions: Record<RecoveryAction, { title: string; confirm: string; success: string }> = {
+  'recompute-progress': {
+    title: '重新计算进度',
+    confirm: '将根据媒体库与下载记录重新计算进度，不会删除或重新下载文件。是否继续？',
+    success: '进度已重新计算',
+  },
+  'clear-progress': {
+    title: '清空订阅进度',
+    confirm: '将清空已下载记录、版本进度和完成状态；未入库内容可能再次下载。是否继续？',
+    success: '订阅进度已清空',
+  },
+  'force-search': {
+    title: '强制重新搜索一次',
+    confirm: '本次将忽略媒体库已有判断并搜索资源，不删除文件，也不会永久修改订阅设置。是否继续？',
+    success: '已提交强制搜索',
+  },
+}
+
+async function runRecoveryAction(action: RecoveryAction) {
+  const config = recoveryActions[action]
   try {
-    const isConfirmed = await createConfirm({
-      title: t('common.confirm'),
-      content: t('subscribe.resetConfirm', { name: props.media?.name }),
-    })
-    if (!isConfirmed) return
-    // 重置
-    const result: { [key: string]: any } = await api.get(`subscribe/reset/${props.media?.id}`)
-    // 提示
-    if (result.success) {
-      $toast.success(t('subscribe.resetSuccess', { name: props.media?.name }))
-      subscribeState.value = 'R'
-      emit('save')
-    } else $toast.error(t('subscribe.resetFailed', { name: props.media?.name, message: result.message }))
+    const confirmed = await createConfirm({ title: config.title, content: config.confirm })
+    if (!confirmed) return
+    const result: { success?: boolean; message?: string } = await api.post(`subscribe/${props.media?.id}/${action}`)
+    if (!result.success) {
+      $toast.error(result.message || '操作失败')
+      return
+    }
+    $toast.success(config.success)
+    if (action === 'clear-progress') subscribeState.value = 'R'
+    emit('save')
   } catch (e) {
     $toast.error(t('subscribe.requestFailed'))
     console.log(e)
   }
 }
-
 //  分享订阅
 async function shareSubscribe() {
   if (!props.media) return
@@ -367,11 +389,28 @@ const dropdownItems = computed(() => [
     },
   },
   {
-    title: t('common.reset'),
+    title: '重新计算进度',
     value: 6,
     props: {
+      prependIcon: 'mdi-calculator-variant-outline',
+      click: () => runRecoveryAction('recompute-progress'),
+    },
+  },
+  {
+    title: '清空订阅进度',
+    value: 10,
+    props: {
       prependIcon: 'mdi-restore-alert',
-      click: resetSubscribe,
+      click: () => runRecoveryAction('clear-progress'),
+      color: 'warning',
+    },
+  },
+  {
+    title: '强制重新搜索一次',
+    value: 11,
+    props: {
+      prependIcon: 'mdi-magnify-scan',
+      click: () => runRecoveryAction('force-search'),
       color: 'warning',
     },
   },
@@ -690,6 +729,10 @@ function handleCardClick() {
                         {{ completedVersionCount }} / {{ versionCount }}
                       </div>
                     </template>
+                    <VTooltip v-if="decisionSummaryText" activator="parent" location="top">
+                      {{ decisionSummaryText }}
+                    </VTooltip>
+
                   </div>
                 </VCardText>
                 <!-- 右下角元数据：暂停 / 待定时替换"x 天前"为状态文案 -->

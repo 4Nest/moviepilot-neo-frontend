@@ -3,7 +3,7 @@ import api from '@/api'
 import type { Storage } from '@/api/types'
 import storageImage from '@images/misc/storage.png'
 import { formatDashboardFileSize, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
 const { t } = useI18n()

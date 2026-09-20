@@ -2,7 +2,7 @@
 import { debounce } from 'lodash-es'
 import WorkflowListView from '@/views/workflow/WorkflowListView.vue'
 import WorkflowShareView from '@/views/workflow/WorkflowShareView.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'

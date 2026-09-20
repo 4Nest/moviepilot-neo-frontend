@@ -3,7 +3,7 @@ import api from '@/api'
 import type { TransferHistory } from '@/api/types'
 import noImage from '@images/no-image.jpeg'
 import { formatDateDifference, formatFileSize } from '@/@core/utils/formatters'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 

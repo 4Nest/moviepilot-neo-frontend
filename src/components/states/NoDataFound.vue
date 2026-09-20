@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import page404 from '@images/pages/404.svg'
 
 // 国际化

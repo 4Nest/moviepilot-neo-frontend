@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { MediaServerConf, MediaStatistic } from '@/api/types'
 import { getLogoUrl } from '@/utils/imageUtils'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { mediaServerDict } from '@/api/constants'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useCardAccentColor } from '@/composables/useCardAccentColor'

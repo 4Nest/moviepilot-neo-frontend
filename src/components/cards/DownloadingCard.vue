@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { ApiResponse, DownloadingInfo } from '@/api/types'
 import { formatFileSize } from '@/@core/utils/formatters'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 /** 卡片使用的下载任务信息，兼容接口已经返回但公共类型尚未声明的来源站点。 */
 interface DownloadingCardInfo extends DownloadingInfo {

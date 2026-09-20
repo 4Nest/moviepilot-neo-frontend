@@ -2,7 +2,7 @@
 import api from '@/api'
 import draggable from 'vuedraggable'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 const display = useDisplay()

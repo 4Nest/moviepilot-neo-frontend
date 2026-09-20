@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { actionStepDict } from '@/api/constants'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 interface WorkflowSummaryAction {
   data?: {

@@ -2,7 +2,7 @@
 import type { PropType } from 'vue'
 import api from '@/api'
 import type { Site, SiteStatistic } from '@/api/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 国际化

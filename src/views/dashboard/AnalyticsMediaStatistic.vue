@@ -3,7 +3,7 @@ import api from '@/api'
 import type { MediaStatistic } from '@/api/types'
 import { formatDashboardCount, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
 import { useDashboardSnapshot } from '@/composables/useDashboardSnapshot'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
 const { t } = useI18n()

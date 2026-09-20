@@ -4,7 +4,7 @@ import type { Site, Plugin, Subscribe } from '@/api/types'
 import { getNavMenus, getSettingTabs } from '@/router/i18n-menu'
 import { NavMenu } from '@/@layouts/types'
 import SearchSiteDialog from '@/components/dialog/SearchSiteDialog.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { VDialog, VMenu } from 'vuetify/components'
 

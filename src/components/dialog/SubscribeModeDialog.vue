@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 type SubscribeMode = 'normal' | 'best_version' | 'best_version_full'
 

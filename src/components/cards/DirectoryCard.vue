@@ -2,7 +2,7 @@
 import type { StorageConf, TransferDirectoryConf } from '@/api/types'
 import api from '@/api'
 import { nextTick } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { storageRemoteDict } from '@/api/constants'
 
 const DEFAULT_DIRECTORY_ACCENT_RGB = '141, 81, 249'

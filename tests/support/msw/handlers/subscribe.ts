@@ -45,7 +45,8 @@ export const subscribeApiUrls = {
   orderConfig: (type: SubscribeMediaType) =>
     new URL(`user/config/${type === '电影' ? 'SubscribeMovieOrder' : 'SubscribeTvOrder'}`, API_BASE_URL).href,
   popular: new URL('subscribe/popular', API_BASE_URL).href,
-  resetById: (id: number) => new URL(`subscribe/reset/${id}`, API_BASE_URL).href,
+  recoveryById: (id: number, action: 'recompute-progress' | 'clear-progress' | 'force-search') =>
+    new URL(`subscribe/${id}/${action}`, API_BASE_URL).href,
   searchById: (id: number) => new URL(`subscribe/search/${id}`, API_BASE_URL).href,
   share: new URL('subscribe/share', API_BASE_URL).href,
   shareById: (id: number) => new URL(`subscribe/share/${id}`, API_BASE_URL).href,
@@ -258,13 +259,14 @@ export function searchSubscribeByIdHandler(
   })
 }
 
-export function resetSubscribeByIdHandler(
+export function subscribeRecoveryActionHandler(
   id: number,
+  action: 'recompute-progress' | 'clear-progress' | 'force-search',
   response: SubscribeMutationResponse = { success: true },
   status = 200,
   onRequest: (url: URL) => void = () => {},
 ) {
-  return http.get(subscribeApiUrls.resetById(id), ({ request }) => {
+  return http.post(subscribeApiUrls.recoveryById(id, action), ({ request }) => {
     onRequest(new URL(request.url))
     return jsonResponse(response, status)
   })

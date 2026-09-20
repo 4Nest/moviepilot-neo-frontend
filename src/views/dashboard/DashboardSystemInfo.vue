@@ -3,7 +3,7 @@ import api from '@/api'
 import type { DashboardSystemInfo } from '@/api/types'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useBackground } from '@/composables/useBackground'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const AboutDialog = defineAsyncComponent(() => import('@/components/dialog/AboutDialog.vue'))
 

@@ -1,4 +1,3 @@
-import i18n from '@/plugins/i18n'
 import vuetify from '@/plugins/vuetify'
 import { createTestingPinia } from '@pinia/testing'
 import { render } from '@testing-library/vue'
@@ -37,7 +36,6 @@ export async function renderWithProviders(component: Component, options: RenderW
     routes: [{ path: '/:pathMatch(.*)*', component: EmptyRoute, meta: initialRouteMeta }],
   })
   await router.push(initialRoute)
-  i18n.global.locale.value = 'zh-CN'
 
   const pinia = createTestingPinia({
     createSpy: vi.fn,
@@ -50,7 +48,7 @@ export async function renderWithProviders(component: Component, options: RenderW
     ...renderOptions,
     global: {
       ...globalOptions,
-      plugins: [vuetify, i18n, pinia, router, ...(globalOptions?.plugins ?? [])],
+      plugins: [vuetify, pinia, router, ...(globalOptions?.plugins ?? [])],
     },
   })
   await router.isReady()

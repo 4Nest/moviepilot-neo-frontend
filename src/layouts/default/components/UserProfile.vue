@@ -5,7 +5,7 @@ import avatar1 from '@images/avatars/avatar-1.png'
 import api from '@/api'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useAuthStore, useUserStore, useGlobalSettingsStore } from '@/stores'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useTheme } from 'vuetify'
 import { checkPrefersColorSchemeIsDark } from '@/@core/utils'
 

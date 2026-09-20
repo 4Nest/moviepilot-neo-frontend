@@ -5,7 +5,7 @@ import api from '@/api'
 import type { DownloaderConf, FilterRuleGroup, Site, Subscribe, SubscribeVersionRule, SubscribeVersionSettings, TransferDirectoryConf } from '@/api/types'
 import { useDisplay } from 'vuetify'
 import { useConfirm } from '@/composables/useConfirm'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { qualityOptions, resolutionOptions, effectOptions } from '@/api/constants'
 import { formatSeason } from '@/@core/utils/formatters'
 

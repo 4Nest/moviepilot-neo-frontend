@@ -2,7 +2,7 @@
 import { numberValidator } from '@/@validators'
 import type { FileItem, ManualScrapeOptions, MediaDataSource, MediaInfo } from '@/api/types'
 import { useGlobalSettingsStore } from '@/stores'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 
 const { t } = useI18n()

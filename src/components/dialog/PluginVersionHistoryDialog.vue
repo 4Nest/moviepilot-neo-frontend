@@ -2,10 +2,10 @@
 import api from '@/api'
 import type { Plugin, PluginReleaseVersion, PluginReleaseVersionsResponse } from '@/api/types'
 import VersionHistory from '@/components/misc/VersionHistory.vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 多语言
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 // 输入参数
 const props = defineProps({
@@ -87,7 +87,7 @@ function formatReleaseDate(value?: string) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString(locale.value)
+  return date.toLocaleDateString('zh-CN')
 }
 
 function releaseItemByHistoryVersion(version: string) {

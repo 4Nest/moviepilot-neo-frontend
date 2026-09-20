@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { usePWAInstall } from '@/composables/usePWAInstall'
 import { useAuthStore } from '@/stores'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 
-const { t, locale, messages } = useI18n()
+const { t } = useI18n()
 const { isInstalled, showInstallPrompt, getInstallInstructions } = usePWAInstall()
 
 const showBanner = ref(false)

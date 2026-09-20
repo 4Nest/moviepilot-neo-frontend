@@ -1,6 +1,5 @@
 import FileToolbar from '@/components/filebrowser/FileToolbar.vue'
 import type { EndPoints, FileItem } from '@/api/types'
-import i18n from '@/plugins/i18n'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import type { AxiosInstance } from 'axios'
@@ -68,7 +67,6 @@ function mountToolbar(
       ],
     },
     global: {
-      plugins: [i18n],
       stubs: {
         IconBtn: IconBtnStub,
         VBtn: {

@@ -3,7 +3,7 @@ import { innerFilterRules } from '@/api/constants'
 import type { CustomRule } from '@/api/types'
 import { cloneDeep } from 'lodash-es'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 显示器宽度

@@ -2,7 +2,7 @@
 import { getNavMenus } from '@/router/i18n-menu'
 import { useDisplay } from 'vuetify'
 import { NavMenu } from '@/@layouts/types'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useLaunchLoading } from '@/composables/useLaunchLoading'
 import { usePWA } from '@/composables/usePWA'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
@@ -19,10 +19,7 @@ const display = useDisplay()
 // PWA模式检测
 const { appMode } = usePWA()
 const { isLaunchLoading } = useLaunchLoading()
-const { t, locale } = useI18n()
-
-// 判断当前是否为英文环境
-const isEnglish = computed(() => locale.value === 'en-US')
+const { t } = useI18n()
 
 const route = useRoute()
 
@@ -218,7 +215,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
               >
                 <div class="btn-content">
                   <VIcon :icon="(menu.icon as string)" size="32"></VIcon>
-                  <span v-if="!isEnglish" class="text-xs">{{ menu.title }}</span>
+                  <span class="text-xs">{{ menu.title }}</span>
                 </div>
               </VBtn>
 
@@ -235,7 +232,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
               >
                 <div class="btn-content">
                   <VIcon icon="mdi-dots-horizontal" size="32"></VIcon>
-                  <span v-if="!isEnglish" class="text-xs">{{ t('nav.more') }}</span>
+                  <span class="text-xs">{{ t('nav.more') }}</span>
                 </div>
               </VBtn>
             </VBtnToggle>

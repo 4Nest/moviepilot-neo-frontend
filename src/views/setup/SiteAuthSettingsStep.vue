@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useSetupWizard } from '@/composables/useSetupWizard'
 
 const { t } = useI18n()
@@ -43,16 +43,6 @@ const formFields = computed(() => {
             <VAlertTitle>{{ t('setupWizard.siteAuth.info') }}</VAlertTitle>
             {{ t('setupWizard.siteAuth.infoDesc') }}
           </VAlert>
-        </VCol>
-
-        <VCol cols="12">
-          <VSwitch
-            v-model="wizardData.siteAuth.auxiliaryAuthEnable"
-            :label="t('setting.system.auxAuthEnable')"
-            :hint="t('setting.system.auxAuthEnableHint')"
-            persistent-hint
-            color="primary"
-          />
         </VCol>
 
         <VCol cols="12">

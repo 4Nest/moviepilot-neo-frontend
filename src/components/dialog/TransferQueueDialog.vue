@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import CryptoJS from 'crypto-js'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useToast } from 'vue-toastification'
 import noImage from '@images/no-image.jpeg'
 import { formatFileSize } from '@/@core/utils/formatters'

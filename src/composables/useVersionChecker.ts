@@ -1,7 +1,7 @@
 import { ref, h } from 'vue'
 import { useToast } from 'vue-toastification'
 import { Workbox } from 'workbox-window'
-import i18n from '@/plugins/i18n'
+import { translate } from '@/composables/useChineseText'
 import VersionUpdateToast from '@/components/toast/VersionUpdateToast.vue'
 import {
   createServiceWorkerCoordinator,
@@ -50,7 +50,7 @@ const serviceWorkerCoordinator = createServiceWorkerCoordinator({
     }),
   onUpdateActivated: () => {
     console.log('[VersionChecker] Service Worker 更新已就绪，等待用户刷新')
-    showUpdateNotification(i18n.global.t('common.swUpdateReady'), i18n.global.t('common.refresh'), reloadPage)
+    showUpdateNotification(translate('common.swUpdateReady'), translate('common.refresh'), reloadPage)
   },
   onError: error => console.error('[VersionChecker] Service Worker 注册失败:', error),
 })
@@ -178,8 +178,8 @@ export function useVersionChecker() {
 
     // 最终兜底：显示版本不一致通知（清除缓存）
     showUpdateNotification(
-      i18n.global.t('common.versionMismatch'),
-      i18n.global.t('common.clearCache'),
+      translate('common.versionMismatch'),
+      translate('common.clearCache'),
       clearCacheAndReload,
     )
   }

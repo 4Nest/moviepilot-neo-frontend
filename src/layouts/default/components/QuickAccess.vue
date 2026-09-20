@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { Plugin } from '@/api/types'
 import { getLogoUrl } from '@/utils/imageUtils'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useRecentPlugins } from '@/composables/useRecentPlugins'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import PluginDataDialog from '@/components/dialog/PluginDataDialog.vue'

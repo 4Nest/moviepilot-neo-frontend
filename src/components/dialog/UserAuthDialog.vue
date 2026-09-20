@@ -2,7 +2,7 @@
 import { isNullOrEmptyObject } from '@/@core/utils'
 import api from '@/api'
 import { useToast } from 'vue-toastification'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 // 多语言支持
 const { t } = useI18n()

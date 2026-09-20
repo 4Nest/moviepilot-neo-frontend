@@ -1,9 +1,9 @@
 import { useGlobalSettingsStore } from '@/stores'
 import type { NavMenu, NavMenuTabItem } from '@/@layouts/types'
-import type { Composer } from 'vue-i18n'
+import type { TextTranslator } from '@/composables/useChineseText'
 
 /** 构建当前语言与全局模式对应的主导航菜单。 */
-export function getNavMenus(t: Composer['t']): NavMenu[] {
+export function getNavMenus(t: TextTranslator): NavMenu[] {
   const globalSettingsStore = useGlobalSettingsStore()
 
   // 检查是否为高级模式
@@ -138,7 +138,7 @@ export function getNavMenus(t: Composer['t']): NavMenu[] {
 }
 
 /** 返回推荐页可用的分类标签。 */
-export function getRecommendTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getRecommendTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     { title: t('recommend.all'), icon: 'mdi-filmstrip-box-multiple', tab: t('recommend.all') },
     { title: t('recommend.categoryMovie'), icon: 'mdi-movie', tab: t('recommend.categoryMovie') },
@@ -149,7 +149,7 @@ export function getRecommendTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回系统设置页的配置标签。 */
-export function getSettingTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getSettingTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('settingTabs.system.title'),
@@ -197,7 +197,7 @@ export function getSettingTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回电影订阅页的业务标签。 */
-export function getSubscribeMovieTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getSubscribeMovieTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('subscribeTabs.movie.mysub'),
@@ -208,7 +208,7 @@ export function getSubscribeMovieTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回电视剧订阅页的业务标签。 */
-export function getSubscribeTvTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getSubscribeTvTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('subscribeTabs.tv.mysub'),
@@ -224,7 +224,7 @@ export function getSubscribeTvTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回插件管理页的业务标签。 */
-export function getPluginTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getPluginTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('pluginTabs.installed'),
@@ -240,7 +240,7 @@ export function getPluginTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回发现页的媒体来源标签。 */
-export function getDiscoverTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getDiscoverTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('discoverTabs.themoviedb'),
@@ -266,7 +266,7 @@ export function getDiscoverTabs(t: Composer['t']): NavMenuTabItem[] {
 }
 
 /** 返回工作流页的业务标签。 */
-export function getWorkflowTabs(t: Composer['t']): NavMenuTabItem[] {
+export function getWorkflowTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('workflowTabs.list'),
@@ -287,7 +287,7 @@ export type PluginSidebarSection = 'start' | 'discovery' | 'subscribe' | 'organi
 /**
  * 将插件声明的 section 映射为与 getNavMenus 一致的已翻译 header（用于 NavMenu.header）
  */
-export function pluginSidebarSectionToHeaderKey(section: string, t: Composer['t']): string {
+export function pluginSidebarSectionToHeaderKey(section: string, t: TextTranslator): string {
   const map: Record<string, string> = {
     start: 'menu.start',
     discovery: 'menu.discovery',

@@ -2,7 +2,7 @@
 import { getLogoUrl } from '@/utils/imageUtils'
 import type { Plugin } from '@/api/types'
 import { useDisplay } from 'vuetify'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 
 const props = defineProps({
   keyword: {

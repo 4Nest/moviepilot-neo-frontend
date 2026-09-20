@@ -2,7 +2,7 @@
 import api from '@/api'
 import { FilterRuleGroup } from '@/api/types'
 import { Handle, Position } from '@vue-flow/core'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { qualityOptions, resolutionOptions, effectOptions } from '@/api/constants'
 const { t } = useI18n()
 

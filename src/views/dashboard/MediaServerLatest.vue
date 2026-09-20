@@ -7,7 +7,7 @@ import DashboardMediaState from '@/components/misc/DashboardMediaState.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useDashboardMediaGridCapacity } from '@/composables/useDashboardMediaGridCapacity'
 import { useDashboardSnapshot } from '@/composables/useDashboardSnapshot'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 
 // 国际化
