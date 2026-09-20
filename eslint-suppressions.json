@@ -79,7 +79,7 @@
   },
   "src/api/types.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 35
+      "count": 34
     }
   },
   "src/components/cards/DirectoryCard.vue": {
@@ -126,7 +126,7 @@
   },
   "src/components/cards/SubscribeCard.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 4
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -358,7 +358,7 @@
   },
   "src/components/pwa/PWAInstallPrompt.vue": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 1
     },
     "sonarjs/no-ignored-exceptions": {
       "count": 1
@@ -500,9 +500,6 @@
   "src/composables/useConfirm.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/composables/useDynamicButton.ts": {
@@ -541,7 +538,7 @@
   },
   "src/composables/useSetupWizard.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 21
+      "count": 17
     },
     "sonarjs/no-duplicated-branches": {
       "count": 2
@@ -629,11 +626,6 @@
     }
   },
   "src/pages/setting.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/plugins/i18n.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
@@ -916,11 +908,6 @@
   },
   "src/views/system/RuleTestView.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/views/user/UserProfileView.vue": {
-    "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
