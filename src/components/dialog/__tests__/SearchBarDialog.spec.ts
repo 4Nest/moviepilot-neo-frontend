@@ -73,6 +73,43 @@ describe('SearchBarDialog media source selection', () => {
     })
   })
 
+  it('uses the native input value when submit precedes compositionend', async () => {
+    setViewport(390)
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+    const form = input.closest('form') as HTMLFormElement
+
+    await fireEvent.compositionStart(input)
+    await fireEvent.input(input, { target: { value: '流浪地球' } })
+    expect(router.currentRoute.value.path).not.toBe('/browse/media/search')
+    await fireEvent.submit(form)
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.query).toEqual({
+        source: 'themoviedb',
+        title: '流浪地球',
+        type: 'media',
+      })
+    })
+  })
+
+  it('submits once when the keyboard emits keydown and keyup around submit', async () => {
+    setViewport(390)
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+    const form = input.closest('form') as HTMLFormElement
+
+    await userEvent.setup().type(input, '流浪地球')
+    await fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
+    await fireEvent.submit(form)
+    await fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/browse/media/search')
+      expect(router.currentRoute.value.query.title).toBe('流浪地球')
+    })
+  })
+
   it('places supported sources inside each search item and uses the selected source', async () => {
     const user = userEvent.setup()
     const { router } = await renderSearchBar()

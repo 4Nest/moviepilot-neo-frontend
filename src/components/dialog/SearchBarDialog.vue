@@ -39,6 +39,8 @@ const siteSearchType = ref<'torrent' | 'subtitle'>('torrent')
 
 // 定义事件
 const emit = defineEmits(['close', 'update:modelValue'])
+// 防止同一软键盘动作通过键盘事件和表单提交重复导航。
+let searchSubmissionLocked = false
 
 // 对话框状态的本地计算属性
 const dialog = computed({
@@ -342,14 +344,41 @@ function searchSubtitle() {
   closeSearch()
 }
 
+/** 从原生输入框读取最新值，覆盖 IME 提交早于 v-model input 的时序。 */
+function syncSearchWord(event?: Event): string {
+  const input = event?.target instanceof HTMLInputElement ? event.target : searchWordInput.value
+  const keyword = input?.value.trim() || searchWord.value?.trim() || ''
+  if (searchWord.value !== keyword) searchWord.value = keyword
+  return keyword
+}
+
+/** 处理软键盘 Enter；submit 是主路径，keydown/keyup 仅用于兼容设备差异。 */
+function handleSearchKey(event: KeyboardEvent) {
+  if (event.isComposing) return
+  const isEnter = event.key === 'Enter' || event.keyCode === 13
+  const isImeFallback = event.type === 'keyup' && event.keyCode === 229
+  if ((!isEnter && !isImeFallback) || searchSubmissionLocked || !syncSearchWord(event)) return
+  event.preventDefault()
+  searchSubmissionLocked = true
+  const form = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.form : null
+  if (form) form.requestSubmit()
+  else searchMedia('media', event)
+}
+
 /** 跳转到指定类型的媒体搜索结果页。 */
-function searchMedia(searchType: MediaSearchType) {
-  if (!searchWord.value) return
-  saveRecentSearches(searchWord.value)
+function searchMedia(searchType: MediaSearchType, event?: Event) {
+  const keyword = syncSearchWord(event)
+  if (!keyword) {
+    searchSubmissionLocked = false
+    return
+  }
+  if (searchSubmissionLocked && event?.type !== 'submit') return
+  searchSubmissionLocked = true
+  saveRecentSearches(keyword)
   router.push({
     path: '/browse/media/search',
     query: {
-      title: searchWord.value,
+      title: keyword,
       type: searchType,
       source: selectedMediaSearchSources[searchType],
     },
@@ -433,7 +462,9 @@ function focusSearchInput() {
 }
 
 watch(dialog, async isOpen => {
+  searchSubmissionLocked = !isOpen
   if (!isOpen) return
+  searchSubmissionLocked = false
   await nextTick()
   focusSearchInput()
 })
@@ -463,7 +494,7 @@ onMounted(() => {
 
       <!-- 中屏及以上常驻搜索输入框，输入时直接在下方展示同一组选项。 -->
       <div v-else v-bind="activatorProps" class="search-desktop-activator">
-        <form class="search-input-wrapper" @submit.prevent="searchMedia('media')">
+        <form class="search-input-wrapper" @submit.prevent="searchMedia('media', $event)">
           <VIcon icon="mdi-magnify" size="22" class="search-input-icon" />
           <input
             ref="searchWordInput"
@@ -474,6 +505,9 @@ onMounted(() => {
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
+            @keydown="handleSearchKey"
+            @keyup="handleSearchKey"
+            @compositionend="syncSearchWord"
             @keydown.escape.stop="closeSearch"
           />
           <kbd class="search-shortcut-badge">{{ metaKey }}</kbd>
@@ -484,7 +518,7 @@ onMounted(() => {
     <VCard class="search-dialog" :class="{ 'search-dialog--dropdown': display.mdAndUp.value }">
       <!-- 弹窗模式保留原有搜索输入区。 -->
       <div v-if="!display.mdAndUp.value" class="search-header">
-        <form class="search-input-wrapper" @submit.prevent="searchMedia('media')">
+        <form class="search-input-wrapper" @submit.prevent="searchMedia('media', $event)">
           <VIcon icon="mdi-text" size="22" class="search-input-icon" />
           <input
             ref="searchWordInput"
@@ -495,6 +529,9 @@ onMounted(() => {
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
+            @keydown="handleSearchKey"
+            @keyup="handleSearchKey"
+            @compositionend="syncSearchWord"
             @keydown.escape.stop="closeSearch"
           />
           <VBtn type="submit" icon size="small" variant="text" class="search-submit-btn">
