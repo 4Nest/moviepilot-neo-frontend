@@ -352,27 +352,27 @@ function syncSearchWord(event?: Event): string {
   return keyword
 }
 
-/** 处理软键盘 Enter；submit 是主路径，keydown/keyup 仅用于兼容设备差异。 */
-function handleSearchKey(event: KeyboardEvent) {
-  if (event.isComposing) return
-  const isEnter = event.key === 'Enter' || event.keyCode === 13
-  const isImeFallback = event.type === 'keyup' && event.keyCode === 229
-  if ((!isEnter && !isImeFallback) || searchSubmissionLocked || !syncSearchWord(event)) return
+/** 请求当前输入框所属表单提交，统一承接键盘、WebKit search 与换行输入事件。 */
+function requestSearchSubmit(event: Event) {
+  if (searchSubmissionLocked) return
+  if (event instanceof KeyboardEvent && event.isComposing && event.keyCode !== 229) return
+  if (
+    event instanceof InputEvent &&
+    event.inputType !== 'insertLineBreak' &&
+    event.inputType !== 'insertParagraph'
+  )
+    return
+
+  const input = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : searchWordInput.value
+  if (!input || !syncSearchWord(event)) return
   event.preventDefault()
-  searchSubmissionLocked = true
-  const form = event.currentTarget instanceof HTMLInputElement ? event.currentTarget.form : null
-  if (form) form.requestSubmit()
-  else searchMedia('media', event)
+  input.form?.requestSubmit()
 }
 
 /** 跳转到指定类型的媒体搜索结果页。 */
 function searchMedia(searchType: MediaSearchType, event?: Event) {
   const keyword = syncSearchWord(event)
-  if (!keyword) {
-    searchSubmissionLocked = false
-    return
-  }
-  if (searchSubmissionLocked && event?.type !== 'submit') return
+  if (!keyword || searchSubmissionLocked) return
   searchSubmissionLocked = true
   saveRecentSearches(keyword)
   router.push({
@@ -500,13 +500,16 @@ onMounted(() => {
             ref="searchWordInput"
             v-model="searchWord"
             id="global-media-search"
-            type="text"
+            type="search"
+            inputmode="search"
             enterkeyhint="search"
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
-            @keydown="handleSearchKey"
-            @keyup="handleSearchKey"
+            @keydown.enter="requestSearchSubmit"
+            @keyup.enter="requestSearchSubmit"
+            @beforeinput="requestSearchSubmit"
+            @search="requestSearchSubmit"
             @compositionend="syncSearchWord"
             @keydown.escape.stop="closeSearch"
           />
@@ -524,13 +527,16 @@ onMounted(() => {
             ref="searchWordInput"
             v-model="searchWord"
             id="global-media-search"
-            type="text"
+            type="search"
+            inputmode="search"
             enterkeyhint="search"
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
-            @keydown="handleSearchKey"
-            @keyup="handleSearchKey"
+            @keydown.enter="requestSearchSubmit"
+            @keyup.enter="requestSearchSubmit"
+            @beforeinput="requestSearchSubmit"
+            @search="requestSearchSubmit"
             @compositionend="syncSearchWord"
             @keydown.escape.stop="closeSearch"
           />
@@ -914,8 +920,13 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
   line-height: 1.5;
   min-inline-size: 0;
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
+.search-native-input::-webkit-search-cancel-button {
+  display: none;
+}
 .search-native-input::placeholder {
   color: rgba(var(--v-theme-on-surface), 0.38);
 }

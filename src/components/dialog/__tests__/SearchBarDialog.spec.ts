@@ -56,6 +56,8 @@ describe('SearchBarDialog media source selection', () => {
     const { router } = await renderSearchBar()
     const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
 
+    expect(input).toHaveAttribute('type', 'search')
+    expect(input).toHaveAttribute('inputmode', 'search')
     expect(input).toHaveAttribute('enterkeyhint', 'search')
     const form = input.closest('form')
     expect(form).not.toBeNull()
@@ -90,6 +92,43 @@ describe('SearchBarDialog media source selection', () => {
         title: '流浪地球',
         type: 'media',
       })
+    })
+  })
+
+  it('submits from the WebKit search event used by iOS Safari', async () => {
+    setViewport(390)
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+
+    await fireEvent.input(input, { target: { value: '海贼王' } })
+    await fireEvent(input, new Event('search', { bubbles: true, cancelable: true }))
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.query).toEqual({
+        source: 'themoviedb',
+        title: '海贼王',
+        type: 'media',
+      })
+    })
+  })
+
+  it('submits from the iOS line-break input fallback', async () => {
+    setViewport(390)
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+
+    await fireEvent.input(input, { target: { value: '海贼王' } })
+    await fireEvent(
+      input,
+      new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertLineBreak',
+      }),
+    )
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.query.title).toBe('海贼王')
     })
   })
 
