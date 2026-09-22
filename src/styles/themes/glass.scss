@@ -1221,12 +1221,6 @@ html[data-theme='glass'] {
     --mobile-scheduler-card-shadow: var(--glass-shadow);
   }
 
-  .mobile-subscribe-calendar {
-    --mobile-calendar-control-bg: var(--glass-surface-soft);
-    --mobile-calendar-placeholder-bg: var(--glass-surface-soft);
-    --mobile-calendar-surface-blur: var(--glass-surface-backdrop-filter);
-  }
-
   // 用户权限编辑器由普通容器构成，通过主题变量接入玻璃表面材质。
   .user-permission-editor {
     --permission-editor-border: 1px solid var(--glass-border);

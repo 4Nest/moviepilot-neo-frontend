@@ -1,5 +1,5 @@
 import SearchBarDialog from '@/components/dialog/SearchBarDialog.vue'
-import { screen, waitFor, within } from '@testing-library/vue'
+import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -19,9 +19,15 @@ function getSearchItem(title: string): HTMLElement {
   return item
 }
 
+function setViewport(width: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width, writable: true })
+  window.dispatchEvent(new Event('resize'))
+}
+
 describe('SearchBarDialog media source selection', () => {
   beforeEach(() => {
     localStorage.clear()
+    setViewport(1280)
   })
 
   it('defaults media searches to TheMovieDB', async () => {
@@ -33,6 +39,29 @@ describe('SearchBarDialog media source selection', () => {
     expect(input.getAttribute('aria-label')).toBe('搜索电影、剧集以及更多...')
 
     await user.type(input, '流浪地球{Enter}')
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/browse/media/search')
+      expect(router.currentRoute.value.query).toEqual({
+        source: 'themoviedb',
+        title: '流浪地球',
+        type: 'media',
+      })
+    })
+  })
+
+  it('submits the mobile search form from the software keyboard action', async () => {
+    setViewport(390)
+    const user = userEvent.setup()
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+
+    expect(input).toHaveAttribute('enterkeyhint', 'search')
+    const form = input.closest('form')
+    expect(form).not.toBeNull()
+
+    await user.type(input, '流浪地球')
+    await fireEvent.submit(form as HTMLFormElement)
 
     await waitFor(() => {
       expect(router.currentRoute.value.path).toBe('/browse/media/search')

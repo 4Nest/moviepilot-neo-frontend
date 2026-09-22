@@ -463,44 +463,44 @@ onMounted(() => {
 
       <!-- 中屏及以上常驻搜索输入框，输入时直接在下方展示同一组选项。 -->
       <div v-else v-bind="activatorProps" class="search-desktop-activator">
-        <div class="search-input-wrapper">
+        <form class="search-input-wrapper" @submit.prevent="searchMedia('media')">
           <VIcon icon="mdi-magnify" size="22" class="search-input-icon" />
           <input
             ref="searchWordInput"
             v-model="searchWord"
             id="global-media-search"
             type="text"
+            enterkeyhint="search"
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
-            @keydown.enter="searchMedia('media')"
             @keydown.escape.stop="closeSearch"
           />
           <kbd class="search-shortcut-badge">{{ metaKey }}</kbd>
-        </div>
+        </form>
       </div>
     </template>
 
     <VCard class="search-dialog" :class="{ 'search-dialog--dropdown': display.mdAndUp.value }">
       <!-- 弹窗模式保留原有搜索输入区。 -->
       <div v-if="!display.mdAndUp.value" class="search-header">
-        <div class="search-input-wrapper">
+        <form class="search-input-wrapper" @submit.prevent="searchMedia('media')">
           <VIcon icon="mdi-text" size="22" class="search-input-icon" />
           <input
             ref="searchWordInput"
             v-model="searchWord"
             id="global-media-search"
             type="text"
+            enterkeyhint="search"
             class="search-native-input"
             :aria-label="t('dialog.searchBar.searchPlaceholder')"
             :placeholder="t('dialog.searchBar.searchPlaceholder')"
-            @keydown.enter="searchMedia('media')"
             @keydown.escape.stop="closeSearch"
           />
-          <VBtn icon size="small" variant="text" class="search-submit-btn" @click="searchMedia('media')">
+          <VBtn type="submit" icon size="small" variant="text" class="search-submit-btn">
             <VIcon icon="mdi-magnify" size="20" />
           </VBtn>
-        </div>
+        </form>
       </div>
 
       <!-- 主内容区域 -->

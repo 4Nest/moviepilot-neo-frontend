@@ -37,12 +37,6 @@
     "vitest/vite": "5.4.18"
   },
   "dependencies": {
-    "@fullcalendar/core": "^6.1.15",
-    "@fullcalendar/daygrid": "^6.1.15",
-    "@fullcalendar/interaction": "^6.1.15",
-    "@fullcalendar/list": "^6.1.15",
-    "@fullcalendar/timegrid": "^6.1.15",
-    "@fullcalendar/vue3": "^6.1.15",
     "@iconify/utils": "^2.2.1",
     "@types/crypto-js": "^4.2.2",
     "@types/js-cookie": "^3.0.6",
