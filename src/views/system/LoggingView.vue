@@ -61,6 +61,8 @@ const parsedLogs = ref<LogEntry[]>([])
 const logViewportRef = ref<HTMLElement | null>(null)
 const isMounted = ref(false)
 const followTail = ref(true)
+// 倒序显示：最新日志在最上方，选择持久化
+const newestFirst = ref(localStorage.getItem('MP_LOG_NEWEST_FIRST') === '1')
 const isStreamPaused = ref(false)
 const searchQuery = ref<string | null>('')
 const selectedLevel = ref('ALL')
@@ -132,12 +134,26 @@ const filteredGroups = computed(() => {
     .filter(group => group.items.length > 0)
 })
 
+const displayGroups = computed(() => {
+  if (!newestFirst.value) {
+    return filteredGroups.value
+  }
+
+  // 分组与组内条目一起倒序，最新时间显示在最上方
+  return filteredGroups.value.map(group => ({ ...group, items: [...group.items].reverse() })).reverse()
+})
+
 const visibleLogCount = computed(() => {
   return filteredGroups.value.reduce((count, group) => count + group.items.length, 0)
 })
 
 const lastVisibleLogId = computed(() => {
   return filteredGroups.value.at(-1)?.items.at(-1)?.id ?? 0
+})
+
+// 跟随滚动锚定到最新一条可见日志；倒序时它位于列表首位
+const followAnchorId = computed(() => {
+  return newestFirst.value ? (filteredGroups.value.at(0)?.items.at(0)?.id ?? 0) : lastVisibleLogId.value
 })
 
 /** 规范化日志级别名称。 */
@@ -393,14 +409,23 @@ function isNearBottom() {
   return scrollHeight - scrollTop - clientHeight <= SCROLL_BOTTOM_THRESHOLD
 }
 
-/** 将日志视口滚动到底部。 */
-function scrollToBottom(behavior: ScrollBehavior = 'auto') {
+/** 判断日志视口是否接近最新日志一端（正序为底部，倒序为顶部）。 */
+function isNearLatest() {
+  if (newestFirst.value) {
+    return (logViewportRef.value?.scrollTop ?? 0) <= SCROLL_BOTTOM_THRESHOLD
+  }
+
+  return isNearBottom()
+}
+
+/** 将日志视口滚动到最新日志一端（正序为底部，倒序为顶部）。 */
+function scrollToLatest(behavior: ScrollBehavior = 'auto') {
   if (!logViewportRef.value) {
     return
   }
 
   logViewportRef.value.scrollTo({
-    top: logViewportRef.value.scrollHeight,
+    top: newestFirst.value ? 0 : logViewportRef.value.scrollHeight,
     behavior,
   })
 }
@@ -411,7 +436,7 @@ function enableFollow(behavior: ScrollBehavior = 'auto') {
   pendingLogCount.value = 0
 
   nextTick(() => {
-    scrollToBottom(behavior)
+    scrollToLatest(behavior)
   })
 }
 
@@ -437,7 +462,7 @@ function flushBuffer() {
     return
   }
 
-  const shouldFollow = isNearBottom()
+  const shouldFollow = isNearLatest()
 
   parsedLogs.value = [...parsedLogs.value, ...incomingLogs].slice(-MAX_LOG_LINES)
 
@@ -518,9 +543,16 @@ function toggleStreamState() {
   pauseStream()
 }
 
+/** 切换日志倒序显示，切换后吸附到最新日志一端。 */
+function toggleNewestFirst() {
+  newestFirst.value = !newestFirst.value
+  localStorage.setItem('MP_LOG_NEWEST_FIRST', newestFirst.value ? '1' : '0')
+  enableFollow()
+}
+
 /** 根据滚动位置更新日志末尾跟随状态。 */
 function handleScroll() {
-  if (isNearBottom()) {
+  if (isNearLatest()) {
     followTail.value = true
     pendingLogCount.value = 0
     return
@@ -529,13 +561,13 @@ function handleScroll() {
   followTail.value = false
 }
 
-watch(lastVisibleLogId, (currentId, previousId) => {
+watch(followAnchorId, (currentId, previousId) => {
   if (!followTail.value || currentId === previousId) {
     return
   }
 
   nextTick(() => {
-    scrollToBottom()
+    scrollToLatest()
   })
 })
 
@@ -631,6 +663,17 @@ onUnmounted(() => {
         variant="text"
         icon
         class="logging-stream-action"
+        :class="{ 'is-live': newestFirst }"
+        :title="newestFirst ? t('logging.oldestFirst') : t('logging.newestFirst')"
+        @click="toggleNewestFirst"
+      >
+        <VIcon :icon="newestFirst ? 'mdi-sort-descending' : 'mdi-sort-ascending'" />
+      </VBtn>
+
+      <VBtn
+        variant="text"
+        icon
+        class="logging-stream-action"
         :class="{ 'is-live': !isStreamPaused }"
         :title="isStreamPaused ? t('logging.resumeStream') : t('logging.pauseStream')"
         @click="toggleStreamState"
@@ -644,7 +687,7 @@ onUnmounted(() => {
         <LoadingBanner :text="t('logging.initializing') + ' ...'" />
       </div>
 
-      <div v-else-if="filteredGroups.length === 0" class="logging-empty">
+      <div v-else-if="displayGroups.length === 0" class="logging-empty">
         <VIcon :icon="parsedLogs.length === 0 ? 'mdi-console-line' : 'mdi-filter-remove-outline'" size="20" />
         <span>
           {{ parsedLogs.length === 0 ? t('logging.waitingForLogs') : t('common.noMatchingData') }}
@@ -652,7 +695,7 @@ onUnmounted(() => {
       </div>
 
       <div v-else class="logging-list">
-        <div v-for="(group, index) in filteredGroups" :key="group.id" class="logging-record">
+        <div v-for="(group, index) in displayGroups" :key="group.id" class="logging-record">
           <div class="logging-record-time">{{ group.secondDisplay || '...' }}</div>
 
           <div class="logging-record-panel" :class="index % 2 === 0 ? 'is-even' : 'is-odd'">
@@ -684,7 +727,7 @@ onUnmounted(() => {
           size="small"
           color="primary"
           variant="elevated"
-          prepend-icon="mdi-arrow-down"
+          :prepend-icon="newestFirst ? 'mdi-arrow-up' : 'mdi-arrow-down'"
           @click="enableFollow('smooth')"
         >
           {{ t('logging.jumpToLatest', { count: pendingLogCount }) }}

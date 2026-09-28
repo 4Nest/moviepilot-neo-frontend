@@ -1355,6 +1355,8 @@ export default {
     connected: '实时更新中',
     lineCount: '显示 {visible}/{total} 行',
     jumpToLatest: '查看最新 ({count})',
+    newestFirst: '倒序显示（最新在上）',
+    oldestFirst: '正序显示（最新在下）',
   },
   moduleTest: {
     normal: '正常',
