@@ -76,7 +76,6 @@ const editorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dar
 
 type RenameMediaType = 'movie' | 'tv'
 const activeRenameMediaType = ref<RenameMediaType>('movie')
-const renameFormatEditorRef = ref<InstanceType<typeof RenameFormatEditor> | null>(null)
 
 // 打开共享分类编辑弹窗，保存后刷新本页分类配置。
 // closeOn 不含 save:进阶页保存原文仅触发 save,弹窗需保持打开;可视化保存由弹窗自身 emit close 关闭。
@@ -441,41 +440,37 @@ useSilentSettingRefresh(loadPageData, {
               />
             </VCol>
             <VCol cols="12">
-              <div class="rename-format-editor-section">
-                <div class="rename-format-type-bar">
+              <VDivider class="mb-4" />
+              <div class="rename-format-section-head">
+                <div class="rename-format-section-title">{{ t('renameFormat.sectionTitle') }}</div>
+                <div class="rename-format-section-desc">{{ t('renameFormat.sectionDesc') }}</div>
+              </div>
+              <RenameFormatEditor
+                v-model="activeRenameFormat"
+                :media-type="activeRenameMediaType"
+                :editor-theme="editorTheme"
+              >
+                <template #toolbar>
                   <VBtnToggle
                     v-model="activeRenameMediaType"
                     class="rename-format-media-toggle"
                     color="primary"
-                    density="comfortable"
+                    density="compact"
                     mandatory
                     variant="outlined"
                     divided
                   >
-                    <VBtn value="movie">
-                      <VIcon icon="mdi-movie-open" size="18" class="me-2" />
-                      {{ t('setting.directory.movieRenameFormat') }}
+                    <VBtn value="movie" size="small">
+                      <VIcon icon="mdi-movie-open" size="16" class="me-1" />
+                      {{ t('mediaType.movie') }}
                     </VBtn>
-                    <VBtn value="tv">
-                      <VIcon icon="mdi-television" size="18" class="me-2" />
-                      {{ t('setting.directory.tvRenameFormat') }}
+                    <VBtn value="tv" size="small">
+                      <VIcon icon="mdi-television" size="16" class="me-1" />
+                      {{ t('mediaType.tv') }}
                     </VBtn>
                   </VBtnToggle>
-                  <VBtn size="small" variant="text" color="warning" @click="renameFormatEditorRef?.resetToDefault()">
-                    <VIcon icon="mdi-restore" size="16" class="me-1" />
-                    {{ t('renameFormat.reset') }}
-                  </VBtn>
-                </div>
-
-                <div class="rename-format-editor-panel">
-                  <RenameFormatEditor
-                    ref="renameFormatEditorRef"
-                    v-model="activeRenameFormat"
-                    :media-type="activeRenameMediaType"
-                    :editor-theme="editorTheme"
-                  />
-                </div>
-              </div>
+                </template>
+              </RenameFormatEditor>
             </VCol>
           </VRow>
         </VCardText>
@@ -494,27 +489,19 @@ useSilentSettingRefresh(loadPageData, {
 </template>
 
 <style scoped>
-.rename-format-editor-section {
-  min-inline-size: 0;
+.rename-format-section-head {
+  margin-block-end: 0.75rem;
 }
 
-.rename-format-type-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+.rename-format-section-title {
+  font-size: 1rem;
+  font-weight: 500;
 }
 
-.rename-format-media-toggle {
-  max-inline-size: 100%;
-}
-
-.rename-format-media-toggle :deep(.v-btn) {
-  min-inline-size: 10.5rem;
-}
-
-.rename-format-editor-panel {
-  padding-block: 0.875rem 0.75rem;
+.rename-format-section-desc {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8125rem;
+  margin-block-start: 0.125rem;
 }
 
 @media (width <= 600px) {
@@ -525,8 +512,6 @@ useSilentSettingRefresh(loadPageData, {
 
   .rename-format-media-toggle :deep(.v-btn) {
     flex: 1 1 50%;
-    min-inline-size: 0;
-    padding-inline: 0.5rem;
   }
 }
 

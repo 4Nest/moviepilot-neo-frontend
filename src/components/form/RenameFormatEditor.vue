@@ -151,6 +151,8 @@ function appendField(key: string) {
 }
 
 const customText = ref('')
+// 常用连接符，一键插入
+const quickTexts = ['/', ' - ', ' ', '.', ' (', ')', '[', ']']
 
 function appendText() {
   const text = customText.value
@@ -204,6 +206,34 @@ function onTokenDrop(targetIndex: number) {
 
 function onFieldDrop() {
   draggingIndex.value = null
+}
+
+// ===== 字段流分组渲染 =====
+interface TokenGroup {
+  /** 可选块条件，为空表示必选 */
+  cond?: string
+  items: { token: RenameToken; index: number }[]
+}
+
+/** 相邻且条件相同的 token 合为一组，可选块整体框起来显示 */
+const tokenGroups = computed<TokenGroup[]>(() => {
+  const groups: TokenGroup[] = []
+  tokens.value.forEach((token, index) => {
+    const last = groups[groups.length - 1]
+    if (token.cond && last?.cond === token.cond) last.items.push({ token, index })
+    else groups.push({ cond: token.cond, items: [{ token, index }] })
+  })
+  return groups
+})
+
+/** 纯 / 文本是目录分隔符 */
+function isPathSeparator(token: RenameToken): boolean {
+  return token.type === 'text' && !token.cond && token.value.trim() === '/'
+}
+
+/** 可选块框上的简短条件说明 */
+function condLabel(cond: string): string {
+  return t('renameFormat.condShort', { field: fieldLabelMap.value[cond] || cond })
 }
 
 // ===== 实时预览 =====
@@ -289,6 +319,14 @@ const preview = computed(() => {
     .trim()
 })
 
+/** 预览按目录层级拆分：前面是文件夹，最后一段是文件名 */
+const previewSegments = computed(() =>
+  preview.value
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean),
+)
+
 // Ace 编辑器配置
 const aceOptions = {
   enableBasicAutocompletion: true,
@@ -308,18 +346,53 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
 
 <template>
   <div class="rename-format-editor">
-    <!-- 模式切换 -->
-    <div class="rename-format-editor__mode-bar">
-      <VBtnToggle v-model="mode" color="primary" density="compact" mandatory variant="outlined" divided>
-        <VBtn value="simple" size="small">
-          <VIcon icon="mdi-cursor-default-click-outline" size="16" class="me-1" />
-          {{ t('renameFormat.modeSimple') }}
+    <!-- 工具栏：左侧由父组件放媒体类型切换，右侧为模式切换与重置 -->
+    <div class="rename-format-editor__toolbar">
+      <div class="rename-format-editor__toolbar-start">
+        <slot name="toolbar" />
+      </div>
+      <div class="rename-format-editor__toolbar-end">
+        <VBtnToggle v-model="mode" color="primary" density="compact" mandatory variant="outlined" divided>
+          <VBtn value="simple" size="small">
+            <VIcon icon="mdi-cursor-default-click-outline" size="16" class="me-1" />
+            {{ t('renameFormat.modeSimple') }}
+          </VBtn>
+          <VBtn value="advanced" size="small">
+            <VIcon icon="mdi-code-tags" size="16" class="me-1" />
+            {{ t('renameFormat.modeAdvanced') }}
+          </VBtn>
+        </VBtnToggle>
+        <VBtn size="small" variant="text" prepend-icon="mdi-restore" @click="resetToDefault">
+          {{ t('renameFormat.reset') }}
         </VBtn>
-        <VBtn value="advanced" size="small">
-          <VIcon icon="mdi-code-tags" size="16" class="me-1" />
-          {{ t('renameFormat.modeAdvanced') }}
-        </VBtn>
-      </VBtnToggle>
+      </div>
+    </div>
+
+    <!-- 实时示例：按目录层级展示 -->
+    <div class="rename-format-editor__preview" data-testid="rename-preview">
+      <div class="rename-format-editor__preview-label">
+        <VIcon icon="mdi-eye-outline" size="16" class="me-1" />
+        {{ t('renameFormat.preview') }}
+      </div>
+      <div class="rename-format-editor__preview-value">
+        <template v-if="previewSegments.length">
+          <span v-for="(segment, i) in previewSegments" :key="i" class="rename-format-editor__preview-segment">
+            <VIcon
+              :icon="i < previewSegments.length - 1 ? 'mdi-folder-outline' : 'mdi-file-video-outline'"
+              size="16"
+              class="rename-format-editor__preview-icon"
+            />
+            <span>{{ segment }}</span>
+            <VIcon
+              v-if="i < previewSegments.length - 1"
+              icon="mdi-chevron-right"
+              size="16"
+              class="rename-format-editor__preview-sep"
+            />
+          </span>
+        </template>
+        <span v-else>—</span>
+      </div>
     </div>
 
     <!-- 简易模式：字段流编辑（不显示 jinja 语法） -->
@@ -327,112 +400,103 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
       <div class="rename-format-editor__token-area" @drop.prevent="onFieldDrop" @dragover.prevent>
         <template v-if="tokens.length">
           <span
-            v-for="(token, index) in tokens"
-            :key="index"
-            class="rename-format-editor__token"
-            :class="{
-              'rename-format-editor__token--field': token.type === 'field',
-              'rename-format-editor__token--text': token.type === 'text',
-              'rename-format-editor__token--optional': Boolean(token.cond),
-            }"
-            draggable="true"
-            @dragstart="draggingIndex = index"
-            @drop.stop="onTokenDrop(index)"
-            @dragover.prevent
+            v-for="(group, groupIndex) in tokenGroups"
+            :key="groupIndex"
+            :class="group.cond ? 'rename-format-editor__cond-group' : 'rename-format-editor__plain-group'"
           >
-            {{ tokenLabel(token) }}
-            <VIcon
-              icon="mdi-close"
-              size="12"
-              class="rename-format-editor__token-remove"
-              @click.stop="removeToken(index)"
-            />
-            <VMenu
-              :model-value="editingIndex === index"
-              activator="parent"
-              :close-on-content-click="false"
-              location="bottom start"
-              @update:model-value="open => (editingIndex = open ? index : null)"
+            <span v-if="group.cond" class="rename-format-editor__cond-label">{{ condLabel(group.cond) }}</span>
+            <span
+              v-for="{ token, index } in group.items"
+              :key="index"
+              class="rename-format-editor__token"
+              :class="{
+                'rename-format-editor__token--field': token.type === 'field',
+                'rename-format-editor__token--text': token.type === 'text' && !isPathSeparator(token),
+                'rename-format-editor__token--separator': isPathSeparator(token),
+              }"
+              draggable="true"
+              @dragstart="draggingIndex = index"
+              @drop.stop="onTokenDrop(index)"
+              @dragover.prevent
             >
-              <VCard class="rename-format-editor__token-editor" data-testid="rename-token-editor">
-                <VCardText class="d-flex flex-column ga-3">
-                  <template v-if="token.type === 'field'">
-                    <VSelect
-                      :model-value="token.value"
-                      :items="fieldOptions"
-                      :label="t('renameFormat.editField')"
-                      density="compact"
-                      variant="outlined"
-                      hide-details
-                      @update:model-value="key => replaceTokenField(tokens, index, key)"
-                    />
+              {{ tokenLabel(token) }}
+              <VIcon
+                icon="mdi-close"
+                size="12"
+                class="rename-format-editor__token-remove"
+                @click.stop="removeToken(index)"
+              />
+              <VMenu
+                :model-value="editingIndex === index"
+                activator="parent"
+                :close-on-content-click="false"
+                location="bottom start"
+                @update:model-value="open => (editingIndex = open ? index : null)"
+              >
+                <VCard class="rename-format-editor__token-editor" data-testid="rename-token-editor">
+                  <VCardText class="d-flex flex-column ga-3">
+                    <template v-if="token.type === 'field'">
+                      <VSelect
+                        :model-value="token.value"
+                        :items="fieldOptions"
+                        :label="t('renameFormat.editField')"
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        @update:model-value="key => replaceTokenField(tokens, index, key)"
+                      />
+                      <VTextField
+                        :model-value="exprBody(token)"
+                        :label="t('renameFormat.editExpr')"
+                        :placeholder="t('renameFormat.editExprPlaceholder')"
+                        density="compact"
+                        variant="outlined"
+                        class="rename-format-editor__token-editor-mono"
+                        hide-details
+                        @update:model-value="body => setTokenExpr(token, body)"
+                      />
+                    </template>
                     <VTextField
-                      :model-value="exprBody(token)"
-                      :label="t('renameFormat.editExpr')"
-                      :placeholder="t('renameFormat.editExprPlaceholder')"
+                      v-else
+                      v-model="token.value"
+                      :label="t('renameFormat.editText')"
                       density="compact"
                       variant="outlined"
                       class="rename-format-editor__token-editor-mono"
                       hide-details
-                      @update:model-value="body => setTokenExpr(token, body)"
+                      autofocus
                     />
-                  </template>
-                  <VTextField
-                    v-else
-                    v-model="token.value"
-                    :label="t('renameFormat.editText')"
-                    density="compact"
-                    variant="outlined"
-                    class="rename-format-editor__token-editor-mono"
-                    hide-details
-                    autofocus
-                  />
-                  <VSelect
-                    :model-value="token.cond ?? ''"
-                    :items="condOptions"
-                    :label="t('renameFormat.editCond')"
-                    density="compact"
-                    variant="outlined"
-                    hide-details
-                    @update:model-value="cond => setTokenCond(token, cond)"
-                  />
-                </VCardText>
-              </VCard>
-            </VMenu>
+                    <VSelect
+                      :model-value="token.cond ?? ''"
+                      :items="condOptions"
+                      :label="t('renameFormat.editCond')"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      @update:model-value="cond => setTokenCond(token, cond)"
+                    />
+                  </VCardText>
+                </VCard>
+              </VMenu>
+            </span>
           </span>
         </template>
         <span v-else class="rename-format-editor__token-empty">{{ t('renameFormat.emptyHint') }}</span>
       </div>
+      <div class="rename-format-editor__tip">{{ t('renameFormat.editTip') }}</div>
 
-      <!-- 插入自定义文本 -->
-      <div class="rename-format-editor__text-input">
-        <VTextField
-          v-model="customText"
-          :placeholder="t('renameFormat.customTextPlaceholder')"
-          density="compact"
-          variant="outlined"
-          hide-details
-          @keydown.enter="appendText"
-        >
-          <template #append>
-            <VBtn size="small" variant="tonal" color="primary" :disabled="!customText" @click="appendText">
-              {{ t('renameFormat.insertText') }}
-            </VBtn>
-          </template>
-        </VTextField>
-      </div>
-
-      <!-- 字段选择区（两列填满） -->
-      <div class="rename-format-editor__fields">
-        <div v-for="group in fieldGroups" :key="group.name" class="rename-format-editor__field-group">
-          <div class="rename-format-editor__field-group-name">{{ group.name }}</div>
-          <div class="rename-format-editor__field-chips">
+      <!-- 添加面板：字段分组 + 自定义文本，每组一行 -->
+      <div class="rename-format-editor__palette">
+        <div v-for="group in fieldGroups" :key="group.name" class="rename-format-editor__palette-row">
+          <div class="rename-format-editor__palette-label">{{ group.name }}</div>
+          <div class="rename-format-editor__palette-items">
             <VChip
               v-for="field in group.fields"
               :key="field.key"
               size="small"
               variant="tonal"
               color="primary"
+              prepend-icon="mdi-plus"
               class="rename-format-editor__field-chip"
               @click="appendField(field.key)"
             >
@@ -440,15 +504,34 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
             </VChip>
           </div>
         </div>
-      </div>
-
-      <!-- 实时预览 -->
-      <div class="rename-format-editor__preview">
-        <div class="rename-format-editor__preview-label">
-          <VIcon icon="mdi-eye-outline" size="16" class="me-1" />
-          {{ t('renameFormat.preview') }}
+        <div class="rename-format-editor__palette-row">
+          <div class="rename-format-editor__palette-label">{{ t('renameFormat.groupText') }}</div>
+          <div class="rename-format-editor__palette-items">
+            <VChip
+              v-for="text in quickTexts"
+              :key="text"
+              size="small"
+              variant="tonal"
+              class="rename-format-editor__quick-text"
+              @click="tokens.push({ type: 'text', value: text })"
+            >
+              {{ displayText(text) }}
+            </VChip>
+            <div class="rename-format-editor__text-input">
+              <VTextField
+                v-model="customText"
+                :placeholder="t('renameFormat.customTextPlaceholder')"
+                density="compact"
+                variant="outlined"
+                hide-details
+                @keydown.enter.prevent="appendText"
+              />
+              <VBtn size="small" variant="tonal" color="primary" :disabled="!customText" @click="appendText">
+                {{ t('renameFormat.insertText') }}
+              </VBtn>
+            </div>
+          </div>
         </div>
-        <code class="rename-format-editor__preview-value">{{ preview || '—' }}</code>
       </div>
     </template>
 
@@ -466,7 +549,7 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
         class="rename-format-editor__ace"
         @init="onAceInit"
       />
-      <div class="rename-format-editor__hint">
+      <div class="rename-format-editor__tip">
         {{ t('setting.directory.movieRenameFormatHint') }}
       </div>
     </template>
@@ -480,10 +563,71 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   gap: 0.75rem;
 }
 
-.rename-format-editor__mode-bar {
+/* ===== 工具栏 ===== */
+.rename-format-editor__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rename-format-editor__toolbar-start,
+.rename-format-editor__toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ===== 实时示例 ===== */
+.rename-format-editor__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 8px;
+  background: rgba(var(--v-theme-primary), 0.05);
+  gap: 0.25rem 0.75rem;
+}
+
+.rename-format-editor__preview-label {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+}
+
+.rename-format-editor__preview-value {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5rem;
+  min-inline-size: 0;
+  word-break: break-all;
+}
+
+.rename-format-editor__preview-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.rename-format-editor__preview-icon {
+  opacity: 0.6;
+}
+
+.rename-format-editor__preview-sep {
+  margin-inline: 0.125rem;
+  opacity: 0.4;
 }
 
 /* ===== 字段流编辑区 ===== */
@@ -495,20 +639,55 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.16);
   border-radius: 8px;
   background: rgba(var(--v-theme-on-surface), 0.02);
-  gap: 0.375rem;
-  min-block-size: 4rem;
+  gap: 0.5rem 0.375rem;
+  min-block-size: 3.5rem;
+}
+
+.rename-format-editor__plain-group {
+  display: contents;
+}
+
+/* 可选块：虚线框包住整组，并标注显示条件 */
+.rename-format-editor__cond-group {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.625rem 0.375rem 0.3125rem;
+  border: 1px dashed rgba(var(--v-theme-primary), 0.45);
+  border-radius: 8px;
+  gap: 0.25rem;
+  margin-block-start: 0.375rem;
+}
+
+.rename-format-editor__cond-label {
+  position: absolute;
+  padding-inline: 0.25rem;
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-primary), 0.9);
+  font-size: 0.6875rem;
+  inset-block-start: -0.5rem;
+  inset-inline-start: 0.5rem;
+  line-height: 1rem;
+  white-space: nowrap;
 }
 
 .rename-format-editor__token {
   display: inline-flex;
   align-items: center;
   border-radius: 6px;
-  cursor: grab;
+  cursor: pointer;
   font-size: 0.8125rem;
   gap: 0.25rem;
-  padding-block: 0.25rem;
+  line-height: 1.25rem;
+  padding-block: 0.1875rem;
   padding-inline: 0.5rem;
+  transition: box-shadow 0.15s;
   user-select: none;
+}
+
+.rename-format-editor__token:hover {
+  box-shadow: 0 0 0 1px rgba(var(--v-theme-primary), 0.5);
 }
 
 .rename-format-editor__token--field {
@@ -524,18 +703,17 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
-.rename-format-editor__token--optional {
-  /* 可选块：左侧细条标识，替代整圈虚线 */
-  box-shadow: inset 2px 0 0 rgba(var(--v-theme-primary), 0.55);
-}
-
-.rename-format-editor__token-cond-icon {
-  opacity: 0.7;
+/* 目录分隔符：弱化底色、加粗斜杠，突出层级 */
+.rename-format-editor__token--separator {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  padding-inline: 0.25rem;
 }
 
 .rename-format-editor__token-remove {
-  cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.45;
   transition: opacity 0.15s;
 }
 
@@ -557,63 +735,81 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   font-size: 0.8125rem;
 }
 
-/* ===== 自定义文本插入 ===== */
-.rename-format-editor__text-input {
-  inline-size: 100%;
+.rename-format-editor__tip {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin-block-start: -0.25rem;
 }
 
-/* ===== 字段选择区 ===== */
-.rename-format-editor__fields {
+/* ===== 添加面板 ===== */
+.rename-format-editor__palette {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.03);
+  gap: 0.625rem;
+}
+
+.rename-format-editor__palette-row {
   display: grid;
-  gap: 0.5rem 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  align-items: start;
+  gap: 0.75rem;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
 }
 
-.rename-format-editor__field-group-name {
+.rename-format-editor__palette-label {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.75rem;
   font-weight: 500;
-  margin-block-end: 0.25rem;
+  line-height: 1.5rem;
 }
 
-.rename-format-editor__field-chips {
+.rename-format-editor__palette-items {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.375rem;
 }
 
-.rename-format-editor__field-chip {
+.rename-format-editor__field-chip,
+.rename-format-editor__quick-text {
   cursor: pointer;
 }
 
-/* ===== 预览 ===== */
-.rename-format-editor__preview {
-  display: flex;
-  border: 1px solid rgba(var(--v-theme-primary), 0.22);
-  padding: 0.75rem;
-
-  border-radius: 8px;
-  background: rgba(var(--v-theme-primary), 0.04);
-  gap: 0.5rem;
+.rename-format-editor__quick-text {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  min-inline-size: 2rem;
+  justify-content: center;
 }
 
-.rename-format-editor__preview-label {
+.rename-format-editor__text-input {
   display: flex;
-  flex-shrink: 0;
+  flex: 1 1 16rem;
   align-items: center;
-  color: rgb(var(--v-theme-primary));
-  font-size: 0.8125rem;
-  font-weight: 500;
+  gap: 0.375rem;
+  max-inline-size: 26rem;
 }
 
-.rename-format-editor__preview-value {
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  word-break: break-all;
+.rename-format-editor__text-input :deep(.v-field__input) {
+  min-block-size: 2rem;
+  padding-block: 0.25rem;
 }
 
+@media (width <= 600px) {
+  .rename-format-editor__palette-row {
+    gap: 0.25rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rename-format-editor__text-input {
+    flex-basis: 100%;
+    max-inline-size: none;
+  }
+}
+
+/* ===== 进阶模式 ===== */
 .rename-format-editor__ace {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
@@ -624,11 +820,5 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
   .rename-format-editor__ace {
     min-block-size: 13rem;
   }
-}
-
-.rename-format-editor__hint {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.5;
 }
 </style>

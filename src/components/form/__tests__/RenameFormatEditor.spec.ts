@@ -8,7 +8,7 @@ import {
   setTokenExpr,
 } from '@/components/form/renameFormatTokens'
 import { renderWithProviders } from '@tests/support/render'
-import { fireEvent, screen } from '@testing-library/vue'
+import { fireEvent, screen, within } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('vue3-ace-editor', () => ({ VAceEditor: { name: 'VAceEditor', render: () => null } }))
@@ -102,15 +102,49 @@ describe('token editing', () => {
 describe('RenameFormatEditor', () => {
   it('opens an editor when a text token is clicked and saves the edit', async () => {
     localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
-    const { emitted } = await renderWithProviders(RenameFormatEditor, {
+    const { emitted, container } = await renderWithProviders(RenameFormatEditor, {
       props: { modelValue: '{{title}} - {{year}}', mediaType: 'movie' },
     })
 
-    await fireEvent.click(screen.getByText('␣-␣'))
+    // 快捷文本区也有 ␣-␣，限定在字段流区域内查找
+    const tokenArea = container.querySelector<HTMLElement>('.rename-format-editor__token-area')!
+    await fireEvent.click(within(tokenArea).getByText('␣-␣'))
     const input = await screen.findByLabelText('文本')
     await fireEvent.update(input, ' / ')
 
     const updates = emitted()['update:modelValue'] as string[][]
     expect(updates.at(-1)?.[0]).toBe('{{title}} / {{year}}')
+  })
+})
+
+describe('RenameFormatEditor layout', () => {
+  it('frames optional blocks and splits the preview into folders', async () => {
+    localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
+    const { container } = await renderWithProviders(RenameFormatEditor, {
+      props: { modelValue: '{{title}}{% if year %} ({{year}}){% endif %}/{{title}}{{fileExt}}', mediaType: 'movie' },
+    })
+
+    const groups = container.querySelectorAll('.rename-format-editor__cond-group')
+    expect(groups).toHaveLength(1)
+    expect(within(groups[0] as HTMLElement).getByText('有年份时')).toBeTruthy()
+    expect(container.querySelectorAll('.rename-format-editor__token--separator')).toHaveLength(1)
+
+    const segments = [...container.querySelectorAll('.rename-format-editor__preview-segment')].map(el =>
+      el.textContent?.trim(),
+    )
+    expect(segments).toEqual(['流浪地球 (2019)', '流浪地球.mkv'])
+  })
+
+  it('inserts a quick text token with one click', async () => {
+    localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
+    const { emitted, container } = await renderWithProviders(RenameFormatEditor, {
+      props: { modelValue: '{{title}}', mediaType: 'movie' },
+    })
+
+    const palette = container.querySelector<HTMLElement>('.rename-format-editor__palette')!
+    await fireEvent.click(within(palette).getByText('␣-␣'))
+
+    const updates = emitted()['update:modelValue'] as string[][]
+    expect(updates.at(-1)?.[0]).toBe('{{title}} - ')
   })
 })
