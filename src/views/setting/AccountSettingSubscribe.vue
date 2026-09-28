@@ -4,6 +4,7 @@ import api from '@/api'
 import type { FilterRuleGroup, Site } from '@/api/types'
 import { useI18n } from '@/composables/useChineseText'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
+import SubscribeAutoFillSetting from './SubscribeAutoFillSetting.vue'
 
 // 国际化
 const { t } = useI18n()
@@ -340,5 +341,9 @@ useSilentSettingRefresh(loadPageData, {
       </VCard>
     </VCol>
   </VRow>
-  <!-- 进度框 -->
+  <VRow>
+    <VCol cols="12">
+      <SubscribeAutoFillSetting :active="props.active" />
+    </VCol>
+  </VRow>
 </template>
