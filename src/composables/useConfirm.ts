@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { translate } from '@/composables/useChineseText'
+import vuetify from '@/plugins/vuetify'
 import ConfirmDialog from '@/@core/components/ConfirmDialog.vue'
 import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
 
@@ -52,7 +53,8 @@ async function createConfirmDialog(options: ConfirmOptions = {}) {
     // 注册必要的组件
     app.component('VDialogCloseBtn', DialogCloseBtn)
 
-
+    // 独立挂载的应用必须注册 Vuetify，否则 VDialog 等组件无法解析、弹窗不渲染
+    app.use(vuetify)
     // 挂载应用
     app.mount(container)
 
