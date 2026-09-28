@@ -4,7 +4,15 @@ import '@/ace-config'
 import { VAceEditor } from 'vue3-ace-editor'
 import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
-import { evalExpr, parseFormat, serializeTokens, type RenameToken } from './renameFormatTokens'
+import {
+  evalExpr,
+  exprBody,
+  parseFormat,
+  replaceTokenField,
+  serializeTokens,
+  setTokenExpr,
+  type RenameToken,
+} from './renameFormatTokens'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -135,6 +143,8 @@ watch(
 
 // ===== 简易模式操作 =====
 const draggingIndex = ref<number | null>(null)
+// 正在编辑的标签下标（点击标签弹出编辑面板）
+const editingIndex = ref<number | null>(null)
 
 function appendField(key: string) {
   tokens.value.push({ type: 'field', value: key })
@@ -161,13 +171,33 @@ function displayText(value: string): string {
 }
 
 function removeToken(index: number) {
+  if (editingIndex.value === index) editingIndex.value = null
   tokens.value.splice(index, 1)
+}
+
+// ===== 标签编辑（点击标签弹出） =====
+/** 当前媒体类型可用的全部字段，供字段/条件下拉使用 */
+const fieldOptions = computed(() =>
+  fieldGroups.value.flatMap(group => group.fields.map(field => ({ title: field.label, value: field.key }))),
+)
+
+const condOptions = computed(() => [
+  { title: t('renameFormat.condAlways'), value: '' },
+  ...fieldOptions.value.map(option => ({
+    title: t('renameFormat.condWhen', { field: option.title }),
+    value: option.value,
+  })),
+])
+
+function setTokenCond(token: RenameToken, cond: string) {
+  token.cond = cond || undefined
 }
 
 function onTokenDrop(targetIndex: number) {
   const from = draggingIndex.value
   draggingIndex.value = null
   if (from === null || from === targetIndex) return
+  editingIndex.value = null
   const [moved] = tokens.value.splice(from, 1)
   tokens.value.splice(targetIndex, 0, moved)
 }
@@ -317,6 +347,58 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
               class="rename-format-editor__token-remove"
               @click.stop="removeToken(index)"
             />
+            <VMenu
+              :model-value="editingIndex === index"
+              activator="parent"
+              :close-on-content-click="false"
+              location="bottom start"
+              @update:model-value="open => (editingIndex = open ? index : null)"
+            >
+              <VCard class="rename-format-editor__token-editor" data-testid="rename-token-editor">
+                <VCardText class="d-flex flex-column ga-3">
+                  <template v-if="token.type === 'field'">
+                    <VSelect
+                      :model-value="token.value"
+                      :items="fieldOptions"
+                      :label="t('renameFormat.editField')"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      @update:model-value="key => replaceTokenField(tokens, index, key)"
+                    />
+                    <VTextField
+                      :model-value="exprBody(token)"
+                      :label="t('renameFormat.editExpr')"
+                      :placeholder="t('renameFormat.editExprPlaceholder')"
+                      density="compact"
+                      variant="outlined"
+                      class="rename-format-editor__token-editor-mono"
+                      hide-details
+                      @update:model-value="body => setTokenExpr(token, body)"
+                    />
+                  </template>
+                  <VTextField
+                    v-else
+                    v-model="token.value"
+                    :label="t('renameFormat.editText')"
+                    density="compact"
+                    variant="outlined"
+                    class="rename-format-editor__token-editor-mono"
+                    hide-details
+                    autofocus
+                  />
+                  <VSelect
+                    :model-value="token.cond ?? ''"
+                    :items="condOptions"
+                    :label="t('renameFormat.editCond')"
+                    density="compact"
+                    variant="outlined"
+                    hide-details
+                    @update:model-value="cond => setTokenCond(token, cond)"
+                  />
+                </VCardText>
+              </VCard>
+            </VMenu>
           </span>
         </template>
         <span v-else class="rename-format-editor__token-empty">{{ t('renameFormat.emptyHint') }}</span>
@@ -459,6 +541,15 @@ function onAceInit(editor: { renderer: { setPadding: (n: number) => void } }) {
 
 .rename-format-editor__token-remove:hover {
   opacity: 1;
+}
+
+.rename-format-editor__token-editor {
+  inline-size: 18rem;
+  max-inline-size: calc(100vw - 2rem);
+}
+
+.rename-format-editor__token-editor-mono :deep(input) {
+  font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
 .rename-format-editor__token-empty {

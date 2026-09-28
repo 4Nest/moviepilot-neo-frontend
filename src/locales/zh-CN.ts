@@ -3648,6 +3648,13 @@ export default {
     fieldFileExt: '文件扩展名',
     fieldCustomization: '自定义占位符',
     fieldWebSource: '流媒体平台',
+    editField: '字段',
+    editExpr: '表达式（可选）',
+    editExprPlaceholder: '如 (season|string).zfill(2)',
+    editText: '文本',
+    editCond: '显示条件',
+    condAlways: '总是显示',
+    condWhen: '当「{field}」有值时',
   },
   validators: {
     required: '此项为必填项',

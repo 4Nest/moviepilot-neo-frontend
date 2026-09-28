@@ -73,6 +73,47 @@ export function serializeTokens(tokens: RenameToken[]): string {
   return parts.join('')
 }
 
+/** 去掉外层 {{}} 及首尾空白 */
+function stripBraces(value: string): string {
+  let body = value.trim()
+  if (body.startsWith('{{')) body = body.slice(2)
+  if (body.endsWith('}}')) body = body.slice(0, -2)
+  return body.trim()
+}
+
+/** 表达式去掉外层 {{}} 后的主体，简单字段返回空串 */
+export function exprBody(token: RenameToken): string {
+  return token.expr ? stripBraces(token.expr) : ''
+}
+
+/** 修改字段 token 的表达式主体；空主体或与字段名相同时退化为简单字段 */
+export function setTokenExpr(token: RenameToken, body: string) {
+  const trimmed = stripBraces(body)
+  if (!trimmed || trimmed === token.value) {
+    token.expr = undefined
+    return
+  }
+  token.expr = `{{${trimmed}}}`
+  token.value = trimmed.match(/\b(\w+)\b/)?.[1] ?? token.value
+}
+
+/**
+ * 把第 index 个字段 token 换成新字段。
+ * 表达式中的原变量名一并替换；若所在可选块以原字段为条件（如 {% if year %} ({{year}}){% endif %}），
+ * 整个连续块的条件也跟着换，避免块被拆散。
+ */
+export function replaceTokenField(tokens: RenameToken[], index: number, key: string) {
+  const token = tokens[index]
+  if (!token || token.type !== 'field' || token.value === key) return
+  const old = token.value
+  if (token.expr) token.expr = token.expr.replace(new RegExp(`\\b${old}\\b`, 'g'), key)
+  token.value = key
+  if (token.cond !== old) return
+  let start = index
+  while (start > 0 && tokens[start - 1].cond === old) start--
+  for (let i = start; i < tokens.length && tokens[i].cond === old; i++) tokens[i].cond = key
+}
+
 /** 求值 jinja 表达式（支持根变量 + 常见过滤器链），用于预览 */
 export function evalExpr(rawExpr: string, data: Record<string, string>): string {
   let body = rawExpr.replace(/^\{\{|\}\}$/g, '').trim()
