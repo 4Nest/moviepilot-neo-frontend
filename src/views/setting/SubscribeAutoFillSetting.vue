@@ -265,7 +265,7 @@ watch(
     </VCardItem>
 
     <!-- 分类规则 -->
-    <VCardText class="auto-fill__section">
+    <VCardText>
       <div class="auto-fill__section-head">
         <span class="auto-fill__section-title">{{ t('setting.subscribe.autoFill.categoryTitle') }}</span>
         <VTooltip :text="t('setting.subscribe.autoFill.categoryHint')" location="top" max-width="320">
@@ -331,7 +331,7 @@ watch(
     <VDivider />
 
     <!-- 下载后回填：即时保存 -->
-    <VCardText class="auto-fill__section">
+    <VCardText>
       <div class="auto-fill__section-head">
         <span class="auto-fill__section-title">{{ t('setting.subscribe.autoFill.backfillTitle') }}</span>
         <VTooltip :text="t('setting.subscribe.autoFill.backfillHint')" location="top" max-width="320">
@@ -352,7 +352,6 @@ watch(
           :key="option.value"
           :value="option.value"
           :color="backfillFields.includes(option.value) ? 'primary' : ''"
-          size="small"
           filter
           variant="outlined"
         >
@@ -363,7 +362,7 @@ watch(
   </VCard>
 
   <!-- 规则编辑对话框 -->
-  <VDialog v-model="dialogVisible" scrollable max-width="44rem" :fullscreen="!display.smAndUp.value">
+  <VDialog v-model="dialogVisible" scrollable max-width="45rem" :fullscreen="!display.smAndUp.value">
     <VCard v-if="draft">
       <VCardItem>
         <VCardTitle>
@@ -373,13 +372,12 @@ watch(
       <VDialogCloseBtn v-model="dialogVisible" />
       <VDivider />
       <VCardText>
-        <VRow dense>
+        <VRow>
           <VCol cols="12" sm="4">
             <VSelect
               v-model="draft.type"
               :items="typeOptions"
               :label="t('setting.subscribe.autoFill.mediaType')"
-              density="compact"
               @update:model-value="onDraftTypeChange"
             />
           </VCol>
@@ -388,7 +386,6 @@ watch(
               v-model="draft.categories"
               :items="categoryOptions(draft.type)"
               :label="t('setting.subscribe.autoFill.categories')"
-              density="compact"
               chips
               closable-chips
               multiple
@@ -399,7 +396,6 @@ watch(
               v-model="draft.resolution"
               :items="resolutionOptions"
               :label="t('setting.subscribe.autoFill.fieldResolution')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -408,7 +404,6 @@ watch(
               v-model="draft.quality"
               :items="qualityOptions"
               :label="t('setting.subscribe.autoFill.fieldQuality')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -417,7 +412,6 @@ watch(
               v-model="draft.effect"
               :items="effectOptions"
               :label="t('setting.subscribe.autoFill.fieldEffect')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -426,7 +420,6 @@ watch(
               v-model="draft.include"
               :label="t('setting.subscribe.autoFill.include')"
               :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -435,7 +428,6 @@ watch(
               v-model="draft.exclude"
               :label="t('setting.subscribe.autoFill.exclude')"
               :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -444,7 +436,6 @@ watch(
               v-model="draft.sites"
               :items="siteOptions"
               :label="t('setting.subscribe.autoFill.fieldSite')"
-              density="compact"
               chips
               closable-chips
               multiple
@@ -456,7 +447,6 @@ watch(
               v-model="draft.filter_groups"
               :items="filterRuleGroupOptions"
               :label="t('setting.subscribe.autoFill.filterGroups')"
-              density="compact"
               chips
               closable-chips
               multiple
@@ -468,7 +458,6 @@ watch(
               v-model="draft.downloader"
               :items="downloaderOptions"
               :label="t('setting.subscribe.autoFill.downloader')"
-              density="compact"
             />
           </VCol>
           <VCol cols="12" sm="8">
@@ -476,7 +465,6 @@ watch(
               v-model="draft.save_path"
               :label="t('setting.subscribe.autoFill.savePath')"
               :placeholder="t('setting.subscribe.autoFill.savePathHint')"
-              density="compact"
               clearable
             />
           </VCol>
@@ -532,19 +520,15 @@ watch(
 </template>
 
 <style scoped>
-.auto-fill__section {
-  padding-block: 0.75rem;
-}
-
 .auto-fill__section-head {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  margin-block-end: 0.5rem;
+  margin-block-end: 0.75rem;
 }
 
 .auto-fill__section-title {
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 500;
 }
 
@@ -563,7 +547,7 @@ watch(
 .auto-fill__rule {
   display: flex;
   flex-direction: column;
-  padding: 0.625rem 0.75rem 0.75rem;
+  padding: 0.75rem 0.875rem 0.875rem;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
   background: rgba(var(--v-theme-on-surface), 0.03);
@@ -599,7 +583,7 @@ watch(
 
 .auto-fill__rule-title {
   overflow: hidden;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -613,12 +597,12 @@ watch(
 
 .auto-fill__tag {
   overflow: hidden;
-  padding: 0.0625rem 0.375rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 4px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.6875rem;
-  line-height: 1.125rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
   max-inline-size: 100%;
   text-overflow: ellipsis;
   white-space: nowrap;
