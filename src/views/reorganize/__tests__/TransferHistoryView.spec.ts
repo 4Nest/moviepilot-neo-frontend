@@ -385,6 +385,13 @@ describe('TransferHistoryView', () => {
     expect(requests).toEqual([{ count: 50, page: 1, title: '科幻' }])
   })
 
+  it('renders the desktop pagination total without a literal placeholder', async () => {
+    await renderHistory()
+
+    expect(await screen.findByText('1 - 0 / 0')).toBeInTheDocument()
+    expect(screen.queryByText(/\{total\}/)).not.toBeInTheDocument()
+  })
+
   it('prevents an older desktop request from replacing a newer route search', async () => {
     const oldRequest = createDeferred<ReturnType<typeof historyResponse>>()
     const newRequest = createDeferred<ReturnType<typeof historyResponse>>()
@@ -826,6 +833,4 @@ describe('TransferHistoryView', () => {
     )
     expect(screen.getByRole('button', { name: '清空记录' })).toBeInTheDocument()
   })
-
-
 })

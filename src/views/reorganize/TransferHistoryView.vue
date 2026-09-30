@@ -367,6 +367,7 @@ const pageTip = computed(() => {
   return {
     begin,
     end,
+    total: totalItems.value,
   }
 })
 
@@ -835,7 +836,6 @@ async function transferDone() {
   // 刷新
   await refreshDataAfterOperation()
 }
-
 
 // 计算下拉菜单
 function getDropdownItems(item: TransferHistory): Array<{
@@ -1485,7 +1485,7 @@ onUnmounted(() => {
         <VSelect v-model="itemsPerPage" :items="pageRange" density="compact" flat class="ms-1" />
       </div>
       <div class="transfer-history-pagination__info w-auto text-sm">
-        {{ t('transferHistory.pageInfo', pageTip) }} {{ totalItems }}
+        {{ t('transferHistory.pageInfo', pageTip) }}
       </div>
       <VPagination
         v-model="currentPage"
