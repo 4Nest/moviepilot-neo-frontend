@@ -104,7 +104,7 @@ export const mediaServerOptions = [
   },
   {
     value: 'mediavault',
-    title: translate('setting.system.mediaVault'),
+    title: translate('setting.system.vyo'),
   },
 ]
 

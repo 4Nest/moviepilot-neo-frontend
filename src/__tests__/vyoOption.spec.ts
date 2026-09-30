@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mediaServerDict, mediaServerOptions } from '@/api/constants'
 import { getLogoUrl } from '@/utils/imageUtils'
 
-describe('MediaVault 媒体服务器接入', () => {
+describe('Vyo 媒体服务器接入', () => {
   it('出现在媒体服务器类型选项里', () => {
     const values = mediaServerOptions.map(option => option.value)
 
