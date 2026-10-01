@@ -232,6 +232,12 @@ function addVersion() {
                 {{ versionSubtitle(rule) }}
               </VChip>
             </VListItemTitle>
+            <VListItemSubtitle class="subscribe-version-group">
+              <VIcon icon="mdi-account-group-outline" size="14" />
+              <span :class="{ 'subscribe-version-group--empty': !rule.release_group }">
+                {{ rule.release_group || t('dialog.subscribeVersions.releaseGroupEmpty') }}
+              </span>
+            </VListItemSubtitle>
             <VListItemSubtitle v-if="versionProgress(rule) && versionTotal(rule)" class="subscribe-version-progress">
               <span class="text-caption text-medium-emphasis">{{ progressText(rule) }}</span>
               <VProgressLinear
@@ -279,7 +285,14 @@ function addVersion() {
       <VCardActions class="app-dialog-actions">
         <span v-if="versions.length > 0" class="text-caption text-medium-emphasis">{{ summaryText }}</span>
         <VSpacer />
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-plus" class="px-5" :disabled="saving" @click="addVersion">
+        <VBtn
+          color="primary"
+          variant="flat"
+          prepend-icon="mdi-plus"
+          class="px-5"
+          :disabled="saving"
+          @click="addVersion"
+        >
           {{ t('dialog.subscribeVersions.addVersion') }}
         </VBtn>
       </VCardActions>
@@ -317,6 +330,8 @@ function addVersion() {
   white-space: normal;
 }
 
+// 字幕组行与决策行共用紧凑排版
+.subscribe-version-group,
 .subscribe-version-decision {
   display: flex;
   align-items: center;
@@ -331,6 +346,11 @@ function addVersion() {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+// 未设字幕组的版本可匹配任意资源，用警告色提示这一风险
+.subscribe-version-group--empty {
+  color: rgb(var(--v-theme-warning));
 }
 
 // 版本名占满剩余宽度并截断，状态徽章固定不被挤压
