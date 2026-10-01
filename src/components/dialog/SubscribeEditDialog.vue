@@ -2,7 +2,15 @@
 import { useToast } from 'vue-toastification'
 import { numberValidator } from '@/@validators'
 import api from '@/api'
-import type { DownloaderConf, FilterRuleGroup, Site, Subscribe, SubscribeVersionRule, SubscribeVersionSettings, TransferDirectoryConf } from '@/api/types'
+import type {
+  DownloaderConf,
+  FilterRuleGroup,
+  Site,
+  Subscribe,
+  SubscribeVersionRule,
+  SubscribeVersionSettings,
+  TransferDirectoryConf,
+} from '@/api/types'
 import { useDisplay } from 'vuetify'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/composables/useChineseText'
@@ -63,10 +71,26 @@ const activeVersionId = ref<string | null>(null)
 const versionRulesLoaded = ref(false)
 
 const versionSettingKeys: (keyof SubscribeVersionSettings)[] = [
-  'keyword', 'filter', 'include', 'exclude', 'quality', 'resolution', 'effect',
-  'total_episode', 'start_episode', 'sites', 'downloader', 'best_version',
-  'best_version_full', 'save_path', 'search_imdbid', 'manual_total_episode',
-  'custom_words', 'media_category', 'filter_groups', 'episode_group',
+  'keyword',
+  'filter',
+  'include',
+  'exclude',
+  'quality',
+  'resolution',
+  'effect',
+  'total_episode',
+  'start_episode',
+  'sites',
+  'downloader',
+  'best_version',
+  'best_version_full',
+  'save_path',
+  'search_imdbid',
+  'manual_total_episode',
+  'custom_words',
+  'media_category',
+  'filter_groups',
+  'episode_group',
 ]
 
 function makeVersionId() {
@@ -141,21 +165,32 @@ function appendVersion() {
     id,
     name: t('dialog.subscribeEdit.newVersion'),
     enabled: true,
-    release_group: activeVersion.value?.release_group,
+    // 字幕组是区分版本资源的核心依据，继承当前版本的字幕组会让用户误以为已按需配置
+    release_group: undefined,
     settings: settingsFromSubscribe(subscribeForm.value),
   })
   activeVersionId.value = id
   syncActiveVersionToForm()
 }
 
-
 // 订阅编辑表单
 const subscribeForm = ref<Subscribe>({
   id: props.subid ?? 0,
-  name: '', year: '', type: '', tmdbid: 0,
-  state: '', last_update: '', username: '', sites: [],
-  best_version: undefined, best_version_full: undefined, current_priority: 0,
-  downloader: '', date: '', show_edit_dialog: false, episode_group: '',
+  name: '',
+  year: '',
+  type: '',
+  tmdbid: 0,
+  state: '',
+  last_update: '',
+  username: '',
+  sites: [],
+  best_version: undefined,
+  best_version_full: undefined,
+  current_priority: 0,
+  downloader: '',
+  date: '',
+  show_edit_dialog: false,
+  episode_group: '',
 })
 
 // 提示框
@@ -267,16 +302,30 @@ async function updateSubscribeInfo() {
   syncFormToActiveVersion()
   const displayName = getSubscribeDisplayName()
   try {
-    const payload = { ...subscribeForm.value, version_rules: JSON.parse(JSON.stringify(versionRules.value)) as SubscribeVersionRule[], version_mode: 'all' as const }
+    const payload = {
+      ...subscribeForm.value,
+      version_rules: JSON.parse(JSON.stringify(versionRules.value)) as SubscribeVersionRule[],
+      version_mode: 'all' as const,
+    }
     const result: { [key: string]: unknown } = await api.put('subscribe/', payload)
     if (result.success) {
       $toast.success(t('dialog.subscribeEdit.updateSuccess', { name: displayName }))
       emit('save', payload)
     } else {
-      $toast.error(t('dialog.subscribeEdit.updateFailed', { name: displayName, message: result.message ?? t('subscribe.requestFailed') }))
+      $toast.error(
+        t('dialog.subscribeEdit.updateFailed', {
+          name: displayName,
+          message: result.message ?? t('subscribe.requestFailed'),
+        }),
+      )
     }
   } catch (e) {
-    $toast.error(t('dialog.subscribeEdit.updateFailed', { name: displayName, message: getRequestErrorMessage(e, t('subscribe.requestFailed')) }))
+    $toast.error(
+      t('dialog.subscribeEdit.updateFailed', {
+        name: displayName,
+        message: getRequestErrorMessage(e, t('subscribe.requestFailed')),
+      }),
+    )
   }
 }
 // 设置用户设置的默认订阅规则
@@ -358,9 +407,12 @@ async function getSubscribeInfo() {
   try {
     const result: Subscribe = await api.get(`subscribe/${props.subid}`)
     subscribeForm.value = result
+    const hadVersions = Boolean(result.version_rules?.length)
     ensureVersionRules(result)
     if (props.addVersion) {
       appendVersion()
+      // 旧订阅首次进入多版本会同时保留一份默认版本，需提示用户两个版本都要检查约束
+      if (!hadVersions) $toast.info(t('dialog.subscribeEdit.legacyVersionNotice'))
     } else if (props.versionId && versionRules.value.some(rule => rule.id === props.versionId)) {
       activeVersionId.value = props.versionId
     }
@@ -392,10 +444,14 @@ async function removeSubscribe() {
       $toast.success(`${displayName} ${t('subscribe.cancelSuccess')}`)
       emit('remove')
     } else {
-      $toast.error(`${displayName} ${t('subscribe.cancelFailed', { message: result.message ?? t('subscribe.requestFailed') })}`)
+      $toast.error(
+        `${displayName} ${t('subscribe.cancelFailed', { message: result.message ?? t('subscribe.requestFailed') })}`,
+      )
     }
   } catch (e) {
-    $toast.error(`${displayName} ${t('subscribe.cancelFailed', { message: getRequestErrorMessage(e, t('subscribe.requestFailed')) })}`)
+    $toast.error(
+      `${displayName} ${t('subscribe.cancelFailed', { message: getRequestErrorMessage(e, t('subscribe.requestFailed')) })}`,
+    )
   }
 }
 
@@ -449,12 +505,19 @@ onMounted(() => {
           <VIcon icon="mdi-clipboard-list-outline" class="me-2" />
         </template>
         <VCardTitle>
-          {{ props.default ? t('dialog.subscribeEdit.titleDefault') : props.addVersion ? t('dialog.subscribeEdit.titleAddVersion') : t('dialog.subscribeEdit.titleEdit') }}
+          {{
+            props.default
+              ? t('dialog.subscribeEdit.titleDefault')
+              : props.addVersion
+                ? t('dialog.subscribeEdit.titleAddVersion')
+                : t('dialog.subscribeEdit.titleEdit')
+          }}
         </VCardTitle>
         <VCardSubtitle v-if="!props.default">
           {{ getSubscribeDisplayName() }}
           <template v-if="activeVersion">
-            <span class="mx-1">·</span><input
+            <span class="mx-1">·</span
+            ><input
               v-if="editingVersionName"
               ref="versionNameInput"
               v-model="activeVersion.name"
@@ -471,7 +534,12 @@ onMounted(() => {
               tabindex="0"
               @click="startEditVersionName"
               @keydown.enter="startEditVersionName"
-            >{{ activeVersion.name }}<VIcon icon="mdi-pencil" size="12" class="version-name-edit-icon" /><VTooltip activator="parent" location="top">{{ t('dialog.subscribeEdit.versionNameHint') }}</VTooltip></span>
+              >{{ activeVersion.name }}<VIcon icon="mdi-pencil" size="12" class="version-name-edit-icon" /><VTooltip
+                activator="parent"
+                location="top"
+                >{{ t('dialog.subscribeEdit.versionNameHint') }}</VTooltip
+              ></span
+            >
           </template>
         </VCardSubtitle>
         <VCardSubtitle v-else>

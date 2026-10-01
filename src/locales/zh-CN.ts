@@ -2793,6 +2793,7 @@ export default {
       defaultSaveSuccess: '{type}订阅默认规则保存成功',
       defaultSaveFailed: '{type}订阅默认规则保存失败：{message}！',
       newVersion: '新版本',
+      legacyVersionNotice: '已保留原订阅设置为「默认版本」，请记得为每个版本单独设置字幕组等过滤条件',
       deleteVersion: '删除版本',
       versionName: '版本名称',
       versionNameHint: '点击修改版本名称',
@@ -2809,6 +2810,7 @@ export default {
       disabled: '已停用',
       noVersions: '暂无订阅版本',
       noVersionsHint: '点击下方按钮新增版本',
+      releaseGroupEmpty: '未设字幕组，可匹配任意资源',
       summary: '已完成 {completed} / {total}',
     },
     subscribeFiles: {

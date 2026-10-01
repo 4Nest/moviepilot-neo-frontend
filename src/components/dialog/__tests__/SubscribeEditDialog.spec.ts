@@ -29,11 +29,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   toastError: vi.fn(),
+  toastInfo: vi.fn(),
   toastSuccess: vi.fn(),
 }))
 
 vi.mock('vue-toastification', () => ({
-  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
+  useToast: () => ({ error: mocks.toastError, info: mocks.toastInfo, success: mocks.toastSuccess }),
 }))
 
 vi.mock('@/composables/useConfirm', () => ({
@@ -121,8 +122,20 @@ describe('SubscribeEditDialog', () => {
       tmdbid: 8120,
       type: '电视剧',
       version_rules: [
-        { id: 'v-a', name: '默认版本', enabled: true, release_group: 'VCB-Studio', settings: {} as SubscribeVersionRule['settings'] },
-        { id: 'v-b', name: '字幕组B', enabled: true, release_group: 'LoliHouse', settings: {} as SubscribeVersionRule['settings'] },
+        {
+          id: 'v-a',
+          name: '默认版本',
+          enabled: true,
+          release_group: 'VCB-Studio',
+          settings: {} as SubscribeVersionRule['settings'],
+        },
+        {
+          id: 'v-b',
+          name: '字幕组B',
+          enabled: true,
+          release_group: 'LoliHouse',
+          settings: {} as SubscribeVersionRule['settings'],
+        },
       ],
     })
     const updated = vi.fn()
@@ -148,14 +161,20 @@ describe('SubscribeEditDialog', () => {
     expect(payload.version_rules?.find(rule => rule.id === 'v-a')?.release_group).toBe('VCB-Studio')
   })
 
-  it('copies the release group into a newly added version', async () => {
+  it('starts a newly added version with an empty release group', async () => {
     const record = createSubscribe({
       id: 813,
       name: '新增版本字幕组电影',
       tmdbid: 8130,
       type: '电影',
       version_rules: [
-        { id: 'v-a', name: '默认版本', enabled: true, release_group: 'VCB-Studio', settings: {} as SubscribeVersionRule['settings'] },
+        {
+          id: 'v-a',
+          name: '默认版本',
+          enabled: true,
+          release_group: 'VCB-Studio',
+          settings: {} as SubscribeVersionRule['settings'],
+        },
       ],
     })
     const updated = vi.fn()
@@ -166,10 +185,9 @@ describe('SubscribeEditDialog', () => {
     await screen.findByText('新增版本字幕组电影')
 
     await user.click(screen.getByRole('tab', { name: '进阶' }))
-    // 新版本复制当前版本字幕组,用户可在此基础上修改
+    // 字幕组是版本的身份依据，新增版本不再继承当前版本的字幕组，由用户显式填写
     const releaseGroup = screen.getByLabelText('字幕组')
-    expect(releaseGroup).toHaveValue('VCB-Studio')
-    await user.clear(releaseGroup)
+    expect(releaseGroup).toHaveValue('')
     await user.type(releaseGroup, '桜都')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
@@ -521,30 +539,92 @@ describe('SubscribeEditDialog', () => {
   it.each([
     ['secure context', true],
     ['insecure context without crypto.randomUUID', false],
-  ])('opens in add-version mode with its own title and saves default + new version together (%s)', async (_case, hasRandomUuid) => {
-    if (!hasRandomUuid) vi.stubGlobal('crypto', { ...globalThis.crypto, randomUUID: undefined })
-    const record = createSubscribe({ id: 820, name: '新增版本测试剧', tmdbid: 8200, version_mode: 'any', version_rules: [] })
+  ])(
+    'opens in add-version mode with its own title and saves default + new version together (%s)',
+    async (_case, hasRandomUuid) => {
+      if (!hasRandomUuid) vi.stubGlobal('crypto', { ...globalThis.crypto, randomUUID: undefined })
+      const record = createSubscribe({
+        id: 820,
+        name: '新增版本测试剧',
+        tmdbid: 8200,
+        version_mode: 'any',
+        version_rules: [],
+      })
+      const updated = vi.fn()
+      server.use(subscribeDetailsHandler(record.id, record), updateSubscribeHandler({ success: true }, 200, updated))
+      useDialogOptions({ tmdbId: 8200 })
+      const { events } = await renderDialog({ subid: record.id, addVersion: true })
+
+      // 新增版本模式使用独立标题
+      await screen.findByText('新增版本')
+      // 等待订阅加载并创建默认版本 + 新版本（副标题显示当前版本名）
+      const versionLabel = await screen.findByText('新版本')
+
+      // 副标题版本名点击后就地编辑，改名后失焦生效
+      await fireEvent.click(versionLabel)
+      const nameInput = await screen.findByLabelText('版本名称')
+      await fireEvent.update(nameInput, 'NEST')
+      await fireEvent.blur(nameInput)
+
+      await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+      await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+      const payload = updated.mock.calls[0][0] as {
+        version_mode?: string
+        version_rules?: { name: string; enabled: boolean }[]
+      }
+      expect(payload.version_mode).toBe('all')
+      expect(payload.version_rules?.map(rule => rule.name)).toEqual(['默认版本', 'NEST'])
+      expect(events.save).toHaveBeenCalledOnce()
+    },
+  )
+
+  it('notifies when a legacy subscription gains its first extra version', async () => {
+    const record = createSubscribe({
+      id: 821,
+      name: '旧订阅提示剧',
+      tmdbid: 8210,
+      version_mode: 'any',
+      version_rules: [],
+    })
+    server.use(subscribeDetailsHandler(record.id, record), updateSubscribeHandler({ success: true }))
+    useDialogOptions({ tmdbId: 8210 })
+    await renderDialog({ subid: record.id, addVersion: true })
+
+    await screen.findByText('新增版本')
+    await waitFor(() =>
+      expect(mocks.toastInfo).toHaveBeenCalledWith(
+        '已保留原订阅设置为「默认版本」，请记得为每个版本单独设置字幕组等过滤条件',
+      ),
+    )
+  })
+
+  it('does not inherit the release group when adding a version', async () => {
+    const existingRule: SubscribeVersionRule = {
+      id: 'v-existing',
+      name: '喵萌',
+      enabled: true,
+      release_group: '喵萌奶茶屋',
+      settings: {} as SubscribeVersionRule['settings'],
+    }
+    const record = createSubscribe({
+      id: 822,
+      name: '版本继承测试剧',
+      tmdbid: 8220,
+      version_mode: 'all',
+      version_rules: [existingRule],
+    })
     const updated = vi.fn()
     server.use(subscribeDetailsHandler(record.id, record), updateSubscribeHandler({ success: true }, 200, updated))
-    useDialogOptions({ tmdbId: 8200 })
-    const { events } = await renderDialog({ subid: record.id, addVersion: true })
-
-    // 新增版本模式使用独立标题
-    await screen.findByText('新增版本')
-    // 等待订阅加载并创建默认版本 + 新版本（副标题显示当前版本名）
-    const versionLabel = await screen.findByText('新版本')
-
-    // 副标题版本名点击后就地编辑，改名后失焦生效
-    await fireEvent.click(versionLabel)
-    const nameInput = await screen.findByLabelText('版本名称')
-    await fireEvent.update(nameInput, 'NEST')
-    await fireEvent.blur(nameInput)
+    useDialogOptions({ tmdbId: 8220 })
+    await renderDialog({ subid: record.id, addVersion: true })
+    await screen.findByText('新版本')
 
     await fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => expect(updated).toHaveBeenCalledOnce())
-    const payload = updated.mock.calls[0][0] as { version_mode?: string; version_rules?: { name: string; enabled: boolean }[] }
-    expect(payload.version_mode).toBe('all')
-    expect(payload.version_rules?.map(rule => rule.name)).toEqual(['默认版本', 'NEST'])
-    expect(events.save).toHaveBeenCalledOnce()
+    const payload = updated.mock.calls[0][0] as { version_rules?: { name: string; release_group?: string }[] }
+    expect(payload.version_rules?.map(rule => rule.name)).toEqual(['喵萌', '新版本'])
+    expect(payload.version_rules?.[0].release_group).toBe('喵萌奶茶屋')
+    // 新版本不应静默继承当前版本的字幕组，避免误匹配其它制作组资源
+    expect(payload.version_rules?.[1].release_group).toBeUndefined()
   })
 })

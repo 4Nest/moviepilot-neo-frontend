@@ -138,16 +138,14 @@ describe('SubscribeVersionsDialog', () => {
   })
 
   it('maps running / completed / disabled states to distinct indicator icons', async () => {
-    await renderDialog(
-      [makeRule('v-a', '运行组'), makeRule('v-b', '完成组'), makeRule('v-c', '暂停组', false)],
-      { version_progress: { 'v-b': makeProgress({ completed: true }) } },
-    )
+    await renderDialog([makeRule('v-a', '运行组'), makeRule('v-b', '完成组'), makeRule('v-c', '暂停组', false)], {
+      version_progress: { 'v-b': makeProgress({ completed: true }) },
+    })
     // 图标经 iconify 渲染为 svg,按 SubscribeCard 约定用 data 属性断言状态图标映射
-    const stateIcons = Array.from(
-      document.querySelectorAll('.v-list-item__prepend [data-version-state-icon]'),
-    ).map(icon => icon.getAttribute('data-version-state-icon'))
+    const stateIcons = Array.from(document.querySelectorAll('.v-list-item__prepend [data-version-state-icon]')).map(
+      icon => icon.getAttribute('data-version-state-icon'),
+    )
     expect(stateIcons).toEqual(['mdi-rss', 'mdi-check-circle', 'mdi-pause-circle-outline'])
-
   })
 
   it('colors progress bars success for running and secondary for disabled versions', async () => {
@@ -169,9 +167,21 @@ describe('SubscribeVersionsDialog', () => {
     expect(await screen.findByText('已完成 1 / 2')).toBeTruthy()
   })
 
+  it('shows each version release group and warns when unset', async () => {
+    const withGroup = { ...makeRule('v-a', '喵萌'), release_group: '喵萌奶茶屋' }
+    await renderDialog([withGroup, makeRule('v-b', '无字幕组版本')])
+
+    expect(await screen.findByText('喵萌奶茶屋')).toBeTruthy()
+    const emptyHint = await screen.findByText('未设字幕组，可匹配任意资源')
+    expect(emptyHint.className).toContain('subscribe-version-group--empty')
+  })
+
   it('hides the progress line for versions without a server progress entry', async () => {
     await renderDialog(
-      [makeRule('v-a', '有进度', true, { total_episode: 12 }), makeRule('v-new', '新版本', true, { total_episode: 12 })],
+      [
+        makeRule('v-a', '有进度', true, { total_episode: 12 }),
+        makeRule('v-new', '新版本', true, { total_episode: 12 }),
+      ],
       { version_progress: { 'v-a': makeProgress({ lack_episode: 4 }) } },
     )
 
