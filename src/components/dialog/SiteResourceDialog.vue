@@ -77,15 +77,6 @@ const resourceHeaders = computed(() => [
   { title: '资源', key: 'stats', sortable: false, width: '10%' },
 ])
 
-// 输入框标签
-const keywordFieldLabel = computed(() => {
-  return keyword.value ? '' : t('dialog.siteResource.searchKeyword')
-})
-
-const categoryFieldLabel = computed(() => {
-  return selectCategory.value.length > 0 ? '' : t('dialog.siteResource.resourceCategory')
-})
-
 // 结果统计文案
 const resultSummaryText = computed(() => `共 ${resourceTotalItems.value} 条结果`)
 
@@ -258,7 +249,6 @@ onMounted(() => {
         </div>
       </header>
 
-
       <div class="site-resource-controls">
         <template v-if="!isMobileLayout">
           <VSheet class="site-resource-filter-panel">
@@ -272,7 +262,7 @@ onMounted(() => {
                     density="compact"
                     variant="solo-filled"
                     flat
-                    :label="keywordFieldLabel"
+                    :label="t('dialog.siteResource.searchKeyword')"
                     clearable
                     prepend-inner-icon="mdi-magnify"
                     hide-details
@@ -289,7 +279,7 @@ onMounted(() => {
                     variant="solo-filled"
                     flat
                     chips
-                    :label="categoryFieldLabel"
+                    :label="t('dialog.siteResource.resourceCategory')"
                     multiple
                     clearable
                     prepend-inner-icon="mdi-folder"
@@ -344,7 +334,7 @@ onMounted(() => {
                         density="compact"
                         variant="solo-filled"
                         flat
-                        :label="keywordFieldLabel"
+                        :label="t('dialog.siteResource.searchKeyword')"
                         clearable
                         prepend-inner-icon="mdi-magnify"
                         hide-details
@@ -362,7 +352,7 @@ onMounted(() => {
                         variant="solo-filled"
                         flat
                         chips
-                        :label="categoryFieldLabel"
+                        :label="t('dialog.siteResource.resourceCategory')"
                         multiple
                         clearable
                         prepend-inner-icon="mdi-folder"
@@ -822,7 +812,6 @@ onMounted(() => {
   flex: 0 0 auto;
   gap: 0.5rem;
 }
-
 
 .site-resource-filter-input :deep(.v-field__input) {
   color: rgb(var(--v-theme-on-surface));

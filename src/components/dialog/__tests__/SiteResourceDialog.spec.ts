@@ -148,7 +148,7 @@ describe('SiteResourceDialog', () => {
     const keywordFields = screen.getAllByLabelText('搜索关键字')
     const keyword = keywordFields[keywordFields.length - 1]
     await user.type(keyword, 'new')
-    const searchButtons = screen.getAllByRole('button', { name: /搜索/ })
+    const searchButtons = screen.getAllByRole('button', { name: '搜索' })
     await user.click(searchButtons[searchButtons.length - 1])
     await waitFor(() => expect(latestRequested).toHaveBeenCalledOnce())
     await waitFor(() => expect(getActiveRequestsCount()).toBe(2))
@@ -218,7 +218,7 @@ describe('SiteResourceDialog', () => {
     await renderDialog()
     expect(await screen.findByText('已有资源', ignoreTooltipOverlay)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /搜索/ }))
+    await user.click(screen.getByRole('button', { name: '搜索' }))
 
     expect(await screen.findByText('资源加载失败，请重试')).toBeInTheDocument()
     expect(screen.getByText('已有资源', ignoreTooltipOverlay)).toBeInTheDocument()
@@ -261,7 +261,7 @@ describe('SiteResourceDialog', () => {
     await user.click(screen.getByLabelText('资源分类'))
     await user.click(await screen.findByRole('option', { name: '电影' }))
     await user.click(await screen.findByRole('option', { name: '剧集' }))
-    await user.click(screen.getByRole('button', { name: /搜索/ }))
+    await user.click(screen.getByRole('button', { name: '搜索' }))
 
     await waitFor(() => expect(requests).toHaveLength(2))
     expect(requests[1].searchParams.get('keyword')).toBe('2160p')
@@ -293,7 +293,7 @@ describe('SiteResourceDialog', () => {
 
     await renderDialog(undefined, { VDataTable: DataTableStub })
     await waitFor(() => expect(screen.getByTestId('resource-table')).toHaveAttribute('data-loading', 'false'))
-    await user.click(screen.getByRole('button', { name: /搜索/ }))
+    await user.click(screen.getByRole('button', { name: '搜索' }))
     await waitFor(() => expect(screen.getByTestId('resource-table')).toHaveAttribute('data-loading', 'true'))
     nextResponse.resolve([createTorrentInfo({ title: '重复搜索结果' })])
 
@@ -423,6 +423,40 @@ describe('SiteResourceDialog', () => {
     expect(open).toHaveBeenNthCalledWith(2, 'https://tracker.example.com/download/one', '_blank')
     expect(open).toHaveBeenCalledTimes(2)
     expect(screen.getAllByLabelText('下载种子文件')[1]).toBeDisabled()
+  })
+
+  it('keeps mobile search controls and focus stable while editing and selecting categories', async () => {
+    setViewport(390)
+    server.use(
+      siteCategoriesHandler(501, [createSiteCategory({ desc: '电影', id: 11 })]),
+      siteResourcesHandler(501, []),
+    )
+    const user = userEvent.setup()
+
+    const { container } = await renderDialog()
+    await screen.findByText('没有数据')
+    await user.click(container.querySelector('.site-resource-mobile-search__toggle') as HTMLElement)
+    const keyword = screen.getByLabelText('搜索关键字')
+
+    await user.type(keyword, '2160p')
+    expect(keyword).toHaveValue('2160p')
+    expect(keyword).toHaveFocus()
+    expect(screen.getByLabelText('搜索关键字')).toBe(keyword)
+
+    await user.clear(keyword)
+    expect(keyword).toHaveValue('')
+    expect(keyword).toHaveFocus()
+    expect(screen.getByLabelText('搜索关键字')).toBe(keyword)
+    await user.type(keyword, '中文搜索')
+    expect(keyword).toHaveValue('中文搜索')
+    expect(keyword).toHaveFocus()
+
+    const category = screen.getByLabelText('资源分类')
+    await user.click(category)
+    await user.click(await screen.findByRole('option', { name: '电影' }))
+    expect(screen.getByLabelText('资源分类')).toBe(category)
+    expect(category).toHaveFocus()
+    expect(container.querySelector('.site-resource-filter-panel .v-chip')).toHaveTextContent('电影')
   })
 
   it('expands and closes mobile search without retaining it after a desktop switch', async () => {
