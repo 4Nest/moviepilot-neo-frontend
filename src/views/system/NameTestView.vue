@@ -390,7 +390,13 @@ async function saveCustomWords() {
             {{ t('nameTest.steps.words.title') }}
           </div>
           <div class="words-chips">
-            <VChip v-for="word in metaInfo.apply_words" :key="word" size="small" variant="tonal">
+            <VChip
+              v-for="word in metaInfo.apply_words"
+              :key="word"
+              class="applied-word-chip"
+              size="small"
+              variant="tonal"
+            >
               {{ word }}
             </VChip>
           </div>
@@ -595,20 +601,23 @@ async function saveCustomWords() {
 .words-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.5rem;
   min-inline-size: 0;
 }
 
-.words-chips :deep(.v-chip) {
+.applied-word-chip {
   block-size: auto;
   max-inline-size: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  line-height: 1.5;
   white-space: normal;
 }
 
-.words-chips :deep(.v-chip__content) {
+.applied-word-chip :deep(.v-chip__content) {
+  min-inline-size: 0;
   overflow-wrap: anywhere;
   white-space: normal;
-  word-break: break-all;
 }
 
 .empty-state {
