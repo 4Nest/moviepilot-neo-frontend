@@ -425,8 +425,11 @@ describe('SiteResourceDialog', () => {
     expect(screen.getAllByLabelText('下载种子文件')[1]).toBeDisabled()
   })
 
-  it('keeps mobile search controls and focus stable while editing and selecting categories', async () => {
-    setViewport(390)
+  it.each([
+    ['desktop', 1280],
+    ['mobile', 390],
+  ] as const)('uses a keyword placeholder and keeps search controls stable on %s', async (_layout, width) => {
+    setViewport(width)
     server.use(
       siteCategoriesHandler(501, [createSiteCategory({ desc: '电影', id: 11 })]),
       siteResourcesHandler(501, []),
@@ -435,13 +438,18 @@ describe('SiteResourceDialog', () => {
 
     const { container } = await renderDialog()
     await screen.findByText('没有数据')
-    await user.click(container.querySelector('.site-resource-mobile-search__toggle') as HTMLElement)
+    if (width < 960) {
+      await user.click(container.querySelector('.site-resource-mobile-search__toggle') as HTMLElement)
+    }
     const keyword = screen.getByLabelText('搜索关键字')
+    expect(keyword).toHaveAttribute('placeholder', '搜索关键字')
+    expect(screen.queryByText('搜索关键字')).not.toBeInTheDocument()
 
     await user.type(keyword, '2160p')
     expect(keyword).toHaveValue('2160p')
     expect(keyword).toHaveFocus()
     expect(screen.getByLabelText('搜索关键字')).toBe(keyword)
+    expect(screen.queryByText('搜索关键字')).not.toBeInTheDocument()
 
     await user.clear(keyword)
     expect(keyword).toHaveValue('')
