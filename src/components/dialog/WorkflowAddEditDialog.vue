@@ -26,6 +26,7 @@ const display = useDisplay()
 
 // 注册事件
 const emit = defineEmits(['save', 'remove', 'close'])
+const saving = ref(false)
 
 // 站点编辑表单数据
 const workflowForm = ref<Workflow>(
@@ -142,6 +143,7 @@ function normalizeWorkflowExecutionConfig() {
 
 // 调用API 新增任务
 async function addWorkflow() {
+  if (saving.value) return
   if (!workflowForm.value.name) {
     $toast.error(t('dialog.workflowAddEdit.nameRequired'))
     return
@@ -164,19 +166,25 @@ async function addWorkflow() {
   }
 
   normalizeWorkflowExecutionConfig()
+  saving.value = true
   startNProgress()
   try {
-    const result: { [key: string]: string } = await api.post('workflow/', workflowForm.value)
+    const result: { success: boolean; message?: string; data?: { id?: Workflow['id'] } } = await api.post(
+      'workflow/',
+      workflowForm.value,
+    )
     if (result.success) {
       $toast.success(t('dialog.workflowAddEdit.addSuccess'))
-      emit('save')
+      emit('save', result.data?.id)
     } else {
       $toast.error(t('dialog.workflowAddEdit.addFailed', { message: result.message }))
     }
   } catch (error) {
     console.error(error)
+  } finally {
+    saving.value = false
+    doneNProgress()
   }
-  doneNProgress()
 }
 
 // 调用API 编辑任务
@@ -324,7 +332,15 @@ onMounted(() => {
         >
           {{ t('dialog.workflowAddEdit.confirm') }}
         </VBtn>
-        <VBtn v-else color="primary" variant="flat" @click="addWorkflow" prepend-icon="mdi-plus" class="px-5">
+        <VBtn
+          v-else
+          color="primary"
+          variant="flat"
+          :loading="saving"
+          @click="addWorkflow"
+          prepend-icon="mdi-plus"
+          class="px-5"
+        >
           {{ t('dialog.workflowAddEdit.confirm') }}
         </VBtn>
       </VCardActions>

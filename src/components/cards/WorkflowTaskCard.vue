@@ -26,7 +26,7 @@ const props = defineProps({
 })
 
 // 定义事件
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'remove'])
 
 // 提示框
 const $toast = useToast()
@@ -43,11 +43,29 @@ const getEventTypeText = (eventTypeValue: string) => {
   return eventType ? eventType.title : eventTypeValue
 }
 
+// 读取编辑所需的完整配置
+async function loadWorkflow(item: Workflow): Promise<Workflow | null> {
+  if (loading.value) return null
+  loading.value = true
+  try {
+    // 卡片只持有摘要，编辑必须读取完整配置，避免保存时丢失动作参数或连线。
+    return await api.get(`workflow/${item.id}`)
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('common.error'))
+    return null
+  } finally {
+    loading.value = false
+  }
+}
+
 // 编辑任务
-function handleEdit(item: Workflow) {
+async function handleEdit(item: Workflow) {
+  const workflow = await loadWorkflow(item)
+  if (!workflow) return
   openSharedDialog(
     WorkflowAddEditDialog,
-    { workflow: item },
+    { workflow },
     {
       save: editDone,
     },
@@ -56,10 +74,12 @@ function handleEdit(item: Workflow) {
 }
 
 // 编辑流程
-function handleFlow(item: Workflow) {
+async function handleFlow(item: Workflow) {
+  const workflow = await loadWorkflow(item)
+  if (!workflow) return
   openSharedDialog(
     WorkflowActionsDialog,
-    { workflow: item },
+    { workflow },
     {
       save: editDone,
     },
@@ -79,23 +99,26 @@ function editDone() {
 
 // 删除任务
 async function handleDelete(item: Workflow) {
-  const isConfirmed = await createConfirm({
-    title: t('common.confirm'),
-    content: t('workflow.task.confirmDelete', { name: item.name }),
-  })
-
-  if (!isConfirmed) return
-
+  if (loading.value) return
+  loading.value = true
   try {
+    const isConfirmed = await createConfirm({
+      title: t('common.confirm'),
+      content: t('workflow.task.confirmDelete', { name: item.name }),
+    })
+    if (!isConfirmed) return
     const result: { [key: string]: string } = await api.delete(`workflow/${item.id}`)
     if (result.success) {
       $toast.success(t('workflow.task.deleteSuccess'))
-      emit('refresh')
+      emit('remove', item.id)
     } else {
       $toast.error(t('workflow.task.deleteFailed', { message: result.message }))
     }
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
   }
 }
 
@@ -386,6 +409,7 @@ const executionStatus = computed(() => {
             <template #append>
               <IconBtn
                 class="workflow-task-card__menu"
+                :disabled="loading"
                 size="small"
                 density="compact"
                 :aria-label="t('workflow.task.moreActions')"

@@ -18,6 +18,7 @@ const isRefreshed = ref(false)
 
 // 所有任务
 const workflowList = ref<Workflow[]>([])
+let fetchSequence = 0
 
 // 事件类型列表
 const eventTypes = ref<Array<{ title: string; value: string }>>([])
@@ -33,8 +34,11 @@ async function loadEventTypes() {
 
 // 加载数据
 async function fetchData() {
+  const sequence = ++fetchSequence
   try {
-    workflowList.value = await api.get('workflow/')
+    const workflows: Workflow[] = await api.get('workflow/', { params: { summary: true } })
+    if (sequence !== fetchSequence) return
+    workflowList.value = workflows
     isRefreshed.value = true
   } catch (error) {
     console.error(error)
@@ -42,8 +46,29 @@ async function fetchData() {
 }
 
 // 新增完成
-function addDone() {
-  fetchData()
+async function addDone(id?: Workflow['id']) {
+  if (id === undefined || id === null || !isRefreshed.value) {
+    await fetchData()
+    return
+  }
+  // 已发出的列表请求不能覆盖新增或删除后的本地结果。
+  const sequence = ++fetchSequence
+  try {
+    const workflow: Workflow = await api.get(`workflow/${id}`)
+    if (sequence !== fetchSequence) {
+      await fetchData()
+      return
+    }
+    if (!workflowList.value.some(item => String(item.id) === String(id))) workflowList.value.push(workflow)
+  } catch (error) {
+    console.error(error)
+    await fetchData()
+  }
+}
+
+function removeWorkflow(id: Workflow['id']) {
+  ++fetchSequence
+  workflowList.value = workflowList.value.filter(item => String(item.id) !== String(id))
 }
 
 onMounted(() => {
@@ -81,7 +106,7 @@ defineExpose({
       class="px-2"
     >
       <template #default="{ item }">
-        <WorkflowTaskCard :workflow="item" :event-types="eventTypes" @refresh="fetchData" />
+        <WorkflowTaskCard :workflow="item" :event-types="eventTypes" @refresh="fetchData" @remove="removeWorkflow" />
       </template>
     </ProgressiveCardGrid>
     <NoDataFound

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiDelete: vi.fn(),
+  apiGet: vi.fn(),
   apiPost: vi.fn(),
   confirm: vi.fn(),
   openSharedDialog: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/api', () => ({
   default: {
     delete: (...args: unknown[]) => mocks.apiDelete(...args),
+    get: (...args: unknown[]) => mocks.apiGet(...args),
     post: (...args: unknown[]) => mocks.apiPost(...args),
   },
 }))
@@ -64,14 +66,51 @@ async function renderCard(workflowOverrides: Partial<Workflow> = {}) {
 describe('WorkflowTaskCard redesign', () => {
   beforeEach(() => {
     mocks.apiDelete.mockReset()
+    mocks.apiGet.mockReset()
     mocks.apiPost.mockReset()
     mocks.confirm.mockReset()
     mocks.openSharedDialog.mockReset()
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
     mocks.apiPost.mockResolvedValue({ success: true })
+    mocks.apiGet.mockResolvedValue(createWorkflow())
+    mocks.apiDelete.mockResolvedValue({ success: true })
     mocks.confirm.mockResolvedValue(true)
     mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
+  })
+
+  it.each(['编辑任务', '编辑流程'])('loads complete configuration before %s', async label => {
+    const detail = createWorkflow({
+      actions: [{ id: 'scan', data: { path: '/media' } }],
+      flows: [{ source: 'scan', target: 'scrape' }],
+      execution_config: { max_workers: 3 },
+    })
+    mocks.apiGet.mockResolvedValue(detail)
+    await renderCard()
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    await fireEvent.click(await screen.findByText(label, { exact: true }))
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalled())
+    expect(mocks.apiGet).toHaveBeenCalledWith('workflow/workflow-1')
+    expect(mocks.openSharedDialog.mock.calls[0][1]).toEqual({ workflow: detail })
+  })
+
+  it('keeps the editor closed when fetching full configuration fails', async () => {
+    mocks.apiGet.mockRejectedValue(new Error('Failed to fetch'))
+    const { container } = await renderCard()
+    await fireEvent.click(container.querySelector('.workflow-task-card')!)
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('removes a card only after confirmed successful deletion (%s)', async success => {
+    mocks.apiDelete.mockResolvedValue({ success, message: '删除失败' })
+    const { emitted } = await renderCard()
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    await fireEvent.click(await screen.findByText('删除任务', { exact: true }))
+    await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalled())
+    await waitFor(() => expect(success ? mocks.toastSuccess : mocks.toastError).toHaveBeenCalled())
+    expect(emitted().remove).toEqual(success ? [['workflow-1']] : undefined)
+    expect(emitted().refresh).toBeUndefined()
   })
 
   it('maps the generated card icon to the workflow trigger type', async () => {
@@ -161,7 +200,7 @@ describe('WorkflowTaskCard redesign', () => {
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
 
     await fireEvent.click(container.querySelector('.workflow-task-card') as Element)
-    expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
     expect(mocks.openSharedDialog.mock.calls[0][1]).toEqual({ workflow: expect.objectContaining({ id: 'workflow-1' }) })
   })
 
