@@ -37,6 +37,18 @@ const deleting = ref(false)
 // 是否折叠
 const isExpanded = ref(false)
 
+// 只展示分享记录实际设置的参数，正则表达式保留原文便于核对。
+const sharedParameters = computed(() =>
+  [
+    { key: 'keyword', label: t('subscribe.keyword'), value: props.media?.keyword },
+    { key: 'include', label: t('subscribe.include'), value: props.media?.include },
+    { key: 'exclude', label: t('subscribe.exclude'), value: props.media?.exclude },
+    { key: 'quality', label: t('dialog.subscribeEdit.quality'), value: props.media?.quality },
+    { key: 'resolution', label: t('dialog.subscribeEdit.resolution'), value: props.media?.resolution },
+    { key: 'effect', label: t('dialog.subscribeEdit.effect'), value: props.media?.effect },
+  ].filter(parameter => parameter.value?.trim()),
+)
+
 // follow用户列表
 const followUsers = ref<string[]>([])
 
@@ -239,25 +251,26 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 元信息 -->
-      <div v-if="media?.keyword" class="share-meta">
-        <div class="share-meta__row">
-          <span class="share-meta__label">{{ t('subscribe.keyword') }}</span>
-          <span class="share-meta__value">{{ media?.keyword }}</span>
-        </div>
-      </div>
+      <VCardText v-if="sharedParameters.length || media?.custom_words" class="share-detail-content pa-0">
+        <dl v-if="sharedParameters.length" class="share-meta" :aria-label="t('subscribe.parameters')">
+          <div v-for="parameter in sharedParameters" :key="parameter.key" class="share-meta__row">
+            <dt class="share-meta__label">{{ parameter.label }}</dt>
+            <dd class="share-meta__value">{{ parameter.value }}</dd>
+          </div>
+        </dl>
 
-      <!-- 识别词（可折叠） -->
-      <div v-if="media?.custom_words" class="share-words">
-        <button class="share-words__toggle" @click="toggleExpand">
-          <VIcon :icon="isExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" />
-          {{ t('subscribe.recognitionWords') }}
-          <span class="share-words__count">{{ media?.custom_words?.split('\n').length || 0 }} 条</span>
-        </button>
-        <div v-show="isExpanded" class="share-words__content">
-          <pre>{{ media?.custom_words }}</pre>
+        <!-- 识别词（可折叠） -->
+        <div v-if="media?.custom_words" class="share-words">
+          <button class="share-words__toggle" @click="toggleExpand">
+            <VIcon :icon="isExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" />
+            {{ t('subscribe.recognitionWords') }}
+            <span class="share-words__count">{{ media?.custom_words?.split('\n').length || 0 }} 条</span>
+          </button>
+          <div v-show="isExpanded" class="share-words__content">
+            <pre>{{ media?.custom_words }}</pre>
+          </div>
         </div>
-      </div>
+      </VCardText>
 
       <VDialogCloseBtn @click="emit('close')" />
     </VCard>
@@ -272,6 +285,7 @@ onMounted(() => {
 /* ===== 顶部 Hero 区 ===== */
 .share-hero {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   padding: 1.25rem;
   gap: 1.25rem;
@@ -340,15 +354,23 @@ onMounted(() => {
 }
 
 /* ===== 元信息 ===== */
+.share-detail-content {
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
 .share-meta {
+  margin: 0;
   padding: 0 1.5rem;
   padding-block-end: 0.5rem;
 }
 
 .share-meta__row {
-  display: flex;
+  display: grid;
   align-items: baseline;
   gap: 0.5rem;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  padding-block: 0.375rem;
 }
 
 .share-meta__label {
@@ -358,8 +380,10 @@ onMounted(() => {
 }
 
 .share-meta__value {
+  margin: 0;
   font-size: 0.875rem;
   font-weight: 500;
+  white-space: pre-wrap;
   word-break: break-all;
 }
 

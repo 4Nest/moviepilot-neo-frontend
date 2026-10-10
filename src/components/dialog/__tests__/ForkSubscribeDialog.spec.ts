@@ -1,6 +1,6 @@
 import type { SubscribeShare } from '@/api/types'
 import ForkSubscribeDialog from '@/components/dialog/ForkSubscribeDialog.vue'
-import { screen, waitFor } from '@testing-library/vue'
+import { screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createSubscribeShare } from '@tests/support/factories/subscribe'
 import {
@@ -140,6 +140,64 @@ describe('ForkSubscribeDialog follow behavior', () => {
     expect(content).toHaveTextContent(media.custom_words!.replaceAll('\n', ' '))
   })
 
+  it('展示分享的过滤参数，正则表达式和联合字幕组连接符保持原样', async () => {
+    const include = '^三明治摆烂组&LoliHouse.*\\b1080p\\b\n(?i)HEVC|H265'
+    const exclude = '先行|合集|<script>alert(1)</script>'
+    server.use(followSubscribersSettingHandler([]))
+    const { media } = await renderDialog(
+      createSubscribeShare({
+        keyword: 'Tensei Shitara Ken Deshita',
+        include,
+        exclude,
+        quality: 'WEB-DL|WebRip',
+        resolution: '1080p',
+        effect: 'HDR|DV',
+      }),
+    )
+    const parameters = within(screen.getByLabelText('订阅参数'))
+
+    for (const [label, value] of [
+      ['关键词', media.keyword],
+      ['包含', include],
+      ['排除', exclude],
+      ['质量', 'WEB-DL|WebRip'],
+      ['分辨率', '1080p'],
+      ['特效', 'HDR|DV'],
+    ]) {
+      const row = parameters.getByText(label!).closest('div')!
+      expect(row.querySelector('dd')?.textContent).toBe(value)
+    }
+    expect(parameters.getByText('排除').closest('div')!.querySelector('script')).toBeNull()
+    expect(media.include).toBe(include)
+    expect(media.exclude).toBe(exclude)
+  })
+
+  it.each([{}, { keyword: '', include: '  ', exclude: '\n', quality: '', resolution: '\t', effect: '' }])(
+    '缺失或空白参数不展示空区域，兼容旧分享记录 %j',
+    async overrides => {
+      server.use(followSubscribersSettingHandler([]))
+      await renderDialog(createSubscribeShare(overrides))
+
+      expect(screen.queryByLabelText('订阅参数')).not.toBeInTheDocument()
+    },
+  )
+
+  it('只展示已设置的参数，切换分享记录后立即更新', async () => {
+    server.use(followSubscribersSettingHandler([]))
+    const { rerender } = await renderDialog(createSubscribeShare({ include: 'LoliHouse', exclude: ' ' }))
+
+    expect(screen.getByText('包含')).toBeInTheDocument()
+    expect(screen.queryByText('排除')).not.toBeInTheDocument()
+    expect(screen.queryByText('质量')).not.toBeInTheDocument()
+
+    await rerender({ media: createSubscribeShare({ exclude: '先行', resolution: '2160p' }) })
+
+    expect(screen.queryByText('包含')).not.toBeInTheDocument()
+    expect(screen.queryByText('LoliHouse')).not.toBeInTheDocument()
+    expect(screen.getByText('先行')).toBeInTheDocument()
+    expect(screen.getByText('2160p')).toBeInTheDocument()
+  })
+
   it('follows a share user and refreshes the action from the server setting', async () => {
     const media = createSubscribeShare({ share_uid: 'new-follow-user' })
     const users: string[] = []
@@ -231,7 +289,15 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
   })
 
   it('keeps the fork button pending and emits the created subscription ID on success', async () => {
-    const media = createSubscribeShare({ id: 6101, share_title: '待复用分享' })
+    const media = createSubscribeShare({
+      id: 6101,
+      share_title: '待复用分享',
+      include: '三明治摆烂组&LoliHouse',
+      exclude: '先行|合集',
+      quality: 'WebRip',
+      resolution: '1080p',
+      effect: 'HDR',
+    })
     const deferred = createDeferred()
     const forkPayload = vi.fn(() => deferred.promise)
     server.use(
