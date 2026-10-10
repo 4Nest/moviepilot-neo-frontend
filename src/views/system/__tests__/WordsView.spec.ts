@@ -189,3 +189,82 @@ describe('WordsView editor preferences', () => {
     expect(mocks.apiPost).not.toHaveBeenCalled()
   })
 })
+
+describe('WordsView remote source removal', () => {
+  const removedUrl = 'https://example.com/removed'
+  const keptUrl = 'https://example.com/kept'
+  let savedSources: Array<{ url: string; enabled: boolean; interval_days: number; tables: string[] }>
+
+  beforeEach(() => {
+    savedSources = [
+      { url: removedUrl, enabled: true, interval_days: 7, tables: ['identifiers'] },
+    ]
+    mocks.toastError.mockClear()
+    mocks.toastSuccess.mockClear()
+    mocks.apiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'system/words/sync/status') return { data: { sources: savedSources } }
+      if (endpoint === 'system/words/synced') {
+        return {
+          data: {
+            identifiers: savedSources.map(source => ({
+              source: source.url,
+              lines: [source.url === removedUrl ? 'Old => Old Result' : 'Other => Other Result'],
+            })),
+          },
+        }
+      }
+      return { data: { value: ['Local => Local Result'] } }
+    })
+    mocks.apiPost.mockImplementation(async (_endpoint: string, payload: typeof savedSources) => {
+      savedSources = payload
+      return { success: true }
+    })
+  })
+
+  it('removes the last source and its displayed words while preserving the local editor', async () => {
+    const user = userEvent.setup()
+    await renderWordsView()
+    await screen.findByText('Old => Old Result')
+    await user.click(screen.getAllByRole('button', { name: /远程同步/ })[0])
+    await user.click(screen.getByRole('button', { name: '删除' }))
+
+    await screen.findByText('尚未配置同步源,点击上方按钮添加')
+    expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/WordsSyncSources', [])
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('同步源已删除')
+    await user.click(screen.getAllByRole('button', { name: /自定义识别词/ })[0])
+
+    expect(screen.queryByText('Old => Old Result')).not.toBeInTheDocument()
+    expect(screen.getByTestId('words-ace-editor')).toHaveAttribute('data-value', 'Local => Local Result')
+  })
+
+  it('keeps another source and its remote words after deleting one source', async () => {
+    savedSources.push({ url: keptUrl, enabled: true, interval_days: 7, tables: ['identifiers'] })
+    const user = userEvent.setup()
+    await renderWordsView()
+    await screen.findByText('Old => Old Result')
+    await user.click(screen.getAllByRole('button', { name: /远程同步/ })[0])
+    await user.click(screen.getAllByRole('button', { name: '删除' })[0])
+    await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('同步源已删除'))
+    expect(screen.getByDisplayValue(keptUrl)).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: /自定义识别词/ })[0])
+
+    expect(screen.queryByText('Old => Old Result')).not.toBeInTheDocument()
+    expect(screen.getByText('Other => Other Result')).toBeInTheDocument()
+  })
+
+  it.each(['response', 'exception'])('restores the source and avoids a success toast on %s failure', async failure => {
+    if (failure === 'exception') mocks.apiPost.mockRejectedValue(new Error('保存失败'))
+    else mocks.apiPost.mockResolvedValue({ success: false, message: '保存失败' })
+    const user = userEvent.setup()
+    await renderWordsView()
+    await screen.findByText('Old => Old Result')
+    await user.click(screen.getAllByRole('button', { name: /远程同步/ })[0])
+    await user.click(screen.getByRole('button', { name: '删除' }))
+
+    await screen.findByDisplayValue(removedUrl)
+    expect(mocks.toastError).toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    await user.click(screen.getAllByRole('button', { name: /自定义识别词/ })[0])
+    expect(screen.getByText('Old => Old Result')).toBeInTheDocument()
+  })
+})

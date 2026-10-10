@@ -386,7 +386,13 @@ async function saveSyncSources(showToast = true) {
     }))
     const result = (await api.post('system/setting/WordsSyncSources', payload)) as ApiResponse<unknown>
     if (result.success) {
+      const sourceUrls = new Set(payload.map(source => source.url))
+      for (const section of Object.keys(syncedWords.value)) {
+        syncedWords.value[section] = syncedWords.value[section].filter(item => sourceUrls.has(item.source))
+      }
+      await loadSyncedWords()
       if (showToast) $toast.success(t('setting.words.syncSettingsSaved'))
+      return true
     } else {
       $toast.error(result.message || t('setting.words.syncSettingsSaveFailed'))
     }
@@ -396,6 +402,7 @@ async function saveSyncSources(showToast = true) {
   } finally {
     savingSyncSources.value = false
   }
+  return false
 }
 
 /** 添加一个空白同步源。 */
@@ -410,9 +417,14 @@ function addSyncSource() {
 
 /** 删除同步源并保存。 */
 async function removeSyncSource(index: number) {
+  if (savingSyncSources.value) return
+  const previousSources = [...syncSources.value]
   syncSources.value.splice(index, 1)
-  await saveSyncSources(false)
-  $toast.success(t('setting.words.syncSourceRemoved'))
+  if (await saveSyncSources(false)) {
+    $toast.success(t('setting.words.syncSourceRemoved'))
+  } else {
+    syncSources.value = previousSources
+  }
 }
 
 /** 同步指定源(缺省全部),完成后刷新远程词表展示。 */
@@ -653,6 +665,7 @@ onMounted(() => {
                   <IconBtn
                     variant="text"
                     color="error"
+                    :disabled="savingSyncSources"
                     :aria-label="t('common.delete')"
                     @click.stop="removeSyncSource(index)"
                   >
