@@ -1,6 +1,13 @@
 // 全局请求优化器
 // 自动管理所有API请求的中断，无需手动注册
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** 写入操作需接收最终结果，允许调用方避免被页面切换中断。 */
+    cancelOnNavigation?: boolean
+  }
+}
+
 let isNavigating = false
 const activeRequests = new Set<AbortController>()
 
@@ -36,7 +43,7 @@ export function initializeRequestOptimizer(axiosInstance: any) {
   axiosInstance.interceptors.request.use(
     (config: any) => {
       // 如果请求已经有 signal，跳过（避免覆盖手动设置的）
-      if (config.signal) {
+      if (config.signal || config.cancelOnNavigation === false) {
         return config
       }
 

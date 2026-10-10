@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 interface RequestConfigFake {
   signal?: AbortSignal
+  cancelOnNavigation?: boolean
 }
 
 interface ResponseFake {
@@ -117,6 +118,19 @@ describe('requestOptimizer', () => {
 
     expect(interceptors.response.fulfilled({ config })).toEqual({ config })
     expect(getActiveRequestsCount()).toBe(0)
+  })
+
+  it('订阅等显式保留的写入请求不会被导航取消，普通查询仍会取消', () => {
+    const interceptors = createAxiosInterceptorFake()
+    const mutation = interceptors.request.fulfilled({ cancelOnNavigation: false })
+    const query = interceptors.request.fulfilled({})
+
+    setNavigatingState(true)
+
+    expect(mutation.signal).toBeUndefined()
+    expect(query.signal?.aborted).toBe(true)
+    expect(getActiveRequestsCount()).toBe(0)
+    expect(interceptors.response.fulfilled({ config: mutation })).toEqual({ config: mutation })
   })
 
   it('导航开始时只取消当前活跃请求，导航结束不主动取消', () => {

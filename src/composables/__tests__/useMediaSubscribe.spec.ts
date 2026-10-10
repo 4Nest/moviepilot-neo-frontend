@@ -7,7 +7,8 @@ import {
   type SubscribeMode,
   useMediaSubscribe,
 } from '@/composables/useMediaSubscribe'
-import { getActiveRequestsCount } from '@/utils/requestOptimizer'
+import { getActiveRequestsCount, setNavigatingState } from '@/utils/requestOptimizer'
+import { useSubscribeRefresh } from '@/composables/useSubscribeRefresh'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSubscribe, createSubscribeMovie, createSubscribeTv } from '@tests/support/factories/subscribe'
 import {
@@ -223,8 +224,42 @@ describe('useMediaSubscribe entry flows', () => {
   })
 
   afterEach(async () => {
+    setNavigatingState(false)
     await flushPromises()
     await waitFor(() => expect(getActiveRequestsCount()).toBe(0))
+  })
+
+  it('切换页面后继续完成订阅，通知列表刷新且不在新页面弹出编辑窗口', async () => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const created = vi.fn(() => pending)
+    const configQueried = vi.fn()
+    const revision = useSubscribeRefresh()
+    const previousRevision = revision.value
+    server.use(
+      createSubscribeHandler({ data: { id: 513 }, success: true }, 200, created),
+      defaultSubscribeConfigHandler('电视剧', { show_edit_dialog: true }, 200, configQueried),
+    )
+    const { router } = await renderSubscribeHarness({ media: createSubscribeTv({ title: '切页番剧' }) })
+    await fireEvent.click(screen.getByRole('button', { name: 'add-normal' }))
+    await waitFor(() => expect(created).toHaveBeenCalledOnce())
+
+    try {
+      setNavigatingState(true)
+      await router.push('/subscribe/tv')
+    } finally {
+      release()
+    }
+
+    await waitFor(() => expect(mocks.doneProgress).toHaveBeenCalledOnce())
+    expect(screen.getByTestId('subscribed')).toHaveTextContent('true')
+    expect(mocks.toastSuccess).toHaveBeenCalledOnce()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(configQueried).not.toHaveBeenCalled()
+    expect(revision.value).toBe(previousRevision + 1)
   })
 
   it('creates a normal movie subscription and synchronizes public state', async () => {
@@ -548,6 +583,8 @@ describe('useMediaSubscribe entry flows', () => {
     ['business failure', 200, { message: 'duplicate', success: false }],
     ['HTTP failure', 500, { message: 'server down', success: false }],
   ])('keeps state unchanged when create returns a %s', async (_case, status, response) => {
+    const revision = useSubscribeRefresh()
+    const previousRevision = revision.value
     const consoleError = status === 500 ? vi.spyOn(console, 'error').mockImplementation(() => {}) : undefined
     server.use(createSubscribeHandler(response, status))
     await renderSubscribeHarness({ media: createSubscribeMovie({ tmdb_id: 107 }) })
@@ -559,6 +596,7 @@ describe('useMediaSubscribe entry flows', () => {
     expect(mocks.cacheStatus).not.toHaveBeenCalled()
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
     expect(mocks.doneProgress).toHaveBeenCalledOnce()
+    expect(revision.value).toBe(previousRevision)
     if (status === 500) expect(consoleError).toHaveBeenCalledOnce()
   })
 

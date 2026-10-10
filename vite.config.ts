@@ -337,6 +337,7 @@ export default defineConfig(({ command, mode, isPreview }) => ({
         'src/views/subscribe/SubscribePopularView.vue',
         'src/views/subscribe/SubscribeShareView.vue',
         'src/composables/useMediaSubscribe.ts',
+        'src/composables/useSubscribeRefresh.ts',
         'src/composables/useTorrentFilter.ts',
         'src/components/cards/SubscribeCard.vue',
         'src/components/filter/TorrentFilterBar.vue',

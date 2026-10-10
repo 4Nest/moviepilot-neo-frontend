@@ -64,10 +64,10 @@ function jsonResponse(body: JsonBodyType, status: number) {
 export function subscribeListHandler(
   response: JsonBodyType = [],
   status = 200,
-  onRequest: (url: URL) => void = () => {},
+  onRequest: (url: URL) => void | Promise<void> = () => {},
 ) {
-  return http.get(subscribeApiUrls.list, ({ request }) => {
-    onRequest(new URL(request.url))
+  return http.get(subscribeApiUrls.list, async ({ request }) => {
+    await onRequest(new URL(request.url))
     return jsonResponse(response, status)
   })
 }
@@ -275,11 +275,11 @@ export function subscribeRecoveryActionHandler(
 export function createSubscribeHandler(
   response: SubscribeMutationResponse = { data: { id: 1 }, success: true },
   status = 200,
-  onCreate: (payload: Record<string, unknown>) => void = () => {},
+  onCreate: (payload: Record<string, unknown>) => void | Promise<void> = () => {},
 ) {
   return http.post(subscribeApiUrls.create, async ({ request }) => {
     const payload = (await request.json()) as Record<string, unknown>
-    onCreate(payload)
+    await onCreate(payload)
     return jsonResponse(response, status)
   })
 }
@@ -320,7 +320,12 @@ export function deleteSubscribeByMediaHandler(
   })
 }
 
-export function subscribeDetailsHandler(id: number, subscribe: Subscribe, status = 200, onRequest: () => void = () => {}) {
+export function subscribeDetailsHandler(
+  id: number,
+  subscribe: Subscribe,
+  status = 200,
+  onRequest: () => void = () => {},
+) {
   return http.get(subscribeApiUrls.details(id), () => {
     onRequest()
     return jsonResponse(subscribe as unknown as JsonBodyType, status)

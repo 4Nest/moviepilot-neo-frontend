@@ -1,5 +1,7 @@
 import type { Subscribe } from '@/api/types'
 import SubscribeListView from '@/views/subscribe/SubscribeListView.vue'
+import { notifySubscribeChanged } from '@/composables/useSubscribeRefresh'
+import { setNavigatingState } from '@/utils/requestOptimizer'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSubscribe } from '@tests/support/factories/subscribe'
 import {
@@ -13,8 +15,9 @@ import {
 } from '@tests/support/msw/handlers/subscribe'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
+import { flushPromises } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref, watch, type PropType } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
@@ -62,9 +65,17 @@ const SubscribeCardStub = defineComponent({
         },
         [
           h('span', props.media.name),
-          h('button', { 'aria-label': `select-${props.media.id}`, onClick: () => emit('select'), type: 'button' }, 'select'),
+          h(
+            'button',
+            { 'aria-label': `select-${props.media.id}`, onClick: () => emit('select'), type: 'button' },
+            'select',
+          ),
           h('button', { 'aria-label': `save-${props.media.id}`, onClick: () => emit('save'), type: 'button' }, 'save'),
-          h('button', { 'aria-label': `remove-${props.media.id}`, onClick: () => emit('remove'), type: 'button' }, 'remove'),
+          h(
+            'button',
+            { 'aria-label': `remove-${props.media.id}`, onClick: () => emit('remove'), type: 'button' },
+            'remove',
+          ),
         ],
       )
   },
@@ -226,12 +237,7 @@ interface RenderListOptions {
 async function renderList(options: RenderListOptions = {}) {
   const type = options.type ?? '电影'
   server.use(
-    subscribeOrderConfigHandler(
-      type,
-      options.orderValue,
-      options.orderStatus ?? 200,
-      options.onOrderRequest,
-    ),
+    subscribeOrderConfigHandler(type, options.orderValue, options.orderStatus ?? 200, options.onOrderRequest),
     subscribeListHandler(options.listResponse ?? [], options.listStatus ?? 200, options.onListRequest),
   )
 
@@ -284,7 +290,36 @@ beforeEach(() => {
   mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
 })
 
+afterEach(() => {
+  setNavigatingState(false)
+})
+
 describe('SubscribeListView loading and filtering', () => {
+  it('切页取消列表查询时不提示请求失败，重新激活后可以正常加载', async () => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const requested = vi.fn(() => pending)
+    const { rerender } = await renderList({ listResponse: [], onListRequest: requested })
+    await waitFor(() => expect(requested).toHaveBeenCalledOnce())
+
+    try {
+      setNavigatingState(true)
+      await rerender({ active: false })
+      await flushPromises()
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    } finally {
+      release()
+      setNavigatingState(false)
+    }
+
+    server.use(subscribeListHandler([movie(1, '新订阅')]))
+    await rerender({ active: true })
+    expect(await screen.findByText('新订阅')).toBeInTheDocument()
+  })
+
   it('loads exact endpoints and shows every owner while retaining type defense', async () => {
     const listRequested = vi.fn()
     const orderRequested = vi.fn()
@@ -379,6 +414,55 @@ describe('SubscribeListView loading and filtering', () => {
 })
 
 describe('SubscribeListView sorting and refresh boundaries', () => {
+  it('页面已打开时，后台订阅成功会立即查询并显示新卡片', async () => {
+    const refreshed = vi.fn()
+    await renderList({ listResponse: [movie(1, '已有订阅')] })
+    await screen.findByText('已有订阅')
+    server.use(subscribeListHandler([movie(1, '已有订阅'), movie(2, '新订阅')], 200, refreshed))
+
+    notifySubscribeChanged()
+
+    expect(await screen.findByText('新订阅')).toBeInTheDocument()
+    expect(refreshed).toHaveBeenCalledOnce()
+    expect(screen.queryByTestId('loading-banner')).not.toBeInTheDocument()
+  })
+
+  it('隐藏订阅列表不因变更发请求，回到列表后刷新新卡片', async () => {
+    const refreshed = vi.fn()
+    const { rerender } = await renderList({ listResponse: [movie(1, '已有订阅')] })
+    await screen.findByText('已有订阅')
+    await rerender({ active: false })
+    server.use(subscribeListHandler([movie(2, '新订阅')], 200, refreshed))
+
+    notifySubscribeChanged()
+    await nextTick()
+    expect(refreshed).not.toHaveBeenCalled()
+    await rerender({ active: true })
+
+    expect(await screen.findByText('新订阅')).toBeInTheDocument()
+    expect(refreshed).toHaveBeenCalledOnce()
+  })
+
+  it('订阅成功发生在首次查询未完成时，补查新卡片且旧响应不能覆盖它', async () => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const initialRequest = vi.fn(() => pending)
+    const refreshed = vi.fn()
+    await renderList({ listResponse: [movie(1, '旧快照')], onListRequest: initialRequest })
+    await waitFor(() => expect(initialRequest).toHaveBeenCalledOnce())
+    server.use(subscribeListHandler([movie(2, '新订阅')], 200, refreshed))
+
+    notifySubscribeChanged()
+    await nextTick()
+    release()
+
+    expect(await screen.findByText('新订阅')).toBeInTheDocument()
+    expect(screen.queryByText('旧快照')).not.toBeInTheDocument()
+    expect(refreshed).toHaveBeenCalledOnce()
+  })
+
   it('applies custom order first and appends unconfigured subscriptions by date', async () => {
     await renderList({
       listResponse: [

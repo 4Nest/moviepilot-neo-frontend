@@ -8,6 +8,7 @@ import type { MediaInfo, MediaSeason, Subscribe } from '@/api/types'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useConfirm } from '@/composables/useConfirm'
 import { setCachedMediaSubscribeStatus } from '@/utils/mediaStatusCache'
+import { notifySubscribeChanged } from '@/composables/useSubscribeRefresh'
 
 export type SubscribeMode = 'normal' | 'best_version' | 'best_version_full'
 
@@ -150,6 +151,7 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   const $toast = useToast()
   const createConfirm = useConfirm()
   const episodeGroup = ref('')
+  const route = useRoute()
 
   // 获取调用方当前媒体，避免在异步流程中持有旧对象。
   function currentMedia() {
@@ -307,28 +309,36 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
     const media = currentMedia()
     if (!media) return
     const identity = getMediaSubscribeIdentity(media)
+    const originPath = route.fullPath
 
     startNProgress()
     try {
-      const result: { [key: string]: any } = await api.post('subscribe/', {
-        name: media.title,
-        type: media.type,
-        year: media.year,
-        tmdbid: media.tmdb_id,
-        doubanid: media.douban_id,
-        bangumiid: media.bangumi_id,
-        anilistid: media.anilist_id,
-        media_source: identity?.source,
-        media_id: identity?.mediaId,
-        mediaid: identity?.mediaKey ?? '',
-        season: media.type === '电影' ? null : season,
-        ...payload,
-        episode_group: episodeGroup.value,
-      })
+      const result: { [key: string]: any } = await api.post(
+        'subscribe/',
+        {
+          name: media.title,
+          type: media.type,
+          year: media.year,
+          tmdbid: media.tmdb_id,
+          doubanid: media.douban_id,
+          bangumiid: media.bangumi_id,
+          anilistid: media.anilist_id,
+          media_source: identity?.source,
+          media_id: identity?.mediaId,
+          mediaid: identity?.mediaKey ?? '',
+          season: media.type === '电影' ? null : season,
+          ...payload,
+          episode_group: episodeGroup.value,
+        },
+        { cancelOnNavigation: false },
+      )
 
       const subscribeSeason = media.type === '电影' ? null : season
       const subscribeMode = getSubscribeMode(payload)
-      if (result.success) updateSubscribeStatus(subscribeSeason, true, subscribeMode)
+      if (result.success) {
+        updateSubscribeStatus(subscribeSeason, true, subscribeMode)
+        notifySubscribeChanged()
+      }
 
       showSubscribeAddToast(
         result.success,
@@ -338,9 +348,9 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
         payload.best_version ?? 0,
       )
 
-      if (result.success && (addOptions.openEditDialog ?? true)) {
+      if (result.success && route.fullPath === originPath && (addOptions.openEditDialog ?? true)) {
         const subscribeConfig = await queryDefaultSubscribeConfig()
-        if (subscribeConfig?.show_edit_dialog && result.data?.id) {
+        if (route.fullPath === originPath && subscribeConfig?.show_edit_dialog && result.data?.id) {
           openSubscribeEditDialog(result.data.id, subscribeSeason, subscribeMode)
         }
       }

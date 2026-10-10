@@ -105,6 +105,8 @@ api.interceptors.response.use(
     return normalizeLocalizedMessage(response.data)
   },
   (error: AxiosError) => {
+    // 保留取消错误的身份，页面可以静默处理导航取消，避免把它当作业务失败。
+    if (error.code === 'ERR_CANCELED' || error.name === 'AbortError') return Promise.reject(error)
     if (!error.response) {
       const requestConfig = error.config as ConnectionAwareRequestConfig | undefined
       const failureReason = resolveConnectionFailureReason(error)
@@ -120,9 +122,6 @@ api.interceptors.response.use(
       } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
         // 请求超时
         return Promise.reject(new Error('Request timeout, please try again later'))
-      } else if (error.name === 'AbortError') {
-        // 请求被中止（路由切换等）
-        return Promise.reject(new Error('Request cancelled'))
       }
       // 其他网络错误
       return Promise.reject(new Error(error.message || 'Network error'))

@@ -11,6 +11,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useDisplay } from 'vuetify'
+import { isCancel } from 'axios'
+import { useSubscribeRefresh } from '@/composables/useSubscribeRefresh'
 
 const SubscribeHistoryDialog = defineAsyncComponent(() => import('@/components/dialog/SubscribeHistoryDialog.vue'))
 
@@ -67,6 +69,8 @@ let isRefreshed = ref(false)
 
 // 刷新状态
 const loading = ref(false)
+const pageActive = ref(true)
+const subscribeRevision = useSubscribeRefresh()
 
 // 最近一次列表请求是否失败，用于保留旧数据时持续展示错误状态。
 const loadError = ref(false)
@@ -275,6 +279,7 @@ async function loadSubscribeOrderConfig() {
     }
     syncDefaultSortBy()
   } catch (error) {
+    if (isCancel(error)) return
     console.error('Failed to load subscribe order config:', error)
     orderConfig.value = []
     syncDefaultSortBy()
@@ -310,9 +315,14 @@ async function fetchData(context: KeepAliveRefreshContext = {}) {
       loading.value = true
     }
     dataList.value = await api.get('subscribe/')
+    if (isInitialLoad && props.subid) {
+      const sub = dataList.value.find(item => item.id.toString() === props.subid)
+      if (sub) sub.page_open = true
+    }
     loadError.value = false
     isRefreshed.value = true
   } catch (error) {
+    if (isCancel(error)) return
     console.error(error)
     loadError.value = true
     if (isInitialLoad) {
@@ -535,22 +545,24 @@ const errorTitle = computed(() => {
   return t('common.noData')
 })
 
-onMounted(async () => {
-  await loadSubscribeOrderConfig()
-  await fetchData()
-  if (props.subid) {
-    // 找到这个订阅
-    const sub = dataList.value.find(sub => sub.id.toString() == props.subid?.toString())
-    if (sub) {
-      // 打开编辑弹窗
-      sub.page_open = true
-    }
-  }
-
+const { refresh: refreshSubscribes } = useKeepAliveRefresh(fetchData, {
+  active: computed(() => props.active && pageActive.value),
 })
 
-useKeepAliveRefresh(fetchData, {
-  active: computed(() => props.active),
+onActivated(() => {
+  pageActive.value = true
+})
+onDeactivated(() => {
+  pageActive.value = false
+})
+
+watch(subscribeRevision, () => {
+  if (pageActive.value && props.active) void refreshSubscribes()
+})
+
+onMounted(async () => {
+  // 列表无需等待排序配置；二者并行，并让订阅完成后的刷新排在当前查询之后。
+  await Promise.all([loadSubscribeOrderConfig(), refreshSubscribes()])
 })
 
 defineExpose({
