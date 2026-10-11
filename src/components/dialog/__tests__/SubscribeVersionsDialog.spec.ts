@@ -45,6 +45,7 @@ async function renderDialog(versionRules: SubscribeVersionRule[], mediaOverrides
   const subscribe = createSubscribe({
     id: 900,
     name: '多版本测试剧',
+    type: '电视剧',
     version_mode: 'all',
     version_rules: versionRules,
     ...mediaOverrides,
@@ -111,9 +112,9 @@ describe('SubscribeVersionsDialog', () => {
       ],
       {
         version_progress: {
-          'v-a': makeProgress({ lack_episode: 4 }),
-          'v-b': makeProgress({ completed: true, lack_episode: 0 }),
-          'v-c': makeProgress({ lack_episode: 5 }),
+          'v-a': makeProgress({ lack_episode: 4, note: [1, 2, 3, 4, 5, 6, 7, 8] }),
+          'v-b': makeProgress({ completed: true, lack_episode: 0, note: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }),
+          'v-c': makeProgress({ lack_episode: 5, note: [1, 2, 3] }),
         },
       },
     )
@@ -182,7 +183,7 @@ describe('SubscribeVersionsDialog', () => {
         makeRule('v-a', '有进度', true, { total_episode: 12 }),
         makeRule('v-new', '新版本', true, { total_episode: 12 }),
       ],
-      { version_progress: { 'v-a': makeProgress({ lack_episode: 4 }) } },
+      { version_progress: { 'v-a': makeProgress({ lack_episode: 4, note: [1, 2, 3, 4, 5, 6, 7, 8] }) } },
     )
 
     expect(await screen.findByText('已下载 8 · 共 12 集')).toBeTruthy()
@@ -192,7 +193,7 @@ describe('SubscribeVersionsDialog', () => {
     expect(screen.getAllByRole('progressbar')).toHaveLength(1)
   })
 
-  it('clamps downloaded episodes when lack_episode is out of range', async () => {
+  it('uses recorded episodes when legacy missing counts are out of range', async () => {
     await renderDialog(
       [
         makeRule('v-under', '负数缺失', true, { total_episode: 12 }),
@@ -200,18 +201,167 @@ describe('SubscribeVersionsDialog', () => {
       ],
       {
         version_progress: {
-          'v-under': makeProgress({ lack_episode: -3 }),
+          'v-under': makeProgress({ lack_episode: -3, note: [1, 1, 2, 0, 13, 'invalid'] }),
           'v-over': makeProgress({ lack_episode: 20 }),
         },
       },
     )
 
-    // lack<0 按满格、lack>total 按零格收敛,不越过 [0,total] 边界
-    expect(await screen.findByText('已下载 12 · 共 12 集')).toBeTruthy()
+    // 不再让无范围的旧缺集计数伪造完成进度，只统计范围内、去重后的集号。
+    expect(await screen.findByText('已下载 2 · 共 12 集')).toBeTruthy()
     expect(screen.getByText('已下载 0 · 共 12 集')).toBeTruthy()
     const bars = screen.getAllByRole('progressbar')
-    expect(bars[0]).toHaveAttribute('aria-valuenow', '100')
+    expect(bars[0]).toHaveAttribute('aria-valuenow', '17')
     expect(bars[1]).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('uses current automatic totals and known library episodes without truncating stale version settings', async () => {
+    await renderDialog([makeRule('v-a', 'ADWeb', true, { total_episode: 25, manual_total_episode: 0 })], {
+      total_episode: 37,
+      version_progress: {
+        'v-a': makeProgress({
+          lack_episode: 11,
+          note: [26],
+          known_episodes: Array.from({ length: 26 }, (_, i) => i + 1),
+        }),
+      },
+    })
+
+    expect(await screen.findByText('已下载 26 · 共 37 集')).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '70')
+  })
+
+  it('keeps completed episode counts stable when the parent target grows', async () => {
+    const { rerender, subscribe } = await renderDialog([makeRule('v-a', 'ADWeb', true, { total_episode: 0 })], {
+      total_episode: 25,
+      version_progress: {
+        'v-a': makeProgress({
+          completed: true,
+          lack_episode: 0,
+          note: [25],
+          known_episodes: Array.from({ length: 25 }, (_, i) => i + 1),
+        }),
+      },
+    })
+
+    expect(await screen.findByText('已下载 25 · 共 25 集')).toBeTruthy()
+    await rerender({ subscribe: { ...subscribe, total_episode: 37 } })
+
+    expect(await screen.findByText('已下载 25 · 共 37 集')).toBeTruthy()
+    expect(Number(screen.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeCloseTo(68)
+  })
+
+  it('keeps a longer automatic version independent of the shorter parent total', async () => {
+    await renderDialog(
+      [
+        makeRule('short', '短分组', true, { total_episode: 12, episode_group: 'short-group', manual_total_episode: 0 }),
+        makeRule('long', '长分组', true, { total_episode: 24, episode_group: 'long-group', manual_total_episode: 0 }),
+      ],
+      {
+        total_episode: 12,
+        version_progress: {
+          short: makeProgress({ note: Array.from({ length: 12 }, (_, i) => i + 1), completed: true }),
+          long: makeProgress({ note: Array.from({ length: 12 }, (_, i) => i + 1), lack_episode: 12 }),
+        },
+      },
+    )
+
+    expect(await screen.findByText('已下载 12 · 共 12 集')).toBeTruthy()
+    expect(screen.getByText('已下载 12 · 共 24 集')).toBeTruthy()
+    expect(screen.getAllByRole('progressbar')[1]).toHaveAttribute('aria-valuenow', '50')
+  })
+
+  it.each([
+    ['long-group', 0, 30],
+    ['old-group', 0, 24],
+    ['long-group', 1, 24],
+  ])(
+    'uses the parsed version total only for the same automatic episode group (%s, %s)',
+    async (group, manual, total) => {
+      await renderDialog(
+        [
+          makeRule('long', '独立分组', true, {
+            total_episode: 24,
+            episode_group: 'long-group',
+            manual_total_episode: manual,
+          }),
+        ],
+        {
+          total_episode: 12,
+          episode_group: 'parent-group',
+          version_progress: {
+            long: makeProgress({ note: [1, 2], total_episode: 30, episode_group: group }),
+          },
+        },
+      )
+
+      expect(await screen.findByText(`已下载 2 · 共 ${total} 集`)).toBeTruthy()
+    },
+  )
+
+  it('treats an explicitly cleared episode group as independent of the parent group', async () => {
+    await renderDialog([makeRule('v-a', '默认分组', true, { total_episode: 24, episode_group: '' })], {
+      total_episode: 12,
+      episode_group: 'parent-group',
+      version_progress: { 'v-a': makeProgress({ note: [1, 2], total_episode: 30, episode_group: null }) },
+    })
+
+    expect(await screen.findByText('已下载 2 · 共 30 集')).toBeTruthy()
+  })
+
+  it('restricts progress to the manually configured version range', async () => {
+    await renderDialog(
+      [makeRule('v-a', 'ADWeb', true, { start_episode: 26, total_episode: 30, manual_total_episode: 1 })],
+      {
+        total_episode: 37,
+        version_progress: {
+          'v-a': makeProgress({ note: [26, 31], known_episodes: Array.from({ length: 27 }, (_, i) => i + 1) }),
+        },
+      },
+    )
+
+    expect(await screen.findByText('已下载 2 · 共 30 集')).toBeTruthy()
+  })
+
+  it.each([
+    [undefined, 25],
+    [0, 37],
+  ])('inherits the parent manual flag only when the version flag is %s', async (manualTotal, expectedTotal) => {
+    await renderDialog([makeRule('v-a', 'ADWeb', true, { total_episode: 25, manual_total_episode: manualTotal })], {
+      total_episode: 37,
+      manual_total_episode: 1,
+      version_progress: { 'v-a': makeProgress({ note: [1, 2] }) },
+    })
+
+    expect(await screen.findByText(`已下载 2 · 共 ${expectedTotal} 集`)).toBeTruthy()
+  })
+
+  it.each(['skip_library', 'best_version', 'multiple', 'disabled_sibling'])(
+    'ignores shared library snapshots in %s mode',
+    async mode => {
+      const rule = makeRule('v-a', 'ADWeb', true, { total_episode: 37, best_version: mode === 'best_version' ? 1 : 0 })
+      const rules = [rule]
+      if (mode === 'multiple' || mode === 'disabled_sibling') rules.push(makeRule('v-b', '其他', mode === 'multiple'))
+      await renderDialog(rules, {
+        total_episode: 37,
+        skip_library_check: mode === 'skip_library' ? 1 : 0,
+        version_progress: {
+          'v-a': makeProgress({ note: [26], known_episodes: Array.from({ length: 26 }, (_, i) => i + 1) }),
+        },
+      })
+
+      expect(await screen.findByText('已下载 1 · 共 37 集')).toBeTruthy()
+    },
+  )
+
+  it('preserves completed movie progress without requiring television episode facts', async () => {
+    await renderDialog([makeRule('v-a', '电影版本', true, { total_episode: 1 })], {
+      type: '电影',
+      version_progress: { 'v-a': makeProgress({ completed: true, lack_episode: 0 }) },
+    })
+
+    expect(await screen.findByText('已下载 1 · 共 1 集')).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
   })
 
   it('offers an inline add-version button in the empty state', async () => {

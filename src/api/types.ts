@@ -56,7 +56,10 @@ export interface SubscribeVersionProgress {
   state?: string
   last_update?: string
   lack_episode?: number
+  total_episode?: number | null
+  episode_group?: string | null
   note?: unknown
+  known_episodes?: number[] | null
   current_priority?: number
   episode_priority: Record<string, number>
   completed: boolean

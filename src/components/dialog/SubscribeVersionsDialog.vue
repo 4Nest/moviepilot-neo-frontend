@@ -47,17 +47,42 @@ function isCompleted(rule: SubscribeVersionRule) {
   return versionProgress(rule)?.completed === true
 }
 
-// 版本总集数:优先版本自定义总集数,否则回落订阅总集数
+// 单版本同剧集组跟随父范围，其余版本保留各自已解析的范围。
 function versionTotal(rule: SubscribeVersionRule) {
-  return rule.settings?.total_episode ?? props.subscribe?.total_episode ?? 0
+  const manualTotal = rule.settings?.manual_total_episode ?? props.subscribe?.manual_total_episode
+  if (manualTotal && rule.settings?.total_episode) return rule.settings.total_episode
+  const episodeGroup =
+    (rule.settings?.episode_group === undefined ? props.subscribe?.episode_group : rule.settings.episode_group) || null
+  if (versions.value.length === 1 && episodeGroup === (props.subscribe?.episode_group || null))
+    return props.subscribe?.total_episode || rule.settings?.total_episode || 0
+  const progress = versionProgress(rule)
+  if (progress && 'episode_group' in progress && (progress.episode_group || null) === episodeGroup)
+    return progress.total_episode || rule.settings?.total_episode || props.subscribe?.total_episode || 0
+  return rule.settings?.total_episode || props.subscribe?.total_episode || 0
 }
 
-// 已下载集数:与 SubscribeCard downloadedEpisode 同口径
+// 缺集摘要没有保存原目标范围，不能与编辑后的总集数相减来推算完成数量。
 function downloadedEpisodes(rule: SubscribeVersionRule) {
   const total = versionTotal(rule)
   if (!total) return 0
-  const lack = versionProgress(rule)?.lack_episode ?? 0
-  return Math.min(Math.max(total - lack, 0), total)
+  if (props.subscribe?.type !== '电视剧') {
+    const lack = versionProgress(rule)?.lack_episode ?? 0
+    return Math.min(Math.max(total - lack, 0), total)
+  }
+  const start = (rule.settings?.start_episode ?? props.subscribe?.start_episode) || 1
+  const progress = versionProgress(rule)
+  const downloaded = Array.isArray(progress?.note) ? progress.note : []
+  const usesLibrary =
+    props.subscribe?.type === '电视剧' &&
+    versions.value.length === 1 &&
+    !(rule.settings?.best_version ?? props.subscribe?.best_version) &&
+    !props.subscribe?.skip_library_check
+  const known = usesLibrary && Array.isArray(progress?.known_episodes) ? progress.known_episodes : []
+  return new Set(
+    [...downloaded, ...known]
+      .map(Number)
+      .filter(episode => Number.isInteger(episode) && episode >= start && episode <= total),
+  ).size
 }
 
 // 第 2 行进度文案:复用订阅卡片 hover 的「已下载 X · 共 Y 集」语义
@@ -74,9 +99,9 @@ function decisionText(rule: SubscribeVersionRule) {
   return [summary.target, counts, summary.reason].filter(Boolean).join(' · ')
 }
 
-// 完成满格,其余按已下载占比取整
+// 目标范围变化后，旧完成状态不能把新增缺口直接显示成满格。
 function progressPercent(rule: SubscribeVersionRule) {
-  if (isCompleted(rule)) return 100
+  if (props.subscribe?.type !== '电视剧' && isCompleted(rule)) return 100
   const total = versionTotal(rule)
   if (!total) return 0
   return Math.round((downloadedEpisodes(rule) / total) * 100)
