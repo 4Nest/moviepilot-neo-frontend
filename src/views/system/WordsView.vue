@@ -596,7 +596,6 @@ onMounted(() => {
               variant="outlined"
               rows="11"
               hide-details
-              no-resize
               spellcheck="false"
             />
 
@@ -1209,11 +1208,13 @@ onMounted(() => {
   --words-token-operator: #000;
 
   overflow: hidden;
+  min-block-size: 12rem;
   block-size: 18.8rem;
   border: 1px solid rgba(var(--v-theme-on-surface), var(--v-border-opacity));
   border-radius: var(--app-surface-radius);
   contain: paint;
   overscroll-behavior: contain;
+  resize: vertical;
   transform: translateZ(0);
 }
 
