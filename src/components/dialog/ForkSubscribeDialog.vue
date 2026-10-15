@@ -151,15 +151,15 @@ async function doDelete() {
     })
     // 订阅状态
     if (result.success) {
-      $toast.success(t('subscribe.cancelSuccess'))
+      $toast.success(t('subscribe.cancelShareSuccess'))
       // 完成
       emit('delete')
     } else {
-      $toast.error(t('subscribe.cancelFailed', { message: result.message }))
+      $toast.error(t('subscribe.cancelShareFailed', { message: result.message || t('subscribe.requestFailed') }))
     }
   } catch (error) {
     console.error(error)
-    $toast.error(t('subscribe.cancelFailed', { message: t('subscribe.requestFailed') }))
+    $toast.error(t('subscribe.cancelShareFailed', { message: t('subscribe.requestFailed') }))
   } finally {
     deleting.value = false
     doneNProgress()

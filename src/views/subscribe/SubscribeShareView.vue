@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import api from '@/api'
-import type { SubscribeShare } from '@/api/types'
+import type { ApiResponse, SubscribeShare } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import SubscribeShareCard from '@/components/cards/SubscribeShareCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
@@ -151,8 +151,9 @@ async function batchDelete() {
   const failedIds: number[] = []
   for (const id of ids) {
     try {
-      await api.delete(`subscribe/share/${id}`)
-      removeData(id)
+      const result: ApiResponse<unknown> = await api.delete(`subscribe/share/${id}`)
+      if (result.success) removeData(id)
+      else failedIds.push(id)
     } catch {
       failedIds.push(id)
     }
@@ -160,11 +161,11 @@ async function batchDelete() {
 
   if (failedIds.length > 0) {
     selectedShareIds.value = new Set(failedIds)
-    $toast.error(t('subscribe.batchDeleteFailed', { count: failedIds.length }))
+    $toast.error(t('subscribe.batchCancelShareFailed', { count: failedIds.length }))
   } else {
     selectedShareIds.value.clear()
     isBatchMode.value = false
-    $toast.success(t('subscribe.batchDeleteSuccess', { count: ids.length }))
+    $toast.success(t('subscribe.batchCancelShareSuccess', { count: ids.length }))
   }
 }
 </script>

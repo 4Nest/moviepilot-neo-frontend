@@ -380,7 +380,7 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
     deferred.resolve()
     await waitFor(() => expect(events.delete).toHaveBeenCalledOnce())
     expect(events.delete).toHaveBeenCalledWith()
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('已取消订阅！')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已取消分享！')
   })
 
   it('reports a delete business failure and does not emit', async () => {
@@ -394,7 +394,7 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
 
     await user.click(screen.getByRole('button', { name: '取消分享' }))
 
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('取消订阅失败：没有删除权限！'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('取消分享失败：没有删除权限！'))
     expect(events.delete).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '取消分享' })).not.toBeDisabled()
   })

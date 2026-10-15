@@ -14,6 +14,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type InfiniteScrollStatus = 'empty' | 'error' | 'ok'
 const initialLoadMargins: number[] = []
 
+const mocks = vi.hoisted(() => ({ toastError: vi.fn(), toastSuccess: vi.fn() }))
+
+vi.mock('vue-toastification', () => ({
+  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
+}))
+
 const InfiniteScrollStub = defineComponent({
   name: 'VInfiniteScroll',
   props: {
@@ -453,14 +459,14 @@ describe('SubscribeShareView', () => {
     expect(screen.queryByRole('button', { name: '退出批量操作' })).not.toBeInTheDocument()
   })
 
-  it('keeps failed shares selected and reports batch delete failures', async () => {
+  it.each([200, 500])('keeps failed shares selected when cancellation fails with HTTP %s', async status => {
     const shareA = createSubscribeShare({ id: 4201, share_title: '删除成功项' })
     const shareB = createSubscribeShare({ id: 4202, share_title: '删除失败项' })
     server.use(
       subscribeSharesHandler([shareA, shareB]),
       http.delete('/api/v1/subscribe/share/:id', ({ params }) => {
         if (Number(params.id) === 4201) return HttpResponse.json({ success: true })
-        return HttpResponse.json({ message: 'occupied' }, { status: 500 })
+        return HttpResponse.json({ success: false, message: '没有删除权限' }, { status })
       }),
     )
     const user = userEvent.setup()
@@ -478,5 +484,7 @@ describe('SubscribeShareView', () => {
     expect(screen.getByText('删除失败项')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '退出批量操作' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '选择分享 4202' })).toHaveAttribute('data-selected', 'true')
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalled()
   })
 })
