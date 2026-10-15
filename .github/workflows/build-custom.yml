@@ -47,6 +47,7 @@ jobs:
         run: |
           frontend_version=$(jq -r '.version' package.json)
           echo "frontend_version=v$frontend_version" >> $GITHUB_ENV
+          test -s ".github/release-notes/v${frontend_version}.md"
 
       - name: Setup node
         uses: actions/setup-node@v7
@@ -79,7 +80,11 @@ jobs:
             gh release create "$frontend_version" \
               --target "$GITHUB_SHA" \
               --title "$frontend_version" \
-              --latest
+              --latest \
+              --notes-file ".github/release-notes/${frontend_version}.md"
+          else
+            gh release edit "$frontend_version" --title "$frontend_version" \
+              --notes-file ".github/release-notes/${frontend_version}.md"
           fi
           gh release upload "$frontend_version" \
             dist.zip \

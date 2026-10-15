@@ -20,6 +20,7 @@ jobs:
         run: |
           frontend_version=$(jq -r '.version' package.json)
           echo "frontend_version=v$frontend_version" >> $GITHUB_ENV
+          test -s ".github/release-notes/v${frontend_version}.md"
 
       - name: Setup node
         uses: actions/setup-node@v3
@@ -55,6 +56,7 @@ jobs:
         with:
           tag_name: ${{ env.frontend_version }}
           name: ${{ env.frontend_version }}
+          body_path: .github/release-notes/${{ env.frontend_version }}.md
           draft: false
           prerelease: false
           make_latest: true
