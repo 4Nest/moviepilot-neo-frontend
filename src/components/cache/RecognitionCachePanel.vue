@@ -8,6 +8,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
+import { getRecognitionQueryText } from '@/utils/cacheDisplay'
 
 type RecognitionStatusFilter = 'all' | 'recognized' | 'unrecognized'
 type InfiniteScrollStatus = 'ok' | 'empty' | 'loading' | 'error'
@@ -64,7 +65,9 @@ const filteredData = computed(() => {
   return cacheData.value.data.filter(item => {
     const matchesKeyword =
       !keyword ||
-      [item.key, item.title, item.year, getRecognitionId(item)].some(value => value.toLowerCase().includes(keyword))
+      [item.key, getRecognitionQueryText(item.key), item.title, item.year, getRecognitionId(item)].some(value =>
+        value.toLowerCase().includes(keyword),
+      )
     const matchesStatus =
       statusFilter.value === 'all' || (statusFilter.value === 'recognized' ? isRecognized(item) : !isRecognized(item))
     return matchesKeyword && matchesStatus
@@ -392,7 +395,7 @@ watch([searchFilter, statusFilter], () => {
                   <span v-if="item.year">{{ item.year }}</span>
                   <span v-if="isRecognized(item)">{{ recognitionIdLabel }} #{{ getRecognitionId(item) }}</span>
                 </div>
-                <div class="recognition-cache-mobile-item__key">{{ item.key }}</div>
+                <div class="recognition-cache-mobile-item__key">{{ getRecognitionQueryText(item.key) }}</div>
               </div>
 
               <VBtn
@@ -439,7 +442,7 @@ watch([searchFilter, statusFilter], () => {
       </template>
 
       <template #item.key="{ item }">
-        <div class="recognition-cache-table__key">{{ item.key }}</div>
+        <div class="recognition-cache-table__key">{{ getRecognitionQueryText(item.key) }}</div>
       </template>
 
       <template #item.result="{ item }">
@@ -464,7 +467,14 @@ watch([searchFilter, statusFilter], () => {
       </template>
 
       <template #item.actions="{ item }">
-        <VBtn icon size="small" variant="text" color="error" @click="deleteSingleItem(item)">
+        <VBtn
+          icon
+          size="small"
+          variant="text"
+          color="error"
+          :aria-label="t('common.delete')"
+          @click="deleteSingleItem(item)"
+        >
           <VIcon icon="mdi-delete-outline" size="18" />
           <VTooltip activator="parent" location="start">{{ t('common.delete') }}</VTooltip>
         </VBtn>

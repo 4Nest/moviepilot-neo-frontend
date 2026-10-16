@@ -1,10 +1,11 @@
 import RecognitionCachePanel from '@/components/cache/RecognitionCachePanel.vue'
-import { screen, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
+  apiDelete: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
 }))
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/api', () => ({
   default: {
     get: mocks.apiGet,
+    delete: mocks.apiDelete,
   },
 }))
 
@@ -39,6 +41,7 @@ async function renderRecognitionCachePanel(recognitionSource = 'themoviedb') {
 describe('RecognitionCachePanel shared recognition statistics', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset()
+    mocks.apiDelete.mockReset()
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
   })
@@ -95,5 +98,26 @@ describe('RecognitionCachePanel shared recognition statistics', () => {
     await renderRecognitionCachePanel('douban')
 
     await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('tmdb/cache'))
+  })
+
+  it.each([1280, 390])('在 %s 像素显示可读查询，并使用原始键删除缓存', async width => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width, writable: true })
+    window.dispatchEvent(new Event('resize'))
+    const key = '[未知][zh]10 Years-2012-None'
+    mocks.apiGet.mockResolvedValue({
+      data: {
+        count: 1,
+        recognized: 0,
+        unrecognized: 1,
+        data: [{ key, title: '', year: '', media_type: 'unknown', tmdb_id: 0 }],
+      },
+    })
+    mocks.apiDelete.mockResolvedValue({ success: true })
+    await renderRecognitionCachePanel()
+    expect(await screen.findByText('10 Years · 2012')).toBeInTheDocument()
+    expect(screen.queryByText(key)).not.toBeInTheDocument()
+    await fireEvent.update(screen.getAllByRole('textbox')[0], '10 Years')
+    await fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalledWith(`tmdb/cache/${encodeURIComponent(key)}`))
   })
 })

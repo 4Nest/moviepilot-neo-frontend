@@ -11,6 +11,7 @@ import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useDisplay } from 'vuetify'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import RecognitionCachePanel from '@/components/cache/RecognitionCachePanel.vue'
+import { getCacheDescriptionText } from '@/utils/cacheDisplay'
 
 const CacheReidentifyDialog = defineAsyncComponent(() => import('@/components/dialog/CacheReidentifyDialog.vue'))
 
@@ -86,7 +87,7 @@ const mobileVisibleCount = ref(MOBILE_CACHE_PAGE_SIZE)
 let reidentifyDialogController: ReturnType<typeof openSharedDialog> | null = null
 
 const tableStyle = computed(() => {
-  return appMode ? '' : 'height: calc(100vh - 21rem - env(safe-area-inset-bottom)'
+  return appMode.value ? '' : 'height: calc(100vh - 21rem - env(safe-area-inset-bottom))'
 })
 
 // 移动端虚拟列表数据
@@ -109,7 +110,13 @@ async function loadCacheData() {
   try {
     loading.value = true
     const res: any = await api.get('torrent/cache')
-    cacheData.value = res.data
+    cacheData.value = {
+      ...res.data,
+      data: res.data.data.map((item: TorrentCacheItem) => ({
+        ...item,
+        description: getCacheDescriptionText(item.description),
+      })),
+    }
     resetMobilePagination()
   } catch (e) {
     console.log(e)
@@ -632,6 +639,7 @@ watch([titleFilter, siteFilter], () => {
           <!-- 缓存列表 -->
           <VDataTable
             v-model="selectedItems"
+            class="cache-desktop-table"
             :headers="[
               { title: '', key: 'data-table-select', sortable: false, width: '48px' },
               { title: t('setting.cache.poster'), key: 'poster', sortable: false, width: '80px' },
@@ -680,11 +688,15 @@ watch([titleFilter, siteFilter], () => {
 
             <!-- 标题列 -->
             <template #item.title="{ item }">
-              <div class="d-flex flex-column min-w-40">
-                <div class="text-subtitle-2 font-weight-bold">
+              <div class="cache-torrent-title d-flex flex-column">
+                <div class="cache-torrent-summary text-subtitle-2 font-weight-bold" :title="item.title">
                   {{ item.title }}
                 </div>
-                <div v-if="item.description" class="text-caption text-grey">
+                <div
+                  v-if="item.description"
+                  class="cache-torrent-summary text-caption text-grey"
+                  :title="item.description"
+                >
                   {{ item.description }}
                 </div>
                 <div v-if="item.season_episode || item.resource_term" class="text-caption text-primary mt-1">
@@ -811,7 +823,34 @@ watch([titleFilter, siteFilter], () => {
 }
 
 .cache-desktop-page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
   padding: 20px;
+}
+
+.cache-desktop-table {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.cache-desktop-table :deep(table) {
+  table-layout: fixed;
+  min-inline-size: 1100px;
+}
+
+.cache-torrent-title {
+  min-inline-size: 0;
+  padding-block: 8px;
+}
+
+.cache-torrent-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .cache-desktop-toolbar {

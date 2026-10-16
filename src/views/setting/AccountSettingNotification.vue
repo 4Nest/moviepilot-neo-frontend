@@ -188,7 +188,8 @@ function addNotification(notification: NotificationChannelType) {
     name = `${t('setting.notification.channel')}${parseInt(name.split(t('setting.notification.channel'))[1]) + 1}`
   }
   notifications.value.push({
-    id: crypto.randomUUID(),
+    // 局域网 HTTP 不提供 randomUUID；渠道 ID 仅用于配置关联。
+    id: globalThis.crypto?.randomUUID?.() ?? `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     name: name,
     type: notification,
     enabled: false,
@@ -433,7 +434,7 @@ useSilentSettingRefresh(loadPageData, {
               <VBtn mtype="submit" @click="saveNotificationSetting" prepend-icon="mdi-content-save">
                 {{ t('common.save') }}
               </VBtn>
-              <VBtn color="success" variant="tonal">
+              <VBtn color="success" variant="tonal" :aria-label="t('common.add')">
                 <VIcon icon="mdi-plus" />
                 <VMenu :activator="'parent'" :close-on-content-click="true">
                   <VList>
