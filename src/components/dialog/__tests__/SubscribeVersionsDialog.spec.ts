@@ -320,7 +320,27 @@ describe('SubscribeVersionsDialog', () => {
       },
     )
 
-    expect(await screen.findByText('已下载 2 · 共 30 集')).toBeTruthy()
+    expect(await screen.findByText('已下载 27 · 共 30 集')).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '90')
+  })
+
+  it.each([
+    [[], 11, 37],
+    [[12, 13, 14, 15, 16], 16, 53],
+    [[1, 11, 12, 12, 13, 14, 15, 16, 31], 16, 53],
+  ])('includes episodes before the inherited start with facts %s', async (note, completed, percent) => {
+    const { rerender, subscribe } = await renderDialog([makeRule('v-a', '主版本')], {
+      start_episode: 12,
+      total_episode: 30,
+      version_progress: { 'v-a': makeProgress({ note }) },
+    })
+
+    expect(await screen.findByText(`已下载 ${completed} · 共 30 集`)).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', String(percent))
+    expect(screen.queryByText(/第12集起/)).not.toBeInTheDocument()
+
+    await rerender({ subscribe: { ...subscribe, total_episode: 16 } })
+    expect(await screen.findByText(`已下载 ${completed} · 共 16 集`)).toBeTruthy()
   })
 
   it.each([

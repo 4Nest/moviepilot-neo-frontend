@@ -74,7 +74,7 @@ function isTvSubscribe(media?: Subscribe) {
 }
 
 // 已下载集数:普通订阅用 total_episode - lack_episode;多版本订阅的父行 lack 不维护,
-// 取后端按各版本下载事实(note 并集)派生的 completed_episode。
+// 取后端派生的 completed_episode，包含起始集前视为完成的集数。
 const downloadedEpisode = computed(() => {
   const total = props.media?.total_episode || 0
   if (!total) return 0
@@ -732,7 +732,6 @@ function handleCardClick() {
                     <VTooltip v-if="decisionSummaryText" activator="parent" location="top">
                       {{ decisionSummaryText }}
                     </VTooltip>
-
                   </div>
                 </VCardText>
                 <!-- 右下角元数据：暂停 / 待定时替换"x 天前"为状态文案 -->
@@ -838,7 +837,6 @@ function handleCardClick() {
   line-height: 1.2;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
-
 
 .subscribe-card-mobile-image-meta__updated {
   flex-shrink: 0;

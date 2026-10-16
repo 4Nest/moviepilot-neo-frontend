@@ -126,7 +126,7 @@ export interface Subscribe {
   start_episode?: number
   // 缺失集数
   lack_episode?: number
-  // 已完成集数
+  // 已完成集数，包含起始集之前视为完成的集数
   completed_episode?: number
   // 附加信息
   note?: string | number[]

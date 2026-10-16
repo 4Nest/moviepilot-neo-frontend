@@ -69,7 +69,7 @@ function downloadedEpisodes(rule: SubscribeVersionRule) {
     const lack = versionProgress(rule)?.lack_episode ?? 0
     return Math.min(Math.max(total - lack, 0), total)
   }
-  const start = (rule.settings?.start_episode ?? props.subscribe?.start_episode) || 1
+  const start = Math.max((rule.settings?.start_episode ?? props.subscribe?.start_episode) || 1, 1)
   const progress = versionProgress(rule)
   const downloaded = Array.isArray(progress?.note) ? progress.note : []
   const usesLibrary =
@@ -78,11 +78,13 @@ function downloadedEpisodes(rule: SubscribeVersionRule) {
     !(rule.settings?.best_version ?? props.subscribe?.best_version) &&
     !props.subscribe?.skip_library_check
   const known = usesLibrary && Array.isArray(progress?.known_episodes) ? progress.known_episodes : []
-  return new Set(
+  const completed = new Set(
     [...downloaded, ...known]
       .map(Number)
       .filter(episode => Number.isInteger(episode) && episode >= start && episode <= total),
   ).size
+  // 与原版卡片口径一致：起始集之前视为已完成，但不重复计入下载记录。
+  return Math.min(start - 1, total) + completed
 }
 
 // 第 2 行进度文案:复用订阅卡片 hover 的「已下载 X · 共 Y 集」语义

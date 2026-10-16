@@ -158,6 +158,63 @@ describe('SubscribeCard display and progress', () => {
     expect(screen.getByText(/卡片测试媒体 S02/)).toBeInTheDocument()
   })
 
+  it.each([480, 1024])('counts skipped episodes as complete on a %s px card', async width => {
+    setViewport(width)
+    const { media, rerender } = await renderCard({
+      type: '电视剧',
+      start_episode: 12,
+      total_episode: 30,
+      lack_episode: 14,
+    })
+    expect(screen.getByText('16 / 30')).toBeInTheDocument()
+    expect(screen.queryByText('第12集起')).not.toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '53')
+
+    await rerender({ media: { ...media, total_episode: 16, lack_episode: 0 } })
+    expect(screen.getByText('16 / 16')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+  })
+
+  it.each([
+    [19, 30, '11 / 30'],
+    [0, 10, '10 / 10'],
+  ])('counts the skipped prefix with %s missing and end %s', async (lack, total, text) => {
+    await renderCard({ type: '电视剧', start_episode: 12, total_episode: total, lack_episode: lack })
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', total === 30 ? '37' : '100')
+  })
+
+  it.each([480, 1024])('uses the single version progress on a %s px card', async width => {
+    setViewport(width)
+    await renderCard({
+      type: '电视剧',
+      start_episode: 1,
+      total_episode: 30,
+      completed_episode: 16,
+      version_rules: [
+        { id: 'main', name: '主版本', enabled: true, settings: { start_episode: 12, sites: [], filter_groups: [] } },
+      ],
+    })
+    expect(screen.getByText('16 / 30')).toBeInTheDocument()
+    expect(screen.queryByText('第12集起')).not.toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '53')
+  })
+
+  it('includes the skipped prefix in downloaded and washed progress', async () => {
+    await renderCard({
+      type: '电视剧',
+      start_episode: 12,
+      total_episode: 30,
+      lack_episode: 14,
+      best_version: 1,
+      completed_episode: 13,
+    })
+    expect(screen.getByText('16 / 30')).toBeInTheDocument()
+    const progress = screen.getByRole('progressbar')
+    expect(progress).toHaveAttribute('aria-valuenow', '43')
+    expect(progress.querySelector('.v-progress-linear__buffer')).toHaveStyle({ width: '53%' })
+  })
+
   it.each([
     ['boolean flag with tv type', true, false, 3, 'tv', 30, true, false],
     ['numeric flags with negative completed episodes', 1, 1, -2, '电视剧', 0, true, true],
