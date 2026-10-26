@@ -25,7 +25,6 @@ const { appMode } = usePWA()
 const display = useDisplay()
 const vuetifyTheme = useTheme()
 
-
 // 路由
 const route = useRoute()
 
@@ -312,11 +311,7 @@ const pluginDashboardRefreshStatus = ref<{ [key: string]: boolean }>({})
 // 当前启用且可渲染的仪表板 Grid 项。
 const dashboardGridItems = computed<DashboardGridItem[]>(() =>
   dashboardConfigs.value
-    .filter(
-      item =>
-        enableConfig.value[buildPluginDashboardId(item.id, item.key)] &&
-        item.cols,
-    )
+    .filter(item => enableConfig.value[buildPluginDashboardId(item.id, item.key)] && item.cols)
     .map(item => {
       const id = buildPluginDashboardId(item.id, item.key)
 

@@ -60,7 +60,9 @@ const actionColors = ['primary', 'success', 'warning', 'info', 'secondary', 'err
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.25rem 0.1rem;
-  transition: background-color 0.18s ease, transform 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .dashboard-quick-action:hover,
@@ -80,6 +82,8 @@ const actionColors = ['primary', 'success', 'warning', 'info', 'secondary', 'err
 }
 
 @media (max-width: 740px) {
-  .dashboard-quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dashboard-quick-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 </style>

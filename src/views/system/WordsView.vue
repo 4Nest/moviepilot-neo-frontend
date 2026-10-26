@@ -219,7 +219,6 @@ const activeGuideContent = computed(() =>
 // 仅在提示内容能补充行内说明时展示折叠面板，避免捷径弹窗内重复出现相同文案。
 const shouldShowGuidePanel = computed(() => activeSection.value === 'identifiers')
 
-
 /** 统计多行词表中非空配置的数量。 */
 function countConfiguredLines(value: string) {
   return value.split('\n').filter(line => line.trim().length > 0).length
@@ -248,7 +247,6 @@ function selectSection(section: WordSectionKey) {
   activeSection.value = section
   expandedHelp.value = null
 }
-
 
 /** 查询一个多行词表配置，并同步其已保存快照。 */
 async function queryTextSection(section: TextSectionKey) {

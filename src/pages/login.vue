@@ -1334,7 +1334,6 @@ onUnmounted(() => {
     padding-inline: 12px;
   }
 
-
   .login-root[data-login-visual-profile] .login-card {
     padding: 1.5rem !important;
     border-radius: 16px !important;

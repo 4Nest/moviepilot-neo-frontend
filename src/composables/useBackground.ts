@@ -6,7 +6,6 @@ type UseSSEOptions = Partial<SSEManagerOptions> & {
   connectDelay?: number
 }
 
-
 /**
  * 后台任务组合函数
  * 统一管理SSE连接和定时器，减少后台常驻活动。

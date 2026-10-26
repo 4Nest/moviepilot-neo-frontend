@@ -441,9 +441,12 @@ function rebuildSidebarMenus() {
 }
 
 let sidebarMenusMounted = false
-watch(() => pluginSidebarNavStore.items, () => {
-  if (sidebarMenusMounted) rebuildSidebarMenus()
-})
+watch(
+  () => pluginSidebarNavStore.items,
+  () => {
+    if (sidebarMenusMounted) rebuildSidebarMenus()
+  },
+)
 
 onMounted(async () => {
   // 主题定制器由布局统一承载，监听需要尽早注册，避免异步加载菜单期间丢失打开事件。

@@ -189,7 +189,13 @@ async function loadSystemSettings() {
 }
 
 async function loadPageData() {
-  await Promise.all([querySites(), queryFilterRuleGroups(), querySelectedSites(), loadSearchSetting(), loadSystemSettings()])
+  await Promise.all([
+    querySites(),
+    queryFilterRuleGroups(),
+    querySelectedSites(),
+    loadSearchSetting(),
+    loadSystemSettings(),
+  ])
 }
 
 onMounted(() => {

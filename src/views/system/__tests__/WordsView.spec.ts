@@ -196,9 +196,7 @@ describe('WordsView remote source removal', () => {
   let savedSources: Array<{ url: string; enabled: boolean; interval_days: number; tables: string[] }>
 
   beforeEach(() => {
-    savedSources = [
-      { url: removedUrl, enabled: true, interval_days: 7, tables: ['identifiers'] },
-    ]
+    savedSources = [{ url: removedUrl, enabled: true, interval_days: 7, tables: ['identifiers'] }]
     mocks.toastError.mockClear()
     mocks.toastSuccess.mockClear()
     mocks.apiGet.mockImplementation(async (endpoint: string) => {

@@ -176,11 +176,15 @@ export function useDynamicButton(options: {
       cleanupDynamicButton()
     })
 
-    watch([resolvedIcon, resolvedShow, resolvedMenuItems], () => {
-      if (!componentActive.value) return
+    watch(
+      [resolvedIcon, resolvedShow, resolvedMenuItems],
+      () => {
+        if (!componentActive.value) return
 
-      setupDynamicButton()
-    }, { deep: true })
+        setupDynamicButton()
+      },
+      { deep: true },
+    )
   }
 
   // 返回控制函数和状态

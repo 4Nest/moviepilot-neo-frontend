@@ -238,7 +238,6 @@ function doDelete() {
   gap: 12px;
 }
 
-
 .subscribe-card-background {
   background-image: linear-gradient(180deg, rgba(31, 41, 55, 47%) 0%, rgb(31, 41, 55) 100%);
 }
@@ -286,7 +285,6 @@ function doDelete() {
     justify-self: auto;
   }
 }
-
 
 // 批量模式选择框
 .share-card-checkbox {

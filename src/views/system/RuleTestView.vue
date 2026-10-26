@@ -86,7 +86,9 @@ const resultSubtitle = computed(() => {
   ]
   return parts.filter(Boolean).join(' · ') || t('ruleTest.waitingResult')
 })
-const ruleCount = computed(() => countRules(ruleTestData.value?.rulegroup?.rule_string || selectedRuleGroup.value?.rule_string))
+const ruleCount = computed(() =>
+  countRules(ruleTestData.value?.rulegroup?.rule_string || selectedRuleGroup.value?.rule_string),
+)
 const ruleCountLabel = computed(() => {
   const count = ruleCount.value
   if (!count) return t('ruleTest.steps.group.empty')
@@ -105,9 +107,10 @@ const pipelineSteps = computed<PipelineStep[]>(() => [
   {
     icon: 'mdi-filter-settings-outline',
     title: t('ruleTest.steps.group.title'),
-    value: ruleTestData.value?.rulegroup_name || ruleTestForm.rulegroup
-      ? `${ruleTestData.value?.rulegroup_name || ruleTestForm.rulegroup} · ${ruleCountLabel.value}`
-      : '-',
+    value:
+      ruleTestData.value?.rulegroup_name || ruleTestForm.rulegroup
+        ? `${ruleTestData.value?.rulegroup_name || ruleTestForm.rulegroup} · ${ruleCountLabel.value}`
+        : '-',
     tone: 'primary',
   },
   {
@@ -119,10 +122,9 @@ const pipelineSteps = computed<PipelineStep[]>(() => [
   {
     icon: resultIcon.value,
     title: t('ruleTest.steps.filter.title'),
-    value: ruleTestResponse.value?.message
-      || (isMatched.value
-        ? torrentInfo.value?.title || ruleTestForm.title
-        : t('ruleTest.steps.filter.pending')),
+    value:
+      ruleTestResponse.value?.message ||
+      (isMatched.value ? torrentInfo.value?.title || ruleTestForm.title : t('ruleTest.steps.filter.pending')),
     tone: isMatched.value ? 'success' : 'warning',
   },
 ])
@@ -241,7 +243,10 @@ onMounted(() => {
     <section class="shortcut-panel shortcut-result-panel">
       <div v-if="showResult" class="result-stack">
         <div class="result-hero" :class="{ 'result-hero--matched': isMatched }">
-          <div class="priority-badge" :class="{ 'priority-badge--matched': isMatched, 'priority-badge--empty': !hasPriority }">
+          <div
+            class="priority-badge"
+            :class="{ 'priority-badge--matched': isMatched, 'priority-badge--empty': !hasPriority }"
+          >
             <span class="text-caption text-medium-emphasis">{{ t('ruleTest.priorityLabel') }}</span>
             <span class="priority-value">{{ priorityText }}</span>
           </div>
@@ -254,13 +259,7 @@ onMounted(() => {
               {{ resultSubtitle }}
             </div>
             <div v-if="resourceChips.length" class="hero-chips mt-3">
-              <VChip
-                v-for="chip in resourceChips"
-                :key="chip"
-                size="small"
-                variant="tonal"
-                :color="resultColor"
-              >
+              <VChip v-for="chip in resourceChips" :key="chip" size="small" variant="tonal" :color="resultColor">
                 {{ chip }}
               </VChip>
             </div>

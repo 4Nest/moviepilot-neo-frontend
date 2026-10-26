@@ -210,9 +210,7 @@ function rebuildNotificationKeys() {
 /** 清理已移除通知的展开状态，避免虚拟列表复用时保留无效 key。 */
 function rebuildExpandedNotificationKeys() {
   const currentKeys = new Set(notificationList.value.map(getNotificationExpansionKey))
-  expandedNotificationKeys.value = new Set(
-    [...expandedNotificationKeys.value].filter(key => currentKeys.has(key)),
-  )
+  expandedNotificationKeys.value = new Set([...expandedNotificationKeys.value].filter(key => currentKeys.has(key)))
 }
 
 /** 列表内容变化后同步未读红点和应用角标状态。 */
@@ -407,7 +405,9 @@ function markAllAsRead() {
 /** 判断通知正文是否明确表达成功完成，来源类型本身不代表失败。 */
 function isSuccessfulNotification(item: SystemNotification) {
   const content = `${item.title || ''} ${item.text || ''}`
-  return /(?:搜索|同步|刷新|添加|处理).*(?:完成|成功)|已完成/.test(content) && !/(?:失败|错误|没有找到|未找到)/.test(content)
+  return (
+    /(?:搜索|同步|刷新|添加|处理).*(?:完成|成功)|已完成/.test(content) && !/(?:失败|错误|没有找到|未找到)/.test(content)
+  )
 }
 
 /** 根据通知分类和业务类型选择列表图标。 */
@@ -497,17 +497,11 @@ function toggleNotificationExpanded(item: SystemNotification) {
   expandedNotificationKeys.value = expandedKeys
 }
 
-useDelayedSSE(
-  `${import.meta.env.VITE_API_BASE_URL}system/message`,
-  handleMessage,
-  'user-notification',
-  3000,
-  {
-    backgroundCloseDelay: 5000,
-    reconnectDelay: 3000,
-    maxReconnectAttempts: 3,
-  },
-)
+useDelayedSSE(`${import.meta.env.VITE_API_BASE_URL}system/message`, handleMessage, 'user-notification', 3000, {
+  backgroundCloseDelay: 5000,
+  reconnectDelay: 3000,
+  maxReconnectAttempts: 3,
+})
 
 /** 监听通知中心展开状态，展开时主动刷新首屏通知。 */
 function handleNotificationMenuVisibleChange(open: boolean) {
@@ -669,7 +663,9 @@ watch(appsMenu, handleNotificationMenuVisibleChange)
                       {{ item.notification.text }}
                     </div>
                     <div class="notification-meta">
-                      <span v-if="item.notification.mtype" class="notification-type">{{ item.notification.mtype }}</span>
+                      <span v-if="item.notification.mtype" class="notification-type">{{
+                        item.notification.mtype
+                      }}</span>
                       <span>{{ formatDateDifference(getNotificationTime(item.notification)) }}</span>
                     </div>
                   </div>

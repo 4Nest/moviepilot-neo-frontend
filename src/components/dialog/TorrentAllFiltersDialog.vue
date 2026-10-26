@@ -59,7 +59,14 @@ function updateFilter(key: string, values: string[]) {
 </script>
 
 <template>
-  <VDialog v-if="visible" v-model="visible" max-width="50rem" location="center" scrollable :fullscreen="!display.mdAndUp.value">
+  <VDialog
+    v-if="visible"
+    v-model="visible"
+    max-width="50rem"
+    location="center"
+    scrollable
+    :fullscreen="!display.mdAndUp.value"
+  >
     <VCard>
       <VDialogCloseBtn v-model="visible" />
       <VCardTitle class="py-3 d-flex align-center">

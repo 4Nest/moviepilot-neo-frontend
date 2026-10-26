@@ -38,16 +38,7 @@ const iconOptions = [
 ]
 
 // 预设颜色选项
-const colorOptions = [
-  '#2196F3',
-  '#4CAF50',
-  '#FF9800',
-  '#9C27B0',
-  '#F44336',
-  '#607D8B',
-  '#795548',
-  '#E91E63',
-]
+const colorOptions = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#F44336', '#607D8B', '#795548', '#E91E63']
 
 // 预设渐变选项
 const gradientOptions = [
@@ -132,7 +123,12 @@ onMounted(() => {
       <VCardText>
         <VRow>
           <VCol cols="12">
-            <VSwitch v-model="folderSettings.showIcon" :label="t('folder.showFolderIcon')" color="primary" hide-details />
+            <VSwitch
+              v-model="folderSettings.showIcon"
+              :label="t('folder.showFolderIcon')"
+              color="primary"
+              hide-details
+            />
           </VCol>
 
           <VCol v-if="folderSettings.showIcon" cols="12" md="6">

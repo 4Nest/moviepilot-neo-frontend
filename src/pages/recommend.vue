@@ -16,7 +16,9 @@ import {
   type RecommendViewSource,
 } from '@/utils/recommendSources'
 
-const ContentToggleSettingsDialog = defineAsyncComponent(() => import('@/components/dialog/ContentToggleSettingsDialog.vue'))
+const ContentToggleSettingsDialog = defineAsyncComponent(
+  () => import('@/components/dialog/ContentToggleSettingsDialog.vue'),
+)
 
 const { appMode } = usePWA()
 
@@ -322,5 +324,4 @@ onActivated(async () => {
   font-size: 1rem;
   margin-block-end: 16px;
 }
-
 </style>

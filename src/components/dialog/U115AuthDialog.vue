@@ -68,12 +68,10 @@ async function handleReset() {
     if (result.success) {
       setMessage('success', t('dialog.u115Auth.authSuccess'))
       handleDone()
-    }
-    else {
+    } else {
       setMessage('error', result.message || t('dialog.u115Auth.authFailed'))
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Reset failed:', error)
     setMessage('error', t('dialog.u115Auth.authFailed'))
   }
@@ -87,12 +85,10 @@ async function fetchAuthUrl() {
     if (result.success && result.data) {
       authUrl.value = result.data.authUrl
       authState.value = result.data.state
-    }
-    else {
+    } else {
       setMessage('error', result.message || t('dialog.u115Auth.urlFetchFailed'))
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Fetch auth URL failed:', error)
     setMessage('error', t('dialog.u115Auth.urlFetchFailed'))
   }
@@ -125,8 +121,7 @@ function openAuthWindow() {
   if (authWindow) {
     setMessage('info', t('dialog.u115Auth.authorizing'))
     pollTimer = setTimeout(checkAuthStatus, POLL_INTERVAL)
-  }
-  else {
+  } else {
     setMessage('error', t('dialog.u115Auth.popupBlocked'))
   }
 }
@@ -155,8 +150,7 @@ async function checkAuthStatus() {
 
       // status === 0 或 1，继续等待
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Check auth status failed:', error)
   }
 
@@ -214,36 +208,20 @@ onUnmounted(() => {
 
         <!-- 状态提示 -->
         <div v-if="text" class="w-full">
-          <VAlert
-            variant="tonal"
-            :type="alertType"
-            :text="text"
-            class="my-4 text-center"
-          >
+          <VAlert variant="tonal" :type="alertType" :text="text" class="my-4 text-center">
             <template #prepend />
           </VAlert>
         </div>
       </VCardText>
 
       <VCardActions class="app-dialog-actions">
-        <VBtn
-          color="error"
-          variant="tonal"
-          prepend-icon="mdi-restore"
-          @click="handleReset"
-        >
+        <VBtn color="error" variant="tonal" prepend-icon="mdi-restore" @click="handleReset">
           {{ t('dialog.u115Auth.reset') }}
         </VBtn>
 
         <VSpacer />
 
-        <VBtn
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-check"
-          class="px-5"
-          @click="handleDone"
-        >
+        <VBtn color="primary" variant="flat" prepend-icon="mdi-check" class="px-5" @click="handleDone">
           {{ t('dialog.u115Auth.complete') }}
         </VBtn>
       </VCardActions>

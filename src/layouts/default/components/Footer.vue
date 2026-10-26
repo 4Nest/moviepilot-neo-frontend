@@ -38,9 +38,7 @@ const currentMenu = ref<string>(getMenuPathFromRoute(route.path))
 // 过滤出底部菜单项
 const footerMenus = computed(() => {
   // 底部导航只承接字符串路径菜单
-  const allMenus = navMenus.value.filter(
-    (menu): menu is NavMenu & { to: string } => typeof menu.to === 'string',
-  )
+  const allMenus = navMenus.value.filter((menu): menu is NavMenu & { to: string } => typeof menu.to === 'string')
 
   // 优先获取有 footer: true 属性的菜单
   const footerMenusWithProperty = allMenus.filter(menu => menu.footer === true)
@@ -214,7 +212,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
                 :value="menu.to"
               >
                 <div class="btn-content">
-                  <VIcon :icon="(menu.icon as string)" size="32"></VIcon>
+                  <VIcon :icon="menu.icon as string" size="32"></VIcon>
                   <span class="text-xs">{{ menu.title }}</span>
                 </div>
               </VBtn>

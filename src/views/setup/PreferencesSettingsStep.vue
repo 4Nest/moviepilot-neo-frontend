@@ -158,7 +158,14 @@ onMounted(() => {
           <p class="text-body-2 text-medium-emphasis mb-4">{{ t('setupWizard.preferences.quickPresetsDesc') }}</p>
           <VRow>
             <!-- Hover 命中区域保持静止，避免预设卡片上浮后底边反复触发 mouseleave。 -->
-            <VCol v-for="(preset, key) in presetConfigs" :key="key" class="preset-card-hover-area" cols="12" sm="6" md="3">
+            <VCol
+              v-for="(preset, key) in presetConfigs"
+              :key="key"
+              class="preset-card-hover-area"
+              cols="12"
+              sm="6"
+              md="3"
+            >
               <VCard
                 :color="selectedPreset === key ? preset.color : 'default'"
                 :variant="selectedPreset === key ? 'tonal' : 'outlined'"

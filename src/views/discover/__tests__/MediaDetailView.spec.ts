@@ -607,8 +607,16 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
   })
 
   it.each([
-    ['Douban', createSubscribeTv({ douban_id: 'db-8702', source: 'douban', tmdb_id: undefined }), createSubscribe({ doubanid: 'db-8702', season: 1, type: '电视剧' })],
-    ['Bangumi', createSubscribeTv({ bangumi_id: 8703, source: 'bangumi', tmdb_id: undefined }), createSubscribe({ bangumiid: 8703, season: 1, type: '电视剧' })],
+    [
+      'Douban',
+      createSubscribeTv({ douban_id: 'db-8702', source: 'douban', tmdb_id: undefined }),
+      createSubscribe({ doubanid: 'db-8702', season: 1, type: '电视剧' }),
+    ],
+    [
+      'Bangumi',
+      createSubscribeTv({ bangumi_id: 8703, source: 'bangumi', tmdb_id: undefined }),
+      createSubscribe({ bangumiid: 8703, season: 1, type: '电视剧' }),
+    ],
   ])('matches %s subscriptions without relying on a TMDB identity', async (_label, media, subscribe) => {
     media.season_info = [createMediaSeason({ season_number: 1 })]
 

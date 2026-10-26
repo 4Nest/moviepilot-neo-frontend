@@ -143,7 +143,6 @@ function syncRootLaunchPalette() {
   })
 }
 
-
 // 检查是否登录
 const authStore = useAuthStore()
 const isLogin = computed(() => authStore.token)

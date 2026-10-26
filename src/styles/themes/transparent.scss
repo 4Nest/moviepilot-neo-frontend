@@ -3,7 +3,7 @@
 /* stylelint-disable scss/at-rule-no-unknown */
 
 // 透明主题专用样式
-html[data-theme="transparent"] {
+html[data-theme='transparent'] {
   // 定义透明度变量
   --transparent-opacity: 0.3;
   --transparent-opacity-light: 0.2;
@@ -21,10 +21,13 @@ html[data-theme="transparent"] {
   --app-grouped-list-icon-opacity: 0.88;
 
   // 应用、布局、主内容区域
-  .v-application, .v-layout, .v-main, .layout-page-content {
+  .v-application,
+  .v-layout,
+  .v-main,
+  .layout-page-content {
     background: transparent;
   }
-  
+
   // 侧边导航栏
   .layout-vertical-nav {
     backdrop-filter: blur(var(--transparent-blur-heavy));
@@ -37,7 +40,7 @@ html[data-theme="transparent"] {
     backdrop-filter: blur(var(--transparent-blur));
     background-color: rgba(var(--v-theme-surface), var(--transparent-opacity));
   }
-  
+
   // 卡片
   .v-card:not(.no-blur) {
     backdrop-filter: blur(var(--transparent-blur));
@@ -114,7 +117,7 @@ html[data-theme="transparent"] {
     backdrop-filter: blur(var(--transparent-blur));
     background-color: rgba(var(--v-theme-surface), var(--transparent-opacity));
   }
-  
+
   // 表格
   .v-table {
     border-radius: 0;
@@ -124,7 +127,7 @@ html[data-theme="transparent"] {
       background-color: rgba(var(--v-theme-surface), var(--transparent-opacity));
     }
   }
-  
+
   // 页脚
   .v-footer {
     backdrop-filter: blur(var(--transparent-blur));
@@ -136,17 +139,17 @@ html[data-theme="transparent"] {
     backdrop-filter: blur(var(--transparent-blur));
     background-color: rgba(var(--v-theme-surface), var(--transparent-opacity));
   }
-  
+
   // 页面容器
   .layout-content-wrapper {
     background: transparent;
   }
-  
+
   // 无内容区域的背景设为透明
   .page-content-container {
     background: transparent;
   }
-  
+
   // 对话框和菜单蒙层样式
   .v-overlay__scrim {
     background: rgba(var(--v-overlay-scrim-background), var(--v-overlay-scrim-opacity));
@@ -167,7 +170,7 @@ html[data-theme="transparent"] {
   .v-field {
     background-color: rgba(var(--v-theme-surface), 0);
   }
-  
+
   // 弹出层内容
   .v-overlay__content {
     border-radius: var(--app-surface-radius);
@@ -206,11 +209,7 @@ html[data-theme="transparent"] {
   .theme-customizer-shadow-slider,
   .theme-customizer-shadow-slider__sample {
     background:
-      linear-gradient(
-        180deg,
-        rgba(var(--v-theme-on-surface), 0.02),
-        rgba(var(--v-theme-on-surface), 0.05)
-      ),
+      linear-gradient(180deg, rgba(var(--v-theme-on-surface), 0.02), rgba(var(--v-theme-on-surface), 0.05)),
       rgba(var(--v-theme-surface), var(--transparent-opacity-light));
   }
 
@@ -237,9 +236,9 @@ html[data-theme="transparent"] {
       ),
       rgba(var(--v-theme-surface), var(--transparent-opacity-heavy)) !important;
   }
-} 
+}
 
-html[data-theme="transparent"].transparent-background-blur-disabled {
+html[data-theme='transparent'].transparent-background-blur-disabled {
   .global-blur-layer,
   .background-image.active {
     backdrop-filter: none;
@@ -248,7 +247,7 @@ html[data-theme="transparent"].transparent-background-blur-disabled {
   }
 }
 
-html[data-theme="transparent"].transparent-glass-lightweight {
+html[data-theme='transparent'].transparent-glass-lightweight {
   --app-grouped-list-backdrop-filter: none;
 
   .global-blur-layer {
@@ -309,7 +308,7 @@ html[data-theme="transparent"].transparent-glass-lightweight {
   }
 }
 
-html[data-theme="transparent"].transparent-glass-realtime {
+html[data-theme='transparent'].transparent-glass-realtime {
   --app-grouped-list-backdrop-filter: none;
 
   .background-image.active {
@@ -351,7 +350,7 @@ html[data-theme="transparent"].transparent-glass-realtime {
   }
 }
 
-html[data-theme="transparent"].transparent-blur-disabled {
+html[data-theme='transparent'].transparent-blur-disabled {
   --app-grouped-list-backdrop-filter: none;
 
   .layout-vertical-nav,

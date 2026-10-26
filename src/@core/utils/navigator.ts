@@ -21,7 +21,6 @@ export async function copyToClipboard(content: string) {
   return success
 }
 
-
 // Uint8Array 转 Base64URL
 export function bufferToBase64Url(buffer: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))

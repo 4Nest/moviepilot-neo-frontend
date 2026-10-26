@@ -161,7 +161,6 @@ async function pollServiceStatus() {
 
 // 执行重启操作
 async function restart() {
-
   // 设置重启状态
   isRestarting.value = true
 
@@ -193,7 +192,6 @@ async function restart() {
 
 // 显示重启确认对话框
 async function showRestartDialog() {
-
   const isConfirmed = await createConfirm({
     type: 'warn',
     title: t('app.confirmRestart'),
@@ -222,7 +220,6 @@ function showSiteAuthDialog() {
 
 /** 显示关于共享弹窗。 */
 function showAboutDialog() {
-
   openSharedDialog(AboutDialog, {}, {}, { closeOn: ['close', 'update:modelValue'] })
 }
 
@@ -391,7 +388,6 @@ function handleThemeCustomizerSettingsChange(event: Event) {
 
 // 获取自定义 CSS
 async function getCustomCSS() {
-
   try {
     const result: { [key: string]: any } = await api.get('system/setting/UserCustomCSS')
     if (result && result.success && result.data?.value) {
@@ -409,7 +405,6 @@ async function getCustomCSS() {
 
 /** 打开自定义 CSS 共享弹窗。 */
 function showCustomCssDialog() {
-
   customCssDialogController?.close()
   customCssDialogController = openSharedDialog(
     CustomCssDialog,
@@ -450,7 +445,6 @@ function showThemeCustomizerDrawer() {
 
 /** 保存自定义 CSS。 */
 async function saveCustomCSS(css: string) {
-
   customCSS.value = css
   try {
     const result: { [key: string]: any } = await api.post('system/setting/UserCustomCSS', css, {

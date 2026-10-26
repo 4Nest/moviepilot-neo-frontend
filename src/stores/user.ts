@@ -11,11 +11,21 @@ export const useUserStore = defineStore('user', {
   }),
   persist: true,
   actions: {
-    setUserID(userID: number) { this.userID = userID },
-    setUserName(userName: string) { this.userName = userName },
-    setAvatar(avatar: string) { this.avatar = avatar },
-    setLevel(level: number) { this.level = level },
-    setWizard(wizard: boolean) { this.wizard = wizard },
+    setUserID(userID: number) {
+      this.userID = userID
+    },
+    setUserName(userName: string) {
+      this.userName = userName
+    },
+    setAvatar(avatar: string) {
+      this.avatar = avatar
+    },
+    setLevel(level: number) {
+      this.level = level
+    },
+    setWizard(wizard: boolean) {
+      this.wizard = wizard
+    },
     loginUser(payload: userState) {
       this.setUserID(payload.userID)
       this.setUserName(payload.userName)

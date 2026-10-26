@@ -356,11 +356,7 @@ function syncSearchWord(event?: Event): string {
 function requestSearchSubmit(event: Event) {
   if (searchSubmissionLocked) return
   if (event instanceof KeyboardEvent && event.isComposing && event.keyCode !== 229) return
-  if (
-    event instanceof InputEvent &&
-    event.inputType !== 'insertLineBreak' &&
-    event.inputType !== 'insertParagraph'
-  )
+  if (event instanceof InputEvent && event.inputType !== 'insertLineBreak' && event.inputType !== 'insertParagraph')
     return
 
   const input = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : searchWordInput.value
@@ -551,64 +547,59 @@ onMounted(() => {
         <!-- 有搜索词时显示搜索入口和匹配结果 -->
         <VList lines="two" v-if="searchWord" class="search-list pa-0 py-2">
           <!-- 媒体搜索入口 -->
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
-              {{ t('common.media') }}
-            </VListSubheader>
-
-            <VListItem
-              v-for="action in mediaSearchActions"
-              :key="action.type"
-              density="comfortable"
-              link
-              class="search-result-item search-source-result-item mx-2 my-1"
-              @click="searchMedia(action.type)"
-            >
-              <template #prepend>
-                <div class="result-icon-wrapper">
-                  <VIcon :icon="action.icon" size="small" color="medium-emphasis" />
-                </div>
-              </template>
-              <VListItemTitle class="font-weight-medium text-body-2">
-                {{ action.title }}
-              </VListItemTitle>
-              <VListItemSubtitle class="text-caption text-medium-emphasis">
-                {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
-                {{ action.description }}
-              </VListItemSubtitle>
-              <div class="search-item-source-row">
-                <VBtnToggle
-                  v-model="selectedMediaSearchSources[action.type]"
-                  class="search-item-source-toggle"
-                  density="compact"
-                  mandatory
-                  role="group"
-                  selected-class="media-source-button--active"
-                  variant="text"
-                  :aria-label="t('dialog.searchBar.mediaSourceFor', { type: action.title })"
-                  @click.stop
-                  @keydown.stop
-                >
-                  <VBtn
-                    v-for="source in mediaSearchSourceOptions[action.type]"
-                    :key="source.value"
-                    class="media-source-button"
-                    size="x-small"
-                    :value="source.value"
-                    :aria-label="t('dialog.searchBar.searchWithSource', { source: source.name })"
-                    :title="t('dialog.searchBar.searchWithSource', { source: source.name })"
-                  >
-                    {{ source.label }}
-                  </VBtn>
-                </VBtnToggle>
-              </div>
-            </VListItem>
+          <VListSubheader class="font-weight-medium text-uppercase px-4">
+            {{ t('common.media') }}
+          </VListSubheader>
 
           <VListItem
+            v-for="action in mediaSearchActions"
+            :key="action.type"
             density="comfortable"
             link
-            @click="searchSubscribeShares"
-            class="search-result-item mx-2 my-1"
+            class="search-result-item search-source-result-item mx-2 my-1"
+            @click="searchMedia(action.type)"
           >
+            <template #prepend>
+              <div class="result-icon-wrapper">
+                <VIcon :icon="action.icon" size="small" color="medium-emphasis" />
+              </div>
+            </template>
+            <VListItemTitle class="font-weight-medium text-body-2">
+              {{ action.title }}
+            </VListItemTitle>
+            <VListItemSubtitle class="text-caption text-medium-emphasis">
+              {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
+              {{ action.description }}
+            </VListItemSubtitle>
+            <div class="search-item-source-row">
+              <VBtnToggle
+                v-model="selectedMediaSearchSources[action.type]"
+                class="search-item-source-toggle"
+                density="compact"
+                mandatory
+                role="group"
+                selected-class="media-source-button--active"
+                variant="text"
+                :aria-label="t('dialog.searchBar.mediaSourceFor', { type: action.title })"
+                @click.stop
+                @keydown.stop
+              >
+                <VBtn
+                  v-for="source in mediaSearchSourceOptions[action.type]"
+                  :key="source.value"
+                  class="media-source-button"
+                  size="x-small"
+                  :value="source.value"
+                  :aria-label="t('dialog.searchBar.searchWithSource', { source: source.name })"
+                  :title="t('dialog.searchBar.searchWithSource', { source: source.name })"
+                >
+                  {{ source.label }}
+                </VBtn>
+              </VBtnToggle>
+            </div>
+          </VListItem>
+
+          <VListItem density="comfortable" link @click="searchSubscribeShares" class="search-result-item mx-2 my-1">
             <template #prepend>
               <div class="result-icon-wrapper">
                 <VIcon icon="mdi-share-variant" size="small" color="medium-emphasis" />
@@ -621,12 +612,7 @@ onMounted(() => {
             </VListItemSubtitle>
           </VListItem>
 
-          <VListItem
-            density="comfortable"
-            link
-            @click="searchHistory"
-            class="search-result-item mx-2 my-1"
-          >
+          <VListItem density="comfortable" link @click="searchHistory" class="search-result-item mx-2 my-1">
             <template #prepend>
               <div class="result-icon-wrapper">
                 <VIcon icon="mdi-history" size="small" color="medium-emphasis" />
@@ -731,62 +717,62 @@ onMounted(() => {
           </template>
 
           <!-- 站点资源搜索 -->
-            <VDivider class="mx-4 my-2 search-divider" />
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
-              {{ t('dialog.searchBar.siteResources') }}
-            </VListSubheader>
+          <VDivider class="mx-4 my-2 search-divider" />
+          <VListSubheader class="font-weight-medium text-uppercase px-4">
+            {{ t('dialog.searchBar.siteResources') }}
+          </VListSubheader>
 
-            <VListItem density="comfortable" link @click="searchTorrent" class="search-result-item mx-2 my-1">
-              <template #prepend>
-                <div class="result-icon-wrapper">
-                  <VIcon icon="mdi-file-search" size="small" color="medium-emphasis" />
-                </div>
-              </template>
-              <VListItemTitle class="font-weight-medium text-body-2">{{
-                t('dialog.searchBar.searchInSites')
-              }}</VListItemTitle>
-              <VListItemSubtitle class="text-caption text-medium-emphasis">
-                {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
-                {{ t('dialog.searchBar.relatedResources') }}
-              </VListItemSubtitle>
-              <template #append>
-                <VBtn
-                  size="x-small"
-                  variant="tonal"
-                  color="primary"
-                  rounded="pill"
-                  @click.stop="openSiteDialog('torrent')"
-                >
-                  {{ t('dialog.searchBar.selectSites') }}
-                </VBtn>
-              </template>
-            </VListItem>
+          <VListItem density="comfortable" link @click="searchTorrent" class="search-result-item mx-2 my-1">
+            <template #prepend>
+              <div class="result-icon-wrapper">
+                <VIcon icon="mdi-file-search" size="small" color="medium-emphasis" />
+              </div>
+            </template>
+            <VListItemTitle class="font-weight-medium text-body-2">{{
+              t('dialog.searchBar.searchInSites')
+            }}</VListItemTitle>
+            <VListItemSubtitle class="text-caption text-medium-emphasis">
+              {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
+              {{ t('dialog.searchBar.relatedResources') }}
+            </VListItemSubtitle>
+            <template #append>
+              <VBtn
+                size="x-small"
+                variant="tonal"
+                color="primary"
+                rounded="pill"
+                @click.stop="openSiteDialog('torrent')"
+              >
+                {{ t('dialog.searchBar.selectSites') }}
+              </VBtn>
+            </template>
+          </VListItem>
 
-            <VListItem density="comfortable" link @click="searchSubtitle" class="search-result-item mx-2 my-1">
-              <template #prepend>
-                <div class="result-icon-wrapper">
-                  <VIcon icon="mdi-subtitles-outline" size="small" color="medium-emphasis" />
-                </div>
-              </template>
-              <VListItemTitle class="font-weight-medium text-body-2">{{
-                t('dialog.searchBar.searchSubtitlesInSites')
-              }}</VListItemTitle>
-              <VListItemSubtitle class="text-caption text-medium-emphasis">
-                {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
-                {{ t('dialog.searchBar.relatedSubtitles') }}
-              </VListItemSubtitle>
-              <template #append>
-                <VBtn
-                  size="x-small"
-                  variant="tonal"
-                  color="primary"
-                  rounded="pill"
-                  @click.stop="openSiteDialog('subtitle')"
-                >
-                  {{ t('dialog.searchBar.selectSites') }}
-                </VBtn>
-              </template>
-            </VListItem>
+          <VListItem density="comfortable" link @click="searchSubtitle" class="search-result-item mx-2 my-1">
+            <template #prepend>
+              <div class="result-icon-wrapper">
+                <VIcon icon="mdi-subtitles-outline" size="small" color="medium-emphasis" />
+              </div>
+            </template>
+            <VListItemTitle class="font-weight-medium text-body-2">{{
+              t('dialog.searchBar.searchSubtitlesInSites')
+            }}</VListItemTitle>
+            <VListItemSubtitle class="text-caption text-medium-emphasis">
+              {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
+              {{ t('dialog.searchBar.relatedSubtitles') }}
+            </VListItemSubtitle>
+            <template #append>
+              <VBtn
+                size="x-small"
+                variant="tonal"
+                color="primary"
+                rounded="pill"
+                @click.stop="openSiteDialog('subtitle')"
+              >
+                {{ t('dialog.searchBar.selectSites') }}
+              </VBtn>
+            </template>
+          </VListItem>
         </VList>
 
         <!-- 无搜索词时显示空状态 -->

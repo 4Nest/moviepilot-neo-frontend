@@ -177,11 +177,7 @@ export function useVersionChecker() {
     }
 
     // 最终兜底：显示版本不一致通知（清除缓存）
-    showUpdateNotification(
-      translate('common.versionMismatch'),
-      translate('common.clearCache'),
-      clearCacheAndReload,
-    )
+    showUpdateNotification(translate('common.versionMismatch'), translate('common.clearCache'), clearCacheAndReload)
   }
 
   return {

@@ -25,7 +25,9 @@ const subtitle = ref(props.subtitle)
 // 站点图标
 const siteIcon = ref('')
 
-const isDownloaded = computed(() => Boolean(subtitle.value?.enclosure && downloadedSubtitleMap[subtitle.value.enclosure]))
+const isDownloaded = computed(() =>
+  Boolean(subtitle.value?.enclosure && downloadedSubtitleMap[subtitle.value.enclosure]),
+)
 
 // 查询站点图标
 async function getSiteIcon() {
@@ -163,7 +165,10 @@ watch(
         </div>
 
         <div class="d-flex flex-wrap align-center gap-2 mb-2">
-          <span v-if="subtitle?.pubdate || subtitle?.date_elapsed" class="d-flex align-center text-sm text-medium-emphasis">
+          <span
+            v-if="subtitle?.pubdate || subtitle?.date_elapsed"
+            class="d-flex align-center text-sm text-medium-emphasis"
+          >
             <VIcon size="small" color="grey" icon="mdi-clock-outline" class="me-1"></VIcon>
             {{ subtitle?.date_elapsed || formatDateDifference(subtitle.pubdate || '') }}
           </span>
@@ -195,7 +200,14 @@ watch(
         <VBtn v-if="subtitle?.report_url" icon size="small" variant="text" color="warning" @click.stop="openReportPage">
           <VIcon icon="mdi-alert-outline"></VIcon>
         </VBtn>
-        <VBtn v-if="subtitle?.page_url" icon size="small" variant="text" color="primary" @click.stop="openSubtitleDetail">
+        <VBtn
+          v-if="subtitle?.page_url"
+          icon
+          size="small"
+          variant="text"
+          color="primary"
+          @click.stop="openSubtitleDetail"
+        >
           <VIcon icon="mdi-information-outline"></VIcon>
         </VBtn>
       </VCardActions>

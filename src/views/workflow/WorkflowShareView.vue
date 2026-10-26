@@ -154,7 +154,14 @@ onMounted(() => {
 <template>
   <VPageContentTitle v-if="keyword" :title="`${t('common.search')}：${keyword}`" />
   <LoadingBanner v-if="!isRefreshed" class="mt-12" />
-  <VInfiniteScroll mode="intersect" side="end" :items="dataList" class="overflow-visible px-2" @load="fetchData" :key="currentKey">
+  <VInfiniteScroll
+    mode="intersect"
+    side="end"
+    :items="dataList"
+    class="overflow-visible px-2"
+    @load="fetchData"
+    :key="currentKey"
+  >
     <template #loading />
     <template #empty />
     <ProgressiveCardGrid

@@ -8,7 +8,6 @@ import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { getWorkflowTabs } from '@/router/i18n-menu'
 
-
 // 国际化
 const { t } = useI18n()
 

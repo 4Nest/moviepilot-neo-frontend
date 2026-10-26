@@ -73,7 +73,7 @@ function getQuickAccessElement() {
   const element = quickAccessRef.value
   if (!element) return null
 
-  return element instanceof HTMLElement ? element : element.$el ?? null
+  return element instanceof HTMLElement ? element : (element.$el ?? null)
 }
 
 // 计算显示状态

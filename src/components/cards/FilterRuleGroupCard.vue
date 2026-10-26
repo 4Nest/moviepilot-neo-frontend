@@ -5,7 +5,9 @@ import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useCardAccentColor } from '@/composables/useCardAccentColor'
 
-const FilterRuleGroupInfoDialog = defineAsyncComponent(() => import('@/components/dialog/FilterRuleGroupInfoDialog.vue'))
+const FilterRuleGroupInfoDialog = defineAsyncComponent(
+  () => import('@/components/dialog/FilterRuleGroupInfoDialog.vue'),
+)
 
 // 获取i18n实例
 const { t } = useI18n()
@@ -81,7 +83,13 @@ function onClose() {
         </div>
       </div>
       <div class="app-card-summary__media" aria-hidden="true">
-        <VImg ref="imageRef" :src="filter_group_svg" contain class="app-card-summary__image" @load="updateAccentColor" />
+        <VImg
+          ref="imageRef"
+          :src="filter_group_svg"
+          contain
+          class="app-card-summary__image"
+          @load="updateAccentColor"
+        />
       </div>
     </VCardText>
   </VCard>

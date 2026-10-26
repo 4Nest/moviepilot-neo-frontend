@@ -36,9 +36,12 @@ function categorizeApps() {
 }
 
 let appGroupsMounted = false
-watch(() => pluginSidebarNavStore.items, () => {
-  if (appGroupsMounted) categorizeApps()
-})
+watch(
+  () => pluginSidebarNavStore.items,
+  () => {
+    if (appGroupsMounted) categorizeApps()
+  },
+)
 
 onMounted(async () => {
   await pluginSidebarNavStore.ensureSidebarNav()

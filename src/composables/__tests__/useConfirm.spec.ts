@@ -20,7 +20,9 @@ describe('useConfirm', () => {
     expect(document.body.textContent).toContain('删除该项？')
 
     // VDialogCloseBtn 也在对话框内，确认按钮取操作区最后一个
-    const confirmBtn = [...document.body.querySelectorAll<HTMLButtonElement>('.v-dialog .v-card-actions .v-btn')].at(-1)!
+    const confirmBtn = [...document.body.querySelectorAll<HTMLButtonElement>('.v-dialog .v-card-actions .v-btn')].at(
+      -1,
+    )!
     confirmBtn.click()
     await expect(confirmPromise).resolves.toBe(true)
     expect(document.body.querySelector('.v-dialog')).toBeNull()

@@ -29,7 +29,6 @@ import '@/styles/main.scss'
 // 7. 状态恢复插件
 import stateRestorePlugin from '@/plugins/stateRestore'
 
-
 function runWhenBrowserIdle(callback: () => void, timeout = 1500) {
   const requestIdle = globalThis.requestIdleCallback
   if (requestIdle) {
@@ -53,7 +52,6 @@ function loadRemoteComponentsAfterLogin() {
       console.error('Failed to load remote components', error)
     })
 }
-
 
 let remoteComponentsInitialized = false
 

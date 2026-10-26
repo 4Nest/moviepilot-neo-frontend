@@ -14,13 +14,7 @@ const { connectivityTest } = useSetupWizard()
       <div v-if="connectivityTest.isTesting">
         <VIcon icon="mdi-cog-sync" class="rotating mb-2" color="primary" size="24" />
         <div class="text-body-2 mb-2">{{ connectivityTest.testMessage }}</div>
-        <VProgressLinear
-          v-model="connectivityTest.testProgress"
-          color="primary"
-          height="6"
-          rounded
-          class="mb-2"
-        />
+        <VProgressLinear v-model="connectivityTest.testProgress" color="primary" height="6" rounded class="mb-2" />
         <div class="text-caption text-medium-emphasis">{{ Math.round(connectivityTest.testProgress) }}%</div>
       </div>
 

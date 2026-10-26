@@ -131,7 +131,10 @@ function submitOrder() {
   cursor: grab;
   padding-block: 10px;
   padding-inline: 12px;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .setting-item::before {

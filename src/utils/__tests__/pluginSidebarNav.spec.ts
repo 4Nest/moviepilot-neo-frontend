@@ -46,7 +46,10 @@ describe('plugin sidebar navigation utilities', () => {
   })
 
   it('keeps the declared section for layout placement independently of its translated header', () => {
-    const [entry] = filterPluginSidebarNavEntries([createNavItem({ plugin_id: 'discover-demo', section: 'discovery' })], t)
+    const [entry] = filterPluginSidebarNavEntries(
+      [createNavItem({ plugin_id: 'discover-demo', section: 'discovery' })],
+      t,
+    )
 
     expect(entry.section).toBe('discovery')
     expect(entry.navMenu.header).toBe('menu.discovery')

@@ -236,7 +236,10 @@ function submitSettings() {
   font: inherit;
   padding-block: 10px;
   padding-inline: 12px;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .setting-item::before {
@@ -293,5 +296,4 @@ function submitSettings() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
 </style>

@@ -97,11 +97,7 @@ watch(filterParams, () => {
 
 <template>
   <div class="px-3">
-    <div
-      v-for="group in filterGroups"
-      :key="group.key"
-      class="flex justify-start align-center"
-    >
+    <div v-for="group in filterGroups" :key="group.key" class="flex justify-start align-center">
       <div class="mr-5">
         <VLabel>{{ group.label }}</VLabel>
       </div>

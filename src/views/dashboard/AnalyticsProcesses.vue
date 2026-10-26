@@ -36,7 +36,7 @@ useDataRefresh(
   'dashboard-processes',
   loadProcessList,
   5000, // 5秒间隔
-  true // 立即执行
+  true, // 立即执行
 )
 </script>
 

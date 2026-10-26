@@ -8,7 +8,6 @@ import type { AxiosInstance } from 'axios'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 
-
 // LocalStorage keys
 const SORT_KEY = 'fileBrowser.sort'
 const SHOW_TREE_KEY = 'fileBrowser.showDirTree'
