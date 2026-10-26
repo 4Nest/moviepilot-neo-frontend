@@ -258,4 +258,69 @@ describe('useTorrentFilter', () => {
     snapshot.filterForm.site.push('mutated')
     expect(filter.filterForm.site).toEqual(['Site A', 'Site B'])
   })
+
+  describe('cascading filter options', () => {
+    const torrents = () => [
+      createTorrent({ freeState: 'FREE', site: 'Site A', title: '促销 A' }),
+      createTorrent({ freeState: 'FREE', site: 'Site B', title: '促销 B' }),
+      createTorrent({ freeState: '2XFREE', site: 'Site C', title: '双倍 C' }),
+      createTorrent({ freeState: '', site: 'Site D', title: '无促销 D' }),
+    ]
+
+    it.each(['filterRowData', 'filterCardData'] as const)(
+      'narrows other dimensions by the selected promotion in %s while keeping its own options switchable',
+      method => {
+        const filter = useTorrentFilter()
+        filter.filterRowData(torrents())
+        expect(filter.filterOptions.site).toEqual(['Site A', 'Site B', 'Site C', 'Site D'])
+
+        filter.filterForm.freeState = ['2XFREE']
+        filter[method](torrents())
+
+        expect(filter.filterOptions.site).toEqual(['Site C'])
+        expect(filter.filterOptions.freeState).toEqual(['FREE', '2XFREE'])
+      },
+    )
+
+    it.each(['filterRowData', 'filterCardData'] as const)(
+      'restores options after the filter is cleared in %s',
+      method => {
+        const filter = useTorrentFilter()
+        filter.filterForm.freeState = ['2XFREE']
+        filter[method](torrents())
+        expect(filter.filterOptions.site).toEqual(['Site C'])
+
+        filter.clearFilter('freeState')
+        filter[method](torrents())
+
+        expect(filter.filterOptions.site).toEqual(['Site A', 'Site B', 'Site C', 'Site D'])
+      },
+    )
+
+    it('keeps a selected value visible even when no result can produce it', () => {
+      const filter = useTorrentFilter()
+      filter.filterForm.freeState = ['2XFREE']
+      filter.filterForm.site = ['Site A']
+
+      expect(filter.filterRowData(torrents())).toEqual([])
+
+      expect(filter.filterOptions.site).toEqual(['Site C', 'Site A'])
+      expect(filter.filterOptions.freeState).toEqual(['FREE', '2XFREE'])
+    })
+
+    it.each(['filterRowData', 'filterCardData'] as const)(
+      'clears options but keeps the form for empty data in %s',
+      method => {
+        const filter = useTorrentFilter()
+        filter[method](torrents())
+        filter.filterForm.site = ['Site A']
+
+        expect(filter[method]([])).toEqual([])
+
+        expect(filter.filterOptions.site).toEqual([])
+        expect(filter.filterOptions.freeState).toEqual([])
+        expect(filter.filterForm.site).toEqual(['Site A'])
+      },
+    )
+  })
 })

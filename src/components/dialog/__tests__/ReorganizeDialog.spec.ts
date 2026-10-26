@@ -525,7 +525,7 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
     expect(mocks.progressControllers[1].stop).toHaveBeenCalledTimes(1)
   })
 
-  it('submits each historical record with reorganize semantics', async () => {
+  it('submits all historical records in one request with reorganize semantics', async () => {
     const bodies: unknown[] = []
     server.use(
       http.post(new URL('transfer/manual', API_BASE_URL).href, async ({ request }) => {
@@ -544,22 +544,33 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
       expect.objectContaining({
         fileitem: {},
         from_history: false,
-        logid: 41,
-        reorganize: true,
-        target_path: null,
-        target_storage: null,
-      }),
-      expect.objectContaining({
-        fileitem: {},
-        from_history: false,
-        logid: 42,
+        logid: 0,
+        logids: [41, 42],
         reorganize: true,
         target_path: null,
         target_storage: null,
       }),
     ])
-    expect(mocks.toastSuccess).toHaveBeenNthCalledWith(1, '历史记录 41 已加入整理队列！')
-    expect(mocks.toastSuccess).toHaveBeenNthCalledWith(2, '历史记录 42 已加入整理队列！')
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('历史记录 41、42 已加入整理队列！')
+  })
+
+  it('keeps the dialog open and reports the failure when the batched history request fails', async () => {
+    let requestCount = 0
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, () => {
+        requestCount += 1
+        return HttpResponse.json({ message: '整理记录不存在，ID：42', success: false })
+      }),
+    )
+    const user = userEvent.setup()
+    const { onDone } = await renderDialog({ logids: [41, 42] })
+
+    await user.click(screen.getByRole('button', { name: '加入整理队列' }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('整理记录不存在，ID：42'))
+    expect(requestCount).toBe(1)
+    expect(onDone).not.toHaveBeenCalled()
   })
 
   it('updates synchronous progress from SSE and always stops it after success', async () => {
@@ -790,7 +801,32 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(bodies).toHaveLength(1))
-    expect(bodies[0]).toEqual(expect.objectContaining({ from_history: true, logid: 41 }))
+    expect(bodies[0]).toEqual(expect.objectContaining({ from_history: true, logids: [41] }))
+  })
+
+  it('previews all historical records in one request and merges the result', async () => {
+    const payloads: unknown[] = []
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async ({ request }) => {
+        payloads.push(await request.json())
+        return HttpResponse.json(
+          previewResponse([
+            { source: '/downloads/Episode 1.mkv', success: true, target: '/library/S01E01.mkv' },
+            { source: '/downloads/Episode 2.mkv', success: true, target: '/library/S01E02.mkv' },
+          ]),
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDialog({ logids: [41, 42] })
+
+    await user.click(screen.getByRole('button', { name: '预览' }))
+
+    expect(await screen.findByText('总数 2')).toBeInTheDocument()
+    expect(payloads).toHaveLength(1)
+    expect(payloads[0]).toEqual(
+      expect.objectContaining({ logid: 0, logids: [41, 42], preview: true, reorganize: true }),
+    )
   })
 })
 

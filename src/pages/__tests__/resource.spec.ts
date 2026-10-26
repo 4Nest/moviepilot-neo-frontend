@@ -185,16 +185,19 @@ const TorrentFilterBarStub = defineComponent({
   props: {
     filterForm: { type: Object, required: true },
     sortField: { type: String, required: true },
+    sortType: { type: String, default: 'desc' },
   },
-  emits: ['update:filterForm', 'update:sortField'],
+  emits: ['update:filterForm', 'update:sortField', 'update:sortType'],
   template: `
     <section
       data-testid="torrent-filter-bar"
       :data-sites="filterForm.site.join(',')"
       :data-sort-field="sortField"
+      :data-sort-type="sortType"
     >
       <button type="button" @click="$emit('update:filterForm', 'site', ['Site A'])">筛选 Site A</button>
       <button type="button" @click="$emit('update:sortField', 'size')">按体积排序</button>
+      <button type="button" @click="$emit('update:sortType', 'asc')">升序</button>
     </section>
   `,
 })
@@ -651,6 +654,48 @@ describe('resource page search flow', () => {
     expect(localStorage.getItem('MPTorrentsViewType')).toBe('card')
   })
 
+  it('restores a persisted sort field and direction when entering the page', async () => {
+    localStorage.setItem('MPTorrentsSortField', 'size')
+    localStorage.setItem('MPTorrentsSortType', 'asc')
+    await renderResource({
+      path: '/resource',
+      query: { keyword: '排序恢复', result_type: 'torrent' },
+    })
+    finishStream(await latestEventSource(), [createTorrent({ title: '排序恢复结果' })])
+
+    const filterBar = await screen.findByTestId('torrent-filter-bar')
+    expect(filterBar).toHaveAttribute('data-sort-field', 'size')
+    expect(filterBar).toHaveAttribute('data-sort-type', 'asc')
+  })
+
+  it('falls back to the default sort for invalid persisted values', async () => {
+    localStorage.setItem('MPTorrentsSortField', 'removed-field')
+    localStorage.setItem('MPTorrentsSortType', 'sideways')
+    await renderResource({
+      path: '/resource',
+      query: { keyword: '排序回退', result_type: 'torrent' },
+    })
+    finishStream(await latestEventSource(), [createTorrent({ title: '排序回退结果' })])
+
+    const filterBar = await screen.findByTestId('torrent-filter-bar')
+    expect(filterBar).toHaveAttribute('data-sort-field', 'default')
+    expect(filterBar).toHaveAttribute('data-sort-type', 'desc')
+  })
+
+  it('persists sort changes for the next visit', async () => {
+    await renderResource({
+      path: '/resource',
+      query: { keyword: '排序保存', result_type: 'torrent' },
+    })
+    finishStream(await latestEventSource(), [createTorrent({ title: '排序保存结果' })])
+
+    await fireEvent.click(await screen.findByRole('button', { name: '按体积排序' }))
+    await fireEvent.click(screen.getByRole('button', { name: '升序' }))
+
+    await waitFor(() => expect(localStorage.getItem('MPTorrentsSortField')).toBe('size'))
+    expect(localStorage.getItem('MPTorrentsSortType')).toBe('asc')
+  })
+
   it('clears filters for a new route search', async () => {
     const rendered = await renderResource({
       path: '/resource',
@@ -826,5 +871,4 @@ describe('resource page search flow', () => {
     })
     expect(screen.queryByText('过期结果')).not.toBeInTheDocument()
   })
-
 })

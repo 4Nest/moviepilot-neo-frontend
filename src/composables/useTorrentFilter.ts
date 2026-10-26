@@ -77,26 +77,41 @@ export function useTorrentFilter() {
   // 筛选后的总数量
   const totalFilteredCount = ref(0)
 
-  // 初始化过滤选项
-  function initOptions(data: Context) {
-    const { torrent_info, meta_info } = data
-    const optionValue = (options: Array<string>, value: string | undefined) => {
-      if (value && !options.includes(value)) {
-        options.push(value)
-        // 如果是season选项，立即触发重新计算
-        if (options === filterOptions.season) {
-          sortSeasonOptions()
-        }
-      }
-    }
+  // 各筛选维度从资源中取值的方式
+  const dimensionValues: Record<string, (data: Context) => string | undefined> = {
+    site: data => data.torrent_info?.site_name,
+    season: data => data.meta_info?.season_episode,
+    releaseGroup: data => data.meta_info?.resource_team,
+    videoCode: data => data.meta_info?.video_encode,
+    freeState: data => data.torrent_info?.volume_factor,
+    edition: data => data.meta_info?.edition,
+    resolution: data => data.meta_info?.resource_pix,
+  }
 
-    optionValue(filterOptions.site, torrent_info?.site_name)
-    optionValue(filterOptions.season, meta_info?.season_episode)
-    optionValue(filterOptions.releaseGroup, meta_info?.resource_team)
-    optionValue(filterOptions.videoCode, meta_info?.video_encode)
-    optionValue(filterOptions.freeState, torrent_info?.volume_factor)
-    optionValue(filterOptions.edition, meta_info?.edition)
-    optionValue(filterOptions.resolution, meta_info?.resource_pix)
+  // 判断资源是否满足除 excludeKey 之外所有维度的已选条件
+  function matchesFilters(data: Context, excludeKey?: string): boolean {
+    for (const key in dimensionValues) {
+      if (key === excludeKey) continue
+      if (!match(filterForm[key], dimensionValues[key](data))) return false
+    }
+    return true
+  }
+
+  // 初始化过滤选项：每个维度只收敛于其他维度已选条件，自身维度不限制自身；已选值始终保留
+  function initOptions(items: Context[]) {
+    for (const key in dimensionValues) {
+      const options = new Set<string>()
+      for (const data of items) {
+        if (!matchesFilters(data, key)) continue
+        const value = dimensionValues[key](data)
+        if (value) options.add(value)
+      }
+      for (const selected of filterForm[key]) {
+        options.add(selected)
+      }
+      filterOptions[key] = [...options]
+    }
+    sortSeasonOptions()
   }
 
   // 直接对季集选项进行排序的函数
@@ -182,25 +197,14 @@ export function useTorrentFilter() {
       return []
     }
 
-    // 首先收集所有过滤选项
-    items.forEach(data => {
-      initOptions(data)
-    })
+    // 级联收敛过滤选项
+    initOptions(items)
 
     // 筛选数据
     let filteredData: Context[] = []
 
     items.forEach((data, index) => {
-      const { meta_info, torrent_info } = data
-      if (
-        match(filterForm.site, torrent_info.site_name) &&
-        match(filterForm.freeState, torrent_info.volume_factor) &&
-        match(filterForm.season, meta_info.season_episode) &&
-        match(filterForm.releaseGroup, meta_info.resource_team) &&
-        match(filterForm.videoCode, meta_info.video_encode) &&
-        match(filterForm.resolution, meta_info.resource_pix) &&
-        match(filterForm.edition, meta_info.edition)
-      ) {
+      if (matchesFilters(data)) {
         filteredData.push(data)
         filteredIndices.value.push(index)
       }
@@ -234,13 +238,14 @@ export function useTorrentFilter() {
       return []
     }
 
+    // 级联收敛过滤选项
+    initOptions(items)
+
     // 数据分组
     const groupMap = new Map<string, GroupedItem[]>()
 
     items.forEach((item, index) => {
       const { torrent_info, meta_info } = item
-      // init options
-      initOptions(item)
       // group data
       const key = `${meta_info.name}_${meta_info.resource_pix}_${meta_info.edition}_${meta_info.resource_team}_${meta_info.season_episode}_${torrent_info.size}`
       const groupedItem = { data: item, originalIndex: index }
@@ -260,18 +265,7 @@ export function useTorrentFilter() {
 
     groupMap.forEach(value => {
       if (value.length > 0) {
-        const matchData = value.filter(item => {
-          const { meta_info, torrent_info } = item.data
-          return (
-            match(filterForm.site, torrent_info.site_name) &&
-            match(filterForm.freeState, torrent_info.volume_factor) &&
-            match(filterForm.season, meta_info.season_episode) &&
-            match(filterForm.releaseGroup, meta_info.resource_team) &&
-            match(filterForm.videoCode, meta_info.video_encode) &&
-            match(filterForm.resolution, meta_info.resource_pix) &&
-            match(filterForm.edition, meta_info.edition)
-          )
-        })
+        const matchData = value.filter(item => matchesFilters(item.data))
         if (matchData.length > 0) {
           matchCount += matchData.length
           const firstItem = matchData[0]

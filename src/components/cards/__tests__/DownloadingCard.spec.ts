@@ -1,6 +1,7 @@
 import type { DownloadingInfo } from '@/api/types'
 import DownloadingCard from '@/components/cards/DownloadingCard.vue'
-import { fireEvent, screen, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
 import { deleteDownloadHandler, downloadActionHandler } from '@tests/support/msw/handlers/download'
 import { server } from '@tests/support/msw/server'
@@ -60,7 +61,9 @@ describe('DownloadingCard display and pause state', () => {
 
     expect(screen.getByText(/测试媒体/)).toBeInTheDocument()
     expect(screen.getByText(/S01 E02/)).toBeInTheDocument()
-    expect(screen.getByText('下载任务标题')).toBeInTheDocument()
+    expect(
+      within(container.querySelector<HTMLElement>('.downloading-card__torrent-title')!).getByText('下载任务标题'),
+    ).toBeInTheDocument()
     expect(screen.getByText(/1 小时/)).toBeInTheDocument()
     expect(container.querySelector('.v-card-text .v-progress-linear')).toBeInTheDocument()
   })
@@ -206,6 +209,42 @@ describe('DownloadingCard display and pause state', () => {
       info: downloading({ media: { ...downloading().media, poster: 'https://images.example.com/new-poster.jpg' } }),
     })
     await waitFor(() => expect(screen.getByRole('button', { name: '图片加载失败' })).toBeInTheDocument())
+  })
+
+  it('keeps long torrent names on a two-line clamp and exposes the full name through a tooltip', async () => {
+    const longTitle = 'The.Very.Long.Release.Name.2024.S01E01.2160p.WEB-DL.DDP5.1.Atmos.H.265-GROUP.Extended.Cut.mkv'
+    const user = userEvent.setup()
+    const { container } = await renderCard(downloading({ title: longTitle }))
+    const torrentTitle = container.querySelector<HTMLElement>('.downloading-card__torrent-title')!
+
+    expect(torrentTitle).toHaveTextContent(longTitle)
+    expect(torrentTitle).toHaveAttribute('tabindex', '0')
+    expect(torrentTitle).toHaveAttribute('aria-describedby')
+    expect(container.querySelector('[role="tooltip"]')).not.toBeInTheDocument()
+
+    await user.hover(torrentTitle)
+
+    const tooltipId = torrentTitle.getAttribute('aria-describedby')!
+    await waitFor(() => expect(document.getElementById(tooltipId)).toHaveClass('v-overlay--active'))
+    expect(document.getElementById(tooltipId)).toHaveTextContent(longTitle)
+    expect(container.querySelector('.downloading-card__torrent-tooltip')).not.toBeInTheDocument()
+  })
+
+  it('does not make a missing torrent title focusable or show an empty tooltip', async () => {
+    const user = userEvent.setup()
+    const { container } = await renderCard(downloading({ title: undefined }))
+    const torrentTitle = container.querySelector<HTMLElement>('.downloading-card__torrent-title')!
+
+    expect(torrentTitle).toHaveTextContent('未知')
+    expect(torrentTitle).not.toHaveAttribute('tabindex')
+
+    await user.hover(torrentTitle)
+    const { promise: tooltipDelayElapsed, resolve: elapse } = Promise.withResolvers<void>()
+    setTimeout(elapse, 300)
+    await tooltipDelayElapsed
+
+    const tooltip = document.querySelector('.downloading-card__torrent-tooltip')!.closest('[role="tooltip"]')!
+    expect(tooltip).not.toHaveClass('v-overlay--active')
   })
 
   it('applies the shared lift state to the outer shell on hover', async () => {

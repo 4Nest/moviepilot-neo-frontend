@@ -2323,6 +2323,9 @@ export default {
       downloadFailed: '{site} {title} 下载失败：{message}！',
       showAdvancedOptions: '显示高级选项',
       hideAdvancedOptions: '隐藏高级选项',
+      unrecognizedTitle: '未识别到媒体信息',
+      unrecognizedContent: '该资源无法识别出媒体信息，仍要按种子标题继续下载吗？',
+      unrecognizedConfirm: '继续下载',
     },
     addSubtitleDownload: {
       confirmDownload: '确认下载字幕',

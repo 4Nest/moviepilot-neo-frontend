@@ -208,6 +208,22 @@ const isSubtitleSearch = computed(() => resultType.value === 'subtitle')
 // 视图类型，从localStorage中读取
 const viewType = ref<TorrentViewType>(normalizeTorrentViewType(localStorage.getItem('MPTorrentsViewType')))
 
+// 排序设置的存储键
+const sortFieldStorageKey = 'MPTorrentsSortField'
+const sortTypeStorageKey = 'MPTorrentsSortType'
+
+// 从localStorage恢复排序设置，字段必须是合法排序键，方向仅接受asc/desc，否则保持默认
+function restoreSortPreference() {
+  const storedField = localStorage.getItem(sortFieldStorageKey)
+  if (storedField && Object.prototype.hasOwnProperty.call(torrentFilter.sortTitles, storedField)) {
+    torrentFilter.sortField.value = storedField
+  }
+  const storedType = localStorage.getItem(sortTypeStorageKey)
+  if (storedType === 'asc' || storedType === 'desc') {
+    torrentFilter.sortType.value = storedType
+  }
+}
+restoreSortPreference()
 
 // 是否有搜索标签
 const hasSearchTags = computed(() => {
@@ -340,6 +356,12 @@ watch(
   },
   { deep: true },
 )
+
+// 排序变化时持久化到localStorage
+watch([() => torrentFilter.sortField.value, () => torrentFilter.sortType.value], ([field, type]) => {
+  localStorage.setItem(sortFieldStorageKey, field)
+  localStorage.setItem(sortTypeStorageKey, type)
+})
 
 // 应用筛选
 function applyFilter() {
@@ -984,7 +1006,6 @@ async function refreshSearch() {
   }
 }
 
-
 // 计算当前显示的数据是否有数据
 const hasData = computed(() => {
   if (isSubtitleSearch.value) {
@@ -1004,7 +1025,6 @@ const hasData = computed(() => {
     return filteredCardDataList.value.length > 0 || rawDataList.value.length > 0
   }
 })
-
 
 watch(
   () => route.query,
@@ -1135,7 +1155,6 @@ onUnmounted(() => {
             {{ t('resource.refreshSearch') }}
           </VTooltip>
         </IconBtn>
-
       </div>
     </div>
 
@@ -1455,7 +1474,6 @@ onUnmounted(() => {
   max-inline-size: min(100%, 220px);
   font-size: 0.75rem;
 }
-
 
 .search-results-container {
   position: relative;

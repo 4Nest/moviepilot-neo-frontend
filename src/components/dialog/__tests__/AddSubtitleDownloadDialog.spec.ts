@@ -27,29 +27,42 @@ vi.mock('vue-toastification', () => ({
   useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
 }))
 
-const SelectStub = defineComponent({
-  name: 'NativeSelectStub',
+interface DirectoryOption {
+  title: string
+  value: string
+  label: string
+}
+
+// 模拟 VCombobox：选中列表项回传选项对象（与 return-object 行为一致），自由输入回传字符串。
+const DirectoryComboboxStub = defineComponent({
+  name: 'NativeDirectoryComboboxStub',
   props: {
-    items: { type: Array as PropType<string[]>, default: () => [] },
+    items: { type: Array as PropType<DirectoryOption[]>, default: () => [] },
     label: String,
-    modelValue: { type: String, default: '' },
+    modelValue: { type: [String, Object] as PropType<string | DirectoryOption | null>, default: null },
   },
   emits: ['update:modelValue'],
-  setup(props, { emit }) {
+  setup(props, { emit, slots }) {
     return () =>
-      h('label', [
-        props.label,
-        h(
-          'select',
-          {
+      h('div', [
+        h('label', [
+          props.label,
+          h('input', {
             'aria-label': props.label,
-            'value': props.modelValue ?? '',
-            'onChange': (event: Event) => emit('update:modelValue', (event.target as HTMLSelectElement).value),
-          },
-          [
-            h('option', { value: '' }, '默认'),
-            ...props.items.map(item => h('option', { key: item, value: item }, item)),
-          ],
+            'value': typeof props.modelValue === 'string' ? props.modelValue : '',
+            'onInput': (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
+          }),
+        ]),
+        h(
+          'ul',
+          props.items.map(item =>
+            h('li', { key: item.value }, [
+              slots.item?.({
+                item: { raw: item, title: item.title, value: item.value },
+                props: { onClick: () => emit('update:modelValue', item) },
+              }),
+            ]),
+          ),
         ),
       ])
   },
@@ -180,10 +193,10 @@ async function renderDialog({
   const result = await renderWithProviders(AddSubtitleDownloadDialog, {
     global: {
       stubs: {
-        AppCombobox: SelectStub,
+        AppCombobox: DirectoryComboboxStub,
         AppTextField: TextFieldStub,
         MediaIdSelector: MediaIdSelectorStub,
-        VCombobox: SelectStub,
+        VCombobox: DirectoryComboboxStub,
         VDialog: DialogStub,
         VDialogCloseBtn: DialogCloseButtonStub,
         VTextField: TextFieldStub,
@@ -237,13 +250,14 @@ describe('AddSubtitleDownloadDialog directories', () => {
       ],
     })
 
-    expect(await screen.findByRole('option', { name: '/subtitles/local' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '/subtitles/legacy' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '/subtitles/null-storage' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: ':/subtitles/empty-storage' })).toBeInTheDocument()
-    expect(screen.getAllByRole('option', { name: 's3:/subtitles/remote' })).toHaveLength(1)
-    expect(screen.queryByText('undefined:/subtitles/legacy')).not.toBeInTheDocument()
-    expect(screen.queryByText('null:/subtitles/null-storage')).not.toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: '字幕目录 (/subtitles/local)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '兼容目录 (/subtitles/legacy)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '空存储目录 (/subtitles/null-storage)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '空字符串存储 (:/subtitles/empty-storage)' })).toBeInTheDocument()
+    expect(screen.getAllByRole('option', { name: /s3:\/subtitles\/remote/ })).toHaveLength(1)
+    expect(screen.getByRole('option', { name: '远程目录 / 重复目录 (s3:/subtitles/remote)' })).toBeInTheDocument()
+    expect(screen.queryByText(/undefined:\/subtitles\/legacy/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/null:\/subtitles\/null-storage/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('保存目录（自动）')).toHaveValue('')
   })
 })
@@ -295,8 +309,7 @@ describe('AddSubtitleDownloadDialog submissions', () => {
       subtitle,
     })
 
-    await screen.findByRole('option', { name: 's3:/subtitles/remote' })
-    await user.selectOptions(screen.getByLabelText('保存目录（自动）'), 's3:/subtitles/remote')
+    await user.click(await screen.findByRole('option', { name: '字幕目录 (s3:/subtitles/remote)' }))
     await user.click(screen.getByRole('button', { name: '显示高级选项' }))
     await user.click(screen.getByRole('button', { name: '查询媒体编号' }))
     await user.click(screen.getByRole('button', { name: '选择媒体编号' }))
@@ -351,5 +364,34 @@ describe('AddSubtitleDownloadDialog submissions', () => {
     expect(mocks.startNProgress).toHaveBeenCalledOnce()
     expect(events.done).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '下载字幕' })).not.toBeDisabled()
+  })
+
+  it('submits only the path when a directory with an alias is selected and a sub-path is appended', async () => {
+    const submitted = vi.fn()
+    server.use(subtitleDownloadHandler({ data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({ directories: [createDirectory({ download_path: '/subtitles/anime', name: '动漫字幕' })] })
+
+    await user.click(await screen.findByRole('option', { name: '动漫字幕 (/subtitles/anime)' }))
+    expect(screen.getByLabelText('保存目录（自动）')).toHaveValue('/subtitles/anime')
+    await user.type(screen.getByLabelText('保存目录（自动）'), '/s1')
+    await user.click(screen.getByRole('button', { name: '下载字幕' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ save_path: '/subtitles/anime/s1' })
+  })
+
+  it('submits null save_path when the directory input is cleared', async () => {
+    const submitted = vi.fn()
+    server.use(subtitleDownloadHandler({ data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({ directories: [createDirectory({ download_path: '/subtitles/anime', name: '动漫字幕' })] })
+
+    await user.click(await screen.findByRole('option', { name: '动漫字幕 (/subtitles/anime)' }))
+    await user.clear(screen.getByLabelText('保存目录（自动）'))
+    await user.click(screen.getByRole('button', { name: '下载字幕' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ save_path: null })
   })
 })

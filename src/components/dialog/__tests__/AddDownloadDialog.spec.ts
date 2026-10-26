@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const API_BASE_URL = 'http://localhost/api/v1/'
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
   doneNProgress: vi.fn(),
   startNProgress: vi.fn(),
   toastError: vi.fn(),
@@ -21,6 +22,10 @@ vi.mock('@/api/nprogress', () => ({
   configureNProgress: vi.fn(),
   doneNProgress: mocks.doneNProgress,
   startNProgress: mocks.startNProgress,
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -55,6 +60,47 @@ const SelectStub = defineComponent({
             h('option', { value: '' }, '默认'),
             ...props.items.map(item => h('option', { key: itemValue(item), value: itemValue(item) }, itemLabel(item))),
           ],
+        ),
+      ])
+  },
+})
+
+interface DirectoryOption {
+  title: string
+  value: string
+  label: string
+}
+
+// 模拟 VCombobox：选中列表项回传选项对象（与 return-object 行为一致），自由输入回传字符串。
+const DirectoryComboboxStub = defineComponent({
+  name: 'NativeDirectoryComboboxStub',
+  props: {
+    items: { type: Array as PropType<DirectoryOption[]>, default: () => [] },
+    label: String,
+    modelValue: { type: [String, Object] as PropType<string | DirectoryOption | null>, default: null },
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit, slots }) {
+    return () =>
+      h('div', [
+        h('label', [
+          props.label,
+          h('input', {
+            'aria-label': props.label,
+            'value': typeof props.modelValue === 'string' ? props.modelValue : '',
+            'onInput': (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
+          }),
+        ]),
+        h(
+          'ul',
+          props.items.map(item =>
+            h('li', { key: item.value }, [
+              slots.item?.({
+                item: { raw: item, title: item.title, value: item.value },
+                props: { onClick: () => emit('update:modelValue', item) },
+              }),
+            ]),
+          ),
         ),
       ])
   },
@@ -218,11 +264,11 @@ async function renderDialog({
   const result = await renderWithProviders(AddDownloadDialog, {
     global: {
       stubs: {
-        AppCombobox: SelectStub,
+        AppCombobox: DirectoryComboboxStub,
         AppSelect: SelectStub,
         AppTextField: TextFieldStub,
         MediaIdSelector: MediaIdSelectorStub,
-        VCombobox: SelectStub,
+        VCombobox: DirectoryComboboxStub,
         VDialog: DialogStub,
         VDialogCloseBtn: DialogCloseButtonStub,
         VSelect: SelectStub,
@@ -279,13 +325,14 @@ describe('AddDownloadDialog directories', () => {
       downloaders: [{ name: '下载器 A', type: 'qbittorrent' }],
     })
 
-    expect(await screen.findByRole('option', { name: '/downloads/local' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '/downloads/legacy' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '/downloads/null-storage' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: ':/downloads/empty-storage' })).toBeInTheDocument()
-    expect(screen.getAllByRole('option', { name: 'rclone:/downloads/remote' })).toHaveLength(1)
-    expect(screen.queryByText('undefined:/downloads/legacy')).not.toBeInTheDocument()
-    expect(screen.queryByText('null:/downloads/null-storage')).not.toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: '下载目录 (/downloads/local)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '兼容目录 (/downloads/legacy)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '空存储目录 (/downloads/null-storage)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '空字符串存储 (:/downloads/empty-storage)' })).toBeInTheDocument()
+    expect(screen.getAllByRole('option', { name: /rclone:\/downloads\/remote/ })).toHaveLength(1)
+    expect(screen.getByRole('option', { name: '远程目录 / 重复目录 (rclone:/downloads/remote)' })).toBeInTheDocument()
+    expect(screen.queryByText(/undefined:\/downloads\/legacy/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/null:\/downloads\/null-storage/)).not.toBeInTheDocument()
     expect(await screen.findByRole('option', { name: '下载器 A' })).toBeInTheDocument()
     expect(screen.getByLabelText('保存目录（自动）')).toHaveValue('')
     expect(screen.getByLabelText('下载器（默认）')).toHaveValue('')
@@ -295,6 +342,7 @@ describe('AddDownloadDialog directories', () => {
 describe('AddDownloadDialog submissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.confirm.mockReset().mockResolvedValue(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
@@ -340,9 +388,8 @@ describe('AddDownloadDialog submissions', () => {
     })
 
     await screen.findByRole('option', { name: '下载器 A' })
-    await screen.findByRole('option', { name: 'rclone:/downloads/remote' })
     await user.selectOptions(screen.getByLabelText('下载器（默认）'), '下载器 A')
-    await user.selectOptions(screen.getByLabelText('保存目录（自动）'), 'rclone:/downloads/remote')
+    await user.click(await screen.findByRole('option', { name: '下载目录 (rclone:/downloads/remote)' }))
     await user.click(screen.getByRole('button', { name: '显示高级选项' }))
     await user.click(screen.getByRole('button', { name: '查询媒体编号' }))
     await user.click(screen.getByRole('button', { name: '选择媒体编号' }))
@@ -417,6 +464,176 @@ describe('AddDownloadDialog submissions', () => {
     await waitFor(() => expect(mocks.doneNProgress).toHaveBeenCalledOnce())
     expect(mocks.startNProgress).toHaveBeenCalledOnce()
     expect(events.done).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
+  })
+
+  it('shows alias labels, keeps the path-only option, and submits only the path', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({
+      directories: [
+        createDirectory({ download_path: '/downloads/movies', name: '电影库' }),
+        createDirectory({ download_path: '/downloads/blank', name: '  ' }),
+      ],
+    })
+
+    expect(await screen.findByRole('option', { name: '/downloads/blank' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: '电影库 (/downloads/movies)' }))
+    expect(screen.getByLabelText('保存目录（自动）')).toHaveValue('/downloads/movies')
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ save_path: '/downloads/movies' })
+  })
+
+  it('submits a freely typed sub-path appended to a selected directory without the alias', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({ directories: [createDirectory({ download_path: '/downloads/movies', name: '电影库' })] })
+
+    await user.click(await screen.findByRole('option', { name: '电影库 (/downloads/movies)' }))
+    await user.type(screen.getByLabelText('保存目录（自动）'), '/2026')
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ save_path: '/downloads/movies/2026' })
+  })
+
+  it('submits null save_path after the directory input is cleared', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({ directories: [createDirectory({ download_path: '/downloads/movies', name: '电影库' })] })
+
+    await user.click(await screen.findByRole('option', { name: '电影库 (/downloads/movies)' }))
+    await user.clear(screen.getByLabelText('保存目录（自动）'))
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ save_path: null })
+  })
+})
+
+describe('AddDownloadDialog unrecognized confirmation', () => {
+  const confirmationResponse = { data: { requires_confirmation: true }, message: '无法识别媒体信息', success: false }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.confirm.mockReset().mockResolvedValue(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('retries the same request with allow_unrecognized after the user confirms', async () => {
+    const bodies: unknown[] = []
+    let calls = 0
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        bodies.push(await request.json())
+        calls += 1
+        return HttpResponse.json(calls === 1 ? confirmationResponse : { data: { download_id: 'abc' }, success: true })
+      }),
+    )
+    const torrent = createTorrent()
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      directories: [createDirectory({ download_path: '/downloads/movies', name: '电影库' })],
+      downloaders: [{ name: '下载器 A', type: 'qbittorrent' }],
+      torrent,
+    })
+
+    await screen.findByRole('option', { name: '下载器 A' })
+    await user.selectOptions(screen.getByLabelText('下载器（默认）'), '下载器 A')
+    await user.click(screen.getByRole('option', { name: '电影库 (/downloads/movies)' }))
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(events.done).toHaveBeenCalledWith(torrent.enclosure))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ type: 'warn' }))
+    expect(bodies).toHaveLength(2)
+    expect(bodies[0]).not.toHaveProperty('allow_unrecognized')
+    expect(bodies[1]).toEqual({ ...(bodies[0] as object), allow_unrecognized: true })
+    expect(bodies[1]).toMatchObject({
+      downloader: '下载器 A',
+      save_path: '/downloads/movies',
+      torrent_in: torrent,
+    })
+    expect(events.error).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
+  })
+
+  it('keeps the dialog open and restores the button when the user cancels', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', confirmationResponse, 200, submitted))
+    mocks.confirm.mockResolvedValue(false)
+    const user = userEvent.setup()
+    const { events } = await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
+    await waitFor(() => expect(mocks.doneNProgress).toHaveBeenCalled())
+    expect(submitted).toHaveBeenCalledOnce()
+    expect(events.done).not.toHaveBeenCalled()
+    expect(events.error).not.toHaveBeenCalled()
+    expect(events.close).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('also confirms for download/ when media is provided', async () => {
+    const bodies: unknown[] = []
+    let calls = 0
+    server.use(
+      http.post(new URL('download/', API_BASE_URL).href, async ({ request }) => {
+        bodies.push(await request.json())
+        calls += 1
+        return HttpResponse.json(calls === 1 ? confirmationResponse : { data: null, success: true })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events, torrent } = await renderDialog({ media: createMedia() })
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(events.done).toHaveBeenCalledWith(torrent.enclosure))
+    expect(bodies[1]).toMatchObject({ allow_unrecognized: true })
+  })
+
+  it('does not ask for confirmation on an ordinary business failure', async () => {
+    server.use(downloadHandler('download/add', { data: null, message: '下载器拒绝任务', success: false }))
+    const user = userEvent.setup()
+    const { events } = await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(events.error).toHaveBeenCalledWith('下载器拒绝任务'))
+    expect(mocks.confirm).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a failure of the confirmed retry as an ordinary error without asking again', async () => {
+    let calls = 0
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, () => {
+        calls += 1
+        return HttpResponse.json(
+          calls === 1 ? confirmationResponse : { data: null, message: '任务添加失败', success: false },
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(events.error).toHaveBeenCalledWith('任务添加失败'))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(calls).toBe(2)
     expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
   })
 })

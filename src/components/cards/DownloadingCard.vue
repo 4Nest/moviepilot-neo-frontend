@@ -179,9 +179,20 @@ async function deleteDownload() {
                   <span>{{ mediaTitle }}</span>
                   <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
                 </div>
-                <div class="downloading-card__torrent-title" :title="props.info?.title">
-                  {{ props.info?.title || t('common.unknown') }}
-                </div>
+                <VTooltip :disabled="!props.info?.title" :max-width="480" location="top" open-delay="200">
+                  <template #activator="{ props: tooltipProps }">
+                    <!-- Tooltip 浮层不参与布局；有标题时允许键盘聚焦，以便读取被截断的完整种子名。 -->
+                    <div
+                      v-bind="tooltipProps"
+                      class="downloading-card__torrent-title"
+                      :class="{ 'downloading-card__torrent-title--focusable': props.info?.title }"
+                      :tabindex="props.info?.title ? 0 : undefined"
+                    >
+                      {{ props.info?.title || t('common.unknown') }}
+                    </div>
+                  </template>
+                  <span class="downloading-card__torrent-tooltip">{{ props.info?.title }}</span>
+                </VTooltip>
               </div>
 
               <div class="downloading-card__chips">
@@ -362,14 +373,34 @@ async function deleteDownload() {
 .downloading-card__torrent-title {
   display: -webkit-box;
   overflow: hidden;
+  min-inline-size: 0;
   margin-block-start: 0.25rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.75rem;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   line-height: 1.4;
   overflow-wrap: anywhere;
   white-space: normal;
+  word-break: break-word;
+}
+
+.downloading-card__torrent-title--focusable {
+  border-radius: 0.25rem;
+  cursor: help;
+}
+
+.downloading-card__torrent-title--focusable:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.downloading-card__torrent-tooltip {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .downloading-card__progress {

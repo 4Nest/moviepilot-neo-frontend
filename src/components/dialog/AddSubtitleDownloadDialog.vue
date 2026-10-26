@@ -8,6 +8,12 @@ import { useI18n } from '@/composables/useChineseText'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 import { numberValidator } from '@/@validators'
 import { useGlobalSettingsStore } from '@/stores'
+import {
+  buildDownloadDirectoryOptions,
+  filterDownloadDirectoryOption,
+  toDownloadDirectoryValue,
+  toDownloadSavePath,
+} from '@/utils/downloadDirectory'
 
 // 多语言支持
 const { t } = useI18n()
@@ -35,8 +41,16 @@ const emit = defineEmits(['done', 'error', 'close'])
 // 提示框
 const $toast = useToast()
 
-// 选择的保存目录
+// 选择的保存目录（始终是路径，不含别名标签）
 const selectedDirectory = ref<string | null>(null)
+
+// 保存目录输入框绑定：统一归一为路径字符串，清空为 null
+const directoryModel = computed({
+  get: () => selectedDirectory.value,
+  set: (value: unknown) => {
+    selectedDirectory.value = toDownloadDirectoryValue(value)
+  },
+})
 
 // 所有目录设置
 const directories = ref<TransferDirectoryConf[]>([])
@@ -85,24 +99,8 @@ async function loadDirectories() {
   }
 }
 
-function convertToUri(item: TransferDirectoryConf) {
-  if (!item.download_path) {
-    return undefined
-  }
-  // storage 缺省是受支持的本地目录配置，不能生成 undefined/null 前缀。
-  if (item.storage === undefined || item.storage === null || item.storage === 'local') {
-    return item.download_path
-  }
-  return item.storage + ':' + item.download_path
-}
-
-// 获取保存目录
-const targetDirectories = computed(() => {
-  const downloadDirectories = directories.value
-    .map(item => convertToUri(item))
-    .filter((item): item is string => item !== undefined)
-  return [...new Set(downloadDirectories)]
-})
+// 保存目录下拉选项：列表显示「别名 (路径)」，值为路径
+const targetDirectories = computed(() => buildDownloadDirectoryOptions(directories.value, toDownloadSavePath))
 
 // 下载字幕
 async function addSubtitleDownload() {
@@ -212,14 +210,21 @@ onMounted(() => {
         <VRow class="px-5">
           <VCol cols="12">
             <VCombobox
-              v-model="selectedDirectory"
+              v-model="directoryModel"
               :items="targetDirectories"
+              item-title="title"
+              item-value="value"
+              :custom-filter="filterDownloadDirectoryOption"
               :label="t('dialog.addSubtitleDownload.saveDirectory')"
               :placeholder="t('dialog.addSubtitleDownload.autoPlaceholder')"
               variant="underlined"
               density="comfortable"
               prepend-inner-icon="mdi-folder"
-            />
+            >
+              <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
+              </template>
+            </VCombobox>
           </VCol>
         </VRow>
         <VRow class="px-5 mt-2">

@@ -16,6 +16,13 @@ import { useI18n } from '@/composables/useChineseText'
 import MediaIdSelector from '../misc/MediaIdSelector.vue'
 import { numberValidator } from '@/@validators'
 import { useGlobalSettingsStore } from '@/stores'
+import { useConfirm } from '@/composables/useConfirm'
+import {
+  buildDownloadDirectoryOptions,
+  filterDownloadDirectoryOption,
+  toDownloadDirectoryValue,
+  toDownloadSavePath,
+} from '@/utils/downloadDirectory'
 
 // 多语言支持
 const { t } = useI18n()
@@ -44,11 +51,22 @@ const emit = defineEmits(['done', 'error', 'close'])
 // 提示框
 const $toast = useToast()
 
+// 确认框
+const createConfirm = useConfirm()
+
 // 选择的下载器
 const selectedDownloader = ref<string | null>(null)
 
-// 选择的保存目录
+// 选择的保存目录（始终是路径，不含别名标签）
 const selectedDirectory = ref<string | null>(null)
+
+// 保存目录输入框绑定：统一归一为路径字符串，清空为 null
+const directoryModel = computed({
+  get: () => selectedDirectory.value,
+  set: (value: unknown) => {
+    selectedDirectory.value = toDownloadDirectoryValue(value)
+  },
+})
 
 // 下载器
 const downloaders = ref<Array<Pick<DownloaderConf, 'name' | 'type'>>>([])
@@ -107,25 +125,8 @@ async function loadDirectories() {
   }
 }
 
-// 将下载目录配置转换为下载器可识别的存储路径。
-function convertToUri(item: TransferDirectoryConf) {
-  if (!item.download_path) {
-    return undefined
-  }
-  // storage 缺省是受支持的本地目录配置，不能生成 undefined/null 前缀。
-  if (item.storage === undefined || item.storage === null || item.storage === 'local') {
-    return item.download_path
-  }
-  return item.storage + ':' + item.download_path
-}
-
-// 获取保存目录
-const targetDirectories = computed(() => {
-  const downloadDirectories = directories.value
-    .map(item => convertToUri(item))
-    .filter((item): item is string => item !== undefined)
-  return [...new Set(downloadDirectories)]
-})
+// 保存目录下拉选项：列表显示「别名 (路径)」，值为路径
+const targetDirectories = computed(() => buildDownloadDirectoryOptions(directories.value, toDownloadSavePath))
 
 // 调用API查询下载器设置
 async function loadDownloaderSetting() {
@@ -147,12 +148,20 @@ const downloaderOptions = computed(() => {
   }))
 })
 
+// 是否为需要用户确认的未识别资源响应
+function requiresConfirmation(result: ApiResponse<unknown> | undefined) {
+  const data = result?.data as { requires_confirmation?: boolean } | null | undefined
+  return result?.success === false && data?.requires_confirmation === true
+}
+
 // 添加下载
 async function addDownload() {
+  let progressActive = true
   startNProgress()
   loading.value = true
   try {
     const payload: {
+      allow_unrecognized?: boolean
       downloader: string | null
       media_id?: string
       media_in?: MediaInfo
@@ -177,7 +186,26 @@ async function addDownload() {
 
     const endpoint = props.media ? 'download/' : 'download/add'
 
-    const result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, payload)
+    let result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, payload)
+
+    // 未识别资源需用户确认：确认后携带 allow_unrecognized 重试同一请求，取消则保留弹窗
+    if (requiresConfirmation(result)) {
+      progressActive = false
+      doneNProgress()
+      const confirmed = await createConfirm({
+        type: 'warn',
+        title: t('dialog.addDownload.unrecognizedTitle'),
+        content: t('dialog.addDownload.unrecognizedContent'),
+        confirmText: t('dialog.addDownload.unrecognizedConfirm'),
+      })
+      if (!confirmed) return
+      progressActive = true
+      startNProgress()
+      result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, {
+        ...payload,
+        allow_unrecognized: true,
+      })
+    }
 
     if (result && result.success) {
       // 添加下载成功
@@ -200,9 +228,10 @@ async function addDownload() {
     }
   } catch (error) {
     console.error(error)
+  } finally {
+    loading.value = false
+    if (progressActive) doneNProgress()
   }
-  loading.value = false
-  doneNProgress()
 }
 
 onMounted(() => {
@@ -255,15 +284,22 @@ onMounted(() => {
             hide-details
           />
           <VCombobox
-            v-model="selectedDirectory"
+            v-model="directoryModel"
             :items="targetDirectories"
+            item-title="title"
+            item-value="value"
+            :custom-filter="filterDownloadDirectoryOption"
             :label="t('dialog.addDownload.saveDirectory')"
             :placeholder="t('dialog.addDownload.autoPlaceholder')"
             variant="outlined"
             density="comfortable"
             prepend-inner-icon="mdi-folder-outline"
             hide-details
-          />
+          >
+            <template #item="{ props: itemProps, item }">
+              <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
+            </template>
+          </VCombobox>
         </div>
         <VBtn
           variant="text"

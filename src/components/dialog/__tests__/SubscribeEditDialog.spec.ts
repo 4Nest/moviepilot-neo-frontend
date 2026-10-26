@@ -273,13 +273,102 @@ describe('SubscribeEditDialog', () => {
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByLabelText('保存路径'))
-    expect(await screen.findAllByText('/downloads')).toHaveLength(1)
+    expect(await screen.findAllByRole('option', { name: '目录一 / 目录二 (/downloads)' })).toHaveLength(1)
     expect(screen.queryByText('undefined')).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByRole('tab', { name: '进阶' }))
     await user.click(screen.getByLabelText('优先级规则组'))
     expect(await screen.findByText('高优先级')).toBeInTheDocument()
+  })
+
+  describe('save path combobox', () => {
+    async function renderWithDirectories(
+      directories: ReturnType<typeof createSubscribeDirectory>[],
+      saved = '' as string | null,
+    ) {
+      const record = createSubscribe({
+        id: 830,
+        name: '目录测试剧',
+        save_path: saved as string,
+        tmdbid: 8300,
+        type: '电影',
+      })
+      const updated = vi.fn()
+      server.use(subscribeDetailsHandler(830, record), updateSubscribeHandler({ success: true }, 200, updated))
+      useDialogOptions({ directories, tmdbId: 8300 })
+      const user = userEvent.setup()
+      const { events } = await renderDialog({ subid: 830 })
+      await screen.findByText('目录测试剧')
+      return { events, updated, user }
+    }
+
+    async function save(user: ReturnType<typeof userEvent.setup>, updated: ReturnType<typeof vi.fn>) {
+      await user.click(screen.getByRole('button', { name: '保存' }))
+      await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+      return updated.mock.calls[0][0] as Record<string, unknown>
+    }
+
+    it('shows alias labels in the list but displays and submits the plain path after selection', async () => {
+      const { updated, user } = await renderWithDirectories([
+        createSubscribeDirectory({ download_path: '/downloads/movies', name: '电影库' }),
+        createSubscribeDirectory({ download_path: '/downloads/blank', name: ' ' }),
+      ])
+
+      await user.click(screen.getByLabelText('保存路径'))
+      expect(await screen.findByRole('option', { name: '/downloads/blank' })).toBeInTheDocument()
+      await user.click(await screen.findByRole('option', { name: '电影库 (/downloads/movies)' }))
+
+      expect(screen.getByLabelText('保存路径')).toHaveValue('/downloads/movies')
+      expect((await save(user, updated)).save_path).toBe('/downloads/movies')
+    })
+
+    it('appends a typed sub-path after selection without leaking the alias into the value', async () => {
+      const { updated, user } = await renderWithDirectories([
+        createSubscribeDirectory({ download_path: '/downloads/movies', name: '电影库' }),
+      ])
+
+      await user.click(screen.getByLabelText('保存路径'))
+      await user.click(await screen.findByRole('option', { name: '电影库 (/downloads/movies)' }))
+      await user.type(screen.getByLabelText('保存路径'), '/2026')
+
+      expect(screen.getByLabelText('保存路径')).toHaveValue('/downloads/movies/2026')
+      expect((await save(user, updated)).save_path).toBe('/downloads/movies/2026')
+    })
+
+    it('filters the list by an alias fragment', async () => {
+      const { user } = await renderWithDirectories([
+        createSubscribeDirectory({ download_path: '/downloads/movies', name: '电影库' }),
+        createSubscribeDirectory({ download_path: '/downloads/anime', name: '动漫库' }),
+      ])
+
+      await user.click(screen.getByLabelText('保存路径'))
+      await user.type(screen.getByLabelText('保存路径'), '动漫')
+
+      expect(await screen.findByRole('option', { name: '动漫库 (/downloads/anime)' })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: '电影库 (/downloads/movies)' })).not.toBeInTheDocument()
+    })
+
+    it('keeps a stored free-form path unchanged on save', async () => {
+      const { updated, user } = await renderWithDirectories(
+        [createSubscribeDirectory({ download_path: '/downloads/movies', name: '电影库' })],
+        '/custom/stored',
+      )
+
+      expect(screen.getByLabelText('保存路径')).toHaveValue('/custom/stored')
+      expect((await save(user, updated)).save_path).toBe('/custom/stored')
+    })
+
+    it('sends an explicit null save_path after the field is cleared', async () => {
+      const { updated, user } = await renderWithDirectories(
+        [createSubscribeDirectory({ download_path: '/downloads/movies', name: '电影库' })],
+        '/downloads/movies',
+      )
+
+      await user.clear(screen.getByLabelText('保存路径'))
+
+      expect(await save(user, updated)).toHaveProperty('save_path', null)
+    })
   })
 
   it.each(['电影', '电视剧'] as const)('loads and saves %s default configuration', async type => {
@@ -348,7 +437,7 @@ describe('SubscribeEditDialog', () => {
     await chooseOption('订阅站点', '完整站点')
     await user.keyboard('{Escape}')
     await chooseOption('下载器', '完整下载器')
-    await chooseOption('保存路径', '/完整目录')
+    await chooseOption('保存路径', '测试目录 (/完整目录)')
     await user.click(screen.getByLabelText('全集洗版'))
     await user.click(screen.getByLabelText('使用 ImdbID 搜索'))
 

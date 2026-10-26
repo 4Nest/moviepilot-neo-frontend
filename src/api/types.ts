@@ -25,7 +25,7 @@ export interface SubscribeVersionSettings {
   downloader?: string
   best_version?: boolean | number
   best_version_full?: boolean | number
-  save_path?: string
+  save_path?: string | null
   search_imdbid?: boolean | number
   manual_total_episode?: boolean | number
   custom_words?: string
@@ -148,7 +148,7 @@ export interface Subscribe {
   // 洗版时已下载剧集的优先级状态
   episode_priority?: Record<string, number>
   // 保存目录
-  save_path?: string
+  save_path?: string | null
   // 时间
   date: string
   // 编辑框设置项
@@ -1753,6 +1753,8 @@ export interface ManualTransferPayload extends Omit<TransferForm, 'fileitem'> {
   fileitem?: FileItem
   // 多选文件批量请求
   fileitems?: FileItem[]
+  // 多选历史记录批量请求
+  logids?: number[]
 }
 
 // 手动整理目的路径匹配结果

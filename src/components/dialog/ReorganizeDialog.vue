@@ -898,8 +898,19 @@ function getBatchItemsLabel(items: FileItem[]) {
   return t('dialog.reorganize.multipleItemsTitle', { count: items.length })
 }
 
+// 生成历史记录在提示和错误信息中的显示名称。
+function getHistoryLogidsLabel(logids: number[]) {
+  return logids.length === 1 ? `历史记录 ${logids[0]}` : `历史记录 ${logids.join('、')}`
+}
+
 // 构造整理请求
-function createTransferPayload(options: { item?: FileItem; items?: FileItem[]; logid?: number; preview?: boolean }) {
+function createTransferPayload(options: {
+  item?: FileItem
+  items?: FileItem[]
+  logid?: number
+  logids?: number[]
+  preview?: boolean
+}) {
   const sourceItem = options.item ?? (options.items?.length ? options.items[0] : ({} as FileItem))
   const payload: ManualTransferPayload = {
     ...transferForm,
@@ -920,6 +931,7 @@ function createTransferPayload(options: { item?: FileItem; items?: FileItem[]; l
       delete payload.fileitem
     }
   }
+  if (options.logids?.length) payload.logids = options.logids
   if (options.preview) payload.preview = true
   return payload
 }
@@ -1207,17 +1219,19 @@ async function previewTransfer() {
     }
 
     if (props.logids?.length) {
+      const logids = props.logids
+      const historyLabel = getHistoryLogidsLabel(logids)
       tasks.push(
-        ...props.logids.map(async logid => {
+        (async () => {
           try {
             const result = await requestManualTransfer<ManualTransferPreviewData>(
-              createTransferPayload({ logid, preview: true }),
+              createTransferPayload({ logids, preview: true }),
             )
             if (!result.success) {
               mergePreviewData(
                 mergedPreviewData,
                 createFailedPreviewData({
-                  source: `历史记录 ${logid}`,
+                  source: historyLabel,
                   message: result.message || t('dialog.reorganize.previewRequestFailed'),
                 }),
               )
@@ -1230,12 +1244,12 @@ async function previewTransfer() {
             mergePreviewData(
               mergedPreviewData,
               createFailedPreviewData({
-                source: `历史记录 ${logid}`,
-                message: `历史记录 ${logid}: ${err?.message || t('dialog.reorganize.previewRequestFailed')}`,
+                source: historyLabel,
+                message: `${historyLabel}: ${err?.message || t('dialog.reorganize.previewRequestFailed')}`,
               }),
             )
           }
-        }),
+        })(),
       )
     }
 
@@ -1303,15 +1317,15 @@ async function handleTransferBatch(items: FileItem[], background: boolean = fals
   }
 }
 
-// 整理日志
-async function handleTransferLog(logid: number, background: boolean = false) {
+// 批量整理历史记录，一次请求提交所选全部历史ID。
+async function handleTransferLogs(logids: number[], background: boolean = false) {
   try {
-    const result = await requestManualTransfer(createTransferPayload({ logid }), background)
+    const result = await requestManualTransfer(createTransferPayload({ logids }), background)
     if (!result.success) {
       $toast.error(result.message || t('dialog.reorganize.transferRequestFailed'))
       return false
     }
-    if (background) $toast.success(`历史记录 ${logid} 已加入整理队列！`)
+    if (background) $toast.success(`${getHistoryLogidsLabel(logids)} 已加入整理队列！`)
     return true
   } catch (error: unknown) {
     console.log(error)
@@ -1392,9 +1406,7 @@ async function transfer(background: boolean = false) {
         // 为日志整理任务开启进度监听
         startLoadingProgress('filetransfer')
       }
-      for (const logid of props.logids) {
-        allSucceeded = (await handleTransferLog(logid, background)) && allSucceeded
-      }
+      allSucceeded = (await handleTransferLogs(props.logids, background)) && allSucceeded
     }
 
     if (allSucceeded) emit('done')
