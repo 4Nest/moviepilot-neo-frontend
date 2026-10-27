@@ -1,6 +1,7 @@
 import { defineComponent, h } from 'vue'
 import { useDisplay } from 'vuetify'
 import { VDialog as VuetifyDialog } from 'vuetify/components/VDialog'
+import { nativeChromeActive } from '@/native/layout'
 
 const DEFAULT_ROOT_FONT_SIZE = 16
 
@@ -53,12 +54,7 @@ function parseDialogWidthLimit(value: unknown, viewportWidth: number) {
 /**
  * 根据 maxWidth 与 width 的有效上限，收窄 fullscreen 的生效宽度。
  */
-function resolveFullscreen(
-  fullscreen: unknown,
-  maxWidth: unknown,
-  width: unknown,
-  viewportWidth: number,
-) {
+function resolveFullscreen(fullscreen: unknown, maxWidth: unknown, width: unknown, viewportWidth: number) {
   if (!isFullscreenRequested(fullscreen)) return false
 
   const widthLimits = [maxWidth, width]
@@ -83,7 +79,16 @@ export default defineComponent({
       const maxWidth = attrs.maxWidth ?? attrs['max-width']
       const resolvedFullscreen = resolveFullscreen(attrs.fullscreen, maxWidth, attrs.width, display.width.value)
 
-      return h(VuetifyDialog, { ...attrs, fullscreen: resolvedFullscreen }, slots)
+      const nativeSheet = nativeChromeActive.value && window.MoviePilotNative?.sheetsVersion === 1
+      return h(
+        VuetifyDialog,
+        {
+          ...attrs,
+          fullscreen: resolvedFullscreen,
+          ...(nativeSheet ? { transition: false } : {}),
+        },
+        slots,
+      )
     }
   },
 })

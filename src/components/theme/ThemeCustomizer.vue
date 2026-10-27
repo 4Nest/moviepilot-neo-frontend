@@ -10,10 +10,10 @@ import {
   type ThemeCustomizerSkin,
   type ThemeCustomizerTheme,
 } from '@/composables/useThemeCustomizer'
+import { nativeChromeActive } from '@/native/layout'
 import { usePWA } from '@/composables/usePWA'
 import { useI18n } from '@/composables/useChineseText'
 import { useTheme } from 'vuetify'
-
 const emit = defineEmits<{
   'close': []
 }>()
@@ -79,14 +79,22 @@ onScopeDispose(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
 })
 
-const themeOptions = computed<Array<{ icon: string; title: string; value: ThemeCustomizerTheme }>>(() => [
-  { title: t('theme.light'), value: 'light', icon: 'mdi-white-balance-sunny' },
-  { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
-  { title: t('theme.auto'), value: 'auto', icon: 'mdi-monitor' },
-  { title: t('theme.purple'), value: 'purple', icon: 'mdi-theme-light-dark' },
-  { title: t('theme.transparent'), value: 'transparent', icon: 'mdi-blur' },
-  { title: t('theme.glass'), value: 'glass', icon: 'mdi-blur-radial' },
-])
+const themeOptions = computed<Array<{ icon: string; title: string; value: ThemeCustomizerTheme }>>(() => {
+  const baseOptions: Array<{ icon: string; title: string; value: ThemeCustomizerTheme }> = [
+    { title: t('theme.light'), value: 'light', icon: 'mdi-white-balance-sunny' },
+    { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
+    { title: t('theme.auto'), value: 'auto', icon: 'mdi-monitor' },
+  ]
+
+  if (nativeChromeActive.value) return baseOptions
+
+  return [
+    ...baseOptions,
+    { title: t('theme.purple'), value: 'purple', icon: 'mdi-theme-light-dark' },
+    { title: t('theme.transparent'), value: 'transparent', icon: 'mdi-blur' },
+    { title: t('theme.glass'), value: 'glass', icon: 'mdi-blur-radial' },
+  ]
+})
 
 const skinOptions = computed<Array<{ title: string; value: ThemeCustomizerSkin }>>(() => [
   { title: t('theme.customizer.skinDefault'), value: 'default' },
@@ -130,14 +138,13 @@ const layoutOptions = computed<Array<{ icon: string; title: string; value: Theme
   { title: t('theme.customizer.layoutHorizontal'), value: 'horizontal', icon: 'mdi-dock-top' },
 ])
 
-const showLayoutSection = computed(() => !appMode.value)
+const showLayoutSection = computed(() => !nativeChromeActive.value && !appMode.value)
 
 // 玻璃表面依赖固定的高光描边维持轮廓，不提供与材质冲突的通用皮肤切换。
-const showSkinSection = computed(() => globalTheme.name.value !== 'glass')
+const showSkinSection = computed(() => !nativeChromeActive.value && globalTheme.name.value !== 'glass')
 
 // 玻璃主题使用成套的外阴影与内高光，不提供不完整的 Vuetify elevation 调整。
-const showShadowSection = computed(() => globalTheme.name.value !== 'glass')
-
+const showShadowSection = computed(() => !nativeChromeActive.value && globalTheme.name.value !== 'glass')
 const hasAppModeCustomization = computed(() => {
   return (
     settings.value.primaryColor !== defaultPrimaryColor ||
@@ -157,10 +164,17 @@ const hasAppModeCustomization = computed(() => {
   )
 })
 
-const showResetBadge = computed(() => (appMode.value ? hasAppModeCustomization.value : isCustomized.value))
+const showResetBadge = computed(() =>
+  nativeChromeActive.value
+    ? settings.value.primaryColor !== defaultPrimaryColor || settings.value.theme !== 'auto'
+    : appMode.value
+      ? hasAppModeCustomization.value
+      : isCustomized.value,
+)
 
 const showSemiDarkMenuOption = computed(() => {
   return (
+    !nativeChromeActive.value &&
     !appMode.value &&
     !globalTheme.current.value.dark &&
     (settings.value.layout === 'vertical' || settings.value.layout === 'collapsed')
@@ -202,12 +216,18 @@ function handleShadowSliderChange(value: unknown) {
 
 // 重置主题定制设置，App 模式只恢复可调整的外观项。
 async function handleResetSettings() {
+  if (nativeChromeActive.value) {
+    await setPrimaryColor(defaultPrimaryColor)
+    await setTheme('auto')
+
+    return
+  }
+
   if (!appMode.value) {
     await resetSettings()
 
     return
   }
-
   // App 模式共享定制器，但保留桌面导航相关偏好，只重置 App 侧可调整的外观设置。
   await setPrimaryColor(defaultPrimaryColor)
   await setGlassAppearance('clear')
@@ -220,7 +240,12 @@ async function handleResetSettings() {
 </script>
 
 <template>
-  <aside class="theme-customizer-panel-host" role="dialog" :aria-label="t('theme.customizer.title')">
+  <aside
+    class="theme-customizer-panel-host"
+    role="dialog"
+    :data-native-sheet-size="nativeChromeActive ? 'medium' : undefined"
+    :aria-label="t('theme.customizer.title')"
+  >
     <div class="theme-customizer-panel" :class="{ 'theme-customizer-panel--dialog': appMode, 'app-surface': appMode }">
       <div class="theme-customizer-header py-5 px-4">
         <div>
@@ -232,7 +257,7 @@ async function handleResetSettings() {
               <VIcon class="text-high-emphasis" icon="mdi-refresh" />
             </IconBtn>
           </VBadge>
-          <IconBtn :aria-label="t('common.close')" @click="emit('close')">
+          <IconBtn data-native-dialog-close :aria-label="t('common.close')" @click="emit('close')">
             <VIcon class="text-high-emphasis" icon="mdi-close" />
           </IconBtn>
         </div>
@@ -289,7 +314,7 @@ async function handleResetSettings() {
             </div>
           </div>
 
-          <template v-if="showSkinSection">
+          <template v-if="!nativeChromeActive && showSkinSection">
             <VDivider class="mt-7" />
 
             <h3 class="theme-customizer-section-title">{{ t('theme.customizer.skins') }}</h3>
@@ -320,29 +345,31 @@ async function handleResetSettings() {
             </div>
           </template>
 
-          <VDivider class="mt-7" />
+          <template v-if="!nativeChromeActive">
+            <VDivider class="mt-7" />
 
-          <h3 class="theme-customizer-section-title">{{ t('theme.customizer.radius') }}</h3>
-          <div class="theme-customizer-preview-grid theme-customizer-preview-grid--radius">
-            <div
-              v-for="radius in radiusOptions"
-              :key="radius.value"
-              class="theme-customizer-preview-option"
-              :class="{ 'is-active': settings.radius === radius.value }"
-              @click="setRadius(radius.value)"
-            >
-              <span class="theme-customizer-radius-scene" :class="`theme-customizer-radius-scene--${radius.value}`">
-                <span class="theme-customizer-radius-scene__card">
-                  <span class="theme-customizer-radius-scene__badge" />
-                  <span class="theme-customizer-radius-scene__line" />
-                  <span class="theme-customizer-radius-scene__line theme-customizer-radius-scene__line--short" />
+            <h3 class="theme-customizer-section-title">{{ t('theme.customizer.radius') }}</h3>
+            <div class="theme-customizer-preview-grid theme-customizer-preview-grid--radius">
+              <div
+                v-for="radius in radiusOptions"
+                :key="radius.value"
+                class="theme-customizer-preview-option"
+                :class="{ 'is-active': settings.radius === radius.value }"
+                @click="setRadius(radius.value)"
+              >
+                <span class="theme-customizer-radius-scene" :class="`theme-customizer-radius-scene--${radius.value}`">
+                  <span class="theme-customizer-radius-scene__card">
+                    <span class="theme-customizer-radius-scene__badge" />
+                    <span class="theme-customizer-radius-scene__line" />
+                    <span class="theme-customizer-radius-scene__line theme-customizer-radius-scene__line--short" />
+                  </span>
                 </span>
-              </span>
-              <span>{{ radius.title }}</span>
+                <span>{{ radius.title }}</span>
+              </div>
             </div>
-          </div>
+          </template>
 
-          <template v-if="showShadowSection">
+          <template v-if="!nativeChromeActive && showShadowSection">
             <VDivider class="mt-7" />
 
             <h3 class="theme-customizer-section-title">{{ t('theme.customizer.shadow') }}</h3>
@@ -384,7 +411,7 @@ async function handleResetSettings() {
             </div>
           </template>
 
-          <div v-if="showSemiDarkMenuOption" class="theme-customizer-semi-dark">
+          <div v-if="!nativeChromeActive && showSemiDarkMenuOption" class="theme-customizer-semi-dark">
             <span>{{ t('theme.customizer.semiDarkMenu') }}</span>
             <VSwitch
               :model-value="settings.semiDarkMenu"
@@ -396,9 +423,9 @@ async function handleResetSettings() {
           </div>
         </section>
 
-        <VDivider v-if="showLayoutSection" />
+        <VDivider v-if="!nativeChromeActive && showLayoutSection" />
 
-        <section v-if="showLayoutSection" class="theme-customizer-section">
+        <section v-if="!nativeChromeActive && showLayoutSection" class="theme-customizer-section">
           <h3 class="theme-customizer-section-title">{{ t('theme.customizer.layout') }}</h3>
           <div class="theme-customizer-preview-grid">
             <div

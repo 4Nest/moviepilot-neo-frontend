@@ -1,4 +1,5 @@
 import SearchBarDialog from '@/components/dialog/SearchBarDialog.vue'
+import { defineComponent, h, ref } from 'vue'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
@@ -200,6 +201,54 @@ describe('SearchBarDialog media source selection', () => {
         source: 'douban',
         title: '刘德华',
         type: 'person',
+      })
+    })
+  })
+
+  it('exposes nativePanel with single-select media sources and NEO resource actions', async () => {
+    const dialogRef = ref<InstanceType<typeof SearchBarDialog> | null>(null)
+    const Host = defineComponent({
+      setup() {
+        return () => h(SearchBarDialog, { ref: dialogRef, modelValue: false, showActivator: false })
+      },
+    })
+    const { router } = await renderWithProviders(Host)
+
+    const initialPanel = dialogRef.value?.nativePanel()
+    expect(initialPanel?.title).toBe('搜索')
+    expect(initialPanel?.sections.find(s => s.id === 'actions')?.items).toEqual([])
+
+    initialPanel?.onQuery?.('沙丘')
+    const queriedPanel = dialogRef.value?.nativePanel()
+    const actionItems = queriedPanel?.sections.find(s => s.id === 'actions')?.items ?? []
+    expect(actionItems.map(item => item.id)).toEqual([
+      'media-media',
+      'media-collection',
+      'media-person',
+      'resource-torrent',
+      'resource-subtitle',
+      'shares',
+      'history',
+    ])
+
+    const mediaAction = actionItems.find(item => item.id === 'media-media')
+    const doubanOption = mediaAction?.children?.find(child => child.id === 'source-media-douban')
+    expect(doubanOption?.selected).toBe(false)
+    doubanOption?.invoke?.()
+
+    const updatedPanel = dialogRef.value?.nativePanel()
+    const updatedMediaAction = updatedPanel?.sections
+      .find(s => s.id === 'actions')
+      ?.items.find(item => item.id === 'media-media')
+    expect(updatedMediaAction?.children?.find(child => child.id === 'source-media-douban')?.selected).toBe(true)
+
+    updatedMediaAction?.children?.find(child => child.id === 'run-media')?.invoke?.()
+    await waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/browse/media/search')
+      expect(router.currentRoute.value.query).toEqual({
+        source: 'douban',
+        title: '沙丘',
+        type: 'media',
       })
     })
   })

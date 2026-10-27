@@ -8,11 +8,13 @@ export interface authState {
 }
 
 export interface userState {
+  superUser?: boolean
   userID: number
   userName: string
   avatar: string
   level: number
   wizard: boolean
+  permissions?: Record<string, unknown>
 }
 
 export interface globalSettingsState {

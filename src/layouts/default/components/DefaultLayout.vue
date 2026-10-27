@@ -28,6 +28,8 @@ import {
   type ThemeCustomizerSettings,
 } from '@/composables/useThemeCustomizer'
 import NeoLogoMark from '@/components/misc/NeoLogoMark.vue'
+import { nativeChromeActive } from '@/native/layout'
+import { nativeHeaderRegistration, type NativePanelSource } from '@/native/registry'
 
 const display = useDisplay()
 // PWA模式检测
@@ -94,14 +96,26 @@ const { isOffline } = useGlobalOfflineStatus()
 // 动态标签页相关
 // 定义动态标签页类型
 interface DynamicHeaderTabButton {
+  title?: string
   icon: string
   color?: string | ComputedRef<string>
   variant?: 'flat' | 'text' | 'elevated' | 'tonal' | 'outlined' | 'plain'
   size?: string
   class?: string
   action?: () => void
+  menuItems?: Array<{
+    id: string
+    title: string
+    icon: string
+    disabled?: boolean
+    selected?: boolean
+    group?: string
+    action: () => void
+  }>
+  panel?: () => NativePanelSource | undefined
   show?: boolean | ComputedRef<boolean>
   loading?: boolean | ComputedRef<boolean>
+  disabled?: boolean | ComputedRef<boolean>
   dataAttr?: string
 }
 
@@ -112,6 +126,7 @@ interface DynamicHeaderTabItem {
 }
 
 interface DynamicHeaderTab {
+  ownerId?: string
   items: DynamicHeaderTabItem[]
   modelValue: string
   appendButtons?: DynamicHeaderTabButton[]
@@ -132,16 +147,20 @@ const pendingHorizontalTab = ref<{ path: string; tab: string } | null>(null)
 const registerDynamicHeaderTab = (tab: DynamicHeaderTab) => {
   // 保存注册标签页的路由路径
   tab.routePath = route.path
+  const nextTab = { ...tab }
   // 强制更新，确保响应式系统能检测到变化
-  dynamicHeaderTab.value = { ...tab }
+  dynamicHeaderTab.value = nextTab
+  nativeHeaderRegistration.value = nextTab
   applyPendingHorizontalTab()
 }
 
 /** 仅注销仍由指定路由持有的动态标签，避免相邻页面生命周期互相覆盖。 */
-const unregisterDynamicHeaderTab = (routePath?: string) => {
+const unregisterDynamicHeaderTab = (routePath?: string, ownerId?: string) => {
   if (routePath && dynamicHeaderTab.value?.routePath !== routePath) return
+  if (ownerId && dynamicHeaderTab.value?.ownerId !== ownerId) return
 
   dynamicHeaderTab.value = null
+  nativeHeaderRegistration.value = null
 }
 
 /** 更新当前动态标签页选中值，并通知注册页面同步状态。 */
@@ -150,6 +169,9 @@ const handleTabChange = (newValue: string) => {
     if (!visibleDynamicHeaderTabItems.value.some(item => item.tab === newValue)) return
 
     dynamicHeaderTab.value.modelValue = newValue
+    if (nativeHeaderRegistration.value) {
+      nativeHeaderRegistration.value.modelValue = newValue
+    }
     // 通知注册的页面更新值
     if (dynamicHeaderTab.value.onUpdateModelValue) {
       dynamicHeaderTab.value.onUpdateModelValue(newValue)
@@ -176,6 +198,7 @@ watch(
       // 如果当前标签页不属于新路由，则清除
       if (dynamicHeaderTab.value && dynamicHeaderTab.value.routePath !== route.path) {
         dynamicHeaderTab.value = null
+        nativeHeaderRegistration.value = null
       }
     })
   },
@@ -192,7 +215,9 @@ const visibleDynamicHeaderTabItems = computed(() => {
 const hasDynamicHeaderTab = computed(() => visibleDynamicHeaderTabItems.value.length > 0)
 
 // 水平布局下动态标签页会并入顶部导航三级菜单，不再额外显示标签页栏。
-const showDynamicHeaderTab = computed(() => hasDynamicHeaderTab.value && !showHorizontalThemeNav.value)
+const showDynamicHeaderTab = computed(
+  () => hasDynamicHeaderTab.value && !showHorizontalThemeNav.value && !nativeChromeActive.value,
+)
 
 const visibleDynamicHeaderButtons = computed(() => {
   if (!hasDynamicHeaderTab.value) return []
@@ -211,6 +236,7 @@ const visibleHorizontalHeaderButtons = computed(() => {
 // 在组件销毁时清理
 onUnmounted(() => {
   dynamicHeaderTab.value = null
+  nativeHeaderRegistration.value = null
   // 清理全局方法
   if (typeof window !== 'undefined') {
     delete (window as DynamicHeaderTabWindow).__VUE_INJECT_DYNAMIC_HEADER_TAB__
@@ -395,6 +421,10 @@ function handleClosePluginQuickAccess() {
   showPluginQuickAccess.value = false
 }
 
+/** 打开插件快速访问面板。 */
+function handleOpenPluginQuickAccess() {
+  showPluginQuickAccess.value = true
+}
 /** 点击插件入口后关闭插件快速访问面板。 */
 function handlePluginClick() {
   showPluginQuickAccess.value = false
@@ -465,7 +495,7 @@ onMounted(async () => {
 
   <!-- 👉 Pull Down Indicator -->
   <div
-    v-if="appMode && showPullIndicator"
+    v-if="appMode && !nativeChromeActive && showPullIndicator"
     class="app-pull-indicator"
     :style="{
       '--app-pull-indicator-navbar-extra-height': navbarExtraHeight,
@@ -709,9 +739,9 @@ onMounted(async () => {
 
   <!-- 👉 Plugin Quick Access -->
   <QuickAccess
-    v-if="appMode"
-    :visible="showPluginQuickAccess"
+    :visible="appMode && !nativeChromeActive && showPluginQuickAccess"
     :pull-distance="pullDistance"
+    @open="handleOpenPluginQuickAccess"
     @close="handleClosePluginQuickAccess"
     @plugin-click="handlePluginClick"
   />

@@ -11,6 +11,7 @@ describe('DialogCloseBtn', () => {
     const button = screen.getByRole('button', { name: '关闭' })
 
     expect(button).toHaveClass('absolute', 'right-3', 'top-3', 'z-10')
+    expect(button).toHaveAttribute('data-native-dialog-close')
     // 图标内容来自 iconify 异步数据集，仅断言图标元素存在且对辅助技术隐藏
     const icon = container.querySelector('svg.v-icon')
     expect(icon).not.toBeNull()

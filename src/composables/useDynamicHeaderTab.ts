@@ -1,16 +1,31 @@
 import type { ComputedRef, Ref } from 'vue'
 import { useTabStateRestore } from '@/composables/useStateRestore'
+import type { NativePanelSource } from '@/native/registry'
 
 // 动态标签页相关类型
+interface DynamicHeaderMenuItem {
+  id: string
+  title: string
+  icon: string
+  disabled?: boolean
+  selected?: boolean
+  group?: string
+  action: () => void
+}
+
 interface DynamicHeaderTabButton {
+  title?: string
   icon: string
   color?: string | ComputedRef<string>
   variant?: 'flat' | 'text' | 'elevated' | 'tonal' | 'outlined' | 'plain'
   size?: string
   class?: string
   action?: () => void
+  menuItems?: DynamicHeaderMenuItem[]
+  panel?: () => NativePanelSource | undefined
   show?: boolean | ComputedRef<boolean>
   loading?: boolean | ComputedRef<boolean>
+  disabled?: boolean | ComputedRef<boolean>
   dataAttr?: string // 用于VMenu定位的data属性
 }
 
@@ -21,6 +36,7 @@ interface DynamicHeaderTabItem {
 }
 
 interface DynamicHeaderTabConfig {
+  ownerId?: string
   items: DynamicHeaderTabItem[]
   modelValue: string
   appendButtons?: DynamicHeaderTabButton[]
@@ -57,6 +73,7 @@ export function useDynamicHeaderTab() {
     }
 
     const tabConfig: DynamicHeaderTabConfig = {
+      ownerId: `header:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${Math.random().toString(36).slice(2)}`}`,
       items: Array.isArray(config.items) ? config.items : config.items.value,
       modelValue: config.modelValue.value,
       appendButtons: config.appendButtons,
@@ -195,4 +212,4 @@ export function useDynamicHeaderTab() {
 }
 
 // 导出类型以供其他地方使用
-export type { DynamicHeaderTabButton, DynamicHeaderTabItem, DynamicHeaderTabConfig }
+export type { DynamicHeaderMenuItem, DynamicHeaderTabButton, DynamicHeaderTabItem, DynamicHeaderTabConfig }

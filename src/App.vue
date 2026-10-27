@@ -10,6 +10,7 @@ import { globalLoadingStateManager } from '@/utils/loadingStateManager'
 import { addBackgroundTimer, removeBackgroundTimer } from '@/utils/backgroundManager'
 import PWAInstallPrompt from '@/components/pwa/PWAInstallPrompt.vue'
 import SharedDialogHost from '@/components/dialog/SharedDialogHost.vue'
+import NativeNavigationHost from '@/components/native/NativeNavigationHost.vue'
 import {
   applyStoredThemeCustomizerAppearance,
   themeCustomizerPrimaryColors,
@@ -60,6 +61,9 @@ import {
 } from '@/utils/glassWallpaperTone'
 
 const LOGIN_WALLPAPER_ROUTE = '/login'
+
+// iOS App 容器会在页面初始化前注入 moviepilot.chrome 桥接；仅在桥接存在时启用原生导航
+const nativeTransportAvailable = typeof window !== 'undefined' && window.MoviePilotNative?.transportVersion === 1
 const BACKGROUND_CROSSFADE_DURATION_MS = 1500
 const LAUNCH_MIN_VISIBLE_MS = 320
 const LAUNCH_MAX_WAIT_MS = 1200
@@ -1211,8 +1215,10 @@ onUnmounted(() => {
       <RouterView />
       <!-- 全局共享弹窗入口，列表与卡片按需在这里挂载业务弹窗。 -->
       <SharedDialogHost />
+      <!-- iOS App 原生导航宿主：仅在 App 容器注入桥接时激活 -->
+      <NativeNavigationHost v-if="nativeTransportAvailable" />
       <!-- PWA安装提示 -->
-      <PWAInstallPrompt />
+      <PWAInstallPrompt v-if="!nativeTransportAvailable" />
     </VApp>
   </div>
 </template>

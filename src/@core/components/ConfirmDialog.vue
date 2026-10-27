@@ -59,7 +59,14 @@ function handleCancel() {
 </script>
 
 <template>
-  <VDialog :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :max-width="width">
+  <VDialog
+    :model-value="modelValue"
+    @update:model-value="emit('update:modelValue', $event)"
+    :max-width="width"
+    :retain-focus="false"
+    data-native-confirm-dialog
+    :data-native-confirm-kind="type"
+  >
     <VCard>
       <VCardItem>
         <div class="d-flex align-center justify-start mt-3">
@@ -67,16 +74,22 @@ function handleCancel() {
             <VIcon size="x-large" :icon="currentType.icon" />
           </VAvatar>
           <div class="mx-3">
-            <p class="font-weight-bold text-xl text-high-emphasis">{{ title }}</p>
-            <p>{{ content }}</p>
+            <p data-native-confirm-title class="font-weight-bold text-xl text-high-emphasis">{{ title }}</p>
+            <p data-native-confirm-message>{{ content }}</p>
           </div>
         </div>
       </VCardItem>
       <VCardActions class="app-confirm-dialog-actions mx-auto">
-        <VBtn variant="tonal" color="secondary" class="px-5" @click="handleCancel">
+        <VBtn data-native-confirm-cancel variant="tonal" color="secondary" class="px-5" @click="handleCancel">
           {{ cancelText }}
         </VBtn>
-        <VBtn variant="elevated" :color="currentType.color" @click="handleConfirm" class="px-5">
+        <VBtn
+          data-native-confirm-accept
+          variant="elevated"
+          :color="currentType.color"
+          @click="handleConfirm"
+          class="px-5"
+        >
           {{ confirmText }}
         </VBtn>
       </VCardActions>

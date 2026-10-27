@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import * as Mousetrap from 'mousetrap'
 import SearchBarDialog from '@/components/dialog/SearchBarDialog.vue'
+import { useI18n } from '@/composables/useChineseText'
+import { useNativeGlobalAction } from '@/native/registry'
+import { nativeChromeActive } from '@/native/layout'
+
+const { t } = useI18n()
 
 const searchOpen = ref(false)
 const searchBar = ref<InstanceType<typeof SearchBarDialog> | null>(null)
@@ -17,6 +22,14 @@ function closeSearch() {
   searchOpen.value = false
 }
 
+useNativeGlobalAction({
+  id: 'search',
+  title: () => t('common.search'),
+  icon: 'search',
+  invoke: openSearch,
+  panel: () => searchBar.value?.nativePanel(),
+})
+
 onMounted(() => {
   Mousetrap.bind(['command+k', 'ctrl+k'], openSearch)
 })
@@ -27,5 +40,5 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <SearchBarDialog ref="searchBar" v-model="searchOpen" show-activator @close="closeSearch" />
+  <SearchBarDialog ref="searchBar" v-model="searchOpen" :show-activator="!nativeChromeActive" @close="closeSearch" />
 </template>

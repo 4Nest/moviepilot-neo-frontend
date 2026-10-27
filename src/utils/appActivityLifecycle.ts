@@ -22,8 +22,10 @@ export class AppActivityLifecycle {
   private lastActivityAt = Date.now()
   private acquireCount = 0
   private started = false
+  private hostLifecycle?: 'active' | 'inactive' | 'background'
 
   private readonly handleActivity = () => {
+    if (this.hostLifecycle && this.hostLifecycle !== 'active') return
     if (document.visibilityState !== 'visible' || !document.hasFocus()) return
 
     this.lastActivityAt = Date.now()
@@ -32,6 +34,7 @@ export class AppActivityLifecycle {
   }
 
   private readonly handleBlur = () => {
+    if (this.hostLifecycle === 'background') return
     if (document.visibilityState === 'hidden') return
 
     this.clearIdleTimer()
@@ -40,6 +43,7 @@ export class AppActivityLifecycle {
   }
 
   private readonly handleFocus = () => {
+    if (this.hostLifecycle && this.hostLifecycle !== 'active') return
     if (document.visibilityState !== 'visible') return
 
     this.clearSuspendTimer()
@@ -49,6 +53,16 @@ export class AppActivityLifecycle {
   }
 
   private readonly handleVisibilityChange = () => {
+    if (this.hostLifecycle === 'background') {
+      this.clearTimers()
+      this.setState('suspended')
+      return
+    }
+    if (this.hostLifecycle === 'inactive') {
+      this.clearTimers()
+      this.setState('passive')
+      return
+    }
     if (document.visibilityState === 'hidden') {
       this.clearTimers()
       this.setState('suspended')
@@ -103,6 +117,12 @@ export class AppActivityLifecycle {
   /** 供路由或测试路径显式登记一次有效前台活动。 */
   markActivity() {
     this.handleActivity()
+  }
+
+  /** 原生场景生命周期进入既有管理器；释放接管后恢复浏览器事件作为唯一来源。 */
+  setHostLifecycle(state: 'active' | 'inactive' | 'background' | undefined) {
+    this.hostLifecycle = state
+    this.handleVisibilityChange()
   }
 
   private start() {

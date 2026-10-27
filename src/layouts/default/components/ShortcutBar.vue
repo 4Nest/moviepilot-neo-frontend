@@ -2,6 +2,8 @@
 import { getQueryValue } from '@/@core/utils'
 import { useShortcutTools } from '@/composables/useShortcutTools'
 import { useI18n } from '@/composables/useChineseText'
+import { useNativeGlobalAction } from '@/native/registry'
+import { nativeChromeActive } from '@/native/layout'
 
 // 国际化
 const { t } = useI18n()
@@ -9,6 +11,31 @@ const { menuShortcuts, pinnedShortcuts, visibleShortcuts, openShortcutDialog: op
 
 // App捷径
 const appsMenu = ref(false)
+useNativeGlobalAction({
+  id: 'shortcuts',
+  title: () => t('shortcut.title'),
+  icon: 'mdi-card-multiple-outline',
+  dataAttr: 'native-shortcuts',
+  panel: () => ({
+    title: t('shortcut.title'),
+    layout: 'grid',
+    sections: [
+      {
+        id: 'tools',
+        items: visibleShortcuts.value.map(item => ({
+          id: item.dialog,
+          title: item.title,
+          subtitle: item.subtitle,
+          icon: item.icon,
+          invoke: () => openShortcutDialog(item),
+        })),
+      },
+    ],
+  }),
+  invoke: () => {
+    appsMenu.value = true
+  },
+})
 
 // 菜单最大宽度
 const menuMaxWidth = ref(420)
@@ -32,15 +59,18 @@ onMounted(() => {
 
 <template>
   <!-- 固定工具图标按钮：识别 → 词表 → 日志 -->
-  <VTooltip v-for="item in pinnedShortcuts" :key="item.dialog" :text="item.title" location="top">
-    <template #activator="{ props: tooltipProps }">
-      <IconBtn class="ms-2" v-bind="tooltipProps" @click="openShortcutTool(item)">
-        <VIcon :icon="item.icon" />
-      </IconBtn>
-    </template>
-  </VTooltip>
+  <template v-if="!nativeChromeActive">
+    <VTooltip v-for="item in pinnedShortcuts" :key="item.dialog" :text="item.title" location="top">
+      <template #activator="{ props: tooltipProps }">
+        <IconBtn class="ms-2" v-bind="tooltipProps" @click="openShortcutTool(item)">
+          <VIcon :icon="item.icon" />
+        </IconBtn>
+      </template>
+    </VTooltip>
+  </template>
   <VMenu
     v-model="appsMenu"
+    :activator="nativeChromeActive ? '[data-menu-activator=native-shortcuts]' : undefined"
     :max-width="menuMaxWidth"
     width="100%"
     max-height="560"
@@ -51,7 +81,7 @@ onMounted(() => {
     scrim
   >
     <!-- Menu Activator -->
-    <template #activator="{ props }">
+    <template v-if="!nativeChromeActive" #activator="{ props }">
       <IconBtn class="ms-2" v-bind="props">
         <VIcon icon="mdi-card-multiple-outline" />
       </IconBtn>

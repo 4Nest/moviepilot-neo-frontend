@@ -22,6 +22,9 @@ import {
   THEME_CUSTOMIZER_OPEN_EVENT,
   type ThemeCustomizerSettings,
 } from '@/composables/useThemeCustomizer'
+import { useNativeGlobalAction, type NativePanelEntry, type NativePanelSource } from '@/native/registry'
+import { nativeChromeActive } from '@/native/layout'
+import { nativeProfileAvatar } from '@/native/profile'
 
 const AboutDialog = defineAsyncComponent(() => import('@/components/dialog/AboutDialog.vue'))
 const CustomCssDialog = defineAsyncComponent(() => import('@/components/dialog/CustomCssDialog.vue'))
@@ -51,6 +54,16 @@ const showUIModeMenu = ref(false)
 
 // 用户头像主菜单是否显示；打开布局级面板前需要主动关闭，避免菜单 overlay 残留。
 const showUserMenu = ref(false)
+useNativeGlobalAction({
+  id: 'profile',
+  title: () => t('common.user'),
+  icon: 'profile',
+  dataAttr: 'native-profile',
+  panel: () => nativeProfilePanel(),
+  invoke: () => {
+    showUserMenu.value = true
+  },
+})
 
 // 主题菜单是否显示
 const showThemeMenu = ref(false)
@@ -234,6 +247,20 @@ function siteAuthDone() {
 const userName = computed(() => userStore.userName)
 const avatar = computed(() => userStore.avatar || avatar1)
 const userLevel = computed(() => userStore.level)
+const nativeAvatar = ref<string>()
+// 仅 App 接管后准备原生头像；切换账号、头像或退出时作废迟到的缩略图。
+watch(
+  [nativeChromeActive, avatar],
+  async ([active, reference], _previous, onCleanup) => {
+    let stale = false
+    onCleanup(() => (stale = true))
+    nativeAvatar.value = undefined
+    if (!active) return
+    const image = await nativeProfileAvatar(reference)
+    if (!stale) nativeAvatar.value = image
+  },
+  { immediate: true },
+)
 
 // 检查是否为高级模式
 const isAdvancedMode = computed(() => {
@@ -485,6 +512,92 @@ try {
   console.error(t('theme.deviceNotSupport'))
 }
 
+/** 原生用户菜单只投影 NEO 存在的菜单项，设置弹窗仍由现有组件处理。 */
+function nativeProfilePanel(): NativePanelSource {
+  const account: NativePanelEntry[] = [
+    {
+      id: 'profile',
+      title: t('user.profile'),
+      icon: 'mdi-account-outline',
+      invoke: () => {
+        void router.push('/profile')
+      },
+    },
+    {
+      id: 'settings',
+      title: isAdvancedMode.value ? t('user.systemSettings') : t('user.wizardSettings'),
+      icon: isAdvancedMode.value ? 'mdi-cog-outline' : 'mdi-wizard-hat',
+      invoke: () => {
+        void router.push(isAdvancedMode.value ? '/setting' : '/setup-wizard')
+      },
+    },
+  ]
+  if (userLevel.value < 2) {
+    account.push({
+      id: 'auth',
+      title: t('user.siteAuth'),
+      icon: 'mdi-lock-check-outline',
+      invoke: showSiteAuthDialog,
+    })
+  }
+  const preferences: NativePanelEntry[] = [
+    {
+      id: 'customizer',
+      title: t('common.theme'),
+      subtitle: t(`theme.${currentThemeName.value}`),
+      icon: 'mdi-tune',
+      invoke: showThemeCustomizerDrawer,
+    },
+  ]
+  const information: NativePanelEntry[] = [
+    {
+      id: 'help',
+      title: t('user.helpDocs'),
+      icon: 'mdi-help-circle-outline',
+      invoke: () => {
+        window.open('https://github.com/4Nest/moviepilot-neo', '_blank')
+      },
+    },
+    {
+      id: 'about',
+      title: t('setting.about.title'),
+      icon: 'mdi-information-outline',
+      invoke: showAboutDialog,
+    },
+  ]
+  return {
+    title: t('common.user'),
+    profile: {
+      name: userName.value,
+      image: nativeAvatar.value,
+    },
+    sections: [
+      { id: 'account', items: account },
+      { id: 'preferences', items: preferences },
+      { id: 'information', items: information },
+      {
+        id: 'session',
+        items: [
+          {
+            id: 'restart',
+            title: t('user.restart'),
+            icon: 'mdi-restart',
+            destructive: true,
+            invoke: showRestartDialog,
+          },
+          {
+            id: 'logout',
+            title: t('app.logout'),
+            icon: 'mdi-logout',
+            destructive: true,
+            invoke: logout,
+          },
+        ],
+      },
+    ],
+  }
+}
+
 // 获取当前主题图标
 const getThemeIcon = computed(() => {
   const theme = themes.find(t => t.name === currentThemeName.value)
@@ -522,7 +635,7 @@ onUnmounted(() => {
 
     <VMenu
       v-model="showUserMenu"
-      activator="parent"
+      :activator="nativeChromeActive ? '[data-menu-activator=native-profile]' : 'parent'"
       width="15rem"
       location="bottom end"
       offset="14px"

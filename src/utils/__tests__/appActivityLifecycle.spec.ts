@@ -95,4 +95,24 @@ describe('AppActivityLifecycle', () => {
     expect(removeWindowListener).toHaveBeenCalledWith('blur', expect.any(Function))
     expect(removeWindowListener).toHaveBeenCalledWith('focus', expect.any(Function))
   })
+
+  it('maps hostLifecycle inactive and background states and restores browser state on release', () => {
+    lifecycle.setHostLifecycle('inactive')
+    expect(lifecycle.getState()).toBe('passive')
+
+    document.dispatchEvent(new Event('pointerdown'))
+    expect(lifecycle.getState()).toBe('passive')
+
+    lifecycle.setHostLifecycle('background')
+    expect(lifecycle.getState()).toBe('suspended')
+
+    window.dispatchEvent(new Event('focus'))
+    expect(lifecycle.getState()).toBe('suspended')
+
+    lifecycle.setHostLifecycle('active')
+    expect(lifecycle.getState()).toBe('active')
+
+    lifecycle.setHostLifecycle(undefined)
+    expect(lifecycle.getState()).toBe('active')
+  })
 })

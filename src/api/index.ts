@@ -125,7 +125,11 @@ api.interceptors.response.use(
       }
       // 其他网络错误
       return Promise.reject(new Error(error.message || 'Network error'))
-    } else if (error.response.status === 403) {
+    } else if (
+      error.response.status === 403 ||
+      (error.response.status === 401 && !error.config?.url?.includes('login/access-token'))
+    ) {
+      // 401 场景排除登录请求自身（密码错误/MFA 由登录页处理）；App 容器内跳转 /login 会触发原生登录页回退
       normalizeLocalizedMessage(error.response.data)
       // 认证 Store
       const authStore = useAuthStore()

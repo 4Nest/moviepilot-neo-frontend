@@ -9,12 +9,17 @@ import PluginDataDialog from '@/components/dialog/PluginDataDialog.vue'
 import { VCard } from 'vuetify/components'
 import { getDominantColor } from '@/@core/utils/image'
 import { disableBodyScroll, enableBodyScroll } from 'body-scroll-lock'
+import { usePWA } from '@/composables/usePWA'
+import { nativeChromeActive } from '@/native/layout'
+import { useNativeGlobalAction } from '@/native/registry'
+import { nativePanelId } from '@/native/panel'
 
 // 国际化
 const { t } = useI18n()
 
 // 最近访问插件管理
-const { getRecentPlugins, addRecentPlugin } = useRecentPlugins()
+const { getRecentPlugins, addRecentPlugin, getPinnedPluginIds, togglePinnedPlugin } = useRecentPlugins()
+const { appMode } = usePWA()
 
 // 输入参数
 const props = defineProps({
@@ -32,6 +37,7 @@ const props = defineProps({
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'plugin-click', plugin: Plugin): void
+  (e: 'open'): void
 }>()
 
 // 有详情页面的插件列表
@@ -39,6 +45,12 @@ const pluginsWithPage = ref<Plugin[]>([])
 
 // 最近访问的插件列表
 const recentPlugins = ref<Plugin[]>([])
+
+// 用户固定的常用插件 ID
+const pinnedPluginIds = ref<string[]>([])
+
+// 搜索关键词
+const searchKeyword = ref<string | null>('')
 
 // 是否加载中
 const loading = ref(false)
@@ -80,6 +92,40 @@ function getQuickAccessElement() {
 const isVisible = computed(() => {
   return props.visible
 })
+
+// 当前搜索关键词
+const normalizedSearchKeyword = computed(() => (searchKeyword.value ?? '').trim().toLocaleLowerCase())
+
+// 已安装且可打开的插件 ID，用于清理历史记录中已经失效的入口。
+const availablePluginIds = computed(() => new Set(pluginsWithPage.value.map(plugin => plugin.id)))
+
+// 固定的常用插件
+const pinnedPlugins = computed(() => {
+  const pluginMap = new Map(pluginsWithPage.value.map(plugin => [plugin.id, plugin]))
+
+  return pinnedPluginIds.value
+    .map(pluginId => pluginMap.get(pluginId))
+    .filter((plugin): plugin is Plugin => Boolean(plugin))
+})
+
+/** 判断插件是否匹配当前搜索关键词。 */
+function matchesPlugin(plugin: Plugin): boolean {
+  const keyword = normalizedSearchKeyword.value
+  if (!keyword) return true
+
+  return [plugin.plugin_name, plugin.id].some(value => value?.toLocaleLowerCase().includes(keyword))
+}
+
+// 匹配搜索结果的插件
+const filteredPlugins = computed(() => pluginsWithPage.value.filter(matchesPlugin))
+
+// 匹配搜索结果的最近插件
+const filteredRecentPlugins = computed(() =>
+  recentPlugins.value
+    .filter(plugin => availablePluginIds.value.has(plugin.id))
+    .filter(plugin => !pinnedPluginIds.value.includes(plugin.id))
+    .filter(matchesPlugin),
+)
 
 // 处理插件图标加载错误
 function handleIconError(plugin: Plugin) {
@@ -182,9 +228,22 @@ async function fetchPluginsWithPage() {
   }
 }
 
-// 加载最近访问的插件
+// 加载最近访问和常用插件
 function loadRecentPlugins() {
   recentPlugins.value = getRecentPlugins()
+  pinnedPluginIds.value = getPinnedPluginIds()
+}
+
+/** 切换插件固定状态 */
+function togglePluginPin(plugin: Plugin) {
+  if (!plugin.id) return
+
+  pinnedPluginIds.value = togglePinnedPlugin(plugin.id)
+}
+
+/** 判断插件是否已固定 */
+function isPinned(plugin: Plugin): boolean {
+  return Boolean(plugin.id && pinnedPluginIds.value.includes(plugin.id))
 }
 
 // 点击插件
@@ -257,6 +316,68 @@ watch(
   },
   { immediate: true },
 )
+
+/** App 插件面板使用系统搜索、分组和固定操作，仍打开同一共享插件详情。 */
+useNativeGlobalAction({
+  id: 'plugins',
+  title: () => t('plugin.quickAccess'),
+  icon: 'mdi-puzzle-outline',
+  invoke: () => emit('open'),
+  panel: () => {
+    /** 插件子菜单同时提供打开和固定操作，复用原有最近访问记录。 */
+    const entry = (plugin: Plugin) => ({
+      id: nativePanelId('plugin', plugin.id),
+      title: plugin.plugin_name || plugin.id || '',
+      subtitle: plugin.plugin_desc,
+      icon: 'mdi-puzzle-outline',
+      image: getPluginIcon(plugin),
+      children: [
+        {
+          id: nativePanelId('open', plugin.id),
+          title: t('common.viewDetails'),
+          icon: 'mdi-puzzle-outline',
+          primary: true,
+          invoke: () => handlePluginClick(plugin),
+        },
+        {
+          id: nativePanelId('pin', plugin.id),
+          title: t(isPinned(plugin) ? 'plugin.unpinPlugin' : 'plugin.pinPlugin', { name: plugin.plugin_name }),
+          icon: isPinned(plugin) ? 'mdi-pin-off-outline' : 'mdi-pin-outline',
+          selected: isPinned(plugin),
+          keepOpen: true,
+          invoke: () => togglePluginPin(plugin),
+        },
+      ],
+    })
+    const pinned = pinnedPlugins.value.filter(matchesPlugin)
+    const recent = filteredRecentPlugins.value
+    const used = new Set([...pinned, ...recent].map(plugin => plugin.id))
+    return {
+      title: t('plugin.quickAccess'),
+      layout: 'grid',
+      loading: loading.value,
+      emptyText: t(searchKeyword.value ? 'plugin.noMatchingContent' : 'plugin.noPluginsWithPage'),
+      search: { text: searchKeyword.value ?? '', placeholder: t('common.search') },
+      onQuery: value => {
+        searchKeyword.value = value
+      },
+      onOpen: () => {
+        searchKeyword.value = ''
+        loadRecentPlugins()
+        return fetchPluginsWithPage()
+      },
+      sections: [
+        { id: 'pinned', title: t('plugin.favorites'), items: pinned.map(entry) },
+        { id: 'recent', title: t('plugin.recentlyUsed'), items: recent.map(entry) },
+        {
+          id: 'all',
+          title: t('plugin.allPlugins'),
+          items: filteredPlugins.value.filter(plugin => !used.has(plugin.id)).map(entry),
+        },
+      ],
+    }
+  },
+})
 
 onMounted(() => {
   if (isVisible.value) {
@@ -425,6 +546,7 @@ function handleBackdropClick(event: MouseEvent) {
 
 <template>
   <VCard
+    v-if="appMode && !nativeChromeActive"
     ref="quickAccessRef"
     :ripple="false"
     class="plugin-quick-access app-surface-square app-surface-flat app-surface-borderless"

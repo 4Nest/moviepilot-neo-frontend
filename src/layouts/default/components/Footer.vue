@@ -5,8 +5,14 @@ import { NavMenu } from '@/@layouts/types'
 import { useI18n } from '@/composables/useChineseText'
 import { useLaunchLoading } from '@/composables/useLaunchLoading'
 import { usePWA } from '@/composables/usePWA'
+import {
+  dynamicButtonRegistry,
+  type DynamicButtonRegister,
+  type DynamicButtonUnregister,
+} from '@/composables/dynamicButtonRegistry'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
-
+import { nativeChromeActive } from '@/native/layout'
+const { register: registerSharedDynamicButton, unregister: unregisterSharedDynamicButton } = dynamicButtonRegistry
 // 是否显示的输入参数
 const props = defineProps({
   showNav: {
@@ -81,41 +87,39 @@ watch(
   newPath => {
     currentMenu.value = getMenuPathFromRoute(newPath)
     // 当路由变化时，清除动态按钮
-    dynamicButton.value = null
+    const registration = dynamicButtonRegistry.registration.value
+    if (registration?.button.routePath && registration.button.routePath !== newPath) {
+      unregisterSharedDynamicButton(registration.ownerId ?? undefined)
+    }
   },
   { immediate: false },
 )
 
 // 动态按钮相关
-// 定义动态按钮类型
-interface DynamicButton {
-  icon: string
-  action: () => void
-  show: boolean
-  routePath?: string // 添加路径属性，用于标识哪个路由注册的
-  menuItems?: DynamicButtonMenuItem[]
-}
-
 // 提供动态按钮注册和获取的方法
-const dynamicButton = ref<DynamicButton | null>(null)
+const dynamicButton = computed(() => dynamicButtonRegistry.registration.value?.button ?? null)
 
 // 提供一个方法让其他组件注册动态按钮
-const registerDynamicButton = (button: DynamicButton) => {
-  // 保存注册按钮的路由路径
-  button.routePath = route.path
-  dynamicButton.value = button
+const registerDynamicButton: DynamicButtonRegister = (button, ownerId) => {
+  registerSharedDynamicButton(
+    {
+      ...button,
+      routePath: button.routePath ?? route.path,
+    },
+    ownerId,
+  )
 }
 
 // 提供一个方法让其他组件取消注册动态按钮
-const unregisterDynamicButton = () => {
-  dynamicButton.value = null
+const unregisterDynamicButton: DynamicButtonUnregister = ownerId => {
+  unregisterSharedDynamicButton(ownerId)
 }
 
 // 添加全局注册方法，解决注入不可用的问题
 if (typeof window !== 'undefined') {
   // 确保在浏览器环境中
-  ;(window as any).__VUE_INJECT_DYNAMIC_BUTTON__ = registerDynamicButton
-  ;(window as any).__VUE_UNINJECT_DYNAMIC_BUTTON__ = unregisterDynamicButton
+  window.__VUE_INJECT_DYNAMIC_BUTTON__ = registerDynamicButton
+  window.__VUE_UNINJECT_DYNAMIC_BUTTON__ = unregisterDynamicButton
 }
 
 // 提供给其他组件使用
@@ -125,14 +129,23 @@ provide('dynamicButton', dynamicButton)
 
 // 在组件销毁时清理
 onUnmounted(() => {
-  dynamicButton.value = null
-  // 清理全局方法
-  if (typeof window !== 'undefined') {
-    delete (window as any).__VUE_INJECT_DYNAMIC_BUTTON__
-    delete (window as any).__VUE_UNINJECT_DYNAMIC_BUTTON__
+  if (typeof window === 'undefined') return
+
+  const ownsRegisterBridge = window.__VUE_INJECT_DYNAMIC_BUTTON__ === registerDynamicButton
+  const ownsUnregisterBridge = window.__VUE_UNINJECT_DYNAMIC_BUTTON__ === unregisterDynamicButton
+
+  if (ownsRegisterBridge && ownsUnregisterBridge) {
+    const registration = dynamicButtonRegistry.registration.value
+    if (registration) unregisterSharedDynamicButton(registration.ownerId ?? undefined)
+  }
+
+  if (ownsRegisterBridge) {
+    delete window.__VUE_INJECT_DYNAMIC_BUTTON__
+  }
+  if (ownsUnregisterBridge) {
+    delete window.__VUE_UNINJECT_DYNAMIC_BUTTON__
   }
 })
-
 // 显示动态按钮
 const showDynamicButton = computed(() => {
   return (
@@ -148,7 +161,7 @@ const visibleDynamicButtonMenuItems = computed(() => {
 })
 
 const hasDynamicButtonMenu = computed(() => visibleDynamicButtonMenuItems.value.length > 0)
-const shouldRenderFooterNav = computed(() => appMode.value && props.showNav)
+const shouldRenderFooterNav = computed(() => appMode.value && props.showNav && !nativeChromeActive.value)
 const shouldRevealFooterNav = computed(() => shouldRenderFooterNav.value && !isLaunchLoading.value)
 
 const legacyDynamicMenuTitleKeyMap: Record<string, string> = {
