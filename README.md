@@ -23,7 +23,7 @@
 
 ## 构建产物
 
-`neo` 分支每次推送自动构建 `dist.zip` 并发布到本仓库 Release（tag 与 `package.json` 版本一致）。后端镜像构建时从此处下载前端产物：
+`beta` 分支每次推送自动构建 `dist.zip` 并发布到本仓库 Release（tag 与 `package.json` 版本一致）。后端镜像构建时从此处下载前端产物：
 
 ```
 https://github.com/4Nest/moviepilot-neo-frontend/releases/download/<version>/dist.zip
@@ -36,11 +36,11 @@ https://github.com/4Nest/moviepilot-neo-frontend/releases/download/<version>/dis
 - `docs/neo-icon.png`：512×512 PNG 图标（用于 Unraid 模板等场景）
 - `src/assets/images/logos/neo.svg`：矢量品牌图标（界面内使用）
 
-外链：`https://raw.githubusercontent.com/4Nest/moviepilot-neo-frontend/neo/docs/neo-icon.png`
+外链：`https://raw.githubusercontent.com/4Nest/moviepilot-neo-frontend/beta/docs/neo-icon.png`
 
 ## 开发
 
-- `neo` 分支为开发主线，功能分支 → PR 到 `neo`（format/lint/typecheck/coverage 门禁）
+- `beta` 分支为开发主线，功能分支 → PR 到 `beta`（format/lint/typecheck/coverage 门禁）
 - 本地预览：`yarn dev`（API 代理到 `localhost:3001`）
 - 上游同步：`git fetch upstream && git merge upstream/v2`
 
