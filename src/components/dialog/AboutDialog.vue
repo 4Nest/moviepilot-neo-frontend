@@ -59,19 +59,6 @@ onMounted(() => {
               </a>
             </dd>
           </div>
-          <div v-if="systemEnv.FRONTEND_VERSION" class="about-row">
-            <dt>{{ t('setting.about.frontendVersion') }}</dt>
-            <dd>
-              <a
-                href="https://github.com/4Nest/moviepilot-neo-frontend"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="about-version-link"
-              >
-                <code>{{ systemEnv.FRONTEND_VERSION }}</code>
-              </a>
-            </dd>
-          </div>
           <div v-if="visibleBuildValue(systemEnv.BACKEND_BUILD_SHA)" class="about-row">
             <dt>后端构建</dt>
             <dd>

@@ -1478,7 +1478,6 @@ export default {
     about: {
       title: '关于 NEO',
       softwareVersion: '软件版本',
-      frontendVersion: '前端版本',
       systemUptime: '系统已运行',
       browserVersion: '浏览器缓存版本',
       authVersion: '认证资源版本',

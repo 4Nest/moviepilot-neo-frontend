@@ -29,11 +29,11 @@ describe('AboutDialog', () => {
     })
   })
 
-  it('展示版本信息且不请求或展示更新日志', async () => {
+  it('仅显示统一版本，不单独展示前端版本，也不请求或展示更新日志', async () => {
     await renderDialog()
 
     expect(await screen.findByText('neo-v2.15.6')).toBeInTheDocument()
-    expect(screen.getByText('v2.15.6')).toBeInTheDocument()
+    expect(screen.queryByText('v2.15.6')).not.toBeInTheDocument()
     expect(mocks.apiGet).toHaveBeenCalledTimes(1)
     expect(mocks.apiGet).toHaveBeenCalledWith('system/env')
     expect(screen.queryByText('更新日志')).not.toBeInTheDocument()
