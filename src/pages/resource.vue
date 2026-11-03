@@ -15,6 +15,11 @@ import { usePWA } from '@/composables/usePWA'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 import { SearchReplaceBatchCollector, isSearchReplaceBatchEvent } from '@/utils/searchStream'
 import { useTorrentFilter } from '@/composables/useTorrentFilter'
+import { openSharedDialog } from '@/composables/useSharedDialog'
+import { markTorrentDownloaded } from '@/utils/torrentDownloadCache'
+import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
+
+const AddDownloadDialog = defineAsyncComponent(() => import('@/components/dialog/AddDownloadDialog.vue'))
 
 // 国际化
 const { t } = useI18n()
@@ -251,17 +256,100 @@ const filteredCardDataList = ref<Array<SearchTorrent>>([])
 // 是否刷新过
 const isRefreshed = ref(false)
 
+const isBatchMode = ref(false)
+const selectedTorrents = ref<Context[]>([])
+const selectedTorrentSet = computed(() => new Set(selectedTorrents.value))
+const visibleTorrentItems = computed(() =>
+  viewType.value === 'card' ? filteredCardDataList.value : filteredRowDataList.value,
+)
+const isAllTorrentsSelected = computed(
+  () =>
+    visibleTorrentItems.value.length > 0 && visibleTorrentItems.value.every(item => selectedTorrentSet.value.has(item)),
+)
 const viewToggleIcon = computed(() => (viewType.value === 'card' ? 'mdi-view-list-outline' : 'mdi-view-grid-outline'))
+
+function resetBatchSelection() {
+  isBatchMode.value = false
+  selectedTorrents.value = []
+}
+
+function toggleBatchMode() {
+  if (isBatchMode.value) resetBatchSelection()
+  else if (!isSubtitleSearch.value && visibleTorrentItems.value.length) isBatchMode.value = true
+}
+
+function toggleTorrentSelection(item: Context) {
+  if (selectedTorrentSet.value.has(item))
+    selectedTorrents.value = selectedTorrents.value.filter(value => value !== item)
+  else selectedTorrents.value = [...selectedTorrents.value, item]
+}
+
+function toggleSelectAllTorrents() {
+  if (isAllTorrentsSelected.value) {
+    selectedTorrents.value = selectedTorrents.value.filter(item => !visibleTorrentItems.value.includes(item))
+    return
+  }
+  const missingItems = visibleTorrentItems.value.filter(item => !selectedTorrentSet.value.has(item))
+  selectedTorrents.value = [...selectedTorrents.value, ...missingItems]
+}
+
+function openBatchDownloadDialog() {
+  const selectedItems = [...selectedTorrents.value]
+  const torrents = selectedItems.flatMap(item => (item.torrent_info ? [item.torrent_info] : []))
+  if (!torrents.length) return
+
+  openSharedDialog(
+    AddDownloadDialog,
+    { torrents },
+    {
+      done: (downloaded: Array<{ enclosure?: string }>) => {
+        const downloadedUrls = new Set(downloaded.map(item => item.enclosure).filter(Boolean))
+        selectedItems.forEach(item => {
+          const url = item.torrent_info?.enclosure
+          if (url && downloadedUrls.has(url)) markTorrentDownloaded(url)
+        })
+        resetBatchSelection()
+      },
+      error: (error: string) => console.error(error),
+    },
+    { closeOn: ['close', 'done', 'error'] },
+  )
+}
 
 // 搜索结果视图切换收纳到页面动态按钮中，和仪表盘的设置按钮保持一致。
 function toggleViewType() {
   changeViewType(viewType.value === 'card' ? 'row' : 'card')
 }
 
+const resourceDynamicIcon = computed(() => (isBatchMode.value ? 'mdi-download' : viewToggleIcon.value))
+const resourceDynamicMenuItems = computed<DynamicButtonMenuItem[]>(() => {
+  if (isBatchMode.value) {
+    return [
+      {
+        title: t('resource.batchDownloadCount', { count: selectedTorrents.value.length }),
+        icon: 'mdi-download',
+        disabled: selectedTorrents.value.length === 0,
+        action: openBatchDownloadDialog,
+      },
+      {
+        title: isAllTorrentsSelected.value ? t('resource.clearSelection') : t('resource.selectAll'),
+        icon: 'mdi-checkbox-multiple-marked-outline',
+        action: toggleSelectAllTorrents,
+      },
+      { title: t('resource.exitBatchMode'), icon: 'mdi-close', action: resetBatchSelection },
+    ]
+  }
+  return [
+    { title: t('resource.batchSelect'), icon: 'mdi-checkbox-multiple-marked-outline', action: toggleBatchMode },
+    { title: t('resource.switchingView'), icon: viewToggleIcon.value, action: toggleViewType },
+  ]
+})
+
 useDynamicButton({
-  icon: viewToggleIcon,
-  onClick: toggleViewType,
-  show: computed(() => appMode.value && isRefreshed.value),
+  icon: resourceDynamicIcon,
+  onClick: () => (isBatchMode.value ? openBatchDownloadDialog() : toggleViewType()),
+  menuItems: resourceDynamicMenuItems,
+  show: computed(() => appMode.value && isRefreshed.value && !isSubtitleSearch.value),
 })
 
 // 是否正在重新搜索
@@ -582,6 +670,7 @@ function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
 
 // 重置搜索结果
 function resetSearchResults() {
+  resetBatchSelection()
   clearStreamPreviewState(true)
   // 新搜索开始时先回到未完成态，避免上一轮空态在 SSE 返回前抢先显示。
   isRefreshed.value = false
@@ -622,6 +711,7 @@ function updateSearchProgress(eventData: { [key: string]: any }, flushNow: boole
 
 // 设置流式搜索结果
 function setStreamResults(items: Context[]) {
+  resetBatchSelection()
   clearStreamPreviewState()
   rawDataList.value = items
   rawSubtitleDataList.value = []
@@ -634,6 +724,7 @@ function setStreamResults(items: Context[]) {
 
 // 设置字幕搜索结果
 function setSubtitleStreamResults(items: SubtitleInfo[]) {
+  resetBatchSelection()
   clearStreamPreviewState()
   rawSubtitleDataList.value = items
   rawDataList.value = []
@@ -1225,7 +1316,13 @@ onUnmounted(() => {
             :estimated-item-height="400"
           >
             <template #default="{ item }">
-              <TorrentCard :torrent="item" :more="item.more" />
+              <TorrentCard
+                :torrent="item"
+                :more="item.more"
+                :batch-mode="isBatchMode"
+                :selected="selectedTorrentSet.has(item)"
+                @select="toggleTorrentSelection(item)"
+              />
             </template>
           </ProgressiveCardGrid>
           <!-- 无结果时显示 -->
@@ -1308,7 +1405,12 @@ onUnmounted(() => {
                 :get-item-key="getTorrentItemKey"
               >
                 <template #default="{ item, index }">
-                  <TorrentItem :torrent="item" />
+                  <TorrentItem
+                    :torrent="item"
+                    :batch-mode="isBatchMode"
+                    :selected="selectedTorrentSet.has(item)"
+                    @select="toggleTorrentSelection(item)"
+                  />
                   <VDivider v-if="index < filteredRowDataList.length - 1" class="my-2" />
                 </template>
               </ProgressiveCardGrid>
@@ -1331,13 +1433,55 @@ onUnmounted(() => {
 
     <Teleport to="body" v-if="route.path === '/resource'">
       <div v-if="isRefreshed && !appMode" class="compact-fab-stack">
-        <VFab
-          :icon="viewToggleIcon"
-          color="primary"
-          appear
-          class="compact-fab compact-fab--primary"
-          @click="toggleViewType"
-        />
+        <template v-if="isBatchMode">
+          <VFab
+            icon="mdi-close"
+            color="info"
+            variant="tonal"
+            appear
+            class="compact-fab compact-fab--secondary"
+            :aria-label="t('resource.exitBatchMode')"
+            @click="resetBatchSelection"
+          />
+          <VFab
+            :icon="isAllTorrentsSelected ? 'mdi-checkbox-multiple-marked' : 'mdi-checkbox-multiple-marked-outline'"
+            color="info"
+            variant="tonal"
+            appear
+            class="compact-fab compact-fab--secondary"
+            :aria-label="isAllTorrentsSelected ? t('resource.clearSelection') : t('resource.selectAll')"
+            @click="toggleSelectAllTorrents"
+          />
+          <VFab
+            icon="mdi-download"
+            color="primary"
+            appear
+            class="compact-fab compact-fab--primary"
+            :disabled="selectedTorrents.length === 0"
+            :aria-label="t('resource.batchDownloadCount', { count: selectedTorrents.length })"
+            @click="openBatchDownloadDialog"
+          />
+        </template>
+        <template v-else>
+          <VFab
+            v-if="!isSubtitleSearch && visibleTorrentItems.length > 0"
+            icon="mdi-checkbox-multiple-marked-outline"
+            color="info"
+            variant="tonal"
+            appear
+            class="compact-fab compact-fab--secondary"
+            :aria-label="t('resource.batchSelect')"
+            @click="toggleBatchMode"
+          />
+          <VFab
+            :icon="viewToggleIcon"
+            color="primary"
+            appear
+            class="compact-fab compact-fab--primary"
+            :aria-label="t('resource.switchingView')"
+            @click="toggleViewType"
+          />
+        </template>
       </div>
     </Teleport>
 

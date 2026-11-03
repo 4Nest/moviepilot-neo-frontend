@@ -173,6 +173,26 @@ describe('DownloadingCard display and pause state', () => {
     expect(container).not.toHaveTextContent('secret')
   })
 
+  it('shows the save path with a unified tooltip and hides it when absent', async () => {
+    const savePath = '/downloads/Movies/Verity (2026)'
+    const user = userEvent.setup()
+    const { container, rerender } = await renderCard(downloading({ save_path: ` ${savePath} ` }))
+    const pathElement = container.querySelector<HTMLElement>('.downloading-card__save-path')!
+
+    expect(pathElement).toHaveTextContent(savePath)
+    expect(pathElement).not.toHaveAttribute('title')
+    expect(pathElement).toHaveAttribute('tabindex', '0')
+
+    await user.hover(pathElement)
+    const tooltipId = pathElement.getAttribute('aria-describedby')!
+    await waitFor(() => expect(document.getElementById(tooltipId)).toHaveClass('v-overlay--active'))
+    expect(document.getElementById(tooltipId)).toHaveTextContent(savePath)
+
+    await user.unhover(pathElement)
+    await rerender({ downloaderName: 'qb-main', info: downloading({ save_path: ' ' }) })
+    expect(container.querySelector('.downloading-card__save-path')).not.toBeInTheDocument()
+  })
+
   it('only renders a centered cover image when a poster is available', async () => {
     const { container, rerender } = await renderCard()
 
@@ -294,25 +314,46 @@ describe('DownloadingCard display and pause state', () => {
 })
 
 describe('DownloadingCard deletion', () => {
-  it('keeps the card visible when HTTP 200 reports business failure', async () => {
+  it('hides immediately and restores the card when HTTP 200 reports business failure', async () => {
     const requested = vi.fn()
-    server.use(deleteDownloadHandler('hash-1', { success: false, message: '任务仍在运行' }, 200, requested))
+    const responseGate = Promise.withResolvers<void>()
+    server.use(
+      deleteDownloadHandler('hash-1', { success: false, message: '任务仍在运行' }, 200, async url => {
+        requested(url)
+        await responseGate.promise
+      }),
+    )
     const { container } = await renderCard()
 
     await fireEvent.click(actionButtons(container).deleteButton)
 
     await waitFor(() => expect(requested).toHaveBeenCalledOnce())
     expect(requested.mock.calls[0][0].searchParams.get('name')).toBe('qb-main')
-    expect(container.querySelector('.downloading-card')).toBeInTheDocument()
+    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
+
+    responseGate.resolve()
+    await waitFor(() => expect(container.querySelector('.downloading-card')).toBeInTheDocument())
   })
 
-  it('hides the card only after business success', async () => {
-    server.use(deleteDownloadHandler('hash-1', { success: true }))
+  it('hides the card immediately and keeps it hidden after business success', async () => {
+    const requested = vi.fn()
+    const responseGate = Promise.withResolvers<void>()
+    server.use(
+      deleteDownloadHandler('hash-1', { success: true }, 200, async url => {
+        requested(url)
+        await responseGate.promise
+      }),
+    )
     const { container } = await renderCard()
 
     await fireEvent.click(actionButtons(container).deleteButton)
 
-    await waitFor(() => expect(container.querySelector('.downloading-card')).not.toBeInTheDocument())
+    await waitFor(() => expect(requested).toHaveBeenCalledOnce())
+    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
+    responseGate.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
   })
 
   it('keeps the card visible when deletion fails at the HTTP boundary', async () => {

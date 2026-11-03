@@ -10,6 +10,7 @@ import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
+const AddDownloadDialog = defineAsyncComponent(() => import('@/components/dialog/AddDownloadDialog.vue'))
 const DownloadHistoryDialog = defineAsyncComponent(() => import('@/components/dialog/DownloadHistoryDialog.vue'))
 
 // 国际化
@@ -23,9 +24,34 @@ function openDownloadHistoryDialog() {
   openSharedDialog(DownloadHistoryDialog, {}, {}, { closeOn: ['close'] })
 }
 
+type DownloadingListViewExpose = { fetchData: () => Promise<void> }
+const downloadingListViews = new Map<string, DownloadingListViewExpose>()
+
+function setDownloadingListRef(name: string, instance: unknown) {
+  if (instance) downloadingListViews.set(name, instance as DownloadingListViewExpose)
+  else downloadingListViews.delete(name)
+}
+
+async function refreshCurrentDownloader() {
+  await downloadingListViews.get(activeTab.value)?.fetchData()
+}
+
+function openAddDownloadDialog() {
+  openSharedDialog(
+    AddDownloadDialog,
+    { downloader: activeTab.value || undefined },
+    { done: refreshCurrentDownloader },
+    { closeOn: ['close', 'done'] },
+  )
+}
+
 useDynamicButton({
-  icon: 'mdi-history',
-  onClick: openDownloadHistoryDialog,
+  icon: 'mdi-plus',
+  onClick: openAddDownloadDialog,
+  menuItems: [
+    { title: t('downloading.addTorrent'), icon: 'mdi-plus', action: openAddDownloadDialog },
+    { title: t('downloading.history'), icon: 'mdi-history', action: openDownloadHistoryDialog },
+  ],
   show: computed(() => appMode.value),
 })
 
@@ -72,7 +98,11 @@ useKeepAliveRefresh(async () => {
     <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
       <VWindowItem v-for="item in downloaders" :key="item.name" :value="item.name">
         <div>
-          <DownloadingListView :name="item.name" :active="activeTab === item.name" />
+          <DownloadingListView
+            :ref="instance => setDownloadingListRef(item.name, instance)"
+            :name="item.name"
+            :active="activeTab === item.name"
+          />
         </div>
       </VWindowItem>
     </VWindow>
@@ -88,10 +118,18 @@ useKeepAliveRefresh(async () => {
     <div class="compact-fab-stack">
       <VFab
         icon="mdi-history"
+        color="info"
+        variant="tonal"
+        appear
+        class="compact-fab compact-fab--secondary"
+        @click="openDownloadHistoryDialog"
+      />
+      <VFab
+        icon="mdi-plus"
         color="primary"
         appear
         class="compact-fab compact-fab--primary"
-        @click="openDownloadHistoryDialog"
+        @click="openAddDownloadDialog"
       />
     </div>
   </Teleport>

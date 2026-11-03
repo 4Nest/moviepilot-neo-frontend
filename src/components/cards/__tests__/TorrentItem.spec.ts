@@ -109,10 +109,10 @@ function createContext(overrides: ContextOverrides = {}): Context {
   }
 }
 
-async function renderItem(context: Context) {
+async function renderItem(context: Context, batchMode = false, selected = false) {
   return renderWithProviders(TorrentItem, {
     global: { stubs: { VImg: ImageStub } },
-    props: { torrent: context },
+    props: { batchMode, selected, torrent: context },
   })
 }
 
@@ -177,6 +177,23 @@ describe('TorrentItem approved regressions', () => {
     await Promise.resolve()
 
     expect(container.querySelector<HTMLImageElement>('img')?.src).toContain('site-202.png')
+  })
+})
+
+describe('TorrentItem batch selection', () => {
+  beforeEach(() => {
+    mocks.getCachedSiteIcon.mockResolvedValue('https://images.example.com/site-101.png')
+    mocks.openSharedDialog.mockReset()
+  })
+
+  it('emits select instead of opening the single-download dialog', async () => {
+    const { container, emitted } = await renderItem(createContext(), true, true)
+
+    await fireEvent.click(getItem(container))
+
+    expect(emitted().select).toHaveLength(1)
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(getItem(container)).toHaveClass('torrent-item--selected')
   })
 })
 

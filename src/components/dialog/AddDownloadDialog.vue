@@ -43,6 +43,8 @@ const props = defineProps({
   title: String,
   media: Object as PropType<MediaInfo>,
   torrent: Object as PropType<TorrentInfo>,
+  torrents: Array as PropType<TorrentInfo[]>,
+  downloader: String,
 })
 
 // 定义成功和失败事件
@@ -55,7 +57,33 @@ const $toast = useToast()
 const createConfirm = useConfirm()
 
 // 选择的下载器
-const selectedDownloader = ref<string | null>(null)
+const selectedDownloader = ref<string | null>(props.downloader || null)
+
+interface ManualTorrentFile {
+  name: string
+  content: string
+}
+
+// 无预设种子时使用手动输入模式
+const isManualMode = computed(() => !props.torrent && !props.torrents?.length)
+const manualUrl = ref('')
+const manualTitle = ref('')
+const manualTorrentFiles = ref<ManualTorrentFile[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const manualFileName = computed(() => manualTorrentFiles.value[0]?.name || '')
+const manualUrlItems = computed(() =>
+  manualUrl.value
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean),
+)
+const manualTorrentItems = computed<TorrentInfo[]>(() => {
+  if (manualTorrentFiles.value.length)
+    return manualTorrentFiles.value.map(file => ({ torrent_content: file.content }) as TorrentInfo)
+  return manualUrlItems.value.map(enclosure => ({ enclosure }) as TorrentInfo)
+})
+const isManualBatch = computed(() => isManualMode.value && manualTorrentItems.value.length > 1)
+const isBatchMode = computed(() => isManualBatch.value || (props.torrents?.length || 0) > 1)
 
 // 选择的保存目录（始终是路径，不含别名标签）
 const selectedDirectory = ref<string | null>(null)
@@ -101,14 +129,22 @@ const mediaSelectorDialog = ref(false)
 const icon = computed(() => (loading.value ? 'mdi-progress-download' : 'mdi-download'))
 
 // 计算按钮文字
-const buttonText = computed(() =>
-  loading.value ? t('dialog.addDownload.downloading') : t('dialog.addDownload.startDownload'),
-)
+const buttonText = computed(() => {
+  if (loading.value) return t('dialog.addDownload.downloading')
+  if (isBatchMode.value) {
+    return t('dialog.addDownload.startBatchDownload', {
+      count: isManualMode.value ? manualTorrentItems.value.length : props.torrents?.length || 0,
+    })
+  }
+  return t('dialog.addDownload.startDownload')
+})
 
-// 下载确认副标题只保留站点名，完整种子标题由下方信息卡片展示。
+// 预设种子仅展示站点等摘要，手动模式展示输入说明。
 const dialogSubtitle = computed(() => {
-  const siteName = props.torrent?.site_name?.trim()
+  if (isManualMode.value) return t('dialog.addDownload.ManualSubtitle')
+  if (isBatchMode.value) return t('dialog.addDownload.batchSubtitle', { count: props.torrents?.length || 0 })
 
+  const siteName = props.torrent?.site_name?.trim()
   return siteName || props.title?.trim() || props.torrent?.title?.trim() || ''
 })
 
@@ -148,42 +184,185 @@ const downloaderOptions = computed(() => {
   }))
 })
 
+function readTorrentFile(file: File): Promise<ManualTorrentFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error(`无法读取种子文件：${file.name}`))
+        return
+      }
+      resolve({ name: file.name, content: reader.result.split(',', 2)[1] || '' })
+    }
+    reader.onerror = () => reject(reader.error || new Error(`无法读取种子文件：${file.name}`))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onTorrentFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (!files.length) return
+
+  try {
+    manualTorrentFiles.value = await Promise.all(files.map(readTorrentFile))
+    if (files.length === 1 && !manualTitle.value.trim()) manualTitle.value = files[0].name.replace(/\.torrent$/i, '')
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('dialog.addDownload.readTorrentFailed'))
+  }
+}
+
+function clearTorrentFile() {
+  manualTorrentFiles.value = []
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
 // 是否为需要用户确认的未识别资源响应
 function requiresConfirmation(result: ApiResponse<unknown> | undefined) {
   const data = result?.data as { requires_confirmation?: boolean } | null | undefined
   return result?.success === false && data?.requires_confirmation === true
 }
 
+interface DownloadPayload {
+  allow_unrecognized?: boolean
+  downloader: string | null
+  media_id?: string
+  media_in?: MediaInfo
+  media_source?: MediaDataSource
+  save_path: string | null
+  torrent_in: TorrentInfo | undefined
+}
+
+function buildDownloadPayload(torrent: TorrentInfo | undefined, includeMediaId = true): DownloadPayload {
+  const payload: DownloadPayload = {
+    torrent_in: torrent,
+    downloader: selectedDownloader.value,
+    save_path: selectedDirectory.value,
+  }
+  if (props.media) payload.media_in = props.media
+  if (includeMediaId && mediaId.value) {
+    payload.media_source = mediaSource.value
+    payload.media_id = mediaId.value
+  }
+  return payload
+}
+
+interface BatchDownloadOutcome {
+  torrent: TorrentInfo
+  payload: DownloadPayload
+  result?: ApiResponse<unknown>
+  error?: unknown
+}
+
+async function addBatchDownload(torrents: TorrentInfo[]) {
+  const endpoint = props.media ? 'download/' : 'download/add'
+  let succeeded = 0
+  let failed = 0
+  let firstError = ''
+  const succeededTorrents: TorrentInfo[] = []
+  startNProgress()
+  loading.value = true
+  try {
+    const outcomes = await Promise.all(
+      torrents.map(async (torrent): Promise<BatchDownloadOutcome> => {
+        const payload = buildDownloadPayload(torrent, false)
+        try {
+          const result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, payload)
+          return { torrent, payload, result }
+        } catch (error) {
+          return { torrent, payload, error }
+        }
+      }),
+    )
+
+    for (const outcome of outcomes) {
+      if (outcome.error !== undefined || !outcome.result) {
+        failed += 1
+        firstError ||= outcome.error instanceof Error ? outcome.error.message : String(outcome.error || '')
+        console.error(outcome.error)
+        continue
+      }
+
+      const { torrent, payload } = outcome
+      try {
+        let result = outcome.result
+        if (requiresConfirmation(result)) {
+          const confirmed = await createConfirm({
+            type: 'warn',
+            title: t('dialog.addDownload.unrecognizedTitle'),
+            content: t('dialog.addDownload.unrecognizedBatchContent', {
+              title: torrent.title || torrent.enclosure || torrent.site_name || t('common.unknown'),
+            }),
+            confirmText: t('dialog.addDownload.unrecognizedConfirm'),
+          })
+          if (!confirmed) {
+            failed += 1
+            continue
+          }
+          result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, {
+            ...payload,
+            allow_unrecognized: true,
+          })
+        }
+        if (result?.success) {
+          succeeded += 1
+          succeededTorrents.push(torrent)
+        } else {
+          failed += 1
+          firstError ||= result?.message || ''
+        }
+      } catch (error) {
+        failed += 1
+        firstError ||= error instanceof Error ? error.message : String(error)
+        console.error(error)
+      }
+    }
+  } finally {
+    loading.value = false
+    doneNProgress()
+  }
+
+  const message = t('dialog.addDownload.batchResult', { succeeded, failed })
+  if (failed) $toast.error(firstError ? `${message} ${firstError}` : message)
+  else $toast.success(message)
+  if (succeeded) emit('done', succeededTorrents)
+  else emit('error', firstError || message)
+}
+
 // 添加下载
 async function addDownload() {
+  if (isManualMode.value && !manualTorrentItems.value.length) {
+    $toast.error(t('dialog.addDownload.emptyTorrentError'))
+    return
+  }
+
+  if (isManualBatch.value) {
+    await addBatchDownload(manualTorrentItems.value)
+    return
+  }
+
+  const effectiveTorrent = (
+    isManualMode.value
+      ? {
+          ...manualTorrentItems.value[0],
+          title: manualTitle.value.trim() || undefined,
+        }
+      : props.torrents?.length
+        ? props.torrents[0]
+        : props.torrent
+  ) as TorrentInfo | undefined
+
+  if ((props.torrents?.length || 0) > 1) {
+    await addBatchDownload(props.torrents!)
+    return
+  }
+
   let progressActive = true
   startNProgress()
   loading.value = true
   try {
-    const payload: {
-      allow_unrecognized?: boolean
-      downloader: string | null
-      media_id?: string
-      media_in?: MediaInfo
-      media_source?: MediaDataSource
-      save_path: string | null
-      torrent_in: TorrentInfo | undefined
-    } = {
-      torrent_in: props.torrent,
-      downloader: selectedDownloader.value,
-      save_path: selectedDirectory.value,
-    }
-
-    if (props.media) {
-      payload.media_in = props.media
-    }
-
-    // 添加媒体ID辅助识别
-    if (mediaId.value) {
-      payload.media_source = mediaSource.value
-      payload.media_id = mediaId.value
-    }
-
+    const payload = buildDownloadPayload(effectiveTorrent)
     const endpoint = props.media ? 'download/' : 'download/add'
 
     let result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(endpoint, payload)
@@ -210,18 +389,25 @@ async function addDownload() {
     if (result && result.success) {
       // 添加下载成功
       $toast.success(
-        t('dialog.addDownload.downloadSuccess', { site: props.torrent?.site_name, title: props.torrent?.title }),
+        isManualMode.value
+          ? t('dialog.addDownload.manualSuccess')
+          : t('dialog.addDownload.downloadSuccess', {
+              site: effectiveTorrent?.site_name,
+              title: effectiveTorrent?.title,
+            }),
       )
       // 下载成功，返回链接
-      emit('done', props.torrent?.enclosure)
+      emit('done', effectiveTorrent?.enclosure)
     } else {
       // 添加下载失败
       $toast.error(
-        t('dialog.addDownload.downloadFailed', {
-          site: props.torrent?.site_name,
-          title: props.torrent?.title,
-          message: result?.message,
-        }),
+        isManualMode.value
+          ? t('dialog.addDownload.manualFailed', { message: result?.message })
+          : t('dialog.addDownload.downloadFailed', {
+              site: effectiveTorrent?.site_name,
+              title: effectiveTorrent?.title,
+              message: result?.message,
+            }),
       )
       // 下载失败，返回错误原因
       emit('error', result?.message)
@@ -248,27 +434,105 @@ onMounted(() => {
             <VIcon icon="mdi-monitor-arrow-down-variant" size="22" />
           </div>
         </template>
-        <VCardTitle class="add-download-header__title">{{ t('dialog.addDownload.confirmDownload') }}</VCardTitle>
+        <VCardTitle class="add-download-header__title">
+          {{
+            isBatchMode
+              ? t('dialog.addDownload.batchTitle')
+              : isManualMode
+                ? t('dialog.addDownload.manualTitle')
+                : t('dialog.addDownload.confirmDownload')
+          }}
+        </VCardTitle>
         <VCardSubtitle class="add-download-header__subtitle">{{ dialogSubtitle }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
       <VCardText class="add-download-content">
-        <div class="add-download-info">
-          <div class="add-download-info__title">{{ torrent?.title }}</div>
-          <div v-if="torrent?.description" class="add-download-info__description">{{ torrent?.description }}</div>
-          <div class="add-download-info__meta">
-            <span v-if="torrent?.size" class="add-download-info__chip">
+        <div v-if="isManualMode" class="add-download-manual">
+          <VTextarea
+            v-model="manualUrl"
+            :label="t('dialog.addDownload.torrentInputLabel')"
+            :placeholder="t('dialog.addDownload.torrentInputPlaceholder')"
+            :disabled="!!manualTorrentFiles.length"
+            prepend-inner-icon="mdi-link-variant"
+            variant="outlined"
+            density="comfortable"
+            rows="2"
+            auto-grow
+            hide-details
+          />
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".torrent,application/x-bittorrent"
+            class="d-none"
+            multiple
+            @change="onTorrentFileChange"
+          />
+          <div class="add-download-manual__file-actions">
+            <VBtn
+              class="add-download-manual__file-button"
+              variant="tonal"
+              color="primary"
+              prepend-icon="mdi-file-upload-outline"
+              :title="manualFileName || undefined"
+              @click="fileInputRef?.click()"
+            >
+              <span class="add-download-manual__file-label">
+                {{
+                  manualTorrentFiles.length > 1
+                    ? t('dialog.addDownload.selectedFilesChip', { count: manualTorrentFiles.length })
+                    : manualFileName
+                      ? t('dialog.addDownload.selectedFileChip', { name: manualFileName })
+                      : t('dialog.addDownload.uploadTorrentFile')
+                }}
+              </span>
+            </VBtn>
+            <VBtn
+              v-if="manualFileName"
+              icon="mdi-close"
+              variant="text"
+              :aria-label="t('dialog.addDownload.clearTorrentFile')"
+              @click="clearTorrentFile"
+            />
+          </div>
+          <VTextField
+            v-if="!isManualBatch"
+            v-model="manualTitle"
+            :label="t('dialog.addDownload.customTitleLabel')"
+            :placeholder="t('dialog.addDownload.customTitlePlaceholder')"
+            prepend-inner-icon="mdi-form-textbox"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+          />
+        </div>
+        <div v-else class="add-download-info">
+          <div class="add-download-info__title">
+            {{
+              isBatchMode
+                ? t('dialog.addDownload.batchSelected', { count: torrents?.length || 0 })
+                : torrent?.title || torrents?.[0]?.title
+            }}
+          </div>
+          <div
+            v-if="!isBatchMode && (torrent?.description || torrents?.[0]?.description)"
+            class="add-download-info__description"
+          >
+            {{ torrent?.description || torrents?.[0]?.description }}
+          </div>
+          <div v-if="!isBatchMode" class="add-download-info__meta">
+            <span v-if="torrent?.size || torrents?.[0]?.size" class="add-download-info__chip">
               <VIcon icon="mdi-harddisk" size="14" />
-              {{ formatFileSize(torrent?.size || 0) }}
+              {{ formatFileSize(torrent?.size || torrents?.[0]?.size || 0) }}
             </span>
             <span class="add-download-info__chip add-download-info__chip--seeders">
               <VIcon icon="mdi-arrow-up-bold" size="13" />
-              {{ torrent?.seeders ?? '-' }}
+              {{ torrent?.seeders ?? torrents?.[0]?.seeders ?? '-' }}
             </span>
             <span class="add-download-info__chip add-download-info__chip--peers">
               <VIcon icon="mdi-arrow-down-bold" size="13" />
-              {{ torrent?.peers ?? '-' }}
+              {{ torrent?.peers ?? torrents?.[0]?.peers ?? '-' }}
             </span>
           </div>
         </div>
@@ -306,6 +570,7 @@ onMounted(() => {
           size="small"
           color="primary"
           class="add-download-advanced__toggle"
+          :disabled="isBatchMode"
           :prepend-icon="showAdvancedOptions ? 'mdi-chevron-up' : 'mdi-chevron-down'"
           @click="showAdvancedOptions = !showAdvancedOptions"
         >
@@ -315,9 +580,10 @@ onMounted(() => {
               : t('dialog.addDownload.showAdvancedOptions')
           }}
         </VBtn>
-        <div v-show="showAdvancedOptions" class="add-download-advanced">
+        <div v-show="showAdvancedOptions && !isBatchMode" class="add-download-advanced">
           <VTextField
             v-model="mediaId"
+            :disabled="isBatchMode"
             :label="mediaIdLabel"
             :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
             :rules="[numberValidator]"
@@ -385,6 +651,35 @@ onMounted(() => {
 
 .add-download-header__subtitle {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-download-manual {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.add-download-manual__file-actions {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.add-download-manual__file-button {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.add-download-manual__file-button :deep(.v-btn__content) {
+  min-inline-size: 0;
+}
+
+.add-download-manual__file-label {
+  overflow: hidden;
+  min-inline-size: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

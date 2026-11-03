@@ -17,7 +17,11 @@ const props = defineProps({
   more: Array as PropType<Context[]>,
   width: String,
   height: String,
+  batchMode: Boolean,
+  selected: Boolean,
 })
+
+const emit = defineEmits(['select'])
 
 // 种子信息
 const torrent = ref(props.torrent?.torrent_info)
@@ -93,6 +97,11 @@ async function handleAddDownload(item: Context | null = null) {
   )
 }
 
+function handleCardClick() {
+  if (props.batchMode) emit('select')
+  else void handleAddDownload(props.torrent)
+}
+
 // 打开种子详情页面
 function openTorrentDetail(item: Context | null = null) {
   const pageUrl = item && !isNullOrEmptyObject(item) ? item.torrent_info?.page_url : torrent.value?.page_url
@@ -148,9 +157,12 @@ watch(
     <VCard
       :width="props.width || '100%'"
       :variant="isDownloaded ? 'outlined' : 'flat'"
-      @click="handleAddDownload(props.torrent)"
+      @click="handleCardClick"
       class="app-hover-lift-card h-full cursor-pointer d-flex flex-column overflow-hidden torrent-card"
-      :class="{ 'border-success border-2 opacity-85': isDownloaded }"
+      :class="{
+        'border-success border-2 opacity-85': isDownloaded && !props.selected,
+        'border-primary border-2 torrent-card--selected': props.batchMode && props.selected,
+      }"
       hover
     >
       <!-- 优惠标签 -->
@@ -161,6 +173,14 @@ watch(
       >
         {{ torrent?.volume_factor }}
       </div>
+
+      <VIcon
+        v-if="props.batchMode"
+        class="torrent-card__selection-icon"
+        :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
+        :color="props.selected ? 'primary' : 'medium-emphasis'"
+        size="26"
+      />
 
       <!-- 媒体标题 -->
       <VCardItem class="pt-3 pb-0">
@@ -286,6 +306,17 @@ watch(
 /* 卡片悬停效果 */
 .torrent-card {
   border: var(--app-card-light-border);
+}
+
+.torrent-card--selected {
+  background: rgba(var(--v-theme-primary), 0.06);
+}
+
+.torrent-card__selection-icon {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: 0.5rem;
+  inset-inline-start: 0.5rem;
 }
 
 .torrent-card-hover-area:hover .torrent-card {

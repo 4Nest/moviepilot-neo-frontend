@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   apiPost: vi.fn(),
   dynamicButtonOptions: undefined as unknown as { onClick: () => void },
   keepAliveRefresh: undefined as unknown as () => Promise<void>,
+  openSharedDialog: vi.fn(),
   toastError: vi.fn(),
   useDynamicButton: vi.fn(),
 }))
@@ -19,6 +20,10 @@ vi.mock('@/api', () => ({
     get: (...args: unknown[]) => mocks.apiGet(...args),
     post: (...args: unknown[]) => mocks.apiPost(...args),
   },
+}))
+
+vi.mock('@/composables/useSharedDialog', () => ({
+  openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
 }))
 
 vi.mock('@/composables/useDynamicButton', () => ({
@@ -143,15 +148,23 @@ function createSubtitle(title: string): SubtitleInfo {
 const TorrentCardStub = defineComponent({
   props: {
     torrent: { type: Object, required: true },
+    batchMode: Boolean,
+    selected: Boolean,
   },
-  template: '<article data-testid="torrent-card">{{ torrent.torrent_info.title }}</article>',
+  emits: ['select'],
+  template:
+    '<article data-testid="torrent-card" :data-selected="selected" @click="$emit(\'select\')">{{ torrent.torrent_info.title }}</article>',
 })
 
 const TorrentItemStub = defineComponent({
   props: {
     torrent: { type: Object, required: true },
+    batchMode: Boolean,
+    selected: Boolean,
   },
-  template: '<article data-testid="torrent-row">{{ torrent.torrent_info.title }}</article>',
+  emits: ['select'],
+  template:
+    '<article data-testid="torrent-row" :data-selected="selected" @click="$emit(\'select\')">{{ torrent.torrent_info.title }}</article>',
 })
 
 const SubtitleCardStub = defineComponent({
@@ -246,6 +259,12 @@ async function renderResource(initialRoute: { path: string; query?: Record<strin
     stubActions: false,
     global: { stubs: pageStubs },
   })
+}
+
+function fabButton(label: string): HTMLElement {
+  const button = document.querySelector<HTMLElement>(`.v-fab[aria-label="${label}"] button`)
+  if (!button) throw new Error(`未找到浮动按钮：${label}`)
+  return button
 }
 
 async function latestEventSource(expectedCount = 1) {
@@ -652,6 +671,52 @@ describe('resource page search flow', () => {
 
     expect(screen.getByTestId('torrent-card')).toHaveTextContent('切换视图结果')
     expect(localStorage.getItem('MPTorrentsViewType')).toBe('card')
+  })
+
+  it('selects multiple torrents and opens the shared batch download dialog', async () => {
+    localStorage.setItem('MPTorrentsViewType', 'card')
+    const first = createTorrent({ name: '媒体一', title: '批量资源一', pageUrl: 'https://example.test/first' })
+    const second = createTorrent({ name: '媒体二', title: '批量资源二', pageUrl: 'https://example.test/second' })
+    await renderResource({ path: '/resource', query: { keyword: '批量下载', result_type: 'torrent' } })
+    finishStream(await latestEventSource(), [first, second])
+
+    await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
+    await fireEvent.click(fabButton('批量选择'))
+    const cards = await screen.findAllByTestId('torrent-card')
+    await fireEvent.click(cards[0])
+    await fireEvent.click(cards[1])
+    expect(cards[0]).toHaveAttribute('data-selected', 'true')
+    expect(cards[1]).toHaveAttribute('data-selected', 'true')
+
+    await fireEvent.click(fabButton('批量下载（2）'))
+    expect(mocks.openSharedDialog).toHaveBeenCalledWith(
+      expect.any(Object),
+      { torrents: [first.torrent_info, second.torrent_info] },
+      { done: expect.any(Function), error: expect.any(Function) },
+      { closeOn: ['close', 'done', 'error'] },
+    )
+
+    const done = mocks.openSharedDialog.mock.calls[0][2].done
+    done([first.torrent_info])
+    await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
+  })
+
+  it('clears batch selections when search results are replaced', async () => {
+    localStorage.setItem('MPTorrentsViewType', 'card')
+    await renderResource({ path: '/resource', query: { keyword: '批量重置', result_type: 'torrent' } })
+    const source = await latestEventSource()
+    finishStream(source, [createTorrent({ title: '旧资源' })])
+
+    await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
+    await fireEvent.click(fabButton('批量选择'))
+    await fireEvent.click(await screen.findByTestId('torrent-card'))
+    expect(screen.getByTestId('torrent-card')).toHaveAttribute('data-selected', 'true')
+
+    mocks.apiGet.mockResolvedValueOnce({ data: [createTorrent({ title: '新资源' })], success: true })
+    await mocks.keepAliveRefresh()
+    expect(await screen.findByText('新资源')).toBeInTheDocument()
+    expect(fabButton('批量选择')).toBeInTheDocument()
+    expect(screen.getByTestId('torrent-card')).toHaveAttribute('data-selected', 'false')
   })
 
   it('restores a persisted sort field and direction when entering the page', async () => {

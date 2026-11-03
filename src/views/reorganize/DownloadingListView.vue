@@ -48,6 +48,8 @@ onMounted(fetchData)
 useKeepAliveRefresh(fetchData, {
   active: computed(() => props.active !== false),
 })
+
+defineExpose({ fetchData })
 </script>
 
 <template>

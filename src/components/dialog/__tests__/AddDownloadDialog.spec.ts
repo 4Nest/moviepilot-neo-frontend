@@ -109,6 +109,7 @@ const DirectoryComboboxStub = defineComponent({
 const TextFieldStub = defineComponent({
   name: 'NativeTextFieldStub',
   props: {
+    disabled: Boolean,
     label: String,
     modelValue: { type: String, default: '' },
   },
@@ -119,10 +120,33 @@ const TextFieldStub = defineComponent({
         props.label,
         h('input', {
           'aria-label': props.label,
+          'disabled': props.disabled,
           'value': props.modelValue ?? '',
           'onInput': (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
         }),
         h('button', { onClick: () => emit('click:append-inner'), type: 'button' }, '查询媒体编号'),
+      ])
+  },
+})
+
+const TextareaStub = defineComponent({
+  name: 'NativeTextareaStub',
+  props: {
+    disabled: Boolean,
+    label: String,
+    modelValue: { type: String, default: '' },
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit }) {
+    return () =>
+      h('label', [
+        props.label,
+        h('textarea', {
+          'aria-label': props.label,
+          'disabled': props.disabled,
+          'value': props.modelValue ?? '',
+          'onInput': (event: Event) => emit('update:modelValue', (event.target as HTMLTextAreaElement).value),
+        }),
       ])
   },
 })
@@ -244,16 +268,22 @@ function downloadHandler(
 
 async function renderDialog({
   directories = [],
+  downloader,
   downloaders = [],
+  manual = false,
   media,
   recognizeSource = 'themoviedb',
   torrent = createTorrent(),
+  torrents,
 }: {
   directories?: TransferDirectoryConf[]
+  downloader?: string
   downloaders?: Array<{ name: string; type: string }>
+  manual?: boolean
   media?: MediaInfo
   recognizeSource?: string
   torrent?: TorrentInfo
+  torrents?: TorrentInfo[]
 } = {}) {
   const events = {
     close: vi.fn(),
@@ -272,6 +302,7 @@ async function renderDialog({
         VDialog: DialogStub,
         VDialogCloseBtn: DialogCloseButtonStub,
         VSelect: SelectStub,
+        VTextarea: TextareaStub,
         VTextField: TextFieldStub,
       },
     },
@@ -283,13 +314,15 @@ async function renderDialog({
       },
     },
     props: {
+      downloader,
       media,
       modelValue: true,
       onClose: events.close,
       onDone: events.done,
       onError: events.error,
       title: media?.title,
-      torrent,
+      torrent: manual || torrents ? undefined : torrent,
+      torrents,
     },
   })
 
@@ -516,6 +549,211 @@ describe('AddDownloadDialog submissions', () => {
   })
 })
 
+describe('AddDownloadDialog manual torrent input', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.confirm.mockReset().mockResolvedValue(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('submits a magnet link with the active downloader and manual success feedback', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: { download_id: 'abc' }, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      downloader: 'qb-main',
+      downloaders: [{ name: 'qb-main', type: 'qbittorrent' }],
+      manual: true,
+    })
+    const magnet = 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Frieren.S01E01'
+
+    expect(screen.getByText('添加种子任务')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择种子文件（可多选）' })).toBeInTheDocument()
+    await screen.findByRole('option', { name: 'qb-main' })
+    expect(screen.getByLabelText('下载器（默认）')).toHaveValue('qb-main')
+    await user.type(screen.getByLabelText('磁力或种子链接（每行一个）'), magnet)
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toEqual({
+      downloader: 'qb-main',
+      save_path: null,
+      torrent_in: { enclosure: magnet },
+    })
+    expect(events.done).toHaveBeenCalledWith(magnet)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('种子下载任务添加成功！')
+  })
+
+  it('reads a selected torrent file as Base64 and defaults its recognition title', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: { download_id: 'abc' }, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    const { container } = await renderDialog({ manual: true })
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['torrent-bytes'], 'Frieren.S01E01.torrent', { type: 'application/x-bittorrent' })
+
+    await user.upload(fileInput, file)
+    await waitFor(() => expect(screen.getByLabelText('自定义识别标题（可选）')).toHaveValue('Frieren.S01E01'))
+    expect(screen.getByRole('button', { name: `已选文件：${file.name}` })).toHaveAttribute('title', file.name)
+    expect(screen.getByLabelText('磁力或种子链接（每行一个）')).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({
+      torrent_in: {
+        title: 'Frieren.S01E01',
+        torrent_content: btoa('torrent-bytes'),
+      },
+    })
+    expect(submitted.mock.calls[0][0].torrent_in).not.toHaveProperty('enclosure')
+  })
+
+  it('submits each line as an independent download task', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: { download_id: 'abc' }, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    const { events } = await renderDialog({ manual: true })
+    const first = 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Show.S01E01'
+    const second = 'https://tracker.example/Show.S01E02.torrent'
+
+    await user.type(screen.getByLabelText('磁力或种子链接（每行一个）'), `${first}{enter}${second}`)
+    await user.click(screen.getByRole('button', { name: '批量下载（2）' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledTimes(2))
+    expect(submitted.mock.calls.map(call => call[0].torrent_in.enclosure)).toEqual([first, second])
+    expect(submitted.mock.calls.every(call => call[0].media_id === undefined)).toBe(true)
+    expect(events.done).toHaveBeenCalledOnce()
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('批量添加完成：成功 2 个，未添加 0 个')
+  })
+
+  it('reads multiple torrent files and submits their Base64 content independently', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { data: { download_id: 'abc' }, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    const { container, events } = await renderDialog({ manual: true })
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const files = [
+      new File(['first'], 'Show.S01E01.torrent', { type: 'application/x-bittorrent' }),
+      new File(['second'], 'Show.S01E02.torrent', { type: 'application/x-bittorrent' }),
+    ]
+
+    await user.upload(fileInput, files)
+    expect(await screen.findByRole('button', { name: '已选 2 个种子文件' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('自定义识别标题（可选）')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '批量下载（2）' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledTimes(2))
+    expect(submitted.mock.calls.map(call => call[0].torrent_in.torrent_content)).toEqual([
+      btoa('first'),
+      btoa('second'),
+    ])
+    expect(events.done).toHaveBeenCalledOnce()
+  })
+
+  it('rejects an empty manual submission before calling the API', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderDialog({ manual: true })
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    expect(mocks.toastError).toHaveBeenCalledWith('请填写磁力/种子链接或选择 .torrent 文件')
+    expect(submitted).not.toHaveBeenCalled()
+    expect(mocks.startNProgress).not.toHaveBeenCalled()
+  })
+})
+
+describe('AddDownloadDialog preset batch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.confirm.mockReset().mockResolvedValue(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('starts all initial requests before waiting for earlier responses', async () => {
+    const firstGate = Promise.withResolvers<void>()
+    const secondGate = Promise.withResolvers<void>()
+    let calls = 0
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async () => {
+        calls += 1
+        await (calls === 1 ? firstGate.promise : secondGate.promise)
+        return HttpResponse.json({ data: { download_id: `id-${calls}` }, success: true })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      torrents: [createTorrent({ title: '并发资源一' }), createTorrent({ title: '并发资源二' })],
+    })
+
+    await user.click(screen.getByRole('button', { name: '批量下载（2）' }))
+    await waitFor(() => expect(calls).toBe(2))
+
+    firstGate.resolve()
+    secondGate.resolve()
+    await waitFor(() => expect(events.done).toHaveBeenCalledOnce())
+  })
+
+  it('handles unrecognized confirmation after all initial requests finish', async () => {
+    const bodies: Array<{ allow_unrecognized?: boolean; torrent_in: TorrentInfo }> = []
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        const body = (await request.json()) as { allow_unrecognized?: boolean; torrent_in: TorrentInfo }
+        bodies.push(body)
+        if (body.torrent_in.title === '未识别资源' && !body.allow_unrecognized)
+          return HttpResponse.json({
+            data: { requires_confirmation: true },
+            message: '无法识别媒体信息',
+            success: false,
+          })
+        return HttpResponse.json({ data: { download_id: 'abc' }, success: true })
+      }),
+    )
+    const first = createTorrent({ title: '未识别资源' })
+    const second = createTorrent({ title: '已识别资源' })
+    const user = userEvent.setup()
+    const { events } = await renderDialog({ torrents: [first, second] })
+
+    await user.click(screen.getByRole('button', { name: '批量下载（2）' }))
+
+    await waitFor(() => expect(events.done).toHaveBeenCalledWith([first, second]))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(bodies).toHaveLength(3)
+    expect(bodies.slice(0, 2).every(body => !body.allow_unrecognized)).toBe(true)
+    expect(bodies[2]).toMatchObject({ allow_unrecognized: true, torrent_in: { title: '未识别资源' } })
+  })
+
+  it('continues after an item failure and returns only successful torrents', async () => {
+    const bodies: Array<{ torrent_in: TorrentInfo }> = []
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        const body = (await request.json()) as { torrent_in: TorrentInfo }
+        bodies.push(body)
+        return HttpResponse.json(
+          body.torrent_in.title === '失败资源'
+            ? { data: null, message: '任务添加失败', success: false }
+            : { data: { download_id: 'abc' }, success: true },
+        )
+      }),
+    )
+    const first = createTorrent({ title: '成功资源' })
+    const second = createTorrent({ title: '失败资源' })
+    const user = userEvent.setup()
+    const { events } = await renderDialog({ torrents: [first, second] })
+
+    expect(screen.getByText('批量添加下载')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '批量下载（2）' }))
+
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies.map(body => body.torrent_in.title)).toEqual(['成功资源', '失败资源'])
+    expect(events.done).toHaveBeenCalledWith([first])
+    expect(mocks.toastError).toHaveBeenCalledWith('批量添加完成：成功 1 个，未添加 1 个 任务添加失败')
+  })
+})
+
 describe('AddDownloadDialog unrecognized confirmation', () => {
   const confirmationResponse = { data: { requires_confirmation: true }, message: '无法识别媒体信息', success: false }
 
@@ -603,6 +841,31 @@ describe('AddDownloadDialog unrecognized confirmation', () => {
 
     await waitFor(() => expect(events.done).toHaveBeenCalledWith(torrent.enclosure))
     expect(bodies[1]).toMatchObject({ allow_unrecognized: true })
+  })
+
+  it('retries a manual magnet download with allow_unrecognized after confirmation', async () => {
+    const bodies: unknown[] = []
+    let calls = 0
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        bodies.push(await request.json())
+        calls += 1
+        return HttpResponse.json(calls === 1 ? confirmationResponse : { data: { download_id: 'abc' }, success: true })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog({ manual: true })
+    const magnet = 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Unknown.Show.S01E01'
+
+    await user.type(screen.getByLabelText('磁力或种子链接（每行一个）'), magnet)
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(events.done).toHaveBeenCalledWith(magnet))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(bodies).toHaveLength(2)
+    expect(bodies[0]).toMatchObject({ torrent_in: { enclosure: magnet } })
+    expect(bodies[0]).not.toHaveProperty('allow_unrecognized')
+    expect(bodies[1]).toEqual({ ...(bodies[0] as object), allow_unrecognized: true })
   })
 
   it('does not ask for confirmation on an ordinary business failure', async () => {

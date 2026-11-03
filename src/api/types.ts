@@ -765,6 +765,8 @@ export interface DownloadingInfo {
   username?: string
   // 剩余时间
   left_time?: string
+  // 下载保存目录
+  save_path?: string
 }
 
 // 缺失剧集信息
@@ -941,6 +943,8 @@ export interface TorrentInfo {
   imdbid: string
   // 种子链接
   enclosure?: string
+  // Base64 编码的种子文件内容
+  torrent_content?: string
   // 详情页面
   page_url?: string
   // 种子大小

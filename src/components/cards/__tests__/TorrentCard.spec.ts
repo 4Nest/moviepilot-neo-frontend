@@ -96,10 +96,10 @@ function createContext(overrides: ContextOverrides = {}): Context {
   }
 }
 
-async function renderCard(context: Context, more: Context[] = []) {
+async function renderCard(context: Context, more: Context[] = [], batchMode = false, selected = false) {
   return renderWithProviders(TorrentCard, {
     global: { stubs: { VImg: ImageStub } },
-    props: { more, torrent: context },
+    props: { batchMode, more, selected, torrent: context },
   })
 }
 
@@ -158,6 +158,23 @@ describe('TorrentCard approved regressions', () => {
 
     expect(open).not.toHaveBeenCalled()
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+  })
+})
+
+describe('TorrentCard batch selection', () => {
+  beforeEach(() => {
+    mocks.getCachedSiteIcon.mockResolvedValue('https://images.example.com/site-101.png')
+    mocks.openSharedDialog.mockReset()
+  })
+
+  it('emits select instead of opening the single-download dialog', async () => {
+    const { container, emitted } = await renderCard(createContext(), [], true, true)
+
+    await fireEvent.click(getCard(container))
+
+    expect(emitted().select).toHaveLength(1)
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(getCard(container)).toHaveClass('torrent-card--selected')
   })
 })
 

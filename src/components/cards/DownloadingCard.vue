@@ -18,7 +18,7 @@ const props = defineProps({
 
 const { t } = useI18n()
 
-// 卡片在删除成功后就地隐藏，等待外层轮询同步任务列表。
+// 删除时就地隐藏，失败时恢复，外层轮询最终同步任务列表。
 const cardState = ref(true)
 const pendingAction = ref<'delete' | 'toggle' | null>(null)
 const imageLoadError = ref(false)
@@ -69,6 +69,7 @@ const progressValue = computed(() => {
 const progressText = computed(() => `${Math.round(progressValue.value)}%`)
 const sizeText = computed(() => formatFileSize(props.info?.size || 0))
 const remainingTimeText = computed(() => props.info?.left_time?.trim() || '--')
+const savePathText = computed(() => props.info?.save_path?.trim() || '')
 
 /** 从 Tracker 地址中仅提取可展示的主机名，避免暴露路径、查询参数或 passkey。 */
 function getTrackerHostname(tracker?: string) {
@@ -126,17 +127,19 @@ async function toggleDownload() {
   }
 }
 
-/** 删除当前下载任务，并仅在业务请求成功后隐藏卡片。 */
+/** 删除当前下载任务，立即隐藏卡片并在请求失败时恢复。 */
 async function deleteDownload() {
   if (pendingAction.value) return
 
   pendingAction.value = 'delete'
+  cardState.value = false
   try {
     const result: ApiResponse<unknown> = await api.delete(`download/${props.info?.hash}`, {
       params: { name: props.downloaderName },
     })
-    if (result.success) cardState.value = false
+    if (!result.success) cardState.value = true
   } catch (error) {
+    cardState.value = true
     console.error(error)
   } finally {
     pendingAction.value = null
@@ -206,6 +209,16 @@ async function deleteDownload() {
                   {{ sourceSiteText }}
                 </VChip>
               </div>
+
+              <VTooltip v-if="savePathText" :max-width="480" location="top" open-delay="200">
+                <template #activator="{ props: tooltipProps }">
+                  <div v-bind="tooltipProps" class="downloading-card__save-path" tabindex="0">
+                    <VIcon icon="mdi-folder-outline" size="14" />
+                    <span>{{ savePathText }}</span>
+                  </div>
+                </template>
+                <span class="downloading-card__save-path-tooltip">{{ savePathText }}</span>
+              </VTooltip>
 
               <div v-if="progressValue > 0" class="downloading-card__progress">
                 <div class="downloading-card__progress-label">
@@ -341,6 +354,40 @@ async function deleteDownload() {
 
 .downloading-card__chips :deep(.v-chip__content) {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.downloading-card__save-path {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  border-radius: 0.25rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: help;
+  font-size: 0.7rem;
+  gap: 0.3rem;
+}
+
+.downloading-card__save-path:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.downloading-card__save-path-tooltip {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.downloading-card__save-path .v-icon {
+  flex: 0 0 auto;
+}
+
+.downloading-card__save-path span {
+  overflow: hidden;
+  min-inline-size: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

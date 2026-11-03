@@ -12,7 +12,11 @@ const AddDownloadDialog = defineAsyncComponent(() => import('../dialog/AddDownlo
 // 输入参数
 const props = defineProps({
   torrent: Object as PropType<Context>,
+  batchMode: Boolean,
+  selected: Boolean,
 })
+
+const emit = defineEmits(['select'])
 
 // 种子信息
 const torrent = ref(props.torrent?.torrent_info)
@@ -85,6 +89,11 @@ async function handleAddDownload() {
   )
 }
 
+function handleItemClick() {
+  if (props.batchMode) emit('select')
+  else void handleAddDownload()
+}
+
 // 添加下载成功
 function addDownloadSuccess(url: string) {
   markTorrentDownloaded(url)
@@ -120,8 +129,11 @@ watch(
     <VListItem
       :value="props.torrent?.torrent_info?.enclosure"
       class="app-hover-lift-card pa-3 mb-2 rounded torrent-item overflow-hidden"
-      :class="{ 'border-start border-success border-3 opacity-85': isDownloaded }"
-      @click="handleAddDownload"
+      :class="{
+        'border-start border-success border-3 opacity-85': isDownloaded && !props.selected,
+        'border-primary border-2 torrent-item--selected': props.batchMode && props.selected,
+      }"
+      @click="handleItemClick"
     >
       <!-- 优惠标签 -->
       <div
@@ -133,6 +145,13 @@ watch(
       </div>
 
       <template v-slot:prepend>
+        <VIcon
+          v-if="props.batchMode"
+          class="mr-2"
+          :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
+          :color="props.selected ? 'primary' : 'medium-emphasis'"
+          size="24"
+        />
         <div class="d-flex flex-column align-center pr-3" :title="torrent?.site_name">
           <VImg
             v-if="siteIcon"
@@ -250,6 +269,10 @@ watch(
 
 .torrent-item {
   border: var(--app-card-light-border);
+}
+
+.torrent-item--selected {
+  background: rgba(var(--v-theme-primary), 0.06);
 }
 
 .torrent-item-hover-area:hover .torrent-item {
