@@ -609,6 +609,20 @@ describe('AddDownloadDialog manual torrent input', () => {
     expect(submitted.mock.calls[0][0].torrent_in).not.toHaveProperty('enclosure')
   })
 
+  it('clears the selected file and restores link input', async () => {
+    const user = userEvent.setup()
+    const { container } = await renderDialog({ manual: true })
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['torrent-bytes'], 'Frieren.S01E01.torrent', { type: 'application/x-bittorrent' })
+
+    await user.upload(fileInput, file)
+    await user.click(await screen.findByRole('button', { name: '移除文件' }))
+
+    expect(screen.getByRole('button', { name: '选择种子文件（可多选）' })).toBeInTheDocument()
+    expect(screen.getByLabelText('磁力或种子链接（每行一个）')).toBeEnabled()
+    expect(fileInput.files).toHaveLength(0)
+  })
+
   it('submits each line as an independent download task', async () => {
     const submitted = vi.fn()
     server.use(downloadHandler('download/add', { data: { download_id: 'abc' }, success: true }, 200, submitted))
