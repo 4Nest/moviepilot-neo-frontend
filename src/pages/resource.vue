@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { LocationQuery } from 'vue-router'
 import NoDataFound from '@/components/states/NoDataFound.vue'
+import SearchDiagnosticsPanel from '@/components/states/SearchDiagnosticsPanel.vue'
 import api from '@/api'
-import type { Context, SubtitleInfo } from '@/api/types'
+import type { Context, RejectedSearchItem, SearchDiagnostics, SubtitleInfo } from '@/api/types'
+import { normalizeRejectedSearchItems, normalizeSearchDiagnostics } from '@/utils/searchDiagnostics'
+import RejectedTorrentCard from '@/components/cards/RejectedTorrentCard.vue'
 import TorrentCard from '@/components/cards/TorrentCard.vue'
 import TorrentItem from '@/components/cards/TorrentItem.vue'
 import SubtitleCard from '@/components/cards/SubtitleCard.vue'
@@ -50,6 +53,8 @@ interface LastSearchContextResponse {
   data?: {
     params?: Partial<SearchParams>
     results?: Array<Context | SubtitleInfo>
+    diagnostics?: unknown
+    rejected_results?: unknown
   }
 }
 
@@ -57,6 +62,14 @@ const resourceSearchParamsStorageKey = 'MP_ResourceSearchParams'
 type TorrentViewType = 'card' | 'row'
 // 只有最新搜索可以提交结果和可重放参数，避免旧请求覆盖新查询。
 let activeSearchRequestId = 0
+const searchDiagnostics = shallowRef<SearchDiagnostics | null>(null)
+const rejectedItems = shallowRef<RejectedSearchItem[]>([])
+const showRejected = ref(false)
+
+function resetRejectedResults() {
+  rejectedItems.value = []
+  showRejected.value = false
+}
 
 function createSearchParams(query: LocationQuery): SearchParams {
   return {
@@ -152,10 +165,17 @@ async function fetchLastSearchContext() {
     const result = (await api.get('search/last/context')) as LastSearchContextResponse
     if (requestId === activeSearchRequestId) {
       applyRememberedSearchParams(result?.data?.params, true)
+      searchDiagnostics.value = normalizeSearchDiagnostics(result?.data?.diagnostics)
+      rejectedItems.value = normalizeRejectedSearchItems(result?.data?.rejected_results)
+      showRejected.value = false
     }
     return Array.isArray(result?.data?.results) ? result.data.results : []
   } catch (error) {
     console.warn('读取上次搜索上下文失败，回退到仅加载结果:', error)
+    if (requestId === activeSearchRequestId) {
+      searchDiagnostics.value = null
+      resetRejectedResults()
+    }
     const results = await api.get('search/last')
     return (results as unknown as Context[]) || []
   }
@@ -670,6 +690,8 @@ function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
 
 // 重置搜索结果
 function resetSearchResults() {
+  searchDiagnostics.value = null
+  resetRejectedResults()
   resetBatchSelection()
   clearStreamPreviewState(true)
   // 新搜索开始时先回到未完成态，避免上一轮空态在 SSE 返回前抢先显示。
@@ -795,6 +817,8 @@ function handleSearchStreamMessage(eventData: { [key: string]: any }) {
   if (eventData.type === 'heartbeat') return
 
   if (eventData.type === 'error') {
+    searchDiagnostics.value = null
+    resetRejectedResults()
     updateSearchProgress(eventData, true)
     errorDescription.value = eventData.message_i18n || eventData.message || t('resource.noResourceFound')
     return
@@ -830,6 +854,11 @@ function handleSearchStreamMessage(eventData: { [key: string]: any }) {
     return
   }
 
+  if (eventData.type === 'done') {
+    searchDiagnostics.value = normalizeSearchDiagnostics(eventData.diagnostics)
+    rejectedItems.value = normalizeRejectedSearchItems(eventData.rejected_items)
+    showRejected.value = false
+  }
   const items = Array.isArray(eventData.items) ? (eventData.items as Context[]) : []
   if (eventData.type === 'append') {
     updateSearchProgress(eventData)
@@ -850,6 +879,8 @@ async function searchByRequest(params: SearchParams, requestToken: string | unde
   const items = await requestSearchResults(params, requestToken)
   if (requestId !== activeSearchRequestId) return false
 
+  searchDiagnostics.value = null
+  resetRejectedResults()
   errorDescription.value = t('resource.noResourceFound')
   streamTotalCount.value = items.length
   if (params.result_type === 'subtitle') {
@@ -1036,6 +1067,8 @@ async function fetchData(options: { force?: boolean; params?: SearchParams; sile
       }
       if (requestId !== activeSearchRequestId) return
       errorDescription.value = t('resource.noResourceFound')
+      searchDiagnostics.value = null
+      resetRejectedResults()
       streamTotalCount.value = results.length
       if (currentSearchParams.result_type === 'subtitle') {
         setSubtitleStreamResults(results as SubtitleInfo[])
@@ -1249,6 +1282,14 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <SearchDiagnosticsPanel
+      v-if="isRefreshed && !progressActive && !isSubtitleSearch && searchDiagnostics"
+      :diagnostics="searchDiagnostics"
+      :rejected-count="rejectedItems.length"
+      :show-rejected="showRejected"
+      @toggle-rejected="showRejected = !showRejected"
+    />
+
     <!-- 搜索结果 -->
     <div v-if="isRefreshed && hasData" class="search-results-container">
       <!-- 筛选栏 -->
@@ -1392,26 +1433,24 @@ onUnmounted(() => {
                 class="stream-result-item"
               >
                 <TorrentItem :torrent="item" />
-                <VDivider v-if="index < streamPreviewDataList.length - 1" class="my-2" />
               </div>
             </div>
             <div v-else-if="!isSubtitleSearch && filteredRowDataList.length > 0" class="resource-list">
               <ProgressiveCardGrid
                 :items="filteredRowDataList"
                 :columns="1"
-                :gap="8"
+                :gap="10"
                 :estimated-item-height="240"
                 :overscan-rows="6"
                 :get-item-key="getTorrentItemKey"
               >
-                <template #default="{ item, index }">
+                <template #default="{ item }">
                   <TorrentItem
                     :torrent="item"
                     :batch-mode="isBatchMode"
                     :selected="selectedTorrentSet.has(item)"
                     @select="toggleTorrentSelection(item)"
                   />
-                  <VDivider v-if="index < filteredRowDataList.length - 1" class="my-2" />
                 </template>
               </ProgressiveCardGrid>
             </div>
@@ -1430,6 +1469,37 @@ onUnmounted(() => {
 
     <!-- 初始加载状态 -->
     <LoadingBanner v-else-if="!isRefreshed && !isSearchLoading" />
+
+    <!-- 已过滤资源 -->
+    <section
+      v-if="showRejected && rejectedItems.length"
+      class="rejected-results my-6"
+      :aria-label="t('resource.diagnostics.rejectedTitle')"
+    >
+      <div class="rejected-results__header d-flex align-center gap-2 mb-3">
+        <VIcon icon="mdi-filter-remove-outline" size="18" />
+        <h2 class="rejected-results__title my-0">{{ t('resource.diagnostics.rejectedTitle') }}</h2>
+        <span class="rejected-results__count">
+          {{ t('resource.diagnostics.rejectedCount', { count: rejectedItems.length }) }}
+        </span>
+      </div>
+      <div v-if="viewType === 'row'" class="resource-list resource-list--rejected">
+        <RejectedTorrentCard
+          v-for="(item, index) in rejectedItems"
+          :key="`${getTorrentItemKey(item.context, index)}-rejected-${index}`"
+          :item="item"
+          mode="row"
+        />
+      </div>
+      <div v-else class="grid gap-4 grid-torrent-card items-start">
+        <RejectedTorrentCard
+          v-for="(item, index) in rejectedItems"
+          :key="`${getTorrentItemKey(item.context, index)}-rejected-${index}`"
+          :item="item"
+          mode="card"
+        />
+      </div>
+    </section>
 
     <Teleport to="body" v-if="route.path === '/resource'">
       <div v-if="isRefreshed && !appMode" class="compact-fab-stack">
@@ -1621,7 +1691,33 @@ onUnmounted(() => {
 
 .search-results-container {
   position: relative;
-  min-block-size: 50vh;
+}
+
+.rejected-results {
+  padding: 14px;
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.rejected-results__header {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
+.rejected-results__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rejected-results__count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 卡片网格布局 */
@@ -1631,11 +1727,16 @@ onUnmounted(() => {
 
 /* 列表视图样式 */
 .resource-list-container {
-  padding: 8px;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .resource-list {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* 无结果提示 */

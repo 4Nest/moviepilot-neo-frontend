@@ -161,6 +161,7 @@ watch(
       class="app-hover-lift-card h-full cursor-pointer d-flex flex-column overflow-hidden torrent-card"
       :class="{
         'border-success border-2 opacity-85': isDownloaded && !props.selected,
+        'torrent-card--batch': props.batchMode,
         'border-primary border-2 torrent-card--selected': props.batchMode && props.selected,
       }"
       hover
@@ -236,7 +237,10 @@ watch(
       </VCardText>
 
       <!-- 卡片底部信息：站点在左下，统计与操作在右 -->
-      <VCardActions class="torrent-card__footer border-t border-opacity-10 mt-auto pa-2">
+      <VCardActions
+        class="torrent-card__footer border-t border-opacity-10 mt-auto pa-2"
+        :class="{ 'torrent-card__footer--with-more': props.more && props.more.length > 0 }"
+      >
         <div class="torrent-card__site">
           <VImg
             v-if="siteIcons[torrent?.site || 0]"
@@ -271,7 +275,7 @@ watch(
           更多来源 ({{ props.more.length }})
         </VBtn>
 
-        <div class="d-flex align-center gap-1 flex-shrink-0">
+        <div class="torrent-card__stats d-flex align-center gap-1 flex-shrink-0">
           <span class="torrent-stat torrent-stat--seeders">
             <VIcon icon="mdi-arrow-up-bold" size="13" />
             {{ torrent?.seeders ?? '-' }}
@@ -284,8 +288,15 @@ watch(
             <VIcon icon="mdi-harddisk" size="14" />
             {{ formatFileSize(torrent.size) }}
           </span>
-          <VBtn icon size="small" variant="text" color="primary" @click.stop="openTorrentDetail()">
-            <VIcon icon="mdi-information-outline"></VIcon>
+          <VBtn
+            icon
+            size="x-small"
+            density="comfortable"
+            variant="text"
+            color="primary"
+            @click.stop="openTorrentDetail()"
+          >
+            <VIcon icon="mdi-information-outline" size="18"></VIcon>
           </VBtn>
         </div>
       </VCardActions>
@@ -310,6 +321,10 @@ watch(
 
 .torrent-card--selected {
   background: rgba(var(--v-theme-primary), 0.06);
+}
+
+.torrent-card--batch .torrent-card__media-title {
+  margin-inline-start: 1.75rem;
 }
 
 .torrent-card__selection-icon {
@@ -347,7 +362,7 @@ watch(
   font-weight: 650;
   gap: 0.22rem;
   line-height: 1;
-  padding: 0.26rem 0.55rem;
+  padding: 0.24rem 0.45rem;
   white-space: nowrap;
 }
 
@@ -362,17 +377,26 @@ watch(
 }
 
 .torrent-card__footer {
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+}
+
+.torrent-card__footer--with-more {
   flex-wrap: wrap;
-  gap: 0.5rem;
+}
+
+.torrent-card__stats {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .torrent-card__site {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   min-inline-size: 0;
 }
-
 .torrent-card__site-text {
   display: flex;
   flex-direction: column;
@@ -386,6 +410,14 @@ watch(
   font-size: 0.8rem;
   font-weight: 600;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.torrent-card__time {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.25;
   white-space: nowrap;
 }
 

@@ -919,6 +919,50 @@ export interface DashboardItem {
   render_mode?: string
 }
 
+/** 单项资源被过滤的具体规则原因。 */
+export interface SearchDiagnosticRejectionDetail {
+  code: string
+  count: number
+  rule_group?: string | null
+  rule?: string | null
+  expected?: string | null
+  actual?: string | null
+}
+
+/** 搜索结束时保留的被过滤资源及其逐项原因。 */
+export interface RejectedSearchItem {
+  context: Context
+  reasons: SearchDiagnosticRejectionDetail[]
+}
+
+/** 后端提供的可选搜索诊断；单页统计不能当作整次搜索总数。 */
+export interface SearchDiagnostics {
+  version: 1
+  search_id: string
+  scope: 'page' | 'search'
+  searched_sites: Array<{
+    site_id: number | null
+    site_name: string
+    attempted: boolean
+    outcome: 'success' | 'empty' | 'error' | 'cooldown' | 'unknown'
+    raw_count: number
+  }>
+  stage_counts: { candidates: number; retained: number }
+  rejection_reasons: Array<{
+    code: string
+    count: number
+    details?: SearchDiagnosticRejectionDetail[]
+  }>
+  rule_groups: Array<{
+    name: string
+    status: 'effective' | 'skipped'
+    reason: 'rule_group_not_applicable' | 'rule_group_missing' | null
+    media_type: string | null
+    categories: string[]
+  }>
+  warnings: Array<{ code: string; rule_group?: string | null }>
+}
+
 // 种子信息
 export interface TorrentInfo {
   // 站点ID

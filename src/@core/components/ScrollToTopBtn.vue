@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+defineProps<{ offsetFab?: boolean }>()
+
 // 控制回到顶部按钮的可见性
 const showScrollToTop = ref(false)
 const scrollThreshold = 200 // 滚动多少像素后显示按钮
@@ -26,7 +28,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="global-action-buttons d-none d-sm-block">
+  <div class="global-action-buttons d-none d-sm-block" :class="{ 'global-action-buttons--offset-fab': offsetFab }">
     <Transition name="scroll-fade">
       <button v-show="showScrollToTop" class="global-action-button" @click="scrollToTop">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -47,39 +49,53 @@ onUnmounted(() => {
 /* Global Action Button Styles (FAB) */
 .global-action-buttons {
   position: fixed;
-  z-index: 100;
+  z-index: 1099;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  inset-block-end: 2rem;
-  inset-inline-end: 2rem;
+  gap: 0.75rem;
+  inset-block-end: max(1rem, calc(env(safe-area-inset-bottom) + 1rem));
+  inset-inline-end: max(1rem, calc(env(safe-area-inset-right) + 1rem));
+  transition: inset-inline-end 0.2s ease;
+}
+
+.global-action-buttons--offset-fab {
+  inset-inline-end: calc(max(1rem, calc(env(safe-area-inset-right) + 1rem)) + 3.75rem);
 }
 
 .global-action-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.05);
+  border: 1px solid rgba(var(--v-theme-primary), 0.18);
   border-radius: 50%;
-  backdrop-filter: blur(10px);
-  background-color: rgba(var(--v-theme-background), 0.8);
-  block-size: 44px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 8%);
-  color: rgb(var(--v-theme-on-surface));
+  backdrop-filter: blur(18px) saturate(1.12);
+  background-color: rgba(var(--v-theme-surface), 0.84);
+  background-image: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.14), rgba(var(--v-theme-primary), 0.06));
+  block-size: 3rem;
+  box-shadow: var(--app-fab-shadow);
+  color: rgb(var(--v-theme-primary));
   cursor: pointer;
-  inline-size: 44px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  inline-size: 3rem;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
 
   &:hover {
-    background-color: rgba(var(--v-theme-background), 0.95);
-    color: rgb(var(--v-theme-primary));
-    transform: translateY(-4px);
+    background-color: rgba(var(--v-theme-surface), 0.94);
+    box-shadow: var(--app-fab-shadow-hover);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    box-shadow: var(--app-fab-shadow-active);
+    transform: translateY(0) scale(0.98);
   }
 
   svg {
-    block-size: 20px;
-    inline-size: 20px;
-    transition: all 0.3s ease;
+    block-size: 22px;
+    inline-size: 22px;
+    transition: transform 0.18s ease;
   }
 }
 </style>

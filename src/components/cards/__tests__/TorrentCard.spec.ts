@@ -174,6 +174,7 @@ describe('TorrentCard batch selection', () => {
 
     expect(emitted().select).toHaveLength(1)
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(getCard(container)).toHaveClass('torrent-card--batch')
     expect(getCard(container)).toHaveClass('torrent-card--selected')
   })
 })

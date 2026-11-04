@@ -1,5 +1,6 @@
-import type { Context, SubtitleInfo } from '@/api/types'
+import type { Context, RejectedSearchItem, SubtitleInfo } from '@/api/types'
 import ResourcePage from '@/pages/resource.vue'
+import { createSearchDiagnostics } from '@tests/support/fixtures/searchDiagnostics'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { defineComponent, nextTick } from 'vue'
@@ -136,6 +137,24 @@ function createTorrent(overrides: TorrentOverrides = {}): Context {
   } as Context
 }
 
+function createRejectedItem(): RejectedSearchItem {
+  const context = createTorrent({ name: '被过滤媒体', title: '被过滤种子', site: '过滤站点' })
+  context.media_info = { title: '被过滤媒体' } as Context['media_info']
+  return {
+    context,
+    reasons: [
+      {
+        code: 'include_missed',
+        count: 1,
+        rule_group: '默认规则',
+        rule: '仅含中文字幕',
+        expected: '中文字幕',
+        actual: null,
+      },
+    ],
+  }
+}
+
 function createSubtitle(title: string): SubtitleInfo {
   return {
     enclosure: `https://example.test/${title}.srt`,
@@ -154,6 +173,14 @@ const TorrentCardStub = defineComponent({
   emits: ['select'],
   template:
     '<article data-testid="torrent-card" :data-selected="selected" @click="$emit(\'select\')">{{ torrent.torrent_info.title }}</article>',
+})
+
+const RejectedTorrentCardStub = defineComponent({
+  props: {
+    item: { type: Object, required: true },
+  },
+  template:
+    '<article data-testid="rejected-torrent-card">{{ item.context.media_info.title }} {{ item.context.torrent_info.title }}</article>',
 })
 
 const TorrentItemStub = defineComponent({
@@ -242,6 +269,7 @@ const pageStubs = {
   LoadingBanner: PassThroughStub,
   NoDataFound: NoDataFoundStub,
   ProgressiveCardGrid: ProgressiveCardGridStub,
+  RejectedTorrentCard: RejectedTorrentCardStub,
   SubtitleCard: SubtitleCardStub,
   SubtitleItem: SubtitleItemStub,
   Teleport: true,
@@ -389,6 +417,72 @@ describe('resource page search flow', () => {
       throw new Error(`Unexpected GET ${endpoint}`)
     })
     mocks.apiPost.mockResolvedValue({ success: true, data: { status: 'disabled' } })
+  })
+
+  it('shows diagnostics only after the current successful terminal event', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '诊断测试', result_type: 'torrent' } })
+    const source = await latestEventSource()
+    source.message({ type: 'replace', items: [], diagnostics: createSearchDiagnostics(), value: 100 })
+    expect(screen.queryByRole('status', { name: '本页搜索情况' })).not.toBeInTheDocument()
+    source.message({ type: 'done', diagnostics: createSearchDiagnostics() })
+    source.fail()
+    expect(await screen.findByRole('status', { name: '本页搜索情况' })).toHaveTextContent('规则“中文字幕”未应用')
+  })
+
+  it('shows and hides rejected torrents from the terminal search event', async () => {
+    const rendered = await renderResource({ path: '/resource', query: { keyword: '过滤测试', result_type: 'torrent' } })
+    const source = await latestEventSource()
+    source.message({
+      type: 'done',
+      diagnostics: createSearchDiagnostics(),
+      rejected_items: [createRejectedItem(), { context: null, reasons: [] }],
+    })
+    source.fail()
+
+    expect(await screen.findByRole('status', { name: '本页搜索情况' })).toBeInTheDocument()
+    expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: '显示过滤' }))
+    expect(screen.getByRole('region', { name: '已过滤资源' })).toHaveTextContent('1 项')
+    expect(screen.getByTestId('rejected-torrent-card')).toHaveTextContent('被过滤媒体 被过滤种子')
+    await fireEvent.click(screen.getByRole('button', { name: '隐藏过滤' }))
+    expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: '显示过滤' }))
+    expect(screen.getByTestId('rejected-torrent-card')).toBeInTheDocument()
+    await rendered.router.push({ path: '/resource', query: { keyword: '下一轮搜索', result_type: 'torrent' } })
+    const nextSource = await latestEventSource(2)
+    expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
+    finishStream(nextSource, [createTorrent({ title: '新搜索结果' })])
+    expect(await screen.findByText('新搜索结果')).toBeInTheDocument()
+    expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
+  })
+
+  it('restores optional diagnostics with the matching remembered results', async () => {
+    mocks.apiGet.mockResolvedValueOnce({
+      success: true,
+      data: {
+        params: { keyword: '记住的搜索' },
+        results: [],
+        diagnostics: createSearchDiagnostics(),
+        rejected_results: [createRejectedItem()],
+      },
+    })
+    await renderResource()
+    expect(await screen.findByRole('status', { name: '本页搜索情况' })).toBeInTheDocument()
+    expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: '显示过滤' }))
+    expect(screen.getByTestId('rejected-torrent-card')).toHaveTextContent('被过滤媒体 被过滤种子')
+  })
+
+  it('ignores diagnostics from a canceled stream and supports old backend events', async () => {
+    const rendered = await renderResource({ path: '/resource', query: { keyword: '旧搜索', result_type: 'torrent' } })
+    const old = await latestEventSource()
+    await rendered.router.push({ path: '/resource', query: { keyword: '新搜索', result_type: 'torrent' } })
+    const current = await latestEventSource(2)
+    old.message({ type: 'done', diagnostics: createSearchDiagnostics() })
+    finishStream(current, [createTorrent({ title: '新结果' })])
+    expect(await screen.findByText('新结果')).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: '本页搜索情况' })).not.toBeInTheDocument()
   })
 
   it.each(searchRouteCases)(
