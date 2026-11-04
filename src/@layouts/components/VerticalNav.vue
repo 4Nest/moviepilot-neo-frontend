@@ -53,7 +53,7 @@ function handleNavScroll(evt: Event) {
         <RouterLink to="/" class="app-logo d-flex align-center app-title-wrapper">
           <NeoLogoMark class="brand-logo-mark" />
 
-          <h1 class="leading-normal text-lg text-nowrap">
+          <h1 class="app-logo-title leading-normal text-nowrap">
             <span class="moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
           </h1>
         </RouterLink>
@@ -115,8 +115,13 @@ function handleNavScroll(evt: Event) {
   .app-title-wrapper {
     flex: 1;
     justify-content: center;
-    gap: 0.6rem;
+    gap: 0.75rem;
     margin-inline-end: 0;
+  }
+
+  .app-logo-title {
+    font-size: 1.35rem;
+    line-height: 1;
   }
 
   .nav-items {
