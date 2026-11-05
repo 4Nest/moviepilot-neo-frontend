@@ -2178,6 +2178,7 @@ export default {
         fieldResolution: '分辨率',
         fieldQuality: '资源质量',
         fieldEffect: '特效',
+        fieldWebSource: '流媒体平台',
         fieldReleaseGroup: '制作组',
         fieldSite: '站点',
         include: '包含',

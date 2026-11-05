@@ -94,10 +94,20 @@ describe('SubscribeAutoFillSetting', () => {
     await renderWithProviders(SubscribeAutoFillSetting)
     await screen.findByTestId('category-rule')
 
+    await fireEvent.click(screen.getByText('流媒体平台'))
+
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/SubscribeDownloadBackfill', ['include', 'web_source']),
+    )
+
     await fireEvent.click(screen.getByText('站点'))
 
     await waitFor(() =>
-      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/SubscribeDownloadBackfill', ['include', 'sites']),
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/SubscribeDownloadBackfill', [
+        'include',
+        'web_source',
+        'sites',
+      ]),
     )
   })
 

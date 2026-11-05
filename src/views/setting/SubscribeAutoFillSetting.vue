@@ -57,6 +57,7 @@ const backfillOptions = computed(() => [
   { title: t('setting.subscribe.autoFill.fieldResolution'), value: 'resolution' },
   { title: t('setting.subscribe.autoFill.fieldQuality'), value: 'quality' },
   { title: t('setting.subscribe.autoFill.fieldEffect'), value: 'effect' },
+  { title: t('setting.subscribe.autoFill.fieldWebSource'), value: 'web_source' },
   { title: t('setting.subscribe.autoFill.fieldReleaseGroup'), value: 'include' },
   { title: t('setting.subscribe.autoFill.fieldSite'), value: 'sites' },
 ])
