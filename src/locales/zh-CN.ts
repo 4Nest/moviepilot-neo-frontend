@@ -428,7 +428,7 @@ export default {
     },
     notification: {
       title: '通知',
-      description: '企业微信、Telegram 通知渠道与消息发送范围',
+      description: '企业微信、Telegram、App 私有推送渠道与消息发送范围',
     },
     about: {
       title: '关于',
@@ -555,6 +555,18 @@ export default {
       apiUrl: '代理API地址',
       apiUrlHint: '自定义代理API地址，格式：https://api.telegram.org',
       apiUrlPlaceholder: 'https://api.telegram.org',
+    },
+    apppush: {
+      name: 'App 私有推送',
+      server: '消息中心地址（可选）',
+      serverHint: '留空使用 MoviePilot 已配置的中心服务；接入凭据由后台自动登记。',
+      manual: '手动接入现有服务',
+      key: '实例中转密钥',
+      keyHint: '通常无需填写。仅兼容已有 Server 手工密钥，至少 32 位；填写后停用自动接入。',
+      hint: '启用后自动接入消息中心，无需索取实例密钥。在 App 的“连接与显示 -> 通知”中绑定设备；免费自签使用主屏幕通知网页。',
+      rotate: '轮换接入凭据',
+      rotated: '接入凭据已轮换，设备绑定保留',
+      rotateFailed: '凭据轮换失败，请稍后重试',
     },
   },
   shortcut: {
@@ -1929,6 +1941,7 @@ export default {
       plugin: '插件',
       other: '其它',
       telegram: 'Telegram',
+      apppush: 'App 私有推送',
     },
     words: {
       summary: '共 {sections} 类词表 · {entries} 条配置',

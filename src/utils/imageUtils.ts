@@ -16,6 +16,7 @@ import ugreenLogo from '@/assets/images/logos/ugreen.png'
 import vyoLogo from '@/assets/images/logos/vyo.png'
 import wechatLogo from '@/assets/images/logos/wechat.png'
 import telegramLogo from '@/assets/images/logos/telegram.webp'
+import notificationLogo from '@/assets/images/logos/notification.png'
 import downloaderLogo from '@/assets/images/logos/downloader.png'
 import mediaserverLogo from '@/assets/images/logos/mediaserver.png'
 import doubanLogo from '@/assets/images/logos/douban.png'
@@ -42,6 +43,7 @@ const logoMap: Record<string, string> = {
   mediavault: vyoLogo,
   wechat: wechatLogo,
   telegram: telegramLogo,
+  notification: notificationLogo,
   downloader: downloaderLogo,
   mediaserver: mediaserverLogo,
   douban: doubanLogo,

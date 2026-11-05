@@ -213,6 +213,7 @@ const notificationConfigFields: Record<NotificationChannelType, Set<string>> = {
     'WECHAT_BOT_WS_URL',
     'WECHAT_ADMINS',
   ]),
+  apppush: new Set(['PUSH_SERVER_URL', 'PUSH_RELAY_KEY']),
 }
 
 /** 丢弃历史未知字段，保留缺失字段供用户在编辑器中补齐。 */
@@ -240,7 +241,7 @@ async function loadNotificationSetting() {
   try {
     const result: { [key: string]: any } = await api.get('system/setting/Notifications')
     notifications.value = (result.data?.value ?? [])
-      .filter((item: NotificationConf) => ['wechat', 'telegram'].includes(item.type))
+      .filter((item: NotificationConf) => ['wechat', 'telegram', 'apppush'].includes(item.type))
       .map(normalizeNotification)
     invalidNotifications.value = result.data?.invalid ?? []
   } catch (error) {
@@ -443,6 +444,9 @@ useSilentSettingRefresh(loadPageData, {
                     </VListItem>
                     <VListItem @click="addNotification('telegram')">
                       <VListItemTitle>{{ t('setting.notification.telegram') }}</VListItemTitle>
+                    </VListItem>
+                    <VListItem @click="addNotification('apppush')">
+                      <VListItemTitle>{{ t('setting.notification.apppush') }}</VListItemTitle>
                     </VListItem>
                   </VList>
                 </VMenu>

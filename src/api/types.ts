@@ -1537,7 +1537,7 @@ export interface DownloaderConf {
   path_mapping?: Array<[storagePath: string, downloadPath: string]>
 }
 
-export type NotificationChannelType = 'telegram' | 'wechat'
+export type NotificationChannelType = 'telegram' | 'wechat' | 'apppush'
 export type NotificationScene = '资源下载' | '整理入库' | '订阅' | '站点' | '媒体服务器' | '手动处理' | '插件' | '其它'
 export type NotificationScope = 'all' | 'user' | 'admin' | 'user,admin'
 
@@ -1547,7 +1547,7 @@ export interface NotificationConf {
   id?: string
   // 名称
   name: string
-  // 类型 telegram/wechat
+  // 类型 telegram/wechat/apppush
   type: NotificationChannelType
   // 配置
   config: Record<string, string | undefined>

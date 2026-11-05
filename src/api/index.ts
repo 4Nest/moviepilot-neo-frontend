@@ -134,7 +134,7 @@ api.interceptors.response.use(
       // 认证 Store
       const authStore = useAuthStore()
       // 清除登录状态信息
-      authStore.logout()
+      authStore.resetSession()
       // token验证失败，跳转到登录页面
       router.push('/login')
     } else {

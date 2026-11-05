@@ -73,6 +73,39 @@ const notificationInfo = ref<NotificationConf>({
   config: {},
 })
 
+const appPushManualPanel = ref<string>()
+const appPushRotating = ref(false)
+const appPushCanRotate = computed(() => {
+  const saved = props.notifications.find(item => item.id === notificationInfo.value.id)
+  return Boolean(
+    saved?.enabled &&
+    saved.type === 'apppush' &&
+    saved.name === notificationInfo.value.name &&
+    !saved.config?.PUSH_RELAY_KEY &&
+    !notificationInfo.value.config?.PUSH_RELAY_KEY &&
+    String(saved.config?.PUSH_SERVER_URL || '').trim() ===
+      String(notificationInfo.value.config?.PUSH_SERVER_URL || '').trim(),
+  )
+})
+
+/** 仅为已保存的渠道发起轮换，草稿地址和手工密钥不会进入此请求。 */
+async function rotateAppPush() {
+  if (!appPushCanRotate.value) return
+  appPushRotating.value = true
+  try {
+    const result = (await api.post('notification/app/instance', {
+      action: 'rotate',
+      source: notificationInfo.value.name,
+    })) as ApiResponse
+    if (result.success) $toast.success(t('notification.apppush.rotated'))
+    else $toast.error(result.message || t('notification.apppush.rotateFailed'))
+  } catch (error) {
+    $toast.error(getApiErrorMessage(error) || t('notification.apppush.rotateFailed'))
+  } finally {
+    appPushRotating.value = false
+  }
+}
+
 // 消息类型下拉字典
 const notificationTypes = [
   { value: '资源下载', title: t('notificationSwitch.resourceDownload') },
@@ -117,6 +150,7 @@ const isWechatBotMode = computed({
 /** 初始化通知渠道编辑数据。 */
 function openNotificationInfoDialog() {
   notificationInfo.value = cloneDeep(props.notification)
+  appPushManualPanel.value = notificationInfo.value.config?.PUSH_RELAY_KEY ? 'manual' : undefined
   ensureWechatConfigDefaults(notificationInfo.value)
   notificationInfoDialog.value = true
 }
@@ -381,6 +415,53 @@ onMounted(() => {
                 persistent-hint
                 prepend-inner-icon="mdi-web"
               />
+            </VCol>
+          </VRow>
+          <VRow v-else-if="notificationInfo.type == 'apppush'">
+            <VCol cols="12">
+              <VTextField
+                v-model="notificationInfo.name"
+                :label="t('notification.name')"
+                :placeholder="t('notification.name')"
+                :hint="t('notification.nameHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12">
+              <VTextField
+                v-model="notificationInfo.config.PUSH_SERVER_URL"
+                :label="t('notification.apppush.server')"
+                placeholder="https://push.example.com"
+                :hint="t('notification.apppush.serverHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-server-network"
+              />
+            </VCol>
+            <VCol cols="12">
+              <VExpansionPanels v-model="appPushManualPanel" variant="accordion">
+                <VExpansionPanel value="manual" :title="t('notification.apppush.manual')">
+                  <VExpansionPanelText>
+                    <VTextField
+                      v-model="notificationInfo.config.PUSH_RELAY_KEY"
+                      type="password"
+                      autocomplete="new-password"
+                      :label="t('notification.apppush.key')"
+                      :hint="t('notification.apppush.keyHint')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-key"
+                    />
+                  </VExpansionPanelText>
+                </VExpansionPanel>
+              </VExpansionPanels>
+            </VCol>
+            <VCol cols="12">
+              <VAlert type="info" variant="tonal">{{ t('notification.apppush.hint') }}</VAlert>
+            </VCol>
+            <VCol v-if="appPushCanRotate" cols="12">
+              <VBtn variant="tonal" :loading="appPushRotating" prepend-icon="mdi-key-change" @click="rotateAppPush">
+                {{ t('notification.apppush.rotate') }}
+              </VBtn>
             </VCol>
           </VRow>
         </VForm>

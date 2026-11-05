@@ -56,6 +56,7 @@ const emit = defineEmits(['close', 'change', 'done'])
 const notificationTypeNames: { [key: string]: string } = {
   wechat: t('notification.wechat.name'),
   telegram: t('notification.telegram.name'),
+  apppush: t('notification.apppush.name'),
 }
 
 /** 打开共享通知渠道配置弹窗。 */
@@ -76,7 +77,9 @@ function openNotificationInfoDialog() {
 
 // 根据通知类型选择图标
 const getIcon = computed(() => {
-  return getLogoUrl(props.notification.type === 'telegram' ? 'telegram' : 'wechat')
+  if (props.notification.type === 'telegram') return getLogoUrl('telegram')
+  if (props.notification.type === 'apppush') return getLogoUrl('notification')
+  return getLogoUrl('wechat')
 })
 
 /** 关闭通知渠道卡片。 */
