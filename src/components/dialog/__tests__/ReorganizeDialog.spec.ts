@@ -847,9 +847,7 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
     const user = userEvent.setup()
     await renderDialog({ historyCount: 1 })
 
-    expect(
-      await screen.findByText('检测到 1 条已整理记录，当前默认跳过；如需覆盖重整请关闭下方「跳过已整理文件」。'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('检测到 1 条已整理记录，本次将自动跳过')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '立即整理' })).toBeInTheDocument()
 
     const skipSwitch = screen.getByLabelText('跳过已整理文件') as HTMLInputElement
@@ -857,9 +855,7 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
 
     await user.click(skipSwitch)
     expect(
-      await screen.findByText(
-        '检测到 1 条已整理记录，本次将清理旧目标文件与历史记录后重新整理（移动模式不会删除当前源文件）。',
-      ),
+      await screen.findByText('检测到 1 条已整理记录，将清理旧目标并重新整理（移动模式保留当前源文件）'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重新整理' })).toBeInTheDocument()
 

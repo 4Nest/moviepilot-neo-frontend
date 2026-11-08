@@ -1457,20 +1457,6 @@ onUnmounted(() => {
           <div class="reorganize-form-pane">
             <div class="reorganize-form-pane__content pa-6">
               <VForm @submit.prevent="() => {}">
-                <VAlert
-                  v-if="manualHistoryCount > 0"
-                  :type="skipTransferred ? 'info' : 'warning'"
-                  variant="tonal"
-                  density="compact"
-                  icon="mdi-history"
-                  class="mb-4"
-                >
-                  {{
-                    t(skipTransferred ? 'dialog.reorganize.historyFound' : 'dialog.reorganize.historyFoundReorganize', {
-                      count: manualHistoryCount,
-                    })
-                  }}
-                </VAlert>
                 <VRow>
                   <VCol cols="12" md="6">
                     <VSelect
@@ -1695,6 +1681,30 @@ onUnmounted(() => {
                     />
                   </VCol>
                 </VRow>
+                <Transition name="fade-transition">
+                  <div
+                    v-if="manualHistoryCount > 0"
+                    class="reorganize-history-notice mt-4"
+                    :class="skipTransferred ? 'reorganize-history-notice--info' : 'reorganize-history-notice--warning'"
+                    role="status"
+                  >
+                    <VIcon
+                      :icon="skipTransferred ? 'mdi-check-circle-outline' : 'mdi-history'"
+                      size="16"
+                      class="reorganize-history-notice__icon"
+                    />
+                    <span class="reorganize-history-notice__text">
+                      {{
+                        t(
+                          skipTransferred
+                            ? 'dialog.reorganize.historyFound'
+                            : 'dialog.reorganize.historyFoundReorganize',
+                          { count: manualHistoryCount },
+                        )
+                      }}
+                    </span>
+                  </div>
+                </Transition>
               </VForm>
             </div>
             <VCardActions class="app-dialog-actions reorganize-form-pane__actions">
@@ -1964,6 +1974,45 @@ onUnmounted(() => {
 
 .reorganize-action-btn--active {
   background: rgba(var(--v-theme-info), 0.12);
+}
+
+.reorganize-history-notice {
+  display: flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  gap: 0.5rem;
+  line-height: 1.25rem;
+  padding-block: 0.45rem;
+  padding-inline: 0.75rem;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.reorganize-history-notice--info {
+  border: 1px solid rgba(var(--v-theme-info), 0.22);
+  background: rgba(var(--v-theme-info), 0.1);
+  color: rgb(var(--v-theme-info));
+}
+
+.reorganize-history-notice--warning {
+  border: 1px solid rgba(var(--v-theme-warning), 0.26);
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
+}
+
+.reorganize-history-notice__icon {
+  flex: none;
+}
+
+.reorganize-history-notice__text {
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reorganize-preview-pane {
