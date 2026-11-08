@@ -28,6 +28,7 @@ const selectedSites = ref<number[]>([])
 const SystemSettings = ref<any>({
   Basic: {
     SEARCH_MULTIPLE_NAME: false,
+    SEARCH_RESOURCE_PAGES: 3,
     DOWNLOAD_SUBTITLE: false,
     AUTO_DOWNLOAD_USER: null,
     TORRENT_TAG: 'MOVIEPILOT',
@@ -159,6 +160,10 @@ async function saveSearchSetting() {
       selectedFilterGroup.value,
     )
 
+    const parsedPages = Number(SystemSettings.value.Basic.SEARCH_RESOURCE_PAGES)
+    SystemSettings.value.Basic.SEARCH_RESOURCE_PAGES =
+      Number.isFinite(parsedPages) && parsedPages >= 1 ? Math.floor(parsedPages) : 3
+
     const result3 = await saveSystemSetting(SystemSettings.value.Basic)
 
     if (result2.success && result3) {
@@ -263,6 +268,18 @@ useSilentSettingRefresh(loadPageData, {
                 :hint="t('setting.search.downloadUserHint')"
                 persistent-hint
                 prepend-inner-icon="mdi-account"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="SystemSettings.Basic.SEARCH_RESOURCE_PAGES"
+                type="number"
+                min="1"
+                step="1"
+                :label="t('setting.search.searchResourcePages')"
+                :hint="t('setting.search.searchResourcePagesHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-file-search"
               />
             </VCol>
             <VCol cols="12" md="6">
