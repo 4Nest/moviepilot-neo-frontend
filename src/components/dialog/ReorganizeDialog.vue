@@ -337,6 +337,13 @@ const transferForm = reactive<TransferForm>({
 // 历史记录入口和文件浏览器命中的成功历史都属于重新整理。
 const isReorganize = computed(() => Boolean(props.logids?.length || transferForm.reorganize))
 
+// 文件浏览入口默认跳过已成功整理的文件；关闭后才清理旧目标与历史记录重新整理。
+const skipTransferred = computed({
+  get: () => !transferForm.reorganize,
+  set: (value: boolean) => {
+    transferForm.reorganize = !value
+  },
+})
 // 当前手动识别与刮削数据源。
 const mediaSource = computed(() => transferForm.media_source ?? 'themoviedb')
 
@@ -959,7 +966,6 @@ async function loadManualTransferHistory() {
     if (!result.success) return
 
     manualHistoryCount.value = result.data?.history_count ?? 0
-    transferForm.reorganize = Boolean(result.data?.reorganize)
   } catch (error) {
     console.error(error)
   } finally {
@@ -1453,13 +1459,17 @@ onUnmounted(() => {
               <VForm @submit.prevent="() => {}">
                 <VAlert
                   v-if="manualHistoryCount > 0"
-                  type="warning"
+                  :type="skipTransferred ? 'info' : 'warning'"
                   variant="tonal"
                   density="compact"
                   icon="mdi-history"
                   class="mb-4"
                 >
-                  {{ t('dialog.reorganize.historyFound', { count: manualHistoryCount }) }}
+                  {{
+                    t(skipTransferred ? 'dialog.reorganize.historyFound' : 'dialog.reorganize.historyFoundReorganize', {
+                      count: manualHistoryCount,
+                    })
+                  }}
                 </VAlert>
                 <VRow>
                   <VCol cols="12" md="6">
@@ -1673,6 +1683,14 @@ onUnmounted(() => {
                       v-model="transferForm.from_history"
                       :label="t('dialog.reorganize.fromHistoryOption')"
                       :hint="t('dialog.reorganize.fromHistoryHint')"
+                      persistent-hint
+                    />
+                  </VCol>
+                  <VCol cols="12" md="6" v-else>
+                    <VSwitch
+                      v-model="skipTransferred"
+                      :label="t('dialog.reorganize.skipTransferredOption')"
+                      :hint="t('dialog.reorganize.skipTransferredHint')"
                       persistent-hint
                     />
                   </VCol>

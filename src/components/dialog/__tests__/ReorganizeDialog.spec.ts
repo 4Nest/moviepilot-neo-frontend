@@ -247,10 +247,12 @@ function createDeferred<T>() {
 function publicSettingHandlers({
   directories = [],
   episodeRules = [],
+  historyCount = 0,
   storages = [],
 }: {
   directories?: TransferDirectoryConf[]
   episodeRules?: unknown[]
+  historyCount?: number
   storages?: StorageConf[]
 } = {}) {
   return [
@@ -268,7 +270,10 @@ function publicSettingHandlers({
     }),
     http.post(new URL('transfer/manual/history', API_BASE_URL).href, () => {
       initializationRequestCount += 1
-      return HttpResponse.json({ data: { history_count: 0, reorganize: false }, success: true })
+      return HttpResponse.json({
+        data: { history_count: historyCount, reorganize: historyCount > 0 },
+        success: true,
+      })
     }),
   ]
 }
@@ -276,6 +281,7 @@ function publicSettingHandlers({
 async function renderDialog({
   directories = [],
   episodeRules = [],
+  historyCount = 0,
   items,
   logids,
   onClose = vi.fn(),
@@ -284,14 +290,15 @@ async function renderDialog({
 }: {
   directories?: TransferDirectoryConf[]
   episodeRules?: unknown[]
+  historyCount?: number
   items?: FileItem[]
   logids?: number[]
-  onClose?: ReturnType<typeof vi.fn>
-  onDone?: ReturnType<typeof vi.fn>
+  onClose?: () => void
+  onDone?: () => void
   storages?: StorageConf[]
 } = {}) {
   const resolvedItems = items ?? (logids?.length ? [] : [createFileItem()])
-  server.use(...publicSettingHandlers({ directories, episodeRules, storages }))
+  server.use(...publicSettingHandlers({ directories, episodeRules, historyCount, storages }))
   const result = await renderWithProviders(ReorganizeDialog, {
     global: {
       stubs: {
@@ -827,6 +834,38 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
     expect(payloads[0]).toEqual(
       expect.objectContaining({ logid: 0, logids: [41, 42], preview: true, reorganize: true }),
     )
+  })
+
+  it('defaults to skipping already-transferred files when history exists and allows toggling reorganize', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ success: true })
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDialog({ historyCount: 1 })
+
+    expect(
+      await screen.findByText('检测到 1 条已整理记录，当前默认跳过；如需覆盖重整请关闭下方「跳过已整理文件」。'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '立即整理' })).toBeInTheDocument()
+
+    const skipSwitch = screen.getByLabelText('跳过已整理文件') as HTMLInputElement
+    expect(skipSwitch.checked).toBe(true)
+
+    await user.click(skipSwitch)
+    expect(
+      await screen.findByText(
+        '检测到 1 条已整理记录，本次将清理旧目标文件与历史记录后重新整理（移动模式不会删除当前源文件）。',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新整理' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '加入整理队列' }))
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toEqual(expect.objectContaining({ reorganize: true }))
   })
 })
 
