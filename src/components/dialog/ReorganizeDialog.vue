@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import CryptoJS from 'crypto-js'
+import { debounce } from 'lodash-es'
 import { useToast } from 'vue-toastification'
 import { numberValidator } from '@/@validators'
 import api from '@/api'
@@ -23,6 +24,7 @@ import ProgressDialog from './ProgressDialog.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
 import { useGlobalSettingsStore } from '@/stores'
+import { buildDownloadDirectoryOptions } from '@/utils/downloadDirectory'
 
 // 国际化
 const { t } = useI18n()
@@ -381,15 +383,15 @@ async function loadDirectories() {
 
 // 目的目录下拉框，第一项用于把目标路径显式重置为后端自动匹配。
 const targetDirectoryOptions = computed<TargetDirectoryOption[]>(() => {
-  const libraryDirectories = directories.value.map(item => item.library_path).filter(Boolean) as string[]
+  const libraryOptions = buildDownloadDirectoryOptions(directories.value, item => item.library_path)
   return [
     {
       title: t('dialog.reorganize.auto'),
       value: AUTO_TARGET_PATH_VALUE,
     },
-    ...[...new Set(libraryDirectories)].map(path => ({
-      title: path,
-      value: path,
+    ...libraryOptions.map(option => ({
+      title: option.label,
+      value: option.value,
     })),
   ]
 })
@@ -1289,6 +1291,19 @@ async function togglePreview() {
   await previewTransfer()
 }
 
+// 展开预览后，表单变更合并为一次延迟刷新，避免连续输入触发并行预览请求。
+const debouncedPreviewTransfer = debounce(() => {
+  if (previewVisible.value && !previewLoading.value && !transferSubmitting.value) void previewTransfer()
+}, 500)
+
+watch(
+  transferForm,
+  () => {
+    if (previewVisible.value) debouncedPreviewTransfer()
+  },
+  { deep: true },
+)
+
 // 整理文件
 async function handleTransfer(item: FileItem, background: boolean = false) {
   try {
@@ -1431,6 +1446,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopLoadingProgress()
+  debouncedPreviewTransfer.cancel()
   if (episodeGroupQueryTimer) clearTimeout(episodeGroupQueryTimer)
 })
 </script>
@@ -1450,7 +1466,7 @@ onUnmounted(() => {
         <VCardTitle>{{ dialogTitle }}</VCardTitle>
         <VCardSubtitle>{{ dialogSubtitle }}</VCardSubtitle>
       </VCardItem>
-      <VDialogCloseBtn @click="emit('close')" />
+      <VDialogCloseBtn :disabled="transferSubmitting" @click="emit('close')" />
       <VDivider />
       <VCardText class="pa-0 reorganize-dialog-card__body">
         <div class="reorganize-main-row" :class="{ 'reorganize-main-row--preview-visible': previewVisible }">

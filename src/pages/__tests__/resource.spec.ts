@@ -795,6 +795,35 @@ describe('resource page search flow', () => {
     await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
   })
 
+  it('keeps batch selection stable when filtering recreates context objects', async () => {
+    localStorage.setItem('MPTorrentsViewType', 'card')
+    const first = createTorrent({ name: '媒体一', title: '稳定资源一', pageUrl: 'https://example.test/stable-first' })
+    const second = createTorrent({ name: '媒体二', title: '稳定资源二', pageUrl: 'https://example.test/stable-second' })
+    await renderResource({ path: '/resource', query: { keyword: '稳定勾选', result_type: 'torrent' } })
+    finishStream(await latestEventSource(), [first, second])
+
+    await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
+    await fireEvent.click(fabButton('批量选择'))
+    await fireEvent.click(await screen.findByText('稳定资源一'))
+    expect(screen.getByText('稳定资源一')).toHaveAttribute('data-selected', 'true')
+
+    await fireEvent.click(screen.getByRole('button', { name: '按体积排序' }))
+    await waitFor(() => expect(screen.getByText('稳定资源一')).toHaveAttribute('data-selected', 'true'))
+    await fireEvent.click(screen.getByText('稳定资源一'))
+    expect(screen.getByText('稳定资源一')).toHaveAttribute('data-selected', 'false')
+    await fireEvent.click(screen.getByText('稳定资源一'))
+    expect(screen.getByText('稳定资源一')).toHaveAttribute('data-selected', 'true')
+
+    await fireEvent.click(fabButton('全选当前结果'))
+    await fireEvent.click(fabButton('批量下载（2）'))
+    expect(mocks.openSharedDialog).toHaveBeenCalledWith(
+      expect.any(Object),
+      { torrents: [first.torrent_info, second.torrent_info] },
+      expect.any(Object),
+      expect.any(Object),
+    )
+  })
+
   it('clears batch selections when search results are replaced', async () => {
     localStorage.setItem('MPTorrentsViewType', 'card')
     await renderResource({ path: '/resource', query: { keyword: '批量重置', result_type: 'torrent' } })

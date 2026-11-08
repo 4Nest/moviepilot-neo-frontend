@@ -13,6 +13,7 @@ import { usePWA } from '@/composables/usePWA'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useRangeSelection } from '@/composables/useRangeSelection'
 
 const FileRenameDialog = defineAsyncComponent(() => import('../dialog/FileRenameDialog.vue'))
 const MediaInfoDialog = defineAsyncComponent(() => import('../dialog/MediaInfoDialog.vue'))
@@ -139,18 +140,17 @@ function isSelected(item: FileItem) {
   return selectedKeys.value.has(getFileItemKey(item))
 }
 
-// 更新单个文件项的选中状态。
-function setItemSelected(item: FileItem, checked: boolean) {
-  const itemKey = getFileItemKey(item)
-
+// 批量更新文件项选中状态，并按存储、类型和路径去重。
+function setItemsSelected(fileItems: readonly FileItem[], checked: boolean) {
+  const itemKeys = new Set(fileItems.map(item => getFileItemKey(item)))
   if (checked) {
-    if (!selectedKeys.value.has(itemKey)) {
-      selected.value = [...selected.value, item]
-    }
+    const nextItems = new Map(selected.value.map(item => [getFileItemKey(item), item]))
+    fileItems.forEach(item => nextItems.set(getFileItemKey(item), item))
+    selected.value = [...nextItems.values()]
     return
   }
 
-  selected.value = selected.value.filter(selectedItem => getFileItemKey(selectedItem) !== itemKey)
+  selected.value = selected.value.filter(selectedItem => !itemKeys.has(getFileItemKey(selectedItem)))
 }
 
 // 识别结果
@@ -217,6 +217,15 @@ const files = computed(() => filteredItems.value.filter(item => item.type === 'f
 
 // 虚拟列表数据，保持引用稳定，避免模板内联展开数组导致虚拟列表重算。
 const displayItems = computed(() => [...dirs.value, ...files.value])
+
+// 文件列表按当前目录、文件及筛选后的显示顺序支持 Shift 连选。
+const rangeSelection = useRangeSelection<FileItem>({
+  items: () => displayItems.value,
+  getKey: getFileItemKey,
+  isSelected,
+  setSelected: setItemsSelected,
+})
+
 // 是否文件
 const isFile = computed(() => inProps.item.type == 'file')
 
@@ -247,14 +256,15 @@ const isImage = computed(() => {
 
 // 调整选择模式
 function changeSelectMode() {
-  selectMode.value = !selectMode.value
-  if (!selectMode.value) selected.value = []
+  if (selectMode.value) exitSelectMode()
+  else selectMode.value = true
 }
 
 // 退出多选模式
 function exitSelectMode() {
   selectMode.value = false
   selected.value = []
+  rangeSelection.reset()
 }
 
 // 调API加载文件夹内的内容
@@ -402,9 +412,9 @@ function changePath(item: FileItem) {
 }
 
 // 点击列表项
-function listItemClick(item: FileItem) {
+function listItemClick(item: FileItem, event?: MouseEvent | KeyboardEvent) {
   if (selectMode.value) {
-    setItemSelected(item, !isSelected(item))
+    rangeSelection.select(item, !isSelected(item), !!event?.shiftKey)
     return false
   }
   changePath(item)
@@ -898,13 +908,19 @@ onUnmounted(() => {
             <template #default="{ item }">
               <VHover>
                 <template #default="hover">
-                  <VListItem v-bind="hover.props" class="px-3 pe-1" @click="listItemClick(item)">
+                  <VListItem
+                    v-bind="hover.props"
+                    class="px-3 pe-1"
+                    @click="listItemClick(item, $event)"
+                    @mousedown.shift.prevent
+                  >
                     <template #prepend>
                       <VListItemAction v-if="selectMode">
                         <VCheckbox
                           :model-value="isSelected(item)"
-                          @update:model-value="setItemSelected(item, !!$event)"
-                          @click.stop
+                          @update:model-value="rangeSelection.selectFromCheckbox(item, !!$event)"
+                          @click.stop="rangeSelection.onCheckboxClick"
+                          @input="rangeSelection.onCheckboxInput(item, $event)"
                         />
                       </VListItemAction>
                       <template v-else>

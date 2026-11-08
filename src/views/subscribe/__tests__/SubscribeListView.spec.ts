@@ -679,6 +679,22 @@ describe('SubscribeListView batch operations', () => {
     await waitFor(() => expect(batchState()).toMatchObject({ enabled: false, selectedCount: 0 }))
   })
 
+  it('classifies a delete success false response as a failure', async () => {
+    const deleted = vi.fn()
+    server.use(deleteSubscribeByIdHandler(1, { message: 'rejected', success: false }, 200, deleted))
+    await renderList({ listResponse: [movie(1, 'Alpha')] })
+    await screen.findByText('Alpha')
+    await fireEvent.click(screen.getByRole('button', { name: 'host-enter-batch' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'select-1' }))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'host-batch-delete' }))
+
+    await waitFor(() => expect(deleted).toHaveBeenCalledOnce())
+    expect(mocks.toastError).toHaveBeenCalledWith('删除失败 1 个订阅')
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    await waitFor(() => expect(batchState()).toMatchObject({ enabled: false, selectedCount: 0 }))
+  })
+
   it.each([
     ['enable', 'host-batch-enable', '启用'],
     ['pause', 'host-batch-pause', '暂停'],

@@ -174,6 +174,27 @@ describe('SiteCard interactions', () => {
     },
   )
 
+  it('refreshes the icon immediately after a successful test and an edit save', async () => {
+    const { container, site } = await renderCard()
+    server.use(
+      siteIconHandler(site.id, 'https://images.example.com/after-test.png'),
+      testSiteConnectionHandler(site.id, { success: true }),
+    )
+
+    await fireEvent.click(getTestButton(container))
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', 'https://images.example.com/after-test.png'),
+    )
+
+    server.use(siteIconHandler(site.id, 'https://images.example.com/after-save.png'))
+    await fireEvent.click(getActionButton(container, 3))
+    await fireEvent.click(await screen.findByText('编辑站点'))
+    getDialogCall().events.save()
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', 'https://images.example.com/after-save.png'),
+    )
+  })
+
   it('restores connectivity controls after an HTTP failure', async () => {
     const requested = vi.fn()
     const { container, emitted, site } = await renderCard()

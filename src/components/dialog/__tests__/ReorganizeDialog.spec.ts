@@ -180,9 +180,11 @@ const IconButtonStub = defineComponent({
 
 const DialogCloseButtonStub = defineComponent({
   name: 'VDialogCloseBtn',
+  props: { disabled: Boolean },
   emits: ['click'],
-  setup(_props, { emit }) {
-    return () => h('button', { onClick: () => emit('click'), type: 'button' }, '关闭')
+  setup(props, { emit }) {
+    return () =>
+      h('button', { disabled: props.disabled, onClick: () => !props.disabled && emit('click'), type: 'button' }, '关闭')
   },
 })
 
@@ -441,6 +443,23 @@ describe('ReorganizeDialog submission safety', () => {
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
   })
 
+  it('disables closing while a transfer request is pending', async () => {
+    const response = createDeferred<ApiResponse>()
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async () => HttpResponse.json(await response.promise)),
+    )
+    const { onClose } = await renderDialog()
+    const closeButton = screen.getByRole('button', { name: '关闭' })
+
+    await fireEvent.click(screen.getByRole('button', { name: '立即整理' }))
+    await waitFor(() => expect(closeButton).toBeDisabled())
+    await fireEvent.click(closeButton)
+    expect(onClose).not.toHaveBeenCalled()
+
+    response.resolve({ data: undefined, success: true })
+    await waitFor(() => expect(closeButton).toBeEnabled())
+  })
+
   it('does not submit or finish when log ids and file items are both empty', async () => {
     let requestCount = 0
     server.use(
@@ -661,6 +680,7 @@ describe('ReorganizeDialog payloads and lifecycle', () => {
     })
 
     expect(screen.getByRole('option', { name: '远程存储' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '电视剧目录 (/library/tv)' })).toBeInTheDocument()
     await selectOption('目的路径', 1)
     await user.click(screen.getByRole('button', { name: '加入整理队列' }))
     await waitFor(() => expect(bodies).toHaveLength(1))
@@ -1012,6 +1032,38 @@ describe('ReorganizeDialog preview', () => {
     expect(screen.queryByText('总数 0')).not.toBeInTheDocument()
     expect(screen.queryByText('成功 0')).not.toBeInTheDocument()
     expect(screen.queryByText('失败 0')).not.toBeInTheDocument()
+  })
+
+  it('debounces automatic preview refreshes while the form changes', async () => {
+    const payloads: Array<Record<string, unknown>> = []
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async ({ request }) => {
+        payloads.push((await request.json()) as Record<string, unknown>)
+        return HttpResponse.json(
+          previewResponse([{ source: '/downloads/Movie.mkv', success: true, target: '/library/Movie.mkv' }]),
+        )
+      }),
+    )
+    await renderDialog()
+    await fireEvent.click(screen.getByRole('button', { name: '预览' }))
+    await waitFor(() => expect(payloads).toHaveLength(1))
+
+    vi.useFakeTimers()
+    try {
+      await fireEvent.input(screen.getByLabelText('集数定位'), { target: { value: '{season_episode}' } })
+      await fireEvent.input(screen.getByLabelText('集数偏移'), { target: { value: 'EP+1' } })
+      await vi.advanceTimersByTimeAsync(499)
+      expect(payloads).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(payloads).toHaveLength(2)
+      expect(payloads[1]).toEqual(
+        expect.objectContaining({ episode_format: '{season_episode}', episode_offset: 'EP+1', preview: true }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('pages through long preview results and can collapse the preview again', async () => {

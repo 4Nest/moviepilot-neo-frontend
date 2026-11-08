@@ -20,6 +20,7 @@ interface TorrentOverrides {
   seeders?: number
   site?: string
   size?: number
+  subtitles?: string[]
   title?: string
   videoCode?: string
 }
@@ -43,6 +44,7 @@ function createTorrent(overrides: TorrentOverrides = {}): Context {
       site_name: overrides.site ?? 'Site A',
       size: overrides.size ?? 1,
       title: overrides.title ?? '测试资源',
+      labels: overrides.subtitles,
       volume_factor: overrides.freeState ?? 'FREE',
     },
   } as Context
@@ -62,6 +64,30 @@ describe('useTorrentFilter', () => {
 
     expect(filter.filterOptions.site).toEqual(['Site B', 'Site A'])
     expect(filter.filterOptions.season).toEqual(['S10', 'S02', 'S10E01-E03', 'S01E12', 'Special'])
+  })
+
+  it('filters Chinese and special-effects subtitles from explicit site labels', () => {
+    const filter = useTorrentFilter()
+    const chinese = createTorrent({ title: '中字资源', subtitles: ['中字'] })
+    const effects = createTorrent({ title: '特效资源', subtitles: ['特效'] })
+    const both = createTorrent({ title: '双字幕资源', subtitles: ['中字', '特效'] })
+    const none = createTorrent({ title: '中字标题但无标签' })
+
+    expect(filter.filterRowData([chinese, effects, both, none])).toHaveLength(4)
+    expect(filter.filterOptions.subtitle).toEqual(['中字', '特效'])
+
+    filter.filterForm.subtitle = ['中字']
+    expect(filter.filterRowData([chinese, effects, both, none]).map(item => item.torrent_info.title)).toEqual([
+      '中字资源',
+      '双字幕资源',
+    ])
+
+    filter.filterForm.subtitle = ['特效']
+    expect(filter.filterRowData([chinese, effects, both, none]).map(item => item.torrent_info.title)).toEqual([
+      '特效资源',
+      '双字幕资源',
+    ])
+    expect(filter.filterTitles.subtitle).toBe('torrent.filterSubtitle')
   })
 
   it('combines filters and exposes every matching original row index', () => {

@@ -33,6 +33,7 @@ export function useTorrentFilter() {
     freeState: [] as string[],
     edition: [] as string[],
     resolution: [] as string[],
+    subtitle: [] as string[],
   })
 
   // 统一存储过滤选项
@@ -44,6 +45,7 @@ export function useTorrentFilter() {
     resolution: [] as string[],
     videoCode: [] as string[],
     releaseGroup: [] as string[],
+    subtitle: [] as string[],
   })
 
   // 排序字段
@@ -60,6 +62,7 @@ export function useTorrentFilter() {
     edition: t('torrent.filterEdition'),
     resolution: t('torrent.filterResolution'),
     releaseGroup: t('torrent.filterReleaseGroup'),
+    subtitle: t('torrent.filterSubtitle'),
   }
 
   // 排序中文名
@@ -78,7 +81,7 @@ export function useTorrentFilter() {
   const totalFilteredCount = ref(0)
 
   // 各筛选维度从资源中取值的方式
-  const dimensionValues: Record<string, (data: Context) => string | undefined> = {
+  const dimensionValues: Record<string, (data: Context) => string | string[] | undefined> = {
     site: data => data.torrent_info?.site_name,
     season: data => data.meta_info?.season_episode,
     releaseGroup: data => data.meta_info?.resource_team,
@@ -86,13 +89,21 @@ export function useTorrentFilter() {
     freeState: data => data.torrent_info?.volume_factor,
     edition: data => data.meta_info?.edition,
     resolution: data => data.meta_info?.resource_pix,
+    // 与资源卡片一致，只使用站点明确标记的字幕标签，不从标题推断。
+    subtitle: data => data.torrent_info?.labels?.filter(label => label === '中字' || label === '特效'),
+  }
+
+  /** 将单值元数据和多值字幕标签统一为候选值。 */
+  function getDimensionValues(key: string, data: Context): string[] {
+    const value = dimensionValues[key](data)
+    return Array.isArray(value) ? value : value ? [value] : []
   }
 
   // 判断资源是否满足除 excludeKey 之外所有维度的已选条件
   function matchesFilters(data: Context, excludeKey?: string): boolean {
     for (const key in dimensionValues) {
       if (key === excludeKey) continue
-      if (!match(filterForm[key], dimensionValues[key](data))) return false
+      if (!match(filterForm[key], getDimensionValues(key, data))) return false
     }
     return true
   }
@@ -103,8 +114,7 @@ export function useTorrentFilter() {
       const options = new Set<string>()
       for (const data of items) {
         if (!matchesFilters(data, key)) continue
-        const value = dimensionValues[key](data)
-        if (value) options.add(value)
+        for (const value of getDimensionValues(key, data)) options.add(value)
       }
       for (const selected of filterForm[key]) {
         options.add(selected)
@@ -179,8 +189,8 @@ export function useTorrentFilter() {
   }
 
   // 匹配过滤函数
-  const match = (filter: Array<string>, value: string | undefined) =>
-    filter.length === 0 || (value && filter.includes(value))
+  const match = (filter: Array<string>, values: string[]) =>
+    filter.length === 0 || values.some(value => filter.includes(value))
 
   // 筛选列表视图数据（不分组）
   function filterRowData(items: Context[] | undefined): Context[] {
@@ -405,6 +415,7 @@ export function useTorrentFilter() {
       videoCode: 'mdi-video-vintage',
       edition: 'mdi-quality-high',
       releaseGroup: 'mdi-account-group-outline',
+      subtitle: 'mdi-subtitles-outline',
     }
     return icons[key] || 'mdi-filter-variant'
   }

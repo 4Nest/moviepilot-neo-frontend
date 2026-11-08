@@ -8,7 +8,7 @@ import type { ApiResponse, Site, SiteStatistic, SiteUserData } from '@/api/types
 import { isNullOrEmptyObject } from '@/@core/utils'
 import { formatFileSize } from '@/@core/utils/formatters'
 import { useConfirm } from '@/composables/useConfirm'
-import { getCachedSiteIcon } from '@/utils/siteIconCache'
+import { clearSiteIconCache, getCachedSiteIcon } from '@/utils/siteIconCache'
 import { useDisplay } from 'vuetify'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
@@ -54,19 +54,25 @@ const testButtonText = ref(t('site.testConnectivity'))
 const testButtonDisable = ref(false)
 
 // 查询站点图标
-async function getSiteIcon() {
+async function getSiteIcon(force = false) {
   const siteId = cardProps.site?.id
   if (!siteId) {
     siteIcon.value = defaultSiteIcon
     return
   }
 
-  try {
-    siteIcon.value = await getCachedSiteIcon(siteId, async () => {
-      const response = await api.get(`site/icon/${siteId}`)
+  if (force) clearSiteIconCache(siteId)
 
-      return response?.data?.icon || defaultSiteIcon
-    })
+  try {
+    siteIcon.value = await getCachedSiteIcon(
+      siteId,
+      async () => {
+        const response = await api.get(`site/icon/${siteId}`)
+
+        return response?.data?.icon || defaultSiteIcon
+      },
+      defaultSiteIcon,
+    )
   } catch (error) {
     siteIcon.value = defaultSiteIcon
     console.error(error)
@@ -80,8 +86,10 @@ async function testSite() {
     testButtonDisable.value = true
 
     const result = (await api.get(`site/test/${cardProps.site?.id}`)) as ApiResponse<unknown>
-    if (result.success) $toast.success(t('site.testSuccess', { name: cardProps.site?.name }))
-    else $toast.error(t('site.testFailed', { name: cardProps.site?.name, message: result.message }))
+    if (result.success) {
+      $toast.success(t('site.testSuccess', { name: cardProps.site?.name }))
+      await getSiteIcon(true)
+    } else $toast.error(t('site.testFailed', { name: cardProps.site?.name, message: result.message }))
 
     // 测试完成后刷新统计数据
     emit('refresh-stats', cardProps.site?.domain)
@@ -218,6 +226,7 @@ const getDownloadPercent = computed(() => {
 
 // 保存站点
 function saveSite() {
+  void getSiteIcon(true)
   emit('update')
 }
 

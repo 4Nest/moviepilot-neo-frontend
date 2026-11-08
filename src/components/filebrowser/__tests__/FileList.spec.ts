@@ -360,6 +360,27 @@ describe('FileList list state', () => {
     expect(emitted().refreshed).toHaveLength(1)
   })
 
+  it('selects and clears a displayed range with Shift-click', async () => {
+    const files = [1, 2, 3, 4].map(index =>
+      createItem({ name: `range-${index}.mkv`, path: `/media/range-${index}.mkv` }),
+    )
+    await renderList(() => Promise.resolve(files))
+    await screen.findByText('range-1.mkv')
+    await fireEvent.click(getIconButton('mdi-select'))
+
+    const row = (index: number) => screen.getByText(`range-${index}.mkv`).closest('[role="button"]') as Element
+    await fireEvent.click(row(1))
+    await fireEvent.click(row(3), { shiftKey: true })
+    await fireEvent.click(getIconButton('mdi-folder-arrow-right'))
+    expect(mocks.openSharedDialog.mock.calls.at(-1)?.[1]).toMatchObject({
+      items: files.slice(0, 3),
+    })
+
+    await fireEvent.click(row(3))
+    await fireEvent.click(row(1), { shiftKey: true })
+    expect(document.querySelector('[data-icon="mdi-folder-arrow-right"]')).toBeNull()
+  })
+
   it('synchronizes selected entries to the newest file objects after refresh', async () => {
     const original = createItem({ name: 'selected.mkv', path: '/media/selected.mkv', size: 10 })
     const refreshed = createItem({ name: 'selected.mkv', path: '/media/selected.mkv', size: 20 })

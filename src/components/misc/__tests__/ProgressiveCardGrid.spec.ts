@@ -1,6 +1,6 @@
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { render, waitFor } from '@testing-library/vue'
-import { nextTick } from 'vue'
+import { h, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 describe('ProgressiveCardGrid scroll target lifecycle', () => {
@@ -48,6 +48,27 @@ describe('ProgressiveCardGrid scroll target lifecycle', () => {
     })
 
     expect(container.querySelector('.progressive-card-grid__track')).toHaveAttribute('data-layout-size-source')
+  })
+
+  it('clamps a frozen window when the original filter shrinks or empties the list', async () => {
+    const items = Array.from({ length: 4 }, (_, id) => ({ id, title: `resource-${id}` }))
+    const { container, rerender } = render(ProgressiveCardGrid, {
+      props: { items, columns: 1, getItemKey: (item: { id: number }) => item.id },
+      slots: { default: ({ item }: { item: { title: string } }) => h('span', item.title) },
+    })
+    await waitFor(() => expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(4))
+    document.documentElement.classList.add('v-overlay-scroll-blocked')
+    // MutationObserver 先消费锁滚动事件，再模拟弹窗内筛选缩短原列表。
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await rerender({ items: items.slice(0, 2) })
+    expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(2)
+    expect(container.textContent).toBe('resource-0resource-1')
+    await rerender({ items: [] })
+    expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(0)
+    await rerender({ items })
+    expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(4)
+    document.documentElement.classList.remove('v-overlay-scroll-blocked')
+    await waitFor(() => expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(4))
   })
 })
 

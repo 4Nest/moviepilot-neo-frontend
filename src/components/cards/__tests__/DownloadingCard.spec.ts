@@ -68,6 +68,15 @@ describe('DownloadingCard display and pause state', () => {
     expect(container.querySelector('.v-card-text .v-progress-linear')).toBeInTheDocument()
   })
 
+  it('exposes the complete remaining time and updates its hint with polling', async () => {
+    const { rerender } = await renderCard(downloading({ left_time: ' 999天23时59分59秒 ' }))
+
+    expect(screen.getByTitle('999天23时59分59秒')).toHaveTextContent('999天23时59分59秒')
+    await rerender({ downloaderName: 'qb-main', info: downloading({ left_time: '1小时20分' }) })
+    expect(screen.queryByTitle('999天23时59分59秒')).not.toBeInTheDocument()
+    expect(screen.getByTitle('1小时20分')).toHaveTextContent('1小时20分')
+  })
+
   it('falls back to the task name and season string when media recognition is incomplete', async () => {
     const { container } = await renderCard(
       downloading({

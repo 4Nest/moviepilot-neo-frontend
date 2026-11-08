@@ -120,54 +120,37 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VHover v-slot="hover">
-    <VCard
-      v-bind="hover.props"
-      variant="tonal"
-      class="app-card-shell app-card-colorful"
-      :style="{ '--app-card-accent-rgb': accentRgb }"
-      @click="openDownloaderInfoDialog"
-    >
-      <VDialogCloseBtn @click="onClose" />
-      <span class="app-card-top-action absolute top-3 right-12">
-        <IconBtn @click.stop>
-          <VIcon class="cursor-move" icon="mdi-drag" />
-        </IconBtn>
-      </span>
-      <VCardText class="app-card-summary app-card-summary--double-action">
-        <div class="app-card-summary__content">
-          <div class="app-card-summary__title-row">
-            <VBadge
-              v-if="props.downloader.default && props.downloader.enabled"
-              dot
-              inline
-              color="success"
-              class="me-1"
-            />
-            <VBadge
-              v-if="props.downloader.bt_default && props.downloader.enabled"
-              dot
-              inline
-              color="info"
-              class="me-1"
-            />
-            <span class="app-card-summary__title text-h6">{{ downloader.name }}</span>
-          </div>
-          <div
-            v-if="downloaderDict[downloader.type] && props.downloader.enabled"
-            class="app-card-summary__meta text-sm"
-          >
-            <span class="app-card-summary__meta-item">{{ `↑ ${formatFileSize(upload_rate, 1)}/s` }}</span>
-            <span class="app-card-summary__meta-item">{{ `↓ ${formatFileSize(download_rate, 1)}/s` }}</span>
-          </div>
-          <div v-else-if="!downloaderDict[downloader.type]" class="app-card-summary__subtitle text-sm">
-            {{ t('setting.system.custom') }}
-          </div>
+  <VCard
+    v-bind="$attrs"
+    variant="tonal"
+    class="app-card-shell app-card-colorful"
+    :style="{ '--app-card-accent-rgb': accentRgb }"
+    @click="openDownloaderInfoDialog"
+  >
+    <VDialogCloseBtn @click="onClose" />
+    <span class="app-card-top-action absolute top-3 right-12">
+      <IconBtn @click.stop>
+        <VIcon class="cursor-move" icon="mdi-drag" />
+      </IconBtn>
+    </span>
+    <VCardText class="app-card-summary app-card-summary--double-action">
+      <div class="app-card-summary__content">
+        <div class="app-card-summary__title-row">
+          <VBadge v-if="props.downloader.default && props.downloader.enabled" dot inline color="success" class="me-1" />
+          <VBadge v-if="props.downloader.bt_default && props.downloader.enabled" dot inline color="info" class="me-1" />
+          <span class="app-card-summary__title text-h6">{{ downloader.name }}</span>
         </div>
-        <div class="app-card-summary__media" aria-hidden="true">
-          <VImg ref="imageRef" :src="getIcon" contain class="app-card-summary__image" @load="updateAccentColor" />
+        <div v-if="downloaderDict[downloader.type] && props.downloader.enabled" class="app-card-summary__meta text-sm">
+          <span class="app-card-summary__meta-item">{{ `↑ ${formatFileSize(upload_rate, 1)}/s` }}</span>
+          <span class="app-card-summary__meta-item">{{ `↓ ${formatFileSize(download_rate, 1)}/s` }}</span>
         </div>
-      </VCardText>
-    </VCard>
-  </VHover>
+        <div v-else-if="!downloaderDict[downloader.type]" class="app-card-summary__subtitle text-sm">
+          {{ t('setting.system.custom') }}
+        </div>
+      </div>
+      <div class="app-card-summary__media" aria-hidden="true">
+        <VImg ref="imageRef" :src="getIcon" contain class="app-card-summary__image" @load="updateAccentColor" />
+      </div>
+    </VCardText>
+  </VCard>
 </template>

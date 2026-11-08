@@ -423,7 +423,9 @@ async function batchDeleteSubscribes() {
     const promises = selectedSubscribes.value.map(id => api.delete(`subscribe/${id}`))
     const results = await Promise.allSettled(promises)
 
-    const successCount = results.filter(result => result.status === 'fulfilled').length
+    const successCount = results.filter(
+      result => result.status === 'fulfilled' && (result.value as { success?: boolean } | undefined)?.success !== false,
+    ).length
     const failedCount = results.length - successCount
 
     if (successCount > 0) {

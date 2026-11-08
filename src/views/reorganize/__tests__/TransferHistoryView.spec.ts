@@ -80,6 +80,9 @@ vi.mock('@/composables/useDynamicButton', () => ({
   },
 }))
 
+/** 替身表格的显示顺序，用于模拟排序和分组后的可见记录。 */
+let stubDisplayOrder: (items: TransferHistory[]) => TransferHistory[] = items => items
+
 const HistoryTableStub = defineComponent({
   name: 'VDataTableVirtual',
   props: {
@@ -113,10 +116,17 @@ const HistoryTableStub = defineComponent({
             )
           : {}
 
+      const displayedItems = stubDisplayOrder(props.items)
+
       return h('section', { 'aria-label': '整理历史桌面列表' }, [
         h('output', { 'aria-label': '整理历史排序结果' }, JSON.stringify(sortResults)),
-        ...props.items.map(item =>
-          h('article', { 'data-history-id': item.id }, [h('span', item.title), slots['item.actions']?.({ item })]),
+        ...(slots['body.prepend']?.({ groupedItems: displayedItems.map(raw => ({ type: 'item', raw })) }) ?? []),
+        ...displayedItems.map(item =>
+          h('article', { 'data-history-id': item.id }, [
+            slots['item.data-table-select']?.({ item }),
+            h('span', item.title),
+            slots['item.actions']?.({ item }),
+          ]),
         ),
         h(
           'button',
@@ -352,6 +362,7 @@ function getDialogCall(index = 0) {
 
 describe('TransferHistoryView', () => {
   beforeEach(() => {
+    stubDisplayOrder = items => items
     mocks.appMode = true
     mocks.desktop = true
     mocks.dynamicButtonConfig = undefined
@@ -495,6 +506,30 @@ describe('TransferHistoryView', () => {
     await waitFor(() => expect(screen.getByRole('status', { name: '整理历史无限列表状态' })).toHaveTextContent('error'))
     await fireEvent.click(screen.getByRole('button', { name: '重试' }))
     expect(await screen.findByText('重试结果')).toBeInTheDocument()
+  })
+
+  it('selects a Shift range in the desktop table display order', async () => {
+    const histories = [1, 2, 3, 4].map(id => createHistory(id, `记录${id}`))
+    stubDisplayOrder = items => [...items].reverse()
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+    await renderHistory('/history?grouped=false')
+    await screen.findByText('记录4')
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: '选择 记录3' }))
+    await fireEvent.click(screen.getByRole('checkbox', { name: '选择 记录1' }), { shiftKey: true })
+    expect(screen.getByRole('checkbox', { name: '选择 记录4' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录3' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录2' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录1' })).toBeChecked()
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: '选择 记录2' }))
+    await fireEvent.click(screen.getByRole('checkbox', { name: '选择 记录4' }), { shiftKey: true })
+    expect(screen.getByRole('checkbox', { name: '选择 记录1' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录2' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录3' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '选择 记录4' })).not.toBeChecked()
   })
 
   it('formats mobile cards and keeps path and batch selection interactions reversible', async () => {

@@ -222,10 +222,11 @@ async function deleteDownload() {
 
               <div v-if="progressValue > 0" class="downloading-card__progress">
                 <div class="downloading-card__progress-label">
-                  <span>
-                    {{ isDownloading ? t('common.download') : t('common.pause') }}
-                    <span class="downloading-card__progress-separator">·</span>
-                    {{ remainingTimeText }}
+                  <span class="downloading-card__progress-copy">
+                    <span>{{ isDownloading ? t('common.download') : t('common.pause') }}</span>
+                    <span class="downloading-card__progress-remaining" :title="remainingTimeText">
+                      {{ remainingTimeText }}
+                    </span>
                   </span>
                   <strong>{{ progressText }}</strong>
                 </div>
@@ -305,7 +306,7 @@ async function deleteDownload() {
 
 .downloading-card {
   display: grid;
-  min-block-size: 12rem;
+  min-block-size: 9rem;
   color: rgb(var(--v-theme-on-surface));
   grid-template-columns: 8rem minmax(0, 1fr);
 }
@@ -313,7 +314,7 @@ async function deleteDownload() {
 .downloading-card__poster {
   position: relative;
   overflow: hidden;
-  min-block-size: 12rem;
+  min-block-size: 9rem;
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
@@ -321,6 +322,11 @@ async function deleteDownload() {
 .downloading-card__image-loader {
   block-size: 100%;
   inline-size: 100%;
+}
+
+.downloading-card__image {
+  position: absolute;
+  inset: 0;
 }
 
 .downloading-card__poster-edge {
@@ -465,10 +471,20 @@ async function deleteDownload() {
   gap: 0.5rem;
 }
 
-.downloading-card__progress-label > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.downloading-card__progress-copy {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1 1 5.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  line-height: 1.3;
+}
+
+.downloading-card__progress-remaining {
+  inline-size: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .downloading-card__progress-label strong {
@@ -478,13 +494,10 @@ async function deleteDownload() {
   font-size: 0.75rem;
 }
 
-.downloading-card__progress-separator {
-  padding-inline: 0.12rem;
-}
-
 .downloading-card__footer {
   display: flex;
   min-inline-size: 0;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   margin-block-start: auto;
@@ -530,17 +543,18 @@ async function deleteDownload() {
 .downloading-card__actions {
   display: flex;
   flex: 0 0 auto;
+  margin-inline-start: auto;
   gap: 0.1rem;
 }
 
 @container (width <= 25rem) {
   .downloading-card {
-    min-block-size: 11rem;
+    min-block-size: 9rem;
     grid-template-columns: 7.333rem minmax(0, 1fr);
   }
 
   .downloading-card__poster {
-    min-block-size: 11rem;
+    min-block-size: 9rem;
   }
 
   .downloading-card__body {
@@ -581,7 +595,7 @@ async function deleteDownload() {
 }
 
 .downloading-card.downloading-card--no-image {
-  min-block-size: 0;
+  min-block-size: 9rem;
   grid-template-columns: minmax(0, 1fr);
 }
 </style>

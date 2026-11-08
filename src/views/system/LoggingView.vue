@@ -510,6 +510,24 @@ const { manager, isConnected } = useSSE(
   },
 )
 
+const statusListenerId = `${listenerId}:status`
+manager.addStatusListener(statusListenerId, status => {
+  // 每次连接都会重发历史尾部；重连时替换旧显示，暂停期间则保留当前内容。
+  if (status === 'open' && !isStreamPaused.value) resetDisplayedLogs()
+})
+onUnmounted(() => manager.removeStatusListener(statusListenerId))
+
+/** 清空待写入缓冲和已显示日志，供重连后接收服务端重发的历史尾部。 */
+function resetDisplayedLogs() {
+  if (timeoutId) {
+    clearTimeout(timeoutId)
+    timeoutId = null
+  }
+  buffer.length = 0
+  parsedLogs.value = []
+  pendingLogCount.value = 0
+}
+
 /** 暂停实时日志流。 */
 function pauseStream() {
   if (isStreamPaused.value) {

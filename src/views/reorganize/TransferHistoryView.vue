@@ -17,6 +17,8 @@ import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useD
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 import { useGlobalSettingsStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useRangeSelection } from '@/composables/useRangeSelection'
+import type { PropType } from 'vue'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 import noImage from '@images/no-image.jpeg'
 
@@ -1046,6 +1048,43 @@ function toggleHistorySelection(item: TransferHistory, checked: boolean | null) 
   updateHistorySelection([item], checked)
 }
 
+// 桌面表格经排序、分组并去掉折叠分组后的显示顺序，由主体插槽中的探针同步。
+const desktopDisplayedHistory = shallowRef<readonly TransferHistory[]>([])
+
+/** 表格 groupedItems 的条目：分组标题或记录行，只包含展开分组内的记录。 */
+type DesktopGroupedEntry = { type: 'group' } | { type: 'item'; raw: TransferHistory }
+
+// Vuetify 3.7 只在主体插槽参数中提供实际显示顺序；items 还会包含折叠分组内的记录。
+const DesktopDisplayOrderProbe = defineComponent({
+  props: {
+    groupedItems: { type: Array as PropType<readonly DesktopGroupedEntry[]>, required: true },
+  },
+  setup(probeProps) {
+    watchEffect(() => {
+      desktopDisplayedHistory.value = probeProps.groupedItems.flatMap(entry =>
+        entry.type === 'item' ? [entry.raw] : [],
+      )
+    })
+    return () => null
+  },
+})
+
+// 桌面记录按住 Shift 连选，范围不覆盖筛选隐藏或折叠分组内的记录。
+const historyRangeSelection = useRangeSelection<TransferHistory>({
+  items: () => desktopDisplayedHistory.value,
+  getKey: item => item.id,
+  isSelected: isHistorySelected,
+  setSelected: updateHistorySelection,
+})
+
+// 选择被清空后不再沿用旧起点。
+watch(
+  () => selected.value.length === 0,
+  empty => {
+    if (empty) historyRangeSelection.reset()
+  },
+)
+
 // 切换移动端批量选择模式，退出时清空移动端选择状态。
 function toggleMobileBatchMode() {
   if (mobileBatchMode.value) {
@@ -1300,6 +1339,9 @@ onUnmounted(() => {
       hover
       :style="{ height: `${availableHeight}px` }"
     >
+      <template #body.prepend="{ groupedItems }">
+        <DesktopDisplayOrderProbe :grouped-items="groupedItems" />
+      </template>
       <template #header.data-table-group>
         <span>{{ t('transferHistory.titleColumn') }}</span>
       </template>
@@ -1322,6 +1364,17 @@ onUnmounted(() => {
             </div>
           </td>
         </tr>
+      </template>
+      <template #item.data-table-select="{ item }">
+        <VCheckbox
+          :model-value="isHistorySelected(item)"
+          :aria-label="t('transferHistory.selectRecord', { title: item.title })"
+          density="compact"
+          hide-details
+          @click="historyRangeSelection.onCheckboxClick"
+          @update:model-value="checked => historyRangeSelection.selectFromCheckbox(item, !!checked)"
+          @input="historyRangeSelection.onCheckboxInput(item, $event)"
+        />
       </template>
       <template #item.title="{ item }">
         <div class="d-flex align-center">
@@ -1407,6 +1460,20 @@ onUnmounted(() => {
       hover
       :style="{ height: `${availableHeight}px` }"
     >
+      <template #body.prepend="{ groupedItems }">
+        <DesktopDisplayOrderProbe :grouped-items="groupedItems" />
+      </template>
+      <template #item.data-table-select="{ item }">
+        <VCheckbox
+          :model-value="isHistorySelected(item)"
+          :aria-label="t('transferHistory.selectRecord', { title: item.title })"
+          density="compact"
+          hide-details
+          @click="historyRangeSelection.onCheckboxClick"
+          @update:model-value="checked => historyRangeSelection.selectFromCheckbox(item, !!checked)"
+          @input="historyRangeSelection.onCheckboxInput(item, $event)"
+        />
+      </template>
       <template #item.title="{ item }">
         <div class="d-flex align-center">
           <VAvatar>

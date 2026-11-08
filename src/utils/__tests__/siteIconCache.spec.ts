@@ -1,4 +1,4 @@
-import { getCachedSiteIcon } from '@/utils/siteIconCache'
+import { clearSiteIconCache, getCachedSiteIcon } from '@/utils/siteIconCache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let keySeed = 0
@@ -62,6 +62,43 @@ describe('site icon cache', () => {
 
     await expect(getCachedSiteIcon(key, refreshedLoader)).resolves.toBe('fresh-icon')
     expect(refreshedLoader).toHaveBeenCalledOnce()
+  })
+
+  it.each(['', '/logo/site.png'])('does not retain an unready icon %s for the long TTL', async icon => {
+    const key = nextKey()
+    await expect(getCachedSiteIcon(key, vi.fn().mockResolvedValue(icon), '/logo/site.png')).resolves.toBe(icon)
+
+    const retryLoader = vi.fn().mockResolvedValue('ready-icon')
+    await expect(getCachedSiteIcon(key, retryLoader, '/logo/site.png')).resolves.toBe('ready-icon')
+    expect(retryLoader).toHaveBeenCalledOnce()
+  })
+
+  it('clears one site or all sites on demand', async () => {
+    const firstKey = nextKey()
+    const secondKey = nextKey()
+    await getCachedSiteIcon(firstKey, vi.fn().mockResolvedValue('first-icon'))
+    await getCachedSiteIcon(secondKey, vi.fn().mockResolvedValue('second-icon'))
+
+    clearSiteIconCache(firstKey)
+    const refreshed = vi.fn().mockResolvedValue('first-fresh')
+    await expect(getCachedSiteIcon(firstKey, refreshed)).resolves.toBe('first-fresh')
+    await expect(getCachedSiteIcon(secondKey, vi.fn().mockResolvedValue('stale'))).resolves.toBe('second-icon')
+    expect(refreshed).toHaveBeenCalledOnce()
+
+    clearSiteIconCache()
+    await expect(getCachedSiteIcon(secondKey, vi.fn().mockResolvedValue('second-fresh'))).resolves.toBe('second-fresh')
+  })
+
+  it('does not let a request started before a forced refresh overwrite the new value', async () => {
+    const key = nextKey()
+    const pending = deferred<string>()
+    const firstRequest = getCachedSiteIcon(key, vi.fn().mockReturnValue(pending.promise))
+
+    clearSiteIconCache(key)
+    await expect(getCachedSiteIcon(key, vi.fn().mockResolvedValue('fresh-icon'))).resolves.toBe('fresh-icon')
+    pending.resolve('stale-icon')
+    await expect(firstRequest).resolves.toBe('stale-icon')
+    await expect(getCachedSiteIcon(key, vi.fn().mockResolvedValue('unexpected'))).resolves.toBe('fresh-icon')
   })
 
   it('allows a retry after the loader rejects', async () => {

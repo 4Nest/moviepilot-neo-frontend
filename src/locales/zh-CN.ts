@@ -1221,6 +1221,7 @@ export default {
     sortPublishTime: '发布时间',
     filterSite: '站点',
     filterSeason: '季',
+    filterSubtitle: '字幕',
     filterFreeState: '促销状态',
     filterVideoCode: '视频编码',
     filterEdition: '质量',
@@ -3353,6 +3354,7 @@ export default {
     pageSize: '每页条数',
     pageInfo: '{begin} - {end} / {total}',
     selectedCount: '已选择 {count}/{total} 项',
+    selectRecord: '选择 {title}',
     actions: {
       batchSelect: '批量选择',
       exitBatchSelect: '退出批量选择',

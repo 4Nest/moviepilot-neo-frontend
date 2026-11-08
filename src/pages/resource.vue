@@ -278,13 +278,14 @@ const isRefreshed = ref(false)
 
 const isBatchMode = ref(false)
 const selectedTorrents = ref<Context[]>([])
-const selectedTorrentSet = computed(() => new Set(selectedTorrents.value))
+const selectedTorrentSet = computed(() => new Set(selectedTorrents.value.map(item => getTorrentItemKey(item))))
 const visibleTorrentItems = computed(() =>
   viewType.value === 'card' ? filteredCardDataList.value : filteredRowDataList.value,
 )
 const isAllTorrentsSelected = computed(
   () =>
-    visibleTorrentItems.value.length > 0 && visibleTorrentItems.value.every(item => selectedTorrentSet.value.has(item)),
+    visibleTorrentItems.value.length > 0 &&
+    visibleTorrentItems.value.every(item => selectedTorrentSet.value.has(getTorrentItemKey(item))),
 )
 const viewToggleIcon = computed(() => (viewType.value === 'card' ? 'mdi-view-list-outline' : 'mdi-view-grid-outline'))
 
@@ -299,17 +300,19 @@ function toggleBatchMode() {
 }
 
 function toggleTorrentSelection(item: Context) {
-  if (selectedTorrentSet.value.has(item))
-    selectedTorrents.value = selectedTorrents.value.filter(value => value !== item)
+  const itemKey = getTorrentItemKey(item)
+  if (selectedTorrentSet.value.has(itemKey))
+    selectedTorrents.value = selectedTorrents.value.filter(value => getTorrentItemKey(value) !== itemKey)
   else selectedTorrents.value = [...selectedTorrents.value, item]
 }
 
 function toggleSelectAllTorrents() {
   if (isAllTorrentsSelected.value) {
-    selectedTorrents.value = selectedTorrents.value.filter(item => !visibleTorrentItems.value.includes(item))
+    const visibleKeys = new Set(visibleTorrentItems.value.map(item => getTorrentItemKey(item)))
+    selectedTorrents.value = selectedTorrents.value.filter(item => !visibleKeys.has(getTorrentItemKey(item)))
     return
   }
-  const missingItems = visibleTorrentItems.value.filter(item => !selectedTorrentSet.value.has(item))
+  const missingItems = visibleTorrentItems.value.filter(item => !selectedTorrentSet.value.has(getTorrentItemKey(item)))
   selectedTorrents.value = [...selectedTorrents.value, ...missingItems]
 }
 
@@ -793,7 +796,7 @@ function applyFinalSubtitleStreamResults(items: SubtitleInfo[]) {
 }
 
 // 获取磁力链接的key
-function getTorrentItemKey(item: Context, index: number) {
+function getTorrentItemKey(item: Context, index = 0) {
   return (
     item.torrent_info?.page_url ||
     item.torrent_info?.enclosure ||
@@ -1361,7 +1364,7 @@ onUnmounted(() => {
                 :torrent="item"
                 :more="item.more"
                 :batch-mode="isBatchMode"
-                :selected="selectedTorrentSet.has(item)"
+                :selected="selectedTorrentSet.has(getTorrentItemKey(item))"
                 @select="toggleTorrentSelection(item)"
               />
             </template>
@@ -1448,7 +1451,7 @@ onUnmounted(() => {
                   <TorrentItem
                     :torrent="item"
                     :batch-mode="isBatchMode"
-                    :selected="selectedTorrentSet.has(item)"
+                    :selected="selectedTorrentSet.has(getTorrentItemKey(item))"
                     @select="toggleTorrentSelection(item)"
                   />
                 </template>
