@@ -30,7 +30,6 @@ const SystemSettings = ref<any>({
     SEARCH_MULTIPLE_NAME: false,
     SEARCH_RESOURCE_PAGES: 3,
     DOWNLOAD_SUBTITLE: false,
-    AUTO_DOWNLOAD_USER: null,
     TORRENT_TAG: 'MOVIEPILOT',
   },
 })
@@ -258,16 +257,6 @@ useSilentSettingRefresh(loadPageData, {
                 :hint="t('setting.search.downloadLabelHint')"
                 persistent-hint
                 prepend-inner-icon="mdi-tag"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VCombobox
-                v-model="SystemSettings.Basic.AUTO_DOWNLOAD_USER"
-                :label="t('setting.search.downloadUser')"
-                :placeholder="t('setting.search.downloadUserPlaceholder')"
-                :hint="t('setting.search.downloadUserHint')"
-                persistent-hint
-                prepend-inner-icon="mdi-account"
               />
             </VCol>
             <VCol cols="12" md="6">

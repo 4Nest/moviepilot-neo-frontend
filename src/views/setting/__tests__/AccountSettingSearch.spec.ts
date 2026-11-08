@@ -39,7 +39,6 @@ describe('AccountSettingSearch', () => {
           data: {
             SEARCH_MULTIPLE_NAME: false,
             DOWNLOAD_SUBTITLE: true,
-            AUTO_DOWNLOAD_USER: null,
             TORRENT_TAG: 'MOVIEPILOT',
           },
         })
@@ -52,6 +51,7 @@ describe('AccountSettingSearch', () => {
   it('defaults SEARCH_RESOURCE_PAGES to 3 in search settings and saves updated or fallback value', async () => {
     await renderWithProviders(AccountSettingSearch)
 
+    expect(screen.queryByLabelText('远程搜索自动下载用户')).not.toBeInTheDocument()
     const pagesInput = (await screen.findByLabelText('搜索资源获取页数')) as HTMLInputElement
     await waitFor(() => expect(pagesInput.value).toBe('3'))
 

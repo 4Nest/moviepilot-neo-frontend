@@ -2049,8 +2049,6 @@ export default {
       movieCategory: '电影',
       tvCategory: '电视剧',
       animeCategory: '动漫',
-      downloadUser: '远程搜索自动下载用户',
-      downloadUserHint: '使用Telegram、企业微信等搜索时是否自动下载，使用逗号分割，设置为 all 代表所有用户自动择优下载',
       multipleNameSearch: '多名称资源搜索',
       multipleNameSearchHint: '使用多个名称（中文、英文等）搜索站点资源并合并搜索结果，会增加站点访问频率',
       searchResourcePages: '搜索资源获取页数',
@@ -2060,7 +2058,6 @@ export default {
       mediaSource: '媒体搜索数据源',
       mediaSourceHint: '搜索媒体信息时使用的数据源以及排序',
       filterRuleGroupHint: '搜索媒体信息时按选定的过滤规则组对结果进行过滤',
-      downloadUserPlaceholder: '用户ID1,用户ID2',
       downloadLabelPlaceholder: 'MOVIEPILOT',
     },
     directory: {
