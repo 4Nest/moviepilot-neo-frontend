@@ -1323,12 +1323,10 @@ onUnmounted(() => {
         </VRow>
       </VCardTitle>
     </VCardItem>
-    <!-- 分组模式 -->
     <VDataTableVirtual
-      v-if="group"
       v-model="selected"
-      :groupBy="groupBy"
-      :headers="groupHeaders"
+      :groupBy="group ? groupBy : undefined"
+      :headers="group ? groupHeaders : headers"
       :items="dataList"
       :loading="loading"
       density="compact"
@@ -1342,10 +1340,10 @@ onUnmounted(() => {
       <template #body.prepend="{ groupedItems }">
         <DesktopDisplayOrderProbe :grouped-items="groupedItems" />
       </template>
-      <template #header.data-table-group>
+      <template v-if="group" #header.data-table-group>
         <span>{{ t('transferHistory.titleColumn') }}</span>
       </template>
-      <template v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
+      <template v-if="group" v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
         <tr>
           <td :colspan="columns.length">
             <div class="d-flex align-center gap-2">
@@ -1383,107 +1381,9 @@ onUnmounted(() => {
           </VAvatar>
           <div class="d-flex flex-column ms-1">
             <span v-if="item.type === '电视剧'" class="d-block text-high-emphasis min-w-20">
-              {{ item?.seasons }}{{ item?.episodes }}
+              <template v-if="!group">{{ item?.title }} </template>{{ item?.seasons }}{{ item?.episodes }}
             </span>
-            <small>{{ item?.category }}</small>
-          </div>
-        </div>
-      </template>
-      <template #item.src="{ item }">
-        <div>
-          <span>
-            <VChip variant="tonal" size="small" label class="my-1"> {{ storageDict[item?.src_storage || ''] }}</VChip>
-            <small>{{ item?.src }}</small>
-          </span>
-          <span class="text-high-emphasis text-bold"> => </span>
-          <br />
-          <span v-if="item?.dest">
-            <VChip variant="tonal" size="small" label class="my-1"> {{ storageDict[item?.dest_storage || ''] }}</VChip>
-            <small>{{ item?.dest }}</small>
-          </span>
-        </div>
-      </template>
-      <template #item.mode="{ item }">
-        <VChip variant="outlined" color="primary" size="small">
-          {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
-        </VChip>
-      </template>
-      <template #item.status="{ item }">
-        <VChip v-if="item?.status" color="success" size="small"> {{ t('transferHistory.status.success') }} </VChip>
-        <VTooltip v-else :text="item?.errmsg">
-          <template #activator="{ props }">
-            <VChip v-bind="props" color="error" size="small"> {{ t('transferHistory.status.failed') }} </VChip>
-          </template>
-        </VTooltip>
-      </template>
-      <template #item.size="{ item }">
-        <small>{{ formatFileSize(item?.src_fileitem?.size || 0) }}</small>
-      </template>
-      <template #item.date="{ item }">
-        <small>{{ item?.date }}</small>
-      </template>
-      <template #item.actions="{ item }">
-        <IconBtn>
-          <VIcon icon="mdi-dots-vertical" />
-          <VMenu activator="parent" close-on-content-click>
-            <VList>
-              <VListItem
-                v-for="(menu, i) in getDropdownItems(item)"
-                :key="i"
-                :base-color="menu.props.color"
-                :disabled="Boolean(menu.props.disabled)"
-                @click="menu.props.click()"
-              >
-                <template #prepend>
-                  <VIcon :icon="menu.props.prependIcon" />
-                </template>
-                <VListItemTitle v-text="menu.title" />
-              </VListItem>
-            </VList>
-          </VMenu>
-        </IconBtn>
-      </template>
-      <template #no-data> {{ t('transferHistory.noData') }} </template>
-    </VDataTableVirtual>
-    <!-- 列表模式 -->
-    <VDataTableVirtual
-      v-else
-      v-model="selected"
-      :headers="headers"
-      :items="dataList"
-      :loading="loading"
-      density="compact"
-      return-object
-      fixed-header
-      show-select
-      :loading-text="t('transferHistory.loading')"
-      hover
-      :style="{ height: `${availableHeight}px` }"
-    >
-      <template #body.prepend="{ groupedItems }">
-        <DesktopDisplayOrderProbe :grouped-items="groupedItems" />
-      </template>
-      <template #item.data-table-select="{ item }">
-        <VCheckbox
-          :model-value="isHistorySelected(item)"
-          :aria-label="t('transferHistory.selectRecord', { title: item.title })"
-          density="compact"
-          hide-details
-          @click="historyRangeSelection.onCheckboxClick"
-          @update:model-value="checked => historyRangeSelection.selectFromCheckbox(item, !!checked)"
-          @input="historyRangeSelection.onCheckboxInput(item, $event)"
-        />
-      </template>
-      <template #item.title="{ item }">
-        <div class="d-flex align-center">
-          <VAvatar>
-            <VIcon :icon="getIcon(item.type || '')" />
-          </VAvatar>
-          <div class="d-flex flex-column ms-1">
-            <span v-if="item.type === '电视剧'" class="d-block text-high-emphasis min-w-20">
-              {{ item?.title }} {{ item?.seasons }}{{ item?.episodes }}
-            </span>
-            <span v-else class="d-block text-high-emphasis min-w-20">
+            <span v-else-if="!group" class="d-block text-high-emphasis min-w-20">
               {{ item?.title }}
             </span>
             <small>{{ item?.category }}</small>

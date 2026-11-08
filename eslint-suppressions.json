@@ -769,7 +769,7 @@
       "count": 9
     },
     "vue/no-v-text-v-html-on-component": {
-      "count": 3
+      "count": 2
     }
   },
   "src/views/setting/AccountSettingDirectory.vue": {
