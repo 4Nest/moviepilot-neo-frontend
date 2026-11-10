@@ -2080,6 +2080,6 @@ export interface CategoryRule {
 
 // 分类配置
 export interface CategoryConfig {
-  movie?: { [key: string]: CategoryRule }
-  tv?: { [key: string]: CategoryRule }
+  movie?: { [key: string]: CategoryRule | null }
+  tv?: { [key: string]: CategoryRule | null }
 }

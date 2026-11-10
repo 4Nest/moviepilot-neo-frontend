@@ -339,3 +339,27 @@ describe('CategoryEditDialog 进阶(YAML 原文)页签', () => {
     expect(editor).toHaveValue(RAW_CONTENT)
   })
 })
+
+describe('CategoryEditDialog 可视化配置加载', () => {
+  it('将 null 兜底分类按空规则渲染且不显示加载失败', async () => {
+    mocks.toastError.mockClear()
+    server.use(
+      http.get(categoryApiUrls.config, () =>
+        HttpResponse.json({
+          success: true,
+          data: {
+            movie: { 外语电影: null },
+            tv: { 欧美剧: null },
+          },
+        }),
+      ),
+    )
+
+    await renderDialog()
+    expect(await screen.findByDisplayValue('外语电影')).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('tab', { name: /电视剧/ }))
+    expect(await screen.findByDisplayValue('欧美剧')).toBeInTheDocument()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+})

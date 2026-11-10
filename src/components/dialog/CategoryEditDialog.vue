@@ -188,10 +188,10 @@ const parseConfig = (data: CategoryConfig) => {
     id: generateId(),
     name,
     rule: {
-      genre_ids: rule.genre_ids?.split(',') ?? [],
-      original_language: rule.original_language?.split(',') ?? [],
-      production_countries: rule.production_countries?.split(',') ?? [],
-      release_year: rule.release_year,
+      genre_ids: rule?.genre_ids?.split(',') ?? [],
+      original_language: rule?.original_language?.split(',') ?? [],
+      production_countries: rule?.production_countries?.split(',') ?? [],
+      release_year: rule?.release_year,
     },
   }))
 
@@ -199,10 +199,10 @@ const parseConfig = (data: CategoryConfig) => {
     id: generateId(),
     name,
     rule: {
-      genre_ids: rule.genre_ids?.split(',') ?? [],
-      original_language: rule.original_language?.split(',') ?? [],
-      origin_country: rule.origin_country?.split(',') ?? [],
-      release_year: rule.release_year,
+      genre_ids: rule?.genre_ids?.split(',') ?? [],
+      original_language: rule?.original_language?.split(',') ?? [],
+      origin_country: rule?.origin_country?.split(',') ?? [],
+      release_year: rule?.release_year,
     },
   }))
 }
