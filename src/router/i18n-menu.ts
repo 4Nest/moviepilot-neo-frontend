@@ -1,22 +1,24 @@
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import type { NavMenu, NavMenuTabItem } from '@/@layouts/types'
 import type { TextTranslator } from '@/composables/useChineseText'
 
 /** 构建当前语言与全局模式对应的主导航菜单。 */
 export function getNavMenus(t: TextTranslator): NavMenu[] {
   const globalSettingsStore = useGlobalSettingsStore()
+  const userStore = useUserStore()
+  const isSuperUser = userStore.superUser
 
   // 检查是否为高级模式
   const isAdvancedMode = globalSettingsStore.get('ADVANCED_MODE') !== false
 
-  return [
+  const menus: NavMenu[] = [
     {
       title: t('navItems.dashboard'),
       icon: 'mdi-home-outline',
       iconColor: 'primary',
       to: '/dashboard',
       header: t('menu.start'),
-      admin: false,
+      admin: true,
       footer: true,
     },
     {
@@ -25,7 +27,7 @@ export function getNavMenus(t: TextTranslator): NavMenu[] {
       iconColor: 'info',
       to: '/resource',
       header: t('menu.start'),
-      admin: false,
+      admin: true,
     },
     {
       title: t('navItems.recommend'),
@@ -55,7 +57,7 @@ export function getNavMenus(t: TextTranslator): NavMenu[] {
       to: '/subscribe/movie',
       header: t('menu.subscribe'),
       admin: false,
-      footer: false,
+      footer: !isSuperUser,
       tabs: getSubscribeMovieTabs(t),
     },
     {
@@ -66,7 +68,7 @@ export function getNavMenus(t: TextTranslator): NavMenu[] {
       to: '/subscribe/tv',
       header: t('menu.subscribe'),
       admin: false,
-      footer: false,
+      footer: !isSuperUser,
       tabs: getSubscribeTvTabs(t),
     },
     {
@@ -86,7 +88,7 @@ export function getNavMenus(t: TextTranslator): NavMenu[] {
       iconColor: 'info',
       to: '/downloading',
       header: t('menu.organize'),
-      admin: false,
+      admin: true,
     },
     {
       title: t('navItems.mediaOrganize'),
@@ -135,6 +137,12 @@ export function getNavMenus(t: TextTranslator): NavMenu[] {
         ]
       : []),
   ]
+
+  if (!isSuperUser) {
+    return menus.filter(item => !item.admin)
+  }
+
+  return menus
 }
 
 /** 返回推荐页可用的分类标签。 */
@@ -209,18 +217,22 @@ export function getSubscribeMovieTabs(t: TextTranslator): NavMenuTabItem[] {
 
 /** 返回电视剧订阅页的业务标签。 */
 export function getSubscribeTvTabs(t: TextTranslator): NavMenuTabItem[] {
-  return [
+  const userStore = useUserStore()
+  const tabs: NavMenuTabItem[] = [
     {
       title: t('subscribeTabs.tv.mysub'),
       tab: 'mysub',
       icon: 'mdi-bell-check',
     },
-    {
+  ]
+  if (userStore.superUser) {
+    tabs.push({
       title: t('subscribeTabs.tv.share'),
       tab: 'share',
       icon: 'mdi-share-variant',
-    },
-  ]
+    })
+  }
+  return tabs
 }
 
 /** 返回插件管理页的业务标签。 */

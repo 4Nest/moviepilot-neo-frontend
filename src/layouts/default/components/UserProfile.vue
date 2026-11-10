@@ -520,32 +520,36 @@ try {
 
 /** 原生用户菜单只投影 NEO 存在的菜单项，设置弹窗仍由现有组件处理。 */
 function nativeProfilePanel(): NativePanelSource {
-  const account: NativePanelEntry[] = [
-    {
-      id: 'profile',
-      title: t('user.profile'),
-      icon: 'mdi-account-outline',
-      invoke: () => {
-        void router.push('/profile')
-      },
-    },
-    {
-      id: 'settings',
-      title: isAdvancedMode.value ? t('user.systemSettings') : t('user.wizardSettings'),
-      icon: isAdvancedMode.value ? 'mdi-cog-outline' : 'mdi-wizard-hat',
-      invoke: () => {
-        void router.push(isAdvancedMode.value ? '/setting' : '/setup-wizard')
-      },
-    },
-  ]
-  if (userLevel.value < 2) {
-    account.push({
-      id: 'auth',
-      title: t('user.siteAuth'),
-      icon: 'mdi-lock-check-outline',
-      invoke: showSiteAuthDialog,
-    })
-  }
+  const account: NativePanelEntry[] = userStore.superUser
+    ? [
+        {
+          id: 'profile',
+          title: t('user.profile'),
+          icon: 'mdi-account-outline',
+          invoke: () => {
+            void router.push('/profile')
+          },
+        },
+        {
+          id: 'settings',
+          title: isAdvancedMode.value ? t('user.systemSettings') : t('user.wizardSettings'),
+          icon: isAdvancedMode.value ? 'mdi-cog-outline' : 'mdi-wizard-hat',
+          invoke: () => {
+            void router.push(isAdvancedMode.value ? '/setting' : '/setup-wizard')
+          },
+        },
+        ...(userLevel.value < 2
+          ? [
+              {
+                id: 'auth',
+                title: t('user.siteAuth'),
+                icon: 'mdi-lock-check-outline',
+                invoke: showSiteAuthDialog,
+              },
+            ]
+          : []),
+      ]
+    : []
   const preferences: NativePanelEntry[] = [
     {
       id: 'customizer',
@@ -571,19 +575,9 @@ function nativeProfilePanel(): NativePanelSource {
       invoke: showAboutDialog,
     },
   ]
-  return {
-    title: t('common.user'),
-    profile: {
-      name: userName.value,
-      image: nativeAvatar.value,
-    },
-    sections: [
-      { id: 'account', items: account },
-      { id: 'preferences', items: preferences },
-      { id: 'information', items: information },
-      {
-        id: 'session',
-        items: [
+  const sessionItems: NativePanelEntry[] = [
+    ...(userStore.superUser
+      ? [
           {
             id: 'restart',
             title: t('user.restart'),
@@ -591,15 +585,27 @@ function nativeProfilePanel(): NativePanelSource {
             destructive: true,
             invoke: showRestartDialog,
           },
-          {
-            id: 'logout',
-            title: t('app.logout'),
-            icon: 'mdi-logout',
-            destructive: true,
-            invoke: logout,
-          },
-        ],
-      },
+        ]
+      : []),
+    {
+      id: 'logout',
+      title: t('app.logout'),
+      icon: 'mdi-logout',
+      destructive: true,
+      invoke: logout,
+    },
+  ]
+  return {
+    title: t('common.user'),
+    profile: {
+      name: userName.value,
+      image: nativeAvatar.value,
+    },
+    sections: [
+      ...(account.length ? [{ id: 'account', items: account }] : []),
+      { id: 'preferences', items: preferences },
+      { id: 'information', items: information },
+      { id: 'session', items: sessionItems },
     ],
   }
 }
@@ -611,7 +617,9 @@ const getThemeIcon = computed(() => {
 })
 
 onMounted(() => {
-  getCustomCSS()
+  if (userStore.superUser) {
+    getCustomCSS()
+  }
   window.addEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerSettingsChange)
 
   // 初始化透明度设置
@@ -666,7 +674,7 @@ onUnmounted(() => {
         <VDivider class="mb-2" />
         <div class="px-2">
           <!-- 👉 Profile -->
-          <VListItem link @click="router.push('/profile')" class="mb-1 rounded-lg" hover>
+          <VListItem v-if="userStore.superUser" link @click="router.push('/profile')" class="mb-1 rounded-lg" hover>
             <template #prepend>
               <VIcon icon="mdi-account-outline" />
             </template>
@@ -674,6 +682,7 @@ onUnmounted(() => {
           </VListItem>
 
           <VListItem
+            v-if="userStore.superUser"
             link
             @click="isAdvancedMode ? router.push('/setting') : router.push('/setup-wizard')"
             class="mb-1 rounded-lg"
@@ -686,13 +695,18 @@ onUnmounted(() => {
           </VListItem>
 
           <!-- 👉 Site Auth -->
-          <VListItem v-if="userLevel < 2" link @click="showSiteAuthDialog" class="mb-1 rounded-lg" hover>
+          <VListItem
+            v-if="userStore.superUser && userLevel < 2"
+            link
+            @click="showSiteAuthDialog"
+            class="mb-1 rounded-lg"
+            hover
+          >
             <template #prepend>
               <VIcon icon="mdi-lock-check-outline" />
             </template>
             <VListItemTitle>{{ t('user.siteAuth') }}</VListItemTitle>
           </VListItem>
-
           <!-- 👉 UI模式设置 - 使用嵌套菜单 -->
           <VMenu location="end" offset-x width="15rem" v-model="showUIModeMenu" :close-on-content-click="true">
             <template v-slot:activator="{ props: menuProps }">
@@ -780,7 +794,7 @@ onUnmounted(() => {
                 </template>
               </VListItem>
 
-              <VListItem @click="showCustomCssDialog">
+              <VListItem v-if="userStore.superUser" @click="showCustomCssDialog">
                 <template #prepend>
                   <VIcon icon="mdi-palette" />
                 </template>
@@ -809,10 +823,10 @@ onUnmounted(() => {
           </VListItem>
 
           <!-- Divider -->
-          <VDivider class="my-3" />
+          <VDivider v-if="userStore.superUser" class="my-3" />
 
           <!-- 👉 restart -->
-          <VListItem @click="showRestartDialog" class="mb-1 rounded-lg" hover>
+          <VListItem v-if="userStore.superUser" @click="showRestartDialog" class="mb-1 rounded-lg" hover>
             <template #prepend>
               <VIcon icon="mdi-restart" />
             </template>

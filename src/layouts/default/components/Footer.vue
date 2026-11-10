@@ -5,6 +5,7 @@ import { NavMenu } from '@/@layouts/types'
 import { useI18n } from '@/composables/useChineseText'
 import { useLaunchLoading } from '@/composables/useLaunchLoading'
 import { usePWA } from '@/composables/usePWA'
+import { useUserStore } from '@/stores'
 import {
   dynamicButtonRegistry,
   type DynamicButtonRegister,
@@ -27,6 +28,7 @@ const { appMode } = usePWA()
 const { isLaunchLoading } = useLaunchLoading()
 const { t } = useI18n()
 
+const userStore = useUserStore()
 const route = useRoute()
 
 // 获取导航菜单
@@ -35,7 +37,8 @@ const navMenus = computed(() => getNavMenus(t))
 // 根据当前路径获取匹配的菜单路径
 function getMenuPathFromRoute(path: string): string {
   const matchedMenu = navMenus.value.find((menu: NavMenu) => menu.footer === true && path.startsWith(menu.to as string))
-  return matchedMenu ? (matchedMenu.to as string) : '/apps'
+  if (matchedMenu) return matchedMenu.to as string
+  return userStore.superUser ? '/apps' : '/recommend'
 }
 
 // 当前选中的菜单，初始值基于当前路由
@@ -51,7 +54,7 @@ const footerMenus = computed(() => {
 
   // 设置期望的底部菜单数量（不包括"更多"按钮）
   // 一般来说，底部导航栏显示 3-4 个主要功能比较合适
-  const expectedFooterMenuCount = 3
+  const expectedFooterMenuCount = userStore.superUser ? 3 : 4
 
   // 如果有 footer 属性的菜单已经足够，优先显示它们
   if (footerMenusWithProperty.length >= expectedFooterMenuCount) {
@@ -232,6 +235,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
 
               <!-- 更多按钮 -->
               <VBtn
+                v-if="userStore.superUser"
                 :variant="currentMenu === '/apps' ? 'text' : 'plain'"
                 color="primary"
                 :ripple="false"

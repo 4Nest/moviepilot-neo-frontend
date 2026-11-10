@@ -12,7 +12,7 @@ import api from '@/api'
 import { formatRating } from '@/@core/utils/formatters'
 import type { MediaInfo, Site, Subscribe } from '@/api/types'
 import router from '@/router'
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { mediaTypeDict } from '@/api/constants'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import {
@@ -48,6 +48,7 @@ const props = defineProps({
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
+const userStore = useUserStore()
 
 // 图片加载状态
 const isImageLoaded = ref(false)
@@ -579,7 +580,13 @@ onBeforeUnmount(() => {
             </p>
             <div v-if="props.media?.collection_id" class="mb-3" @click.stop=""></div>
             <div v-else class="flex align-center justify-between">
-              <IconBtn icon="mdi-magnify" color="white" size="small" @click.stop="clickSearch" />
+              <IconBtn
+                v-if="userStore.superUser"
+                icon="mdi-magnify"
+                color="white"
+                size="small"
+                @click.stop="clickSearch"
+              />
               <VSpacer />
               <IconBtn
                 :icon="isSubscribed ? 'mdi-heart' : 'mdi-heart-outline'"

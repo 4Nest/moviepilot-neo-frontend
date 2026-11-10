@@ -5,7 +5,7 @@ import { useTheme } from 'vuetify'
 import { useAuthStore, useUserStore } from '@/stores'
 import { authState, userState } from '@/stores/types'
 import api from '@/api'
-import router from '@/router'
+import router, { isAllowedSubscribeUserPath } from '@/router'
 import LoginMfaStep from '@/components/auth/LoginMfaStep.vue'
 import { bufferToBase64Url, base64UrlToUint8Array } from '@/@core/utils/navigator'
 import type { ApiResponse } from '@/api/types'
@@ -267,6 +267,8 @@ interface PassKeyFinishResponse {
   access_token: string
   user_id: number
   user_name: string
+  super_user?: boolean
+  permissions?: Record<string, unknown>
   avatar: string
   level: number
   wizard: boolean
@@ -462,6 +464,16 @@ async function afterLogin(userPayload: userState) {
   const originalPath = authStore.originalPath
   authStore.setOriginalPath(null)
 
+  if (!userPayload.superUser) {
+    const resolvedPath = originalPath ? router.resolve(originalPath).path : ''
+    if (originalPath && originalPath !== '/' && isAllowedSubscribeUserPath(resolvedPath)) {
+      await router.push(originalPath)
+    } else {
+      await router.push('/recommend')
+    }
+    return
+  }
+
   // 如果需要显示设置向导，跳转到设置向导页面
   if (userPayload.wizard) {
     await router.push('/setup-wizard')
@@ -478,11 +490,13 @@ async function afterLogin(userPayload: userState) {
 // 处理登录成功
 async function handleLoginSuccess(response: PassKeyFinishResponse) {
   const userPayload: userState = {
+    superUser: Boolean(response.super_user),
     userID: response.user_id,
     userName: response.user_name,
     avatar: response.avatar,
     level: response.level,
     wizard: response.wizard,
+    permissions: response.permissions ?? {},
   }
 
   const authPayLoad: authState = {

@@ -5,6 +5,7 @@ import { getNavMenus, getSettingTabs } from '@/router/i18n-menu'
 import { NavMenu } from '@/@layouts/types'
 import SearchSiteDialog from '@/components/dialog/SearchSiteDialog.vue'
 import { useI18n } from '@/composables/useChineseText'
+import { useUserStore } from '@/stores'
 import { useDisplay } from 'vuetify'
 import { VDialog, VMenu } from 'vuetify/components'
 import type { NativePanelEntry, NativePanelSource } from '@/native/registry'
@@ -16,6 +17,7 @@ const display = useDisplay()
 // 多语言支持
 const { t } = useI18n()
 
+const userStore = useUserStore()
 // 定义 props，接收浮层状态及是否显示响应式入口。
 const props = withDefaults(
   defineProps<{
@@ -196,20 +198,21 @@ function getMenus(): NavMenu[] {
         admin: item.admin,
       }),
   )
-  // 设置标签页
-  getSettingTabs(t).forEach(
-    item =>
-      item &&
-      menus.push({
-        title: t('navItems.setting') + ' -> ' + item.title,
-        icon: item.icon,
-        to: `/setting?tab=${item.tab}`,
-        header: '',
-        admin: true,
-        description: item.description,
-      }),
-  )
-
+  if (userStore.superUser) {
+    // 设置标签页
+    getSettingTabs(t).forEach(
+      item =>
+        item &&
+        menus.push({
+          title: t('navItems.setting') + ' -> ' + item.title,
+          icon: item.icon,
+          to: `/setting?tab=${item.tab}`,
+          header: '',
+          admin: true,
+          description: item.description,
+        }),
+    )
+  }
   return menus
 }
 
@@ -501,45 +504,47 @@ function nativePanel(): NativePanelSource {
         ],
       })
     }
-    const resources = [
-      { type: 'torrent' as const, title: t('dialog.searchBar.relatedResources'), invoke: searchTorrent },
-      { type: 'subtitle' as const, title: t('dialog.searchBar.relatedSubtitles'), invoke: searchSubtitle },
-    ]
-    actions.push(
-      ...resources.map(item => ({
-        id: `resource-${item.type}`,
-        title: item.title,
-        subtitle: `${t('common.search')} ${keyword}`,
-        icon: 'search',
-        children: [
-          {
-            id: `run-resource-${item.type}`,
-            title: t('common.search'),
-            icon: 'search',
-            primary: true,
-            invoke: item.invoke,
-          },
-          {
-            id: `sites-${item.type}`,
-            title: t('dialog.searchBar.selectSites'),
-            icon: 'mdi-web',
-            invoke: () => openSiteDialog(item.type),
-          },
-        ],
-      })),
-    )
-    actions.push({
-      id: 'shares',
-      title: t('subscribe.searchShares'),
-      icon: 'mdi-share-variant',
-      invoke: searchSubscribeShares,
-    })
-    actions.push({
-      id: 'history',
-      title: t('navItems.history'),
-      icon: 'mdi-history',
-      invoke: searchHistory,
-    })
+    if (userStore.superUser) {
+      const resources = [
+        { type: 'torrent' as const, title: t('dialog.searchBar.relatedResources'), invoke: searchTorrent },
+        { type: 'subtitle' as const, title: t('dialog.searchBar.relatedSubtitles'), invoke: searchSubtitle },
+      ]
+      actions.push(
+        ...resources.map(item => ({
+          id: `resource-${item.type}`,
+          title: item.title,
+          subtitle: `${t('common.search')} ${keyword}`,
+          icon: 'search',
+          children: [
+            {
+              id: `run-resource-${item.type}`,
+              title: t('common.search'),
+              icon: 'search',
+              primary: true,
+              invoke: item.invoke,
+            },
+            {
+              id: `sites-${item.type}`,
+              title: t('dialog.searchBar.selectSites'),
+              icon: 'mdi-web',
+              invoke: () => openSiteDialog(item.type),
+            },
+          ],
+        })),
+      )
+      actions.push({
+        id: 'shares',
+        title: t('subscribe.searchShares'),
+        icon: 'mdi-share-variant',
+        invoke: searchSubscribeShares,
+      })
+      actions.push({
+        id: 'history',
+        title: t('navItems.history'),
+        icon: 'mdi-history',
+        invoke: searchHistory,
+      })
+    }
   }
   return {
     title: t('common.search'),
@@ -572,17 +577,21 @@ function nativePanel(): NativePanelSource {
           invoke: () => goSubscribe(item),
         })),
       },
-      {
-        id: 'plugins',
-        title: t('dialog.searchBar.plugins'),
-        items: matchedPluginItems.value.slice(0, 10).map(item => ({
-          id: nativePanelId('plugin', item.id),
-          title: item.plugin_name || item.id || '',
-          subtitle: item.plugin_desc,
-          icon: 'mdi-puzzle-outline',
-          invoke: () => showPlugin(item.id ?? ''),
-        })),
-      },
+      ...(userStore.superUser
+        ? [
+            {
+              id: 'plugins',
+              title: t('dialog.searchBar.plugins'),
+              items: matchedPluginItems.value.slice(0, 10).map(item => ({
+                id: nativePanelId('plugin', item.id),
+                title: item.plugin_name || item.id || '',
+                subtitle: item.plugin_desc,
+                icon: 'mdi-puzzle-outline',
+                invoke: () => showPlugin(item.id ?? ''),
+              })),
+            },
+          ]
+        : []),
       {
         id: 'recent',
         title: t('dialog.searchBar.recentSearches'),
@@ -605,11 +614,13 @@ function nativePanel(): NativePanelSource {
 defineExpose({ focusSearchInput, nativePanel })
 
 onMounted(() => {
-  fetchInstalledPlugins()
   fetchSubscribes()
   loadRecentSearches()
-  loadUserSitePreferences()
-  queryAllSites()
+  if (userStore.superUser) {
+    fetchInstalledPlugins()
+    loadUserSitePreferences()
+    queryAllSites()
+  }
 })
 </script>
 <template>
@@ -736,7 +747,13 @@ onMounted(() => {
             </div>
           </VListItem>
 
-          <VListItem density="comfortable" link @click="searchSubscribeShares" class="search-result-item mx-2 my-1">
+          <VListItem
+            v-if="userStore.superUser"
+            density="comfortable"
+            link
+            @click="searchSubscribeShares"
+            class="search-result-item mx-2 my-1"
+          >
             <template #prepend>
               <div class="result-icon-wrapper">
                 <VIcon icon="mdi-share-variant" size="small" color="medium-emphasis" />
@@ -749,7 +766,13 @@ onMounted(() => {
             </VListItemSubtitle>
           </VListItem>
 
-          <VListItem density="comfortable" link @click="searchHistory" class="search-result-item mx-2 my-1">
+          <VListItem
+            v-if="userStore.superUser"
+            density="comfortable"
+            link
+            @click="searchHistory"
+            class="search-result-item mx-2 my-1"
+          >
             <template #prepend>
               <div class="result-icon-wrapper">
                 <VIcon icon="mdi-history" size="small" color="medium-emphasis" />
@@ -761,7 +784,6 @@ onMounted(() => {
               {{ t('dialog.searchBar.historySearch') }}
             </VListItemSubtitle>
           </VListItem>
-
           <!-- 匹配的订阅 -->
           <template v-if="matchedSubscribeItems.length > 0">
             <VDivider class="mx-4 my-2 search-divider" />
@@ -826,7 +848,7 @@ onMounted(() => {
           </template>
 
           <!-- 匹配的插件 -->
-          <template v-if="matchedPluginItems.length > 0">
+          <template v-if="userStore.superUser && matchedPluginItems.length > 0">
             <VDivider class="mx-4 my-2 search-divider" />
             <VListSubheader class="font-weight-medium text-uppercase px-4">
               {{ t('dialog.searchBar.plugins') }}
@@ -854,62 +876,64 @@ onMounted(() => {
           </template>
 
           <!-- 站点资源搜索 -->
-          <VDivider class="mx-4 my-2 search-divider" />
-          <VListSubheader class="font-weight-medium text-uppercase px-4">
-            {{ t('dialog.searchBar.siteResources') }}
-          </VListSubheader>
+          <template v-if="userStore.superUser">
+            <VDivider class="mx-4 my-2 search-divider" />
+            <VListSubheader class="font-weight-medium text-uppercase px-4">
+              {{ t('dialog.searchBar.siteResources') }}
+            </VListSubheader>
 
-          <VListItem density="comfortable" link @click="searchTorrent" class="search-result-item mx-2 my-1">
-            <template #prepend>
-              <div class="result-icon-wrapper">
-                <VIcon icon="mdi-file-search" size="small" color="medium-emphasis" />
-              </div>
-            </template>
-            <VListItemTitle class="font-weight-medium text-body-2">{{
-              t('dialog.searchBar.searchInSites')
-            }}</VListItemTitle>
-            <VListItemSubtitle class="text-caption text-medium-emphasis">
-              {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
-              {{ t('dialog.searchBar.relatedResources') }}
-            </VListItemSubtitle>
-            <template #append>
-              <VBtn
-                size="x-small"
-                variant="tonal"
-                color="primary"
-                rounded="pill"
-                @click.stop="openSiteDialog('torrent')"
-              >
-                {{ t('dialog.searchBar.selectSites') }}
-              </VBtn>
-            </template>
-          </VListItem>
+            <VListItem density="comfortable" link @click="searchTorrent" class="search-result-item mx-2 my-1">
+              <template #prepend>
+                <div class="result-icon-wrapper">
+                  <VIcon icon="mdi-file-search" size="small" color="medium-emphasis" />
+                </div>
+              </template>
+              <VListItemTitle class="font-weight-medium text-body-2">{{
+                t('dialog.searchBar.searchInSites')
+              }}</VListItemTitle>
+              <VListItemSubtitle class="text-caption text-medium-emphasis">
+                {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
+                {{ t('dialog.searchBar.relatedResources') }}
+              </VListItemSubtitle>
+              <template #append>
+                <VBtn
+                  size="x-small"
+                  variant="tonal"
+                  color="primary"
+                  rounded="pill"
+                  @click.stop="openSiteDialog('torrent')"
+                >
+                  {{ t('dialog.searchBar.selectSites') }}
+                </VBtn>
+              </template>
+            </VListItem>
 
-          <VListItem density="comfortable" link @click="searchSubtitle" class="search-result-item mx-2 my-1">
-            <template #prepend>
-              <div class="result-icon-wrapper">
-                <VIcon icon="mdi-subtitles-outline" size="small" color="medium-emphasis" />
-              </div>
-            </template>
-            <VListItemTitle class="font-weight-medium text-body-2">{{
-              t('dialog.searchBar.searchSubtitlesInSites')
-            }}</VListItemTitle>
-            <VListItemSubtitle class="text-caption text-medium-emphasis">
-              {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
-              {{ t('dialog.searchBar.relatedSubtitles') }}
-            </VListItemSubtitle>
-            <template #append>
-              <VBtn
-                size="x-small"
-                variant="tonal"
-                color="primary"
-                rounded="pill"
-                @click.stop="openSiteDialog('subtitle')"
-              >
-                {{ t('dialog.searchBar.selectSites') }}
-              </VBtn>
-            </template>
-          </VListItem>
+            <VListItem density="comfortable" link @click="searchSubtitle" class="search-result-item mx-2 my-1">
+              <template #prepend>
+                <div class="result-icon-wrapper">
+                  <VIcon icon="mdi-subtitles-outline" size="small" color="medium-emphasis" />
+                </div>
+              </template>
+              <VListItemTitle class="font-weight-medium text-body-2">{{
+                t('dialog.searchBar.searchSubtitlesInSites')
+              }}</VListItemTitle>
+              <VListItemSubtitle class="text-caption text-medium-emphasis">
+                {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
+                {{ t('dialog.searchBar.relatedSubtitles') }}
+              </VListItemSubtitle>
+              <template #append>
+                <VBtn
+                  size="x-small"
+                  variant="tonal"
+                  color="primary"
+                  rounded="pill"
+                  @click.stop="openSiteDialog('subtitle')"
+                >
+                  {{ t('dialog.searchBar.selectSites') }}
+                </VBtn>
+              </template>
+            </VListItem>
+          </template>
         </VList>
 
         <!-- 无搜索词时显示空状态 -->

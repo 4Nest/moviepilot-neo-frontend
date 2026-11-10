@@ -1,8 +1,25 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { configureNProgress } from '@/api/nprogress'
-import { useAuthStore } from '@/stores'
+import { useAuthStore, useUserStore } from '@/stores'
 import { setNavigatingState as setRequestNavigatingState } from '@/utils/requestOptimizer'
 
+const SUBSCRIBE_USER_EXACT_PATHS: Record<string, true> = {
+  '/recommend': true,
+  '/discover': true,
+  '/subscribe/movie': true,
+  '/subscribe/tv': true,
+  '/media': true,
+  '/person': true,
+}
+
+const SUBSCRIBE_USER_PREFIX_PATHS = ['/browse/', '/credits/']
+
+/** 判断路径是否允许普通订阅用户访问。 */
+export function isAllowedSubscribeUserPath(path: string): boolean {
+  const normalized = (path || '').replace(/\/$/, '') || '/'
+  if (SUBSCRIBE_USER_EXACT_PATHS[normalized]) return true
+  return SUBSCRIBE_USER_PREFIX_PATHS.some(prefix => path.startsWith(prefix))
+}
 // Nprogress
 configureNProgress()
 
@@ -19,8 +36,9 @@ const router = createRouter({
       path: '/',
       redirect: () => {
         const authStore = useAuthStore()
+        const userStore = useUserStore()
         if (!authStore.token) return '/login'
-        return '/dashboard'
+        return userStore.superUser ? '/dashboard' : '/recommend'
       },
     },
     {
@@ -232,8 +250,9 @@ router.beforeEach(async (to: any, from: any, next: any) => {
   // 设置导航状态 - 同时中断API请求
   setRequestNavigatingState(true)
 
-  // 认证 Store
+  // 认证与用户 Store
   const authStore = useAuthStore()
+  const userStore = useUserStore()
   // 登录页的实验参数不是登录后可恢复的业务目标。
   if (to.path !== '/login') authStore.originalPath = to.fullPath
   const isAuthenticated = authStore.token !== null
@@ -242,6 +261,9 @@ router.beforeEach(async (to: any, from: any, next: any) => {
     // 用户未登录，重定向到登录页
     setRequestNavigatingState(false)
     next('/login')
+  } else if (isAuthenticated && !userStore.superUser && to.path !== '/login' && !isAllowedSubscribeUserPath(to.path)) {
+    setRequestNavigatingState(false)
+    next('/recommend')
   } else {
     next()
   }

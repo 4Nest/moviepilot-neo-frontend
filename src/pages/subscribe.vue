@@ -6,7 +6,7 @@ import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-
+import { useUserStore } from '@/stores'
 import { getSubscribeMovieTabs, getSubscribeTvTabs } from '@/router/i18n-menu'
 
 // 国际化
@@ -14,6 +14,7 @@ const { t } = useI18n()
 
 const route = useRoute()
 const { appMode } = usePWA()
+const userStore = useUserStore()
 
 // 非默认标签页和弹窗按需加载，避免进入订阅列表时同步下载分享/统计相关代码。
 const SubscribeShareView = defineAsyncComponent(() => import('@/views/subscribe/SubscribeShareView.vue'))
@@ -202,8 +203,8 @@ function selectSubscribeSort(value: SubscribeSortBy) {
 const filterActivator = computed(() => '[data-menu-activator="filter-btn"]')
 const searchActivator = computed(() => '[data-menu-activator="share-filter-btn"]')
 
-const showDefaultRuleAction = computed(() => activeTab.value === 'mysub')
-const showSubscribeHistoryAction = showDefaultRuleAction
+const showDefaultRuleAction = computed(() => userStore.superUser && activeTab.value === 'mysub')
+const showSubscribeHistoryAction = computed(() => activeTab.value === 'mysub')
 
 function openDefaultRuleDialog() {
   openSharedDialog(
@@ -371,12 +372,13 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
       })
     }
 
-    items.push({
-      titleKey: 'dialog.subscribeEdit.titleDefault',
-      icon: 'mdi-clipboard-edit-outline',
-      action: openDefaultRuleDialog,
-    })
-
+    if (showDefaultRuleAction.value) {
+      items.push({
+        titleKey: 'dialog.subscribeEdit.titleDefault',
+        icon: 'mdi-clipboard-edit-outline',
+        action: openDefaultRuleDialog,
+      })
+    }
     return items.length > 1 ? items : undefined
   }
 
@@ -409,7 +411,11 @@ useDynamicButton({
   icon: subscribeDynamicIcon,
   onClick: handleSubscribeDynamicAction,
   menuItems: subscribeDynamicMenuItems,
-  show: computed(() => appMode.value && (subscribeBatchState.value.enabled || showDefaultRuleAction.value)),
+  show: computed(
+    () =>
+      appMode.value &&
+      (subscribeBatchState.value.enabled || showSubscribeHistoryAction.value || showDefaultRuleAction.value),
+  ),
 })
 
 // 使用动态标签页

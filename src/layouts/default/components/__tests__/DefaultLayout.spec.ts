@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     template: '<span data-testid="vertical-nav-link">{{ item.title }}</span>',
   },
   sidebarStore: undefined as SidebarStoreMock | undefined,
+  userStore: undefined as { superUser: boolean } | undefined,
   verticalNavLayout: { template: '<div><slot name="vertical-nav-content" /></div>' },
 }))
 
@@ -42,10 +43,14 @@ vi.mock('@/stores', async () => {
     ensureSidebarNav: mocks.ensureSidebarNav,
     items: [] as PluginSidebarNavItem[],
   })
+  mocks.userStore = reactive({
+    superUser: true,
+  })
 
   return {
     useGlobalSettingsStore: () => ({ get: vi.fn(() => false) }),
     usePluginSidebarNavStore: () => mocks.sidebarStore,
+    useUserStore: () => mocks.userStore,
   }
 })
 
@@ -91,6 +96,7 @@ describe('DefaultLayout', () => {
     mocks.ensureSidebarNav.mockReset()
     mocks.ensureSidebarNav.mockResolvedValue(undefined)
     mocks.sidebarStore!.items = []
+    mocks.userStore!.superUser = true
   })
 
   it('removes theme customizer listeners while sidebar loading is still pending', async () => {

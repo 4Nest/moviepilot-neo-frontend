@@ -234,7 +234,11 @@ watch(
         return false
       }
 
-      if (normalizedKeyword.value && !data.name?.toLowerCase().includes(normalizedKeyword.value)) {
+      if (
+        normalizedKeyword.value &&
+        !data.name?.toLowerCase().includes(normalizedKeyword.value) &&
+        !data.username?.toLowerCase().includes(normalizedKeyword.value)
+      ) {
         return false
       }
 

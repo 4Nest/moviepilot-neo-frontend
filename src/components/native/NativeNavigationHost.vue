@@ -52,22 +52,20 @@ const confirmation = ref<NativeConfirmation>()
 const themePreference = ref(readThemeCustomizerSettings().theme)
 const menus = computed(() => getNavMenus(t))
 const authenticated = computed(() => Boolean(auth.token) && Boolean(route.meta.requiresAuth))
-const roots = computed<NativeSnapshot['roots']>(() =>
-  authenticated.value
-    ? [
-        ...menus.value
-          .filter(menu => menu.footer === true && typeof menu.to === 'string' && menu.to !== '/apps')
-          .slice(0, 3)
-          .map(menu => ({
-            id: menu.to as string,
-            path: menu.to as string,
-            title: menu.title,
-            icon: typeof menu.icon === 'string' ? menu.icon : 'apps',
-          })),
-        { id: '/apps', path: '/apps', title: t('nav.more'), icon: 'more' },
-      ]
-    : [],
-)
+const roots = computed<NativeSnapshot['roots']>(() => {
+  if (!authenticated.value) return []
+  const footerItems = menus.value
+    .filter(menu => menu.footer === true && typeof menu.to === 'string' && menu.to !== '/apps')
+    .slice(0, user.superUser ? 3 : 4)
+    .map(menu => ({
+      id: menu.to as string,
+      path: menu.to as string,
+      title: menu.title,
+      icon: typeof menu.icon === 'string' ? menu.icon : 'apps',
+    }))
+  if (!user.superUser) return footerItems
+  return [...footerItems, { id: '/apps', path: '/apps', title: t('nav.more'), icon: 'more' }]
+})
 const history = new NativeRouteHistory(router, () => roots.value)
 // Vue 完成守卫和异步页面解析后、修改实际内容前保留离页画面，不改变任何业务历史。
 const removePreviewHook = router.beforeResolve(async (to, from) => {
@@ -307,7 +305,7 @@ const model = computed(() => {
   }
   let menuSequence = 0
   let moreMenu: NativeMenuSection[] = []
-  if (authenticated.value) {
+  if (authenticated.value && user.superUser) {
     const groupedMenus: Record<string, NavMenu[]> = {}
     const appMenus = [
       ...menus.value.filter(item => !item.footer),
@@ -566,7 +564,9 @@ void router.isReady().then(() => {
   routerReady.value = true
 })
 onMounted(() => {
-  void pluginMenus.ensureSidebarNav()
+  if (user.superUser) {
+    void pluginMenus.ensureSidebarNav()
+  }
 })
 onScopeDispose(() => {
   window.removeEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerChange)

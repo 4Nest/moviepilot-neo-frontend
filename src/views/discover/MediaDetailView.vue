@@ -19,7 +19,7 @@ import router from '@/router'
 import { isNullOrEmptyObject } from '@/@core/utils'
 import { useTheme } from 'vuetify'
 import { useI18n } from '@/composables/useChineseText'
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { openMediaServerItem, openDoubanApp } from '@/utils/appDeepLink'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
@@ -50,6 +50,7 @@ const mediaProps = defineProps({
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
+const userStore = useUserStore()
 
 // 获取主题信息
 const theme = useTheme()
@@ -853,7 +854,12 @@ onUnmounted(() => {
           </span>
         </div>
         <div class="media-actions">
-          <VBtn v-if="hasMediaIdentity()" variant="tonal" color="primary" class="media-action-button">
+          <VBtn
+            v-if="userStore.superUser && hasMediaIdentity()"
+            variant="tonal"
+            color="primary"
+            class="media-action-button"
+          >
             <template #prepend>
               <VIcon icon="mdi-magnify" />
             </template>
@@ -870,7 +876,7 @@ onUnmounted(() => {
             </VMenu>
           </VBtn>
           <VBtn
-            v-if="hasMediaIdentity()"
+            v-if="userStore.superUser && hasMediaIdentity()"
             variant="tonal"
             color="info"
             class="media-action-button"

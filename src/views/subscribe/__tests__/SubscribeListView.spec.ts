@@ -2,6 +2,9 @@ import type { Subscribe } from '@/api/types'
 import SubscribeListView from '@/views/subscribe/SubscribeListView.vue'
 import { notifySubscribeChanged } from '@/composables/useSubscribeRefresh'
 import { setNavigatingState } from '@/utils/requestOptimizer'
+import { isAllowedSubscribeUserPath } from '@/router'
+import { getNavMenus, getSubscribeTvTabs } from '@/router/i18n-menu'
+import { useUserStore } from '@/stores'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSubscribe } from '@tests/support/factories/subscribe'
 import {
@@ -337,11 +340,39 @@ describe('SubscribeListView loading and filtering', () => {
     expect(screen.getByTestId('sort-by-state')).toHaveTextContent('date')
   })
 
-  it('normalizes keyword filtering', async () => {
-    await renderList({ keyword: '  ALPHA  ', listResponse: [movie(1, 'Alpha One'), movie(2, 'Beta Two')] })
+  it('normalizes keyword filtering by media name or subscriber username', async () => {
+    const { rerender } = await renderList({
+      keyword: '  ALPHA  ',
+      listResponse: [movie(1, 'Alpha One', { username: 'emby_alice' }), movie(2, 'Beta Two', { username: 'emby_bob' })],
+    })
 
     expect(await screen.findByText('Alpha One')).toBeInTheDocument()
     expect(screen.queryByText('Beta Two')).not.toBeInTheDocument()
+
+    await rerender({ keyword: '  EMBY_BOB  ' })
+    expect(await screen.findByText('Beta Two')).toBeInTheDocument()
+    expect(screen.queryByText('Alpha One')).not.toBeInTheDocument()
+  })
+
+  it('filters nav menus and route access for non-superuser subscribe accounts', async () => {
+    await renderList({ listResponse: [] })
+    const userStore = useUserStore()
+    userStore.superUser = false
+
+    const menus = getNavMenus(key => key)
+    expect(menus.map(item => item.to)).toEqual(['/recommend', '/discover', '/subscribe/movie', '/subscribe/tv'])
+    expect(menus.every(item => item.footer === true)).toBe(true)
+    expect(getSubscribeTvTabs(key => key).map(tab => tab.tab)).toEqual(['mysub'])
+
+    expect(isAllowedSubscribeUserPath('/recommend')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/discover')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/subscribe/movie')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/subscribe/tv')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/media')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/browse/media/search')).toBe(true)
+    expect(isAllowedSubscribeUserPath('/dashboard')).toBe(false)
+    expect(isAllowedSubscribeUserPath('/setting')).toBe(false)
+    expect(isAllowedSubscribeUserPath('/plugin-app/EmbyUserManager/main')).toBe(false)
   })
 
   it.each([

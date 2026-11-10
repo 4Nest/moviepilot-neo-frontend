@@ -10,7 +10,7 @@ import UserProfile from './UserProfile.vue'
 import QuickAccess from './QuickAccess.vue'
 import HeaderTab from './HeaderTab.vue'
 import ThemeCustomizer from '@/components/theme/ThemeCustomizer.vue'
-import { usePluginSidebarNavStore } from '@/stores'
+import { usePluginSidebarNavStore, useUserStore } from '@/stores'
 import { getNavMenus } from '@/router/i18n-menu'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
 import { NavMenu } from '@/@layouts/types'
@@ -42,6 +42,7 @@ const showThemeCustomizer = ref(false)
 
 // 插件侧边栏导航 Store
 const pluginSidebarNavStore = usePluginSidebarNavStore()
+const userStore = useUserStore()
 
 // 开始菜单项
 const startMenus = ref<NavMenu[]>([])
@@ -245,6 +246,7 @@ onUnmounted(() => {
 
 /** 判断当前页面状态是否允许使用主界面下拉快捷入口手势。 */
 const canUsePullGesture = () => {
+  if (!userStore.superUser) return false
   // 检查是否在dashboard页面
   const isDashboard = route.path === '/dashboard' || route.path === '/'
   // 检查插件快速访问面板是否已显示
@@ -438,6 +440,7 @@ onBeforeUnmount(() => {
 
 /** 将插件侧边栏菜单合并到对应的导航分组中。 */
 function appendPluginSidebarMenus() {
+  if (!userStore.superUser) return
   for (const { navMenu, section } of filterPluginSidebarNavEntries(pluginSidebarNavStore.items, t)) {
     switch (section) {
       case 'start':
@@ -471,12 +474,9 @@ function rebuildSidebarMenus() {
 }
 
 let sidebarMenusMounted = false
-watch(
-  () => pluginSidebarNavStore.items,
-  () => {
-    if (sidebarMenusMounted) rebuildSidebarMenus()
-  },
-)
+watch([() => pluginSidebarNavStore.items, () => userStore.superUser], () => {
+  if (sidebarMenusMounted) rebuildSidebarMenus()
+})
 
 onMounted(async () => {
   // 主题定制器由布局统一承载，监听需要尽早注册，避免异步加载菜单期间丢失打开事件。
@@ -485,7 +485,9 @@ onMounted(async () => {
 
   rebuildSidebarMenus()
   sidebarMenusMounted = true
-  await pluginSidebarNavStore.ensureSidebarNav()
+  if (userStore.superUser) {
+    await pluginSidebarNavStore.ensureSidebarNav()
+  }
 })
 </script>
 
@@ -525,7 +527,11 @@ onMounted(async () => {
         class="theme-navbar-row d-flex h-16 align-center mx-1"
         :class="{ 'theme-navbar-row--horizontal': showHorizontalThemeNav }"
       >
-        <RouterLink v-if="showHorizontalThemeNav" to="/dashboard" class="theme-horizontal-logo">
+        <RouterLink
+          v-if="showHorizontalThemeNav"
+          :to="userStore.superUser ? '/dashboard' : '/recommend'"
+          class="theme-horizontal-logo"
+        >
           <NeoLogoMark class="brand-logo-mark" />
           <span class="theme-horizontal-logo__text moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
         </RouterLink>
@@ -548,10 +554,9 @@ onMounted(async () => {
           <!-- 👉 Horizontal Search Bar -->
           <SearchBar v-if="showHorizontalThemeNav" />
           <!-- 👉 Shortcuts -->
-          <ShortcutBar />
+          <ShortcutBar v-if="userStore.superUser" />
           <!-- 👉 Notification -->
-          <UserNofification />
-          <!-- 👉 UserProfile -->
+          <UserNofification v-if="userStore.superUser" />
           <UserProfile />
         </div>
       </div>

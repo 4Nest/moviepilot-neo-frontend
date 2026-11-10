@@ -8,7 +8,7 @@ import type { Subscribe } from '@/api/types'
 import router from '@/router'
 import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 
@@ -44,6 +44,9 @@ const props = defineProps({
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
+const userStore = useUserStore()
+const isSuperUser = computed(() => userStore.superUser)
+const subscriberName = computed(() => props.media?.username?.trim() || '')
 
 // 定义触发的自定义事件
 const emit = defineEmits(['remove', 'save', 'select'])
@@ -362,6 +365,7 @@ const dropdownItems = computed(() => [
       prependIcon: 'mdi-file-edit-outline',
       click: openSubscribeEntry,
     },
+    show: isSuperUser.value,
   },
   {
     title: t('subscribe.addVersion'),
@@ -370,6 +374,7 @@ const dropdownItems = computed(() => [
       prependIcon: 'mdi-layers-plus',
       click: () => editSubscribeDialog(undefined, true),
     },
+    show: isSuperUser.value,
   },
   {
     title: t('common.search'),
@@ -378,6 +383,7 @@ const dropdownItems = computed(() => [
       prependIcon: 'mdi-magnify',
       click: searchSubscribe,
     },
+    show: isSuperUser.value,
   },
   {
     title: subscribeState.value === 'S' ? t('common.enable') : t('common.pause'),
@@ -395,6 +401,7 @@ const dropdownItems = computed(() => [
       prependIcon: 'mdi-calculator-variant-outline',
       click: () => runRecoveryAction('recompute-progress'),
     },
+    show: isSuperUser.value,
   },
   {
     title: '清空订阅进度',
@@ -404,6 +411,7 @@ const dropdownItems = computed(() => [
       click: () => runRecoveryAction('clear-progress'),
       color: 'warning',
     },
+    show: isSuperUser.value,
   },
   {
     title: '强制重新搜索一次',
@@ -413,6 +421,7 @@ const dropdownItems = computed(() => [
       click: () => runRecoveryAction('force-search'),
       color: 'warning',
     },
+    show: isSuperUser.value,
   },
   {
     title: t('common.share'),
@@ -422,7 +431,7 @@ const dropdownItems = computed(() => [
       click: shareSubscribe,
       color: 'success',
     },
-    show: props.media?.type === '电视剧',
+    show: isSuperUser.value && props.media?.type === '电视剧',
   },
   {
     title: t('subscribe.mediaDetail'),
@@ -439,6 +448,7 @@ const dropdownItems = computed(() => [
       prependIcon: 'mdi-file-document-outline',
       click: viewSubscribeFiles,
     },
+    show: isSuperUser.value,
   },
   {
     title: t('common.unsubscribe'),
@@ -455,7 +465,7 @@ const dropdownItems = computed(() => [
 watch(
   () => props.media?.page_open,
   (newOpenState, _) => {
-    if (newOpenState) editSubscribeDialog()
+    if (isSuperUser.value && newOpenState) editSubscribeDialog()
   },
   { immediate: true },
 )
@@ -499,9 +509,11 @@ function handleCardClick() {
   if (props.batchMode) {
     // 批量模式下触发选择事件
     emit('select')
-  } else {
+  } else if (isSuperUser.value) {
     // 非批量模式下：多版本订阅先进入版本选择页，单版本直接编辑
     openSubscribeEntry()
+  } else {
+    viewMediaDetail()
   }
 }
 </script>
@@ -629,6 +641,14 @@ function handleCardClick() {
                           {{ subscribeProgressText }}
                         </span>
                       </div>
+                      <span
+                        v-if="isSuperUser && subscriberName"
+                        class="subscribe-card-mobile-owner"
+                        data-testid="subscribe-card-mobile-owner"
+                      >
+                        <VIcon icon="mdi-account-outline" size="13" />
+                        <span>{{ subscriberName }}</span>
+                      </span>
 
                       <IconBtn v-if="!props.sortable" class="subscribe-card-mobile-menu" size="small" @click.stop>
                         <VIcon icon="mdi-dots-horizontal" size="18" />
@@ -729,6 +749,14 @@ function handleCardClick() {
                         {{ completedVersionCount }} / {{ versionCount }}
                       </div>
                     </template>
+                    <span
+                      v-if="isSuperUser && subscriberName"
+                      class="subscribe-card-owner"
+                      data-testid="subscribe-card-owner"
+                    >
+                      <VIcon icon="mdi-account-outline" size="13" class="me-1" />
+                      {{ subscriberName }}
+                    </span>
                     <VTooltip v-if="decisionSummaryText" activator="parent" location="top">
                       {{ decisionSummaryText }}
                     </VTooltip>
@@ -1019,6 +1047,32 @@ function handleCardClick() {
   line-height: 1;
   padding: 3px 7px;
   vertical-align: middle;
+}
+
+.subscribe-card-owner {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 52%);
+  color: rgba(255, 255, 255, 92%);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  margin-inline-end: 0.5rem;
+  padding: 4px 8px;
+}
+
+.subscribe-card-mobile-owner {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  font-weight: 500;
+  gap: 0.2rem;
+  line-height: 1;
 }
 
 @media (width <= 599px) {

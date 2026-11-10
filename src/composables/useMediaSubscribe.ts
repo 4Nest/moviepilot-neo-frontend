@@ -9,7 +9,7 @@ import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useConfirm } from '@/composables/useConfirm'
 import { setCachedMediaSubscribeStatus } from '@/utils/mediaStatusCache'
 import { notifySubscribeChanged } from '@/composables/useSubscribeRefresh'
-
+import { useUserStore } from '@/stores'
 export type SubscribeMode = 'normal' | 'best_version' | 'best_version_full'
 
 interface SubscribePayload {
@@ -152,7 +152,7 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   const createConfirm = useConfirm()
   const episodeGroup = ref('')
   const route = useRoute()
-
+  const userStore = useUserStore()
   // 获取调用方当前媒体，避免在异步流程中持有旧对象。
   function currentMedia() {
     return options.media()
@@ -348,7 +348,12 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
         payload.best_version ?? 0,
       )
 
-      if (result.success && route.fullPath === originPath && (addOptions.openEditDialog ?? true)) {
+      if (
+        userStore.superUser &&
+        result.success &&
+        route.fullPath === originPath &&
+        (addOptions.openEditDialog ?? true)
+      ) {
         const subscribeConfig = await queryDefaultSubscribeConfig()
         if (route.fullPath === originPath && subscribeConfig?.show_edit_dialog && result.data?.id) {
           openSubscribeEditDialog(result.data.id, subscribeSeason, subscribeMode)

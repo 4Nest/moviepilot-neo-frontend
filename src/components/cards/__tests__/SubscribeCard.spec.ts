@@ -70,6 +70,7 @@ async function renderCard(
   mediaOverrides: Partial<Subscribe> = {},
   props: Partial<{ batchMode: boolean; selected: boolean; sortable: boolean }> = {},
   globalImageCache = false,
+  superUser = true,
 ) {
   const media = createSubscribe({
     backdrop: 'https://images.example.com/backdrop.jpg',
@@ -85,6 +86,15 @@ async function renderCard(
         data: { GLOBAL_IMAGE_CACHE: globalImageCache },
         initialized: true,
         loading: false,
+      },
+      user: {
+        superUser,
+        userID: superUser ? 1 : 2,
+        userName: superUser ? 'admin' : 'emby_alice',
+        avatar: '',
+        level: 1,
+        wizard: false,
+        permissions: {},
       },
     },
     props: { media, ...props },
@@ -132,8 +142,8 @@ describe('SubscribeCard display and progress', () => {
 
     expect(screen.getByText(media.name)).toBeInTheDocument()
     expect(screen.getByText('2025')).toBeInTheDocument()
-    // 唯一 admin 模式下卡片不再展示用户名
-    expect(screen.queryByText(media.username)).not.toBeInTheDocument()
+    // 管理员模式下卡片展示订阅用户名
+    expect(screen.getByText(media.username)).toBeInTheDocument()
     const image = container.querySelector<HTMLImageElement>('img')
     expect(image).not.toBeNull()
     expect((image as HTMLImageElement).src).toContain('system/cache/image?url=')
@@ -594,4 +604,34 @@ describe('SubscribeCard item operations', () => {
       else expect(mocks.toastError).not.toHaveBeenCalled()
     },
   )
+
+  it('hides subscriber badge and admin actions for non-superuser and navigates to media detail on click', async () => {
+    const { container, media } = await renderCard(
+      { username: 'emby_alice', tmdbid: 157336, type: '电影', year: '2014' },
+      {},
+      false,
+      false,
+    )
+
+    expect(screen.queryByText('emby_alice')).not.toBeInTheDocument()
+
+    await fireEvent.click(container.querySelector('.subscribe-card') as Element)
+    expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      path: '/media',
+      query: {
+        mediaid: 'tmdb:157336',
+        title: media.name,
+        year: '2014',
+        type: '电影',
+      },
+    })
+
+    await openMenu(container)
+    expect(await screen.findByText('暂停')).toBeInTheDocument()
+    expect(screen.getByText('媒体详情')).toBeInTheDocument()
+    expect(screen.getByText('取消订阅')).toBeInTheDocument()
+    expect(screen.queryByText('编辑')).not.toBeInTheDocument()
+    expect(screen.queryByText('重新计算进度')).not.toBeInTheDocument()
+  })
 })
