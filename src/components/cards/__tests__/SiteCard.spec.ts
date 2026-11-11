@@ -135,6 +135,44 @@ describe('SiteCard display', () => {
     else expect(card).not.toHaveClass('border-error', 'border-warning', 'border-success')
   })
 
+  it('shows circuit recovery time and the latest error without changing normal health projection', async () => {
+    const { container } = await renderCard(
+      {},
+      {
+        stats: createSiteStatistic({
+          circuit_open: true,
+          circuit_until: '2026-11-11 18:30:00',
+          consecutive_fails: 3,
+          last_error: 'Cookie 失效',
+          lst_state: 0,
+          seconds: 1,
+        }),
+      },
+    )
+
+    expect(container.querySelector('.site-card')).toHaveClass('border-error')
+    expect(screen.getByText('熔断保护中')).toBeInTheDocument()
+    expect(screen.getByText('恢复时间：2026-11-11 18:30:00')).toBeInTheDocument()
+    expect(screen.getByText('最近异常：Cookie 失效')).toBeInTheDocument()
+  })
+
+  it('omits optional recovery time and error lines when circuit metadata is partial', async () => {
+    await renderCard(
+      {},
+      {
+        stats: createSiteStatistic({
+          circuit_open: true,
+          circuit_until: null,
+          last_error: null,
+        }),
+      },
+    )
+
+    expect(screen.getByText('熔断保护中')).toBeInTheDocument()
+    expect(screen.queryByText(/恢复时间：/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/最近异常：/)).not.toBeInTheDocument()
+  })
+
   it('keeps zero transfer data visible with stable minimum progress', async () => {
     await renderCard({ is_active: false }, { data: createSiteUserData({ download: 0, upload: 0 }) })
 

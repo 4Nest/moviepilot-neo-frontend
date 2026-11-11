@@ -29,6 +29,7 @@ const warningCodes = new Set([
   'rule_group_missing',
   'provider_error',
   'provider_cooldown',
+  'provider_circuit_open',
   'provider_outcome_unknown',
 ])
 </script>
@@ -75,7 +76,13 @@ const warningCodes = new Set([
               <span class="search-diagnostics__name">{{ site.site_name }}</span>
               <span class="search-diagnostics__separator" aria-hidden="true"> — </span>
               <span class="search-diagnostics__outcome">
-                {{ t(`resource.diagnostics.${site.attempted ? site.outcome : 'notAttempted'}`) }}
+                {{
+                  t(
+                    `resource.diagnostics.${
+                      site.outcome === 'circuit_open' ? 'circuit_open' : site.attempted ? site.outcome : 'notAttempted'
+                    }`,
+                  )
+                }}
                 <span v-if="site.attempted">{{ t('resource.diagnostics.rawCount', { count: site.raw_count }) }}</span>
               </span>
             </li>

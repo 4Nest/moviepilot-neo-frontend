@@ -105,7 +105,7 @@ export function normalizeSearchDiagnostics(value: unknown): SearchDiagnostics | 
         typeof site.site_name === 'string' &&
         typeof site.attempted === 'boolean' &&
         typeof site.outcome === 'string' &&
-        ['success', 'empty', 'error', 'cooldown', 'unknown'].includes(site.outcome) &&
+        ['success', 'empty', 'error', 'cooldown', 'circuit_open', 'unknown'].includes(site.outcome) &&
         count(site.raw_count),
     )
   )

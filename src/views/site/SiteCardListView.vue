@@ -186,6 +186,9 @@ function getConnectionStatus(domain: string) {
   if (!stats || Object.keys(stats).length === 0) {
     return 'unknown'
   }
+  if (stats.circuit_open) {
+    return 'failed'
+  }
   if (stats.lst_state === 1) {
     return 'failed'
   } else if (stats.lst_state === 0) {

@@ -51,6 +51,28 @@ describe('SearchDiagnosticsPanel', () => {
     expect(panel).toHaveTextContent('规则“中文字幕”未应用')
   })
 
+  it('explains circuit-open sources instead of reporting a generic unsearched state', async () => {
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.searched_sites = [
+      {
+        site_id: 9,
+        site_name: '熔断站点',
+        attempted: false,
+        outcome: 'circuit_open',
+        raw_count: 0,
+      },
+    ]
+    diagnostics.warnings = [{ code: 'provider_circuit_open' }]
+
+    await renderWithProviders(SearchDiagnosticsPanel, { props: { diagnostics } })
+    const panel = screen.getByRole('status')
+    expect(panel).toHaveTextContent('部分站点因连续异常处于熔断保护期，本轮已自动跳过')
+    await fireEvent.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(panel).toHaveTextContent('熔断站点')
+    expect(panel).toHaveTextContent('异常熔断，暂时跳过')
+    expect(panel).not.toHaveTextContent('未执行检索')
+  })
+
   it('shows rejection counts and uses generic text for future codes without rendering raw codes as markup', async () => {
     const diagnostics = createSearchDiagnostics()
     diagnostics.scope = 'search'

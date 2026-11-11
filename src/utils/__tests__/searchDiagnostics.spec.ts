@@ -46,6 +46,22 @@ describe('search diagnostics contract', () => {
     expect(normalizeSearchDiagnostics(diagnostics)).toEqual(diagnostics)
   })
 
+  it('accepts circuit-open sources within the version 1 diagnostics contract', () => {
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.searched_sites = [
+      {
+        site_id: 9,
+        site_name: '熔断站点',
+        attempted: false,
+        outcome: 'circuit_open',
+        raw_count: 0,
+      },
+    ]
+    diagnostics.warnings = [{ code: 'provider_circuit_open', rule_group: null }]
+
+    expect(normalizeSearchDiagnostics(diagnostics)).toEqual(diagnostics)
+  })
+
   it('normalizes rejected search items and filters out malformed entries', () => {
     const validItem = {
       context: { media_info: {}, meta_info: {}, torrent_info: { title: 'Test' } },

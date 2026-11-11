@@ -190,6 +190,9 @@ const statColor = computed(() => {
   if (!cardProps.stats || isNullOrEmptyObject(cardProps.stats)) {
     return 'secondary'
   }
+  if (cardProps.stats.circuit_open) {
+    return 'error'
+  }
   if (cardProps.stats?.lst_state === 1) {
     return 'error'
   } else if (cardProps.stats?.lst_state === 0) {
@@ -358,6 +361,22 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
               {{ cardProps.site?.url }}
             </div>
           </div>
+
+          <VAlert
+            v-if="cardProps.stats?.circuit_open"
+            color="error"
+            density="compact"
+            variant="tonal"
+            class="mb-2 text-caption"
+          >
+            <div class="font-weight-medium">{{ t('site.circuitOpen') }}</div>
+            <div v-if="cardProps.stats.circuit_until">
+              {{ t('site.circuitUntil', { time: cardProps.stats.circuit_until }) }}
+            </div>
+            <div v-if="cardProps.stats.last_error" class="text-truncate">
+              {{ t('site.circuitLastError', { reason: cardProps.stats.last_error }) }}
+            </div>
+          </VAlert>
 
           <!-- 公开 BT 标签占据剩余空间并在底部对齐，避免短行卡片覆盖站点地址。 -->
           <div v-if="cardProps.site?.public" class="site-card-public-summary flex flex-1 items-end">

@@ -690,7 +690,15 @@ export interface SiteStatistic {
   // 最后访问时间
   lst_mod_date?: string
   // 耗时记录 JSON
-  note?: string
+  note?: string | Record<string, number>
+  // 连续失败次数
+  consecutive_fails?: number
+  // 是否处于熔断保护期
+  circuit_open?: boolean
+  // 熔断恢复时间
+  circuit_until?: string | null
+  // 最近异常原因
+  last_error?: string | null
 }
 
 // 站点用户数据
@@ -944,7 +952,7 @@ export interface SearchDiagnostics {
     site_id: number | null
     site_name: string
     attempted: boolean
-    outcome: 'success' | 'empty' | 'error' | 'cooldown' | 'unknown'
+    outcome: 'success' | 'empty' | 'error' | 'cooldown' | 'circuit_open' | 'unknown'
     raw_count: number
   }>
   stage_counts: { candidates: number; retained: number }

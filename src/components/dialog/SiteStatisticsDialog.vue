@@ -57,6 +57,9 @@ function getConnectionStatus(stats: SiteStatistic | undefined): string {
   if (!stats || Object.keys(stats).length === 0) {
     return 'unknown'
   }
+  if (stats.circuit_open) {
+    return 'failed'
+  }
   if (stats.lst_state === 1) {
     return 'failed'
   } else if (stats.lst_state === 0) {
@@ -270,6 +273,19 @@ onMounted(() => {
                       </VChip>
                     </div>
                     <div class="text-caption text-medium-emphasis">{{ item.site.domain }}</div>
+                    <div v-if="item.stats?.circuit_open" class="mt-2 text-caption text-error">
+                      <div class="font-weight-medium">{{ t('site.circuitOpen') }}</div>
+                      <div v-if="item.stats.circuit_until">
+                        {{ t('site.circuitUntil', { time: item.stats.circuit_until }) }}
+                      </div>
+                      <div v-if="item.stats.last_error">
+                        {{ t('site.circuitLastError', { reason: item.stats.last_error }) }}
+                      </div>
+                      <div>
+                        <span>{{ t('site.consecutiveFails') }}</span>
+                        <span>: {{ item.stats.consecutive_fails || 0 }}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

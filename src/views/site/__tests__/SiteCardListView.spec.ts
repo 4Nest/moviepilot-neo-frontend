@@ -290,6 +290,28 @@ describe('SiteCardListView', () => {
     else expect(visibleCards).toHaveLength(1)
   })
 
+  it('treats circuit-open sites as failed for the existing health filter', async () => {
+    const site = createSite({ id: 250, name: '熔断站点', domain: 'circuit.example.com' })
+    await renderList({
+      sites: [site],
+      statistics: [
+        createSiteStatistic({
+          domain: site.domain,
+          circuit_open: true,
+          circuit_until: '2026-11-11 18:30:00',
+          last_error: '连续超时',
+          lst_state: 0,
+          seconds: 1,
+        }),
+      ],
+    })
+    expect(await screen.findByText('熔断站点')).toBeInTheDocument()
+
+    await selectFilter('连接失败')
+    expect(screen.getByText('熔断站点')).toBeInTheDocument()
+    expect(screen.getByLabelText('site-state-250')).toHaveTextContent('"circuit_open":true')
+  })
+
   it('reorders only the complete list and posts exact priorities', async () => {
     const saved = vi.fn()
     const first = createSite({ id: 301, name: '第一站' })
