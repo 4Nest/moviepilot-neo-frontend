@@ -244,4 +244,57 @@ describe('SiteAddEditDialog', () => {
 
     expect(events.close).toHaveBeenCalledOnce()
   })
+
+  it('persists per-site sentinel alert mute flag when adding or editing a site', async () => {
+    const added = vi.fn()
+    server.use(addSiteHandler({ success: true }, 200, added))
+    const user = userEvent.setup()
+    await renderDialog('add')
+
+    expect(screen.getByLabelText('健康预警通知')).toBeChecked()
+    await user.type(screen.getByLabelText('站点地址'), 'https://maint.example.com/')
+    await user.click(screen.getByLabelText('健康预警通知'))
+    await user.click(screen.getByRole('button', { name: '新增站点' }))
+
+    await waitFor(() => expect(added).toHaveBeenCalledOnce())
+    expect(added.mock.calls[0][0]).toMatchObject({
+      note: { sentinel_alert: false },
+      url: 'https://maint.example.com/',
+    })
+  })
+
+  it('restores muted sentinel alert from JSON/object note and clears it when re-enabled', async () => {
+    const mutedSite = createSite({
+      name: '维护站点',
+      note: JSON.stringify({ custom: 1, sentinel_alert: false }),
+    })
+    const updated = vi.fn()
+    server.use(siteDetailsHandler(mutedSite.id, mutedSite), updateSiteHandler({ success: true }, 200, updated))
+    const user = userEvent.setup()
+    await renderDialog('edit', mutedSite.id)
+
+    const alertSwitch = await screen.findByLabelText('健康预警通知')
+    expect(alertSwitch).not.toBeChecked()
+    await user.click(alertSwitch)
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    expect(updated.mock.calls[0][0].note).toEqual({ custom: 1 })
+  })
+
+  it('falls back to enabled sentinel alert when note is a plain non-JSON string', async () => {
+    const legacySite = createSite({ name: '旧备注站点', note: 'plain-text-note' })
+    const updated = vi.fn()
+    server.use(siteDetailsHandler(legacySite.id, legacySite), updateSiteHandler({ success: true }, 200, updated))
+    const user = userEvent.setup()
+    await renderDialog('edit', legacySite.id)
+
+    const alertSwitch = await screen.findByLabelText('健康预警通知')
+    expect(alertSwitch).toBeChecked()
+    await user.click(alertSwitch)
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    expect(updated.mock.calls[0][0].note).toEqual({ sentinel_alert: false })
+  })
 })

@@ -661,8 +661,8 @@ export interface Site {
   render?: any
   // 是否公开站点
   public?: number
-  // 备注
-  note?: string
+  // 备注与站点扩展配置
+  note?: Record<string, unknown> | string | null
   // 超时时间
   timeout?: number
   // 流控单位周期

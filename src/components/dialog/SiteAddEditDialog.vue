@@ -47,6 +47,8 @@ const siteType = ref('cookie')
 
 // 是否限流
 const isLimit = ref(false)
+// 是否开启单站点健康预警通知
+const sentinelAlert = ref(true)
 // 加入 CookieCloud 同步域名黑名单状态
 const addingToCookieCloudBlacklist = ref(false)
 
@@ -82,12 +84,43 @@ async function loadDownloaderSetting() {
   }
 }
 
+// 解析站点扩展配置对象
+function parseSiteNoteObject(rawNote: Site['note']): Record<string, unknown> {
+  if (rawNote && typeof rawNote === 'object' && !Array.isArray(rawNote)) {
+    return { ...rawNote }
+  }
+  if (typeof rawNote === 'string' && rawNote.trim()) {
+    try {
+      const parsed = JSON.parse(rawNote)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...parsed }
+      }
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+// 将单站点健康预警通知开关写回 note 扩展配置
+function syncSentinelAlertToNote() {
+  const noteObj = parseSiteNoteObject(siteForm.value.note)
+  if (!sentinelAlert.value) {
+    siteForm.value.note = { ...noteObj, sentinel_alert: false }
+  } else if (siteForm.value.note != null) {
+    delete noteObj.sentinel_alert
+    siteForm.value.note = noteObj
+  }
+}
+
 // 查询站点信息
 async function fetchSiteInfo() {
   try {
     siteForm.value = await api.get(`site/${props.siteid}`)
     siteForm.value.proxy = siteForm.value.proxy === 1
     siteForm.value.render = siteForm.value.render === 1
+    const noteObj = parseSiteNoteObject(siteForm.value.note)
+    sentinelAlert.value = noteObj.sentinel_alert !== false
   } catch (error) {
     console.error(error)
   }
@@ -98,6 +131,7 @@ async function addSite() {
   if (!siteForm.value?.url) return
   startNProgress()
   try {
+    syncSentinelAlertToNote()
     const result: { [key: string]: string } = await api.post('site/', siteForm.value)
     if (result.success) {
       $toast.success(t('site.messages.addSuccess'))
@@ -124,6 +158,7 @@ async function updateSiteInfo() {
       siteForm.value.limit_count = 0
       siteForm.value.limit_seconds = 0
     }
+    syncSentinelAlertToNote()
     const result: { [key: string]: any } = await api.put('site/', siteForm.value)
     if (result.success) {
       $toast.success(`${siteForm.value?.name} ${t('site.messages.updateSuccess')}`)
@@ -361,6 +396,14 @@ onMounted(async () => {
                 v-model="siteForm.render"
                 :label="t('site.fields.browserSimulation')"
                 :hint="t('site.hints.browserSimulation')"
+                persistent-hint
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="sentinelAlert"
+                :label="t('site.fields.sentinelAlert')"
+                :hint="t('site.hints.sentinelAlert')"
                 persistent-hint
               />
             </VCol>

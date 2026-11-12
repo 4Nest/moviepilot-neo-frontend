@@ -44,6 +44,7 @@ const siteSetting = ref<any>({
   Site: {
     SITEDATA_REFRESH_INTERVAL: 0,
     SITE_MESSAGE: false,
+    SITE_SENTINEL_ALERT: true,
     BROWSER_EMULATION: 'cloakbrowser',
     OCR_HOST: '',
     FLARESOLVERR_URL: '',
@@ -290,6 +291,14 @@ useSilentSettingRefresh(loadSiteSettings, {
                   v-model="siteSetting.Site.SITE_MESSAGE"
                   :label="t('setting.site.readSiteMessage')"
                   :hint="t('setting.site.readSiteMessageHint')"
+                  persistent-hint
+                />
+              </VCol>
+              <VCol cols="12" md="6">
+                <VSwitch
+                  v-model="siteSetting.Site.SITE_SENTINEL_ALERT"
+                  :label="t('setting.site.sentinelAlert')"
+                  :hint="t('setting.site.sentinelAlertHint')"
                   persistent-hint
                 />
               </VCol>
