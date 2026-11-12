@@ -6,6 +6,7 @@ import type { Context } from '@/api/types'
 import { getCachedSiteIcon } from '@/utils/siteIconCache'
 import { downloadedTorrentMap, markTorrentDownloaded } from '@/utils/torrentDownloadCache'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { getTorrentPromotionKind, type TorrentPromotionKind } from '@/utils/torrent'
 
 const AddDownloadDialog = defineAsyncComponent(() => import('../dialog/AddDownloadDialog.vue'))
 
@@ -20,6 +21,7 @@ const emit = defineEmits(['select'])
 
 // 种子信息
 const torrent = ref(props.torrent?.torrent_info)
+const promotionKind = computed(() => getTorrentPromotionKind(torrent.value))
 
 // 媒体信息
 const media = ref(props.torrent?.media_info)
@@ -62,13 +64,9 @@ async function getSiteIcon(site: number | undefined) {
   }
 }
 
-// 获取优惠类型样式
-function getPromotionClass(downloadVolumeFactor: number | undefined, uploadVolumeFactor: number | undefined) {
-  if (!downloadVolumeFactor) return 'bg-success'
-  if (downloadVolumeFactor === 0) return 'bg-success'
-  else if (downloadVolumeFactor < 1) return 'bg-orange'
-  else if (uploadVolumeFactor !== undefined && uploadVolumeFactor > 1) return 'bg-purple'
-  else return ''
+/** 为已确认的促销选择样式，未知倍率不落入免费颜色。 */
+function getPromotionClass(kind?: TorrentPromotionKind) {
+  return kind ? { free: 'bg-success', discount: 'bg-orange', bonus: 'bg-purple', other: '' }[kind] : ''
 }
 
 // 询问并添加下载
@@ -179,9 +177,9 @@ watch(
           </VChip>
           <!-- 优惠标签整合进标题行 -->
           <span
-            v-if="torrent?.downloadvolumefactor !== 1 || torrent?.uploadvolumefactor !== 1"
+            v-if="promotionKind"
             class="discount-banner text-white font-weight-bold"
-            :class="getPromotionClass(torrent?.downloadvolumefactor, torrent?.uploadvolumefactor)"
+            :class="getPromotionClass(promotionKind)"
           >
             {{ torrent?.volume_factor }}
           </span>

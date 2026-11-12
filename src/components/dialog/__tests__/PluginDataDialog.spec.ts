@@ -213,6 +213,13 @@ describe('PluginDataDialog', () => {
     await renderDialog()
 
     expect(await screen.findByText('无法加载组件，请稍后再试')).toBeInTheDocument()
+
+    mocks.loadRemoteComponent.mockResolvedValue(createRemotePage([]))
+    await fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    expect(await screen.findByTestId('remote-page')).toBeInTheDocument()
+    expect(mocks.loadRemoteComponent).toHaveBeenCalledTimes(2)
+    expect(mocks.apiGet).toHaveBeenCalledOnce()
   })
 
   it('renders the precompiled loading state while the remote Page is pending', async () => {

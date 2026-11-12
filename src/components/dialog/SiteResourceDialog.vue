@@ -5,6 +5,7 @@ import { formatFileSize } from '@core/utils/formatters'
 import { useDisplay, useTheme } from 'vuetify'
 import AddDownloadDialog from '../dialog/AddDownloadDialog.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
+import { getTorrentPromotionKind } from '@/utils/torrent'
 import { useI18n } from '@/composables/useChineseText'
 
 // 国际化
@@ -106,11 +107,12 @@ async function downloadTorrentFile(enclosure: string) {
   window.open(enclosure, '_blank')
 }
 
-// 促销Chip类
-function getVolumeFactorClass(downloadVolume: number, uploadVolume: number) {
-  if (downloadVolume === 0) return 'text-white bg-lime-500'
-  if (downloadVolume < 1) return 'text-white bg-green-500'
-  if (uploadVolume !== 1) return 'text-white bg-sky-500'
+// 仅为已确认的促销设置颜色，未知倍率不落入免费样式。
+function getVolumeFactorClass(resource: TorrentInfo) {
+  const kind = getTorrentPromotionKind(resource)
+  if (kind === 'free') return 'text-white bg-lime-500'
+  if (kind === 'discount') return 'text-white bg-green-500'
+  if (kind === 'bonus') return 'text-white bg-sky-500'
 
   return 'text-white bg-gray-500'
 }
@@ -457,12 +459,15 @@ onMounted(() => {
                   {{ label }}
                 </VChip>
                 <VChip
-                  v-if="item.downloadvolumefactor !== 1 || item.uploadvolumefactor !== 1"
-                  :class="getVolumeFactorClass(item.downloadvolumefactor, item.uploadvolumefactor)"
+                  v-if="getTorrentPromotionKind(item)"
+                  :class="getVolumeFactorClass(item)"
                   variant="elevated"
                   size="x-small"
                 >
                   {{ item.volume_factor }}
+                </VChip>
+                <VChip v-if="item.category" variant="tonal" color="primary" size="x-small">
+                  {{ t('dialog.siteResource.resourceCategory') }}：{{ item.category }}
                 </VChip>
               </div>
             </div>
@@ -596,13 +601,16 @@ onMounted(() => {
                         {{ label }}
                       </VChip>
                       <VChip
-                        v-if="item.downloadvolumefactor !== 1 || item.uploadvolumefactor !== 1"
-                        :class="getVolumeFactorClass(item.downloadvolumefactor, item.uploadvolumefactor)"
+                        v-if="getTorrentPromotionKind(item)"
+                        :class="getVolumeFactorClass(item)"
                         variant="elevated"
                         size="small"
                         class="me-1 mb-1"
                       >
                         {{ item.volume_factor }}
+                      </VChip>
+                      <VChip v-if="item.category" variant="tonal" color="primary" size="small" class="me-1 mb-1">
+                        {{ t('dialog.siteResource.resourceCategory') }}：{{ item.category }}
                       </VChip>
                     </div>
 

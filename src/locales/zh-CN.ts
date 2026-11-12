@@ -1171,6 +1171,9 @@ export default {
       warnings: {
         rule_group_not_applicable: '规则“{name}”未应用：类型或分类不符',
         rule_group_missing: '规则“{name}”不存在',
+        rule_id_invalid: '规则组“{name}”引用了无效的规则 ID：{ids}，请改用英文字母和数字（至少包含一个字母）',
+        rule_id_missing: '规则组“{name}”引用的规则 ID 不存在：{ids}，请修复引用',
+        rule_syntax_invalid: '规则组“{name}”表达式语法无效，请检查运算符、括号和优先级层级',
         provider_error: '部分来源请求失败，暂时无法确认结果',
         provider_cooldown: '部分来源暂时冷却，本页未搜索',
         provider_circuit_open: '部分站点因连续异常处于熔断保护期，本轮已自动跳过',
@@ -1189,6 +1192,8 @@ export default {
     searching: '正在搜索，请稍候...',
     noData: '没有数据',
     noResourceFound: '未搜索到任何资源',
+    ruleConfigurationError: '发现过滤规则配置异常',
+    ruleConfigurationErrorHint: '请根据上方提示修复规则 ID 或规则组表达式，然后重新搜索。',
     searchStreamTimeout: '搜索连接长时间无响应，请稍后重试',
     searchStreamDisconnected: '搜索连接已中断，请稍后重试',
     refreshSearch: '重新搜索',

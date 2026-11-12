@@ -356,14 +356,14 @@ async function fetchMarketPlugin(pluginId?: string) {
 }
 
 /** 读取已安装插件的最新市场详情，并保留本地运行状态字段。 */
-async function fetchInstalledPluginDetail() {
+async function fetchInstalledPluginDetail(force = false) {
   let pluginDetail = props.plugin
   if (!props.plugin?.id) return pluginDetail
 
   try {
     const historyPlugin: Plugin = await api.get(`plugin/history/${props.plugin.id}`, {
       params: {
-        force: false,
+        force,
       },
     })
     pluginDetail = { ...(props.plugin || {}), ...(historyPlugin || {}), installed: true } as Plugin
@@ -375,7 +375,8 @@ async function fetchInstalledPluginDetail() {
 
 /** 使用插件市场详情弹窗展示已安装插件信息和评分入口。 */
 async function showPluginAbout() {
-  const pluginDetail = await fetchInstalledPluginDetail()
+  // 有更新时强刷市场索引，确保详情弹窗的更新操作使用最新 Release 版本。
+  const pluginDetail = await fetchInstalledPluginDetail(Boolean(props.plugin?.has_update))
   if (!pluginDetail) return
 
   marketDetailDialogController?.close()

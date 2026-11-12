@@ -4,7 +4,11 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import SearchDiagnosticsPanel from '@/components/states/SearchDiagnosticsPanel.vue'
 import api from '@/api'
 import type { Context, RejectedSearchItem, SearchDiagnostics, SubtitleInfo } from '@/api/types'
-import { normalizeRejectedSearchItems, normalizeSearchDiagnostics } from '@/utils/searchDiagnostics'
+import {
+  hasRuleConfigurationError,
+  normalizeRejectedSearchItems,
+  normalizeSearchDiagnostics,
+} from '@/utils/searchDiagnostics'
 import RejectedTorrentCard from '@/components/cards/RejectedTorrentCard.vue'
 import TorrentCard from '@/components/cards/TorrentCard.vue'
 import TorrentItem from '@/components/cards/TorrentItem.vue'
@@ -413,6 +417,16 @@ const errorTitle = ref(t('resource.noData'))
 
 // 错误描述
 const errorDescription = ref(t('resource.noResourceFound'))
+
+const ruleConfigurationError = computed(
+  () => !isSubtitleSearch.value && hasRuleConfigurationError(searchDiagnostics.value),
+)
+const displayErrorTitle = computed(() =>
+  ruleConfigurationError.value ? t('resource.ruleConfigurationError') : errorTitle.value,
+)
+const displayErrorDescription = computed(() =>
+  ruleConfigurationError.value ? t('resource.ruleConfigurationErrorHint') : errorDescription.value,
+)
 
 let searchEventSource: EventSource | null = null
 let searchStreamIdleTimer: ReturnType<typeof setTimeout> | null = null
@@ -1464,7 +1478,7 @@ onUnmounted(() => {
 
     <!-- 无数据显示 -->
     <div v-else-if="isRefreshed && !progressActive" class="d-flex flex-column align-center justify-center py-8">
-      <NoDataFound :errorTitle="errorTitle" :errorDescription="errorDescription" />
+      <NoDataFound :errorTitle="displayErrorTitle" :errorDescription="displayErrorDescription" />
       <VBtn rounded="pill" class="mt-4" color="primary" prepend-icon="mdi-home" to="/">
         {{ t('resource.backToHome') }}
       </VBtn>

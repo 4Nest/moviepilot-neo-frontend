@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ApiResponse, Site, SiteUserData } from '@/api/types'
-import api from '@/api'
+import api, { getApiErrorMessage } from '@/api'
 import { useDisplay, useTheme } from 'vuetify'
 import { formatFileSize } from '@/@core/utils/formatters'
 import ProgressDialog from '@/components/dialog/ProgressDialog.vue'
@@ -26,6 +26,7 @@ const progressDialog = ref(false)
 
 // 失败状态保留对应操作，重试时不改变已展示的站点数据。
 const failedOperation = ref<'load' | 'refresh'>()
+const failureMessage = ref<string>()
 
 const vuetifyTheme = useTheme()
 
@@ -346,15 +347,21 @@ async function fetchSiteUserData(failureOperation: 'load' | 'refresh' = 'load', 
       if (activeGeneration !== operationGeneration) return false
 
       siteDatas.value = result.data.sort((a, b) => (a.updated_day || '').localeCompare(b.updated_day || ''))
+    } else if (result.message) {
+      failedOperation.value = failureOperation
+      failureMessage.value = result.message
+      return false
     }
 
     failedOperation.value = undefined
+    failureMessage.value = undefined
     return true
   } catch (error) {
     if (activeGeneration !== operationGeneration) return false
 
     console.error(error)
     failedOperation.value = failureOperation
+    failureMessage.value = getApiErrorMessage(error)
   }
 
   return false
@@ -372,12 +379,14 @@ async function refreshSiteData() {
       await fetchSiteUserData('refresh', generation)
     } else {
       failedOperation.value = 'refresh'
+      failureMessage.value = result.message
     }
   } catch (error) {
     if (generation !== operationGeneration) return
 
     console.error(error)
     failedOperation.value = 'refresh'
+    failureMessage.value = getApiErrorMessage(error)
   } finally {
     if (generation === operationGeneration) {
       progressDialog.value = false
@@ -416,13 +425,16 @@ onBeforeMount(() => {
       <VCardText class="pt-5">
         <VAlert v-if="failedOperation" type="error" variant="tonal" class="mb-5">
           <div class="d-flex flex-wrap align-center justify-space-between gap-3">
-            <span>
-              {{
-                failedOperation === 'refresh'
-                  ? t('dialog.siteUserData.refreshFailed')
-                  : t('dialog.siteUserData.loadFailed')
-              }}
-            </span>
+            <div class="site-data-failure-message">
+              <div>
+                {{
+                  failedOperation === 'refresh'
+                    ? t('dialog.siteUserData.refreshFailed')
+                    : t('dialog.siteUserData.loadFailed')
+                }}
+              </div>
+              <div v-if="failureMessage" class="text-body-2 mt-1">{{ failureMessage }}</div>
+            </div>
             <VBtn size="small" variant="tonal" prepend-icon="mdi-refresh" @click="retryFailedOperation">
               {{ t('common.retry') }}
             </VBtn>
@@ -653,6 +665,12 @@ onBeforeMount(() => {
 </template>
 
 <style scoped>
+.site-data-failure-message {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 .site-data-summary-card,
 .site-data-chart-card {
   overflow: hidden;

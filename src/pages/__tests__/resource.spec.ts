@@ -429,6 +429,21 @@ describe('resource page search flow', () => {
     expect(await screen.findByRole('status', { name: '本页搜索情况' })).toHaveTextContent('规则“中文字幕”未应用')
   })
 
+  it('distinguishes an invalid rule configuration from candidates that simply do not match', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '旧规则搜索', result_type: 'torrent' } })
+    const source = await latestEventSource()
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.stage_counts = { candidates: 146, retained: 0 }
+    diagnostics.warnings = [{ code: 'rule_id_invalid', rule_group: '国产剧', rule_ids: [' Pre Candidate'] }]
+    source.message({ type: 'replace', stage: 'filtered', items: [], value: 100 })
+    source.message({ type: 'done', stage: 'done', diagnostics })
+    source.fail()
+    const empty = await screen.findByTestId('no-data')
+    expect(empty).toHaveTextContent('发现过滤规则配置异常')
+    expect(empty).toHaveTextContent('修复规则 ID 或规则组表达式')
+    expect(screen.getByRole('status', { name: '本页搜索情况' })).toHaveTextContent('Pre Candidate')
+  })
+
   it('shows and hides rejected torrents from the terminal search event', async () => {
     const rendered = await renderResource({ path: '/resource', query: { keyword: '过滤测试', result_type: 'torrent' } })
     const source = await latestEventSource()

@@ -358,7 +358,7 @@ interface ListResponses {
   market?: () => Plugin[] | Promise<Plugin[]>
   marketStatus?: number
   order?: unknown[]
-  rating?: (ids: string[]) => Record<string, PluginRating> | Promise<Record<string, PluginRating>>
+  rating?: (request: Request) => Record<string, PluginRating> | Promise<Record<string, PluginRating>>
   statistic?: () => Record<string, number> | Promise<Record<string, number>>
 }
 
@@ -378,8 +378,7 @@ function registerListHandlers(responses: ListResponses = {}) {
     http.get(apiUrls.statistic, async () => HttpResponse.json((await responses.statistic?.()) ?? {})),
     http.get(apiUrls.sidebar, () => HttpResponse.json([])),
     http.get(apiUrls.rating, async ({ request }) => {
-      const ids = new URL(request.url).searchParams.get('plugin_ids')?.split(',').filter(Boolean) ?? []
-      return HttpResponse.json(((await responses.rating?.(ids)) ?? {}) as unknown as JsonBodyType)
+      return HttpResponse.json(((await responses.rating?.(request)) ?? {}) as unknown as JsonBodyType)
     }),
   )
 }
@@ -750,8 +749,8 @@ describe('PluginCardListView loading and request ownership', () => {
     await waitForRequestsToFinish()
   })
 
-  it('batches ratings by 100 plugin IDs and merges the returned values into current cards', async () => {
-    const requestedChunks: string[][] = []
+  it('loads one rating snapshot without plugin ID parameters and maps lowercase keys into current cards', async () => {
+    const requestedUrls: URL[] = []
     const installed = Array.from({ length: 101 }, (_, index) =>
       createPlugin({ id: `Installed-${index}`, installed: true, plugin_name: `已安装-${index}` }),
     )
@@ -761,17 +760,80 @@ describe('PluginCardListView loading and request ownership', () => {
     await renderList({
       installed: () => installed,
       market: () => market,
-      rating: ids => {
-        requestedChunks.push(ids)
+      rating: request => {
+        requestedUrls.push(new URL(request.url))
         return Object.fromEntries(
-          ids.map(id => [id, { average_rating: id === 'Market-0' ? 4.8 : 4, plugin_id: id, rating_count: 2 }]),
+          [...installed, ...market].map(({ id }) => [
+            id.toLowerCase(),
+            { average_rating: id === 'Market-0' ? 4.8 : 4, plugin_id: id.toLowerCase(), rating_count: 2 },
+          ]),
         )
       },
     })
 
-    await waitFor(() => expect(requestedChunks).toHaveLength(3))
-    expect(requestedChunks.map(chunk => chunk.length)).toEqual([100, 100, 2])
+    await waitForRequestsToFinish()
+    expect(requestedUrls.map(url => url.href)).toEqual([apiUrls.rating])
+    expect(screen.getByLabelText('installed-rating-Installed-0')).toHaveTextContent('4')
     expect(await screen.findByLabelText('rating-Market-0')).toHaveTextContent('4.8')
+  })
+})
+
+describe('PluginCardListView market snapshot reuse', () => {
+  beforeEach(() => {
+    mocks.appMode = false
+    mocks.keepAliveHandler = undefined
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('reuses the catalog on reactivation for five minutes and bypasses it for manual refresh', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    let marketRequests = 0
+    await renderList({
+      market: () => {
+        marketRequests += 1
+        return [createPlugin({ id: 'Cached', plugin_name: '已缓存市场插件' })]
+      },
+    })
+    try {
+      await waitForRequestsToFinish()
+      getHeaderConfig().modelValue.value = 'market'
+      await nextTick()
+      getHeaderConfig().modelValue.value = 'installed'
+      await nextTick()
+      expect(marketRequests).toBe(1)
+
+      await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
+      expect(marketRequests).toBe(1)
+
+      now.mockReturnValue(301001)
+      await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
+      expect(marketRequests).toBe(2)
+
+      getHeaderButton('mdi-refresh').action?.()
+      await waitFor(() => expect(marketRequests).toBe(3))
+      await waitForRequestsToFinish()
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('fetches a new catalog after an installed plugin changes version', async () => {
+    let version = '1.0.0'
+    let marketRequests = 0
+    await renderList({
+      installed: () => [createPlugin({ id: 'Installed', installed: true, plugin_version: version })],
+      market: () => {
+        marketRequests += 1
+        return [createPlugin({ id: 'Market' })]
+      },
+    })
+    await waitForRequestsToFinish()
+
+    version = '2.0.0'
+    await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
+    expect(marketRequests).toBe(2)
+    await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
+    expect(marketRequests).toBe(2)
     await waitForRequestsToFinish()
   })
 })
@@ -980,8 +1042,9 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     await nextTick()
     await waitForRequestsToFinish()
     getDynamicMenuItem('dialog.pluginMarketSetting.title').action()
+    const requestsBeforeSetting = marketRequests
     getDialogEvents().save()
-    await waitFor(() => expect(marketRequests).toBeGreaterThanOrEqual(3))
+    await waitFor(() => expect(marketRequests).toBe(requestsBeforeSetting + 1))
 
     await fireEvent.click(screen.getByRole('button', { name: 'installed-Available' }))
     await waitFor(() => expect(sidebarStore.ensureSidebarNav).toHaveBeenCalledWith(true))

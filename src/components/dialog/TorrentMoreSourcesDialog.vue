@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { Context } from '@/api/types'
+import type { Context, TorrentInfo } from '@/api/types'
 import { formatFileSize } from '@/@core/utils/formatters'
+import { getTorrentPromotionKind } from '@/utils/torrent'
 
 // 输入参数
 const props = defineProps({
@@ -30,13 +31,10 @@ const visible = computed({
   },
 })
 
-/** 获取优惠标签类。 */
-function getPromotionChipClass(downloadVolumeFactor: number | undefined, uploadVolumeFactor: number | undefined) {
-  if (!downloadVolumeFactor) return 'chip-free'
-  if (downloadVolumeFactor === 0) return 'chip-free'
-  else if (downloadVolumeFactor < 1) return 'chip-discount'
-  else if (uploadVolumeFactor !== undefined && uploadVolumeFactor > 1) return 'chip-bonus'
-  else return ''
+/** 只为已知促销选择颜色，不把空倍率误认为免费。 */
+function getPromotionChipClass(torrent?: TorrentInfo) {
+  const kind = getTorrentPromotionKind(torrent)
+  return kind ? { free: 'chip-free', discount: 'chip-discount', bonus: 'chip-bonus', other: '' }[kind] : ''
 }
 
 /** 选择更多来源进行下载。 */
@@ -94,13 +92,8 @@ function handleDetail(item: Context) {
                 </VChip>
 
                 <VChip
-                  v-if="item.torrent_info?.downloadvolumefactor !== 1 || item.torrent_info?.uploadvolumefactor !== 1"
-                  :class="
-                    getPromotionChipClass(
-                      item.torrent_info?.downloadvolumefactor,
-                      item.torrent_info?.uploadvolumefactor,
-                    )
-                  "
+                  v-if="getTorrentPromotionKind(item.torrent_info)"
+                  :class="getPromotionChipClass(item.torrent_info)"
                   size="x-small"
                   variant="elevated"
                   class="rounded-sm ml-1"

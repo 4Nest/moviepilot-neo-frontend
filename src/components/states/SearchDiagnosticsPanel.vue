@@ -2,7 +2,7 @@
 import type { SearchDiagnostics } from '@/api/types'
 import { computed, ref, useId } from 'vue'
 import { useI18n } from '@/composables/useChineseText'
-import { formatSearchDiagnosticRejectionDetail } from '@/utils/searchDiagnostics'
+import { formatSearchDiagnosticRejectionDetail, ruleConfigurationWarningCodes } from '@/utils/searchDiagnostics'
 
 const props = withDefaults(
   defineProps<{ diagnostics: SearchDiagnostics; rejectedCount?: number; showRejected?: boolean }>(),
@@ -24,14 +24,15 @@ const reasonCodes = new Set([
   'caller_filter',
   'duplicate',
 ])
-const warningCodes = new Set([
-  'rule_group_not_applicable',
-  'rule_group_missing',
-  'provider_error',
-  'provider_cooldown',
-  'provider_circuit_open',
-  'provider_outcome_unknown',
-])
+const warningCodes: Record<string, true> = {
+  ...ruleConfigurationWarningCodes,
+  rule_group_not_applicable: true,
+  rule_group_missing: true,
+  provider_error: true,
+  provider_cooldown: true,
+  provider_circuit_open: true,
+  provider_outcome_unknown: true,
+}
 </script>
 
 <template>
@@ -121,8 +122,9 @@ const warningCodes = new Set([
         <VIcon icon="mdi-information-outline" size="15" class="search-diagnostics__icon" />
         <span>
           {{
-            t(`resource.diagnostics.warnings.${warningCodes.has(warning.code) ? warning.code : 'other'}`, {
+            t(`resource.diagnostics.warnings.${warningCodes[warning.code] ? warning.code : 'other'}`, {
               name: warning.rule_group || t('resource.diagnostics.unnamedRule'),
+              ids: (warning.rule_ids ?? []).join('、'),
             })
           }}
         </span>

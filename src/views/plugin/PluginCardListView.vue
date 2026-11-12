@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
 import api from '@/api'
+import { getPluginRatings as getPluginRatingSnapshot } from '@/api/pluginRating'
 import type { ApiResponse, Plugin, PluginRating } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import { getPluginTabs } from '@/router/i18n-menu'
@@ -189,6 +190,11 @@ const installedLoadError = ref(false)
 const isAppMarketLoaded = ref(false)
 
 const marketLoadError = ref(false)
+
+// 只复用当前页面最近五分钟的完整市场清单；手动刷新和安装状态变化仍重新查询。
+const MARKET_CACHE_TTL = 5 * 60 * 1000
+let marketFetchedAt = Number.NEGATIVE_INFINITY
+let marketInstalledKey = ''
 
 // APP市场窗口
 const PluginAppDialog = ref(false)
@@ -969,9 +975,28 @@ function mergeMarketMetadataIntoInstalled() {
   })
 }
 
+/** 为市场清单的复用记录当前安装身份与版本，避免安装、卸载或更新后沿用旧清单。 */
+function getMarketInstalledKey(): string {
+  return JSON.stringify(dataList.value.map(plugin => [plugin.id, plugin.plugin_version, plugin.repo_url]).sort())
+}
+
 // 获取未安装插件列表数据
 async function fetchUninstalledPlugins(force: boolean = false, context: KeepAliveRefreshContext = {}) {
   const generation = ++marketWriterGeneration
+  const installedKey = getMarketInstalledKey()
+  if (
+    !force &&
+    !isMarketRefreshing.value &&
+    context.silent &&
+    (context.source === 'activated' || context.source === 'tab') &&
+    isAppMarketLoaded.value &&
+    installedKey === marketInstalledKey &&
+    Date.now() - marketFetchedAt < MARKET_CACHE_TTL
+  )
+    return uninstalledList.value
+
+  // 一旦需要新清单，失败前的旧清单不再算作新鲜结果，便于下一次激活重试。
+  marketFetchedAt = Number.NEGATIVE_INFINITY
   if (!context.silent || !isAppMarketLoaded.value) {
     marketLoadError.value = false
   }
@@ -999,6 +1024,8 @@ async function fetchUninstalledPlugins(force: boolean = false, context: KeepAliv
     // 设置APP市场加载完成
     isAppMarketLoaded.value = true
     marketLoadError.value = false
+    marketFetchedAt = Date.now()
+    marketInstalledKey = installedKey
   } catch (error) {
     console.error(error)
     if (generation === marketWriterGeneration && !isAppMarketLoaded.value) {
@@ -1020,7 +1047,7 @@ async function getPluginStatistics() {
   }
 }
 
-/** 批量加载插件评分并合并到已安装和市场插件对象。 */
+/** 加载完整评分快照，并仅合并到当前已安装和市场插件对象。 */
 async function getPluginRatings() {
   const generation = ++ratingWriterGeneration
   const pluginIds = Array.from(
@@ -1034,16 +1061,7 @@ async function getPluginRatings() {
   }
 
   try {
-    const ratings: { [key: string]: PluginRating } = {}
-    for (let start = 0; start < pluginIds.length; start += 100) {
-      const chunk = pluginIds.slice(start, start + 100)
-      const response: { [key: string]: PluginRating } = await api.get('plugin/rating', {
-        params: {
-          plugin_ids: chunk.join(','),
-        },
-      })
-      Object.assign(ratings, response)
-    }
+    const ratings = await getPluginRatingSnapshot(pluginIds)
 
     const currentPluginIds = Array.from(
       new Set([...dataList.value, ...marketList.value].map(plugin => plugin.id).filter(Boolean)),

@@ -17,7 +17,7 @@ vi.mock('workbox-routing', () => ({
 vi.mock('workbox-strategies', () => {
   class Strategy {
     options: StrategyOptions
-    constructor(options: StrategyOptions) {
+    constructor(options: StrategyOptions = {}) {
       this.options = options
     }
   }
@@ -51,19 +51,37 @@ async function loadWorker() {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Service Worker private API boundary', () => {
-  it.each(['site/', 'site/icon/1', 'user/current', 'storage/avatars/private.png'])(
-    'uses NetworkOnly without a URL-only runtime cache for %s',
-    async path => {
-      await loadWorker()
-      const request = new Request(`https://moviepilot.test/api/v1/${path}`, {
-        headers: { Authorization: 'Bearer account-b' },
-      })
-      if (path.endsWith('.png')) Object.defineProperty(request, 'destination', { value: 'image' })
-      const route = state.routes.find(({ match }) => match({ request, url: new URL(request.url) }))
-      expect(route?.strategy.constructor.name).toBe('NetworkOnly')
-      expect(route?.strategy.options.fetchOptions?.cache).toBe('no-store')
-    },
-  )
+  it.each([
+    'plugin/file/demo/dist/assets/remoteEntry.js?v=1.2.3',
+    'plugin/file/demo/dist/assets/chunk.js',
+    'system/img/0?imgurl=https%3A%2F%2Fmedia.test%2Fposter.jpg',
+    'system/cache/image?url=https%3A%2F%2Fmedia.test%2Fposter.jpg',
+  ])('preserves browser HTTP caching without Cache Storage for %s', async path => {
+    await loadWorker()
+    const request = new Request(`https://moviepilot.test/api/v1/${path}`)
+    const route = state.routes.find(({ match }) => match({ request, url: new URL(request.url) }))
+    expect(route?.strategy.constructor.name).toBe('NetworkOnly')
+    expect(route?.strategy.options.fetchOptions).toBeUndefined()
+    expect(route?.strategy.options.cacheName).toBeUndefined()
+  })
+
+  it.each([
+    'site/',
+    'site/icon/1',
+    'user/current',
+    'storage/avatars/private.png',
+    'plugin/Demo/config',
+    'system/img/0/other',
+  ])('uses NetworkOnly without a URL-only runtime cache for %s', async path => {
+    await loadWorker()
+    const request = new Request(`https://moviepilot.test/api/v1/${path}`, {
+      headers: { Authorization: 'Bearer account-b' },
+    })
+    if (path.endsWith('.png')) Object.defineProperty(request, 'destination', { value: 'image' })
+    const route = state.routes.find(({ match }) => match({ request, url: new URL(request.url) }))
+    expect(route?.strategy.constructor.name).toBe('NetworkOnly')
+    expect(route?.strategy.options.fetchOptions?.cache).toBe('no-store')
+  })
 
   it('deletes legacy API caches during activation while preserving current static caches', async () => {
     await loadWorker()

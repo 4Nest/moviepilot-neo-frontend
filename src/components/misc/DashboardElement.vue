@@ -7,7 +7,7 @@ import { isNullOrEmptyObject } from '@/@core/utils'
 import { loadRemoteComponent } from '@/utils/federationLoader'
 import { useToast } from 'vue-toastification'
 import { usePluginNativeSubscribe } from '@/composables/usePluginNativeSubscribe'
-import RemoteComponentError from './RemoteComponentError.vue'
+import { useRetryableRemoteComponent } from '@/composables/useRetryableRemoteComponent'
 
 type DashboardComponentLoader = () => Promise<any>
 
@@ -141,25 +141,25 @@ function loadPluginDashboardComponent(pluginId: string) {
   return pluginDashboardComponentLoadPromise
 }
 
-// 每个插件节点身份使用独立异步组件，避免 Vue 复用前一个 remote 的成功解析结果。
-const dynamicPluginComponent = computed(() => {
-  const pluginId = props.config?.id
-  const identity = pluginDashboardIdentity.value
-
-  return defineAsyncComponent({
-    loader: async () => {
-      try {
-        if (!pluginId) throw new Error(`插件ID不存在: ${identity}`)
-        return await loadPluginDashboardComponent(pluginId)
-      } catch (error) {
-        console.error('加载远程组件失败:', error)
-        throw error
-      }
+// 每个插件节点身份使用独立异步组件，失败后可在原卡片内清理缓存并重试。
+const dynamicPluginComponent = useRetryableRemoteComponent(
+  async () => {
+    const pluginId = props.config?.id
+    try {
+      if (!pluginId) throw new Error(`插件ID不存在: ${pluginDashboardIdentity.value}`)
+      return await loadPluginDashboardComponent(pluginId)
+    } catch (error) {
+      console.error('加载远程组件失败:', error)
+      throw error
+    }
+  },
+  {
+    identity: pluginDashboardIdentity,
+    beforeRetry: () => {
+      pluginDashboardComponentLoadPromise = null
     },
-    loadingComponent: DashboardSkeleton,
-    errorComponent: RemoteComponentError,
-  })
-})
+  },
+)
 
 // 判断当前配置是否对应内置异步仪表盘组件。
 function isBuiltInDashboardElement() {

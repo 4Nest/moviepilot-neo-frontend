@@ -1,7 +1,9 @@
-import { vi } from 'vitest'
+import { extractDominantColor, getDominantColor, preloadCorsImage, selectVibrantSwatch } from '@/@core/utils/image'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getColor: vi.fn(),
+  getPalette: vi.fn(),
 }))
 
 vi.mock('colorthief', () => ({
@@ -9,11 +11,12 @@ vi.mock('colorthief', () => ({
     getColor(image: HTMLImageElement, quality?: number) {
       return mocks.getColor(image, quality)
     }
+
+    getPalette(image: HTMLImageElement, colorCount?: number, quality?: number) {
+      return mocks.getPalette(image, colorCount, quality)
+    }
   },
 }))
-
-import { extractDominantColor, getDominantColor, preloadCorsImage } from '@/@core/utils/image'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 function createImage(cacheKey: string) {
   const image = document.createElement('img')
@@ -25,6 +28,7 @@ function createImage(cacheKey: string) {
 describe('dominant color extraction', () => {
   beforeEach(() => {
     mocks.getColor.mockReset()
+    mocks.getPalette.mockReset().mockReturnValue([])
   })
 
   it('shares a pending extraction and reuses only the successful result', async () => {
@@ -66,6 +70,78 @@ describe('dominant color extraction', () => {
     expect(mocks.getColor).toHaveBeenCalledTimes(101)
     await extractDominantColor(createImage('fifo-0'))
     expect(mocks.getColor).toHaveBeenCalledTimes(102)
+  })
+})
+
+describe('selectVibrantSwatch', () => {
+  it('selects a saturated brand color instead of near-white, near-black, or neutral background swatches', () => {
+    expect(
+      selectVibrantSwatch([
+        [250, 250, 248],
+        [8, 10, 12],
+        [120, 120, 120],
+        [180, 30, 20],
+        [20, 60, 220],
+      ]),
+    ).toEqual([20, 60, 220])
+  })
+
+  it('ignores malformed swatches and returns undefined when no usable brand color exists', () => {
+    expect(
+      selectVibrantSwatch([
+        [255, 255],
+        [Number.NaN, 20, 30],
+        [240, 240, 240],
+        [20, 20, 20],
+      ]),
+    ).toBeUndefined()
+  })
+})
+
+describe('extractDominantColor vibrant palette', () => {
+  beforeEach(() => {
+    mocks.getColor.mockReset()
+    mocks.getPalette.mockReset()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  it('uses the selected palette swatch and reuses the extracted color from cache', async () => {
+    const image = createImage('vibrant-icon')
+    mocks.getPalette.mockReturnValue([
+      [255, 255, 255],
+      [10, 20, 240],
+    ])
+
+    await expect(extractDominantColor(image)).resolves.toBe('#0a14f0')
+    await expect(extractDominantColor(image)).resolves.toBe('#0a14f0')
+
+    expect(mocks.getPalette).toHaveBeenCalledOnce()
+    expect(mocks.getPalette).toHaveBeenCalledWith(image, 6, 16)
+    expect(mocks.getColor).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the dominant color when the palette has no vibrant swatch', async () => {
+    const image = createImage('neutral-icon')
+    mocks.getPalette.mockReturnValue([[250, 250, 250]])
+    mocks.getColor.mockReturnValue([12, 34, 56])
+
+    await expect(extractDominantColor(image, { quality: 8 })).resolves.toBe('#0c2238')
+
+    expect(mocks.getPalette).toHaveBeenCalledWith(image, 6, 8)
+    expect(mocks.getColor).toHaveBeenCalledWith(image, 8)
+  })
+
+  it('does not cache a failed palette extraction', async () => {
+    const image = createImage('retry-icon')
+    mocks.getPalette.mockImplementationOnce(() => {
+      throw new Error('image not ready')
+    })
+    mocks.getPalette.mockReturnValueOnce([[200, 30, 40]])
+    mocks.getColor.mockReturnValue([1, 2, 3])
+
+    await expect(extractDominantColor(image)).resolves.toBeUndefined()
+    await expect(extractDominantColor(image)).resolves.toBe('#c81e28')
+    expect(mocks.getPalette).toHaveBeenCalledTimes(2)
   })
 })
 

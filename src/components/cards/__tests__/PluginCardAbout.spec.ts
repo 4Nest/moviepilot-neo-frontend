@@ -98,6 +98,21 @@ describe('PluginCard about menu', () => {
     expect(sidebarStore.ensureSidebarNav).toHaveBeenCalledWith(true)
   })
 
+  it('refreshes the market index before an update started from the about dialog', async () => {
+    const { container } = await renderWithProviders(PluginCard, {
+      props: { plugin: { ...plugin, has_update: true } },
+    })
+
+    await fireEvent.click(container.querySelector<HTMLButtonElement>('.v-card .v-btn')!)
+    await fireEvent.click(await screen.findByText('关于'))
+
+    await waitFor(() => {
+      expect(mocks.apiGet).toHaveBeenCalledWith('plugin/history/DemoPlugin', {
+        params: { force: true },
+      })
+    })
+  })
+
   it('resolves a missing installed repo from market metadata before opening the project page', async () => {
     mocks.apiGet.mockImplementation((url: string) => {
       if (url === 'plugin/history/DemoPlugin') return Promise.resolve({ ...plugin, repo_url: 'local://DemoPlugin' })

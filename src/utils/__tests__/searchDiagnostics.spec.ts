@@ -1,5 +1,9 @@
 import backendProduced from '@tests/support/fixtures/backendSearchDiagnostics.json'
-import { normalizeRejectedSearchItems, normalizeSearchDiagnostics } from '@/utils/searchDiagnostics'
+import {
+  hasRuleConfigurationError,
+  normalizeRejectedSearchItems,
+  normalizeSearchDiagnostics,
+} from '@/utils/searchDiagnostics'
 import { createSearchDiagnostics } from '@tests/support/fixtures/searchDiagnostics'
 import { describe, expect, it } from 'vitest'
 
@@ -27,6 +31,8 @@ describe('search diagnostics contract', () => {
     { rejection_reasons: [{ code: 'filter_rules', count: 1, details: [{ code: 'include_missed', count: -1 }] }] },
     { rule_groups: [{ name: 'rule', status: 'skipped', categories: null }] },
     { warnings: [{ code: 'new_warning', rule_group: 1 }] },
+    { warnings: [{ code: 'rule_id_invalid', rule_ids: ' Pre Candidate' }] },
+    { warnings: [{ code: 'rule_id_invalid', rule_ids: [1] }] },
   ])('rejects malformed diagnostics without affecting results', change => {
     const malformed = { ...createSearchDiagnostics(), ...change }
     expect(() => normalizeSearchDiagnostics(malformed)).not.toThrow()
@@ -44,6 +50,15 @@ describe('search diagnostics contract', () => {
     ]
     diagnostics.warnings = [{ code: 'future_warning', rule_group: null }]
     expect(normalizeSearchDiagnostics(diagnostics)).toEqual(diagnostics)
+  })
+
+  it('accepts optional complete rule IDs without changing old version-1 payloads', () => {
+    const diagnostics = createSearchDiagnostics()
+    expect(hasRuleConfigurationError(diagnostics)).toBe(false)
+    expect(hasRuleConfigurationError(null)).toBe(false)
+    diagnostics.warnings = [{ code: 'rule_id_invalid', rule_group: '国产剧', rule_ids: [' Pre Candidate'] }]
+    expect(normalizeSearchDiagnostics(diagnostics)).toEqual(diagnostics)
+    expect(hasRuleConfigurationError(diagnostics)).toBe(true)
   })
 
   it('accepts circuit-open sources within the version 1 diagnostics contract', () => {

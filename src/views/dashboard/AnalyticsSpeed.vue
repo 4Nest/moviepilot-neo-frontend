@@ -125,7 +125,7 @@ async function loadDownloaderInfo() {
 const { loading } = useDataRefresh(
   'analytics-speed',
   loadDownloaderInfo,
-  3000, // 3秒间隔
+  5000, // 下载概况每五秒更新，首次加载仍立即执行。
   true, // 立即执行
 )
 </script>
