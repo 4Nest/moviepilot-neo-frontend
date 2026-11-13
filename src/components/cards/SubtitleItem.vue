@@ -38,7 +38,7 @@ async function getSiteIcon() {
   try {
     siteIcon.value = await getCachedSiteIcon(subtitle.value.site, async () => {
       try {
-        const response = await api.get(`site/icon/${subtitle.value?.site}`)
+        const response = await api.get(`site/icon/${subtitle.value?.site}`, { cancelOnNavigation: false })
 
         return response?.data?.icon || ''
       } catch (error) {
@@ -115,9 +115,10 @@ watch(
             v-if="siteIcon"
             :src="siteIcon"
             :alt="subtitle?.site_name"
-            class="rounded mb-1 site-icon"
+            class="rounded mb-1 site-icon flex-shrink-0"
             width="32"
             height="32"
+            @error="siteIcon = ''"
           />
           <VAvatar
             v-else

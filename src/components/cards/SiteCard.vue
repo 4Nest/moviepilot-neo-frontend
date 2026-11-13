@@ -67,7 +67,7 @@ async function getSiteIcon(force = false) {
     siteIcon.value = await getCachedSiteIcon(
       siteId,
       async () => {
-        const response = await api.get(`site/icon/${siteId}`)
+        const response = await api.get(`site/icon/${siteId}`, { cancelOnNavigation: false })
 
         return response?.data?.icon || defaultSiteIcon
       },

@@ -1,9 +1,16 @@
 import type { RejectedSearchItem } from '@/api/types'
 import RejectedTorrentCard from '@/components/cards/RejectedTorrentCard.vue'
 import { renderWithProviders } from '@tests/support/render'
-import { screen } from '@testing-library/vue'
+import { server } from '@tests/support/msw/server'
+import { screen, waitFor } from '@testing-library/vue'
+import { HttpResponse, http } from 'msw'
+import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
 
+const ImageStub = defineComponent({
+  props: { alt: String, src: String },
+  template: '<img :alt="alt" :src="src" />',
+})
 function createRejectedItem(): RejectedSearchItem {
   return {
     context: {
@@ -57,5 +64,24 @@ describe('RejectedTorrentCard', () => {
     expect(row).toHaveTextContent('被过滤媒体')
     expect(row).toHaveTextContent('测试站点')
     expect(row).toHaveTextContent('规则组“默认规则”/ 仅含中文字幕：未满足包含条件 中文字幕')
+  })
+
+  it('loads and displays cached site icon when site id is present', async () => {
+    server.use(
+      http.get('*/site/icon/303', () =>
+        HttpResponse.json({ data: { icon: 'data:image/png;base64,ICON303' }, success: true }),
+      ),
+    )
+    const item = createRejectedItem()
+    item.context.torrent_info!.site = 303
+
+    const { container } = await renderWithProviders(RejectedTorrentCard, {
+      global: { stubs: { VImg: ImageStub } },
+      props: { item, mode: 'row' },
+    })
+
+    await waitFor(() =>
+      expect(container.querySelector<HTMLImageElement>('img')?.src).toBe('data:image/png;base64,ICON303'),
+    )
   })
 })

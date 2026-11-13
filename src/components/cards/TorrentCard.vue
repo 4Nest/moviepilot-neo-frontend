@@ -59,7 +59,7 @@ async function getSiteIcon(site: number | undefined) {
   try {
     siteIcons.value[site] = await getCachedSiteIcon(site, async () => {
       try {
-        const response = await api.get(`site/icon/${site}`)
+        const response = await api.get(`site/icon/${site}`, { cancelOnNavigation: false })
 
         return response?.data?.icon || ''
       } catch (error) {
@@ -71,6 +71,10 @@ async function getSiteIcon(site: number | undefined) {
     console.error(error)
     siteIcons.value[site] = ''
   }
+}
+
+function handleSiteIconError(site: number | undefined) {
+  if (site) siteIcons.value[site] = ''
 }
 
 // 询问并添加下载
@@ -247,6 +251,7 @@ watch(
             class="rounded flex-shrink-0"
             width="20"
             height="20"
+            @error="handleSiteIconError(torrent?.site)"
           />
           <VAvatar v-else size="20" class="text-caption bg-surface-variant flex-shrink-0" color="surface-variant">
             {{ torrent?.site_name?.substring(0, 1) }}

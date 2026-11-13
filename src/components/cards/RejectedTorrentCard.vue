@@ -1,18 +1,63 @@
 <script setup lang="ts">
+import api from '@/api'
 import type { RejectedSearchItem } from '@/api/types'
 import { useI18n } from '@/composables/useChineseText'
 import { formatSearchDiagnosticRejectionDetail } from '@/utils/searchDiagnostics'
+import { getCachedSiteIcon } from '@/utils/siteIconCache'
+import { ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{ item: RejectedSearchItem; mode?: 'card' | 'row' }>(), {
   mode: 'card',
 })
 const { t } = useI18n()
+const siteIcon = ref('')
+
+async function loadSiteIcon(site: number | undefined) {
+  if (!site) {
+    siteIcon.value = ''
+    return
+  }
+  try {
+    const icon = await getCachedSiteIcon(site, async () => {
+      try {
+        const response = await api.get(`site/icon/${site}`, { cancelOnNavigation: false })
+        return response?.data?.icon || ''
+      } catch {
+        return ''
+      }
+    })
+    if (props.item.context.torrent_info?.site === site) {
+      siteIcon.value = icon
+    }
+  } catch {
+    if (props.item.context.torrent_info?.site === site) {
+      siteIcon.value = ''
+    }
+  }
+}
+
+watch(
+  () => props.item.context.torrent_info?.site,
+  site => {
+    void loadSiteIcon(site)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div v-if="props.mode === 'row'" class="rejected-torrent-row d-flex align-start" data-testid="rejected-torrent-card">
     <div class="rejected-torrent-row__site-badge flex-shrink-0">
-      <VAvatar size="32" color="surface-variant" class="text-caption font-weight-bold">
+      <VImg
+        v-if="siteIcon"
+        :src="siteIcon"
+        :alt="item.context.torrent_info?.site_name"
+        class="rounded flex-shrink-0"
+        width="32"
+        height="32"
+        @error="siteIcon = ''"
+      />
+      <VAvatar v-else size="32" color="surface-variant" class="text-caption font-weight-bold">
         {{ item.context.torrent_info?.site_name?.substring(0, 1) }}
       </VAvatar>
       <span v-if="item.context.torrent_info?.site_name" class="rejected-torrent-row__site">
@@ -61,7 +106,16 @@ const { t } = useI18n()
     <VCardText class="d-flex flex-column flex-grow-1 pa-3">
       <div class="rejected-torrent-card__torrent-title">{{ item.context.torrent_info?.title }}</div>
       <div class="rejected-torrent-card__site d-flex align-center gap-2 mt-2">
-        <VAvatar size="20" color="surface-variant" class="text-caption flex-shrink-0">
+        <VImg
+          v-if="siteIcon"
+          :src="siteIcon"
+          :alt="item.context.torrent_info?.site_name"
+          class="rounded flex-shrink-0"
+          width="20"
+          height="20"
+          @error="siteIcon = ''"
+        />
+        <VAvatar v-else size="20" color="surface-variant" class="text-caption flex-shrink-0">
           {{ item.context.torrent_info?.site_name?.substring(0, 1) }}
         </VAvatar>
         <span>{{ item.context.torrent_info?.site_name }}</span>

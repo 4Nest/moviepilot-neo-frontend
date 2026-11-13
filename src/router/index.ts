@@ -247,8 +247,10 @@ const router = createRouter({
 
 // 路由导航守卫
 router.beforeEach(async (to: any, from: any, next: any) => {
-  // 设置导航状态 - 同时中断API请求
-  setRequestNavigatingState(true)
+  // 仅在切换页面路径时中断在途请求，避免同页面清理地址栏参数时误杀当前页的异步加载
+  if (!from?.matched?.length || to.path !== from.path) {
+    setRequestNavigatingState(true)
+  }
 
   // 认证与用户 Store
   const authStore = useAuthStore()
