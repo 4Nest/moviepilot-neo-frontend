@@ -4,7 +4,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { flushPromises } from '@vue/test-utils'
 import { computed, defineComponent, h, nextTick, ref, unref, type PropType } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiDelete: vi.fn(),
@@ -82,6 +82,8 @@ vi.mock('@/composables/useDynamicButton', () => ({
 
 /** 替身表格的显示顺序，用于模拟排序和分组后的可见记录。 */
 let stubDisplayOrder: (items: TransferHistory[]) => TransferHistory[] = items => items
+/** 是否在替身表格中直接渲染 `#item.title` 插槽。 */
+let renderTitleSlot = false
 
 const HistoryTableStub = defineComponent({
   name: 'VDataTableVirtual',
@@ -119,23 +121,25 @@ const HistoryTableStub = defineComponent({
       const displayedItems = stubDisplayOrder(props.items)
 
       return h('section', { 'aria-label': '整理历史桌面列表' }, [
-        h('output', { 'aria-label': '整理历史排序结果' }, JSON.stringify(sortResults)),
-        ...(slots['body.prepend']?.({ groupedItems: displayedItems.map(raw => ({ type: 'item', raw })) }) ?? []),
-        ...displayedItems.map(item =>
-          h('article', { 'data-history-id': item.id }, [
-            slots['item.data-table-select']?.({ item }),
-            h('span', item.title),
-            slots['item.actions']?.({ item }),
-          ]),
-        ),
-        h(
-          'button',
-          {
-            onClick: () => emit('update:modelValue', props.items),
-            type: 'button',
-          },
-          '选择当前页',
-        ),
+        h('div', { class: 'v-table__wrapper' }, [
+          h('output', { 'aria-label': '整理历史排序结果' }, JSON.stringify(sortResults)),
+          ...(slots['body.prepend']?.({ groupedItems: displayedItems.map(raw => ({ type: 'item', raw })) }) ?? []),
+          ...displayedItems.map(item =>
+            h('article', { 'data-history-id': item.id }, [
+              slots['item.data-table-select']?.({ item }),
+              renderTitleSlot ? slots['item.title']?.({ item }) : h('span', item.title),
+              slots['item.actions']?.({ item }),
+            ]),
+          ),
+          h(
+            'button',
+            {
+              onClick: () => emit('update:modelValue', props.items),
+              type: 'button',
+            },
+            '选择当前页',
+          ),
+        ]),
       ])
     }
   },
@@ -363,6 +367,7 @@ function getDialogCall(index = 0) {
 describe('TransferHistoryView', () => {
   beforeEach(() => {
     stubDisplayOrder = items => items
+    renderTitleSlot = false
     mocks.appMode = true
     mocks.desktop = true
     mocks.dynamicButtonConfig = undefined
@@ -380,6 +385,10 @@ describe('TransferHistoryView', () => {
     }))
     mocks.createConfirm.mockResolvedValue(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('uses the desktop URL query as the request source and falls back from invalid pagination values', async () => {
@@ -867,5 +876,105 @@ describe('TransferHistoryView', () => {
       batchKeys.indexOf('transferHistory.actions.exitBatchMode'),
     )
     expect(screen.getByRole('button', { name: '清空记录' })).toBeInTheDocument()
+  })
+
+  it('renders movie titles in grouped desktop mode instead of leaving the primary label blank', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync('src/views/reorganize/TransferHistoryView.vue', 'utf8')
+    expect(source).not.toContain('@next="currentPage + 1"')
+    expect(source).not.toContain('@prev="currentPage - 1"')
+
+    renderTitleSlot = true
+    const histories = [
+      createHistory(1, '星际穿越', { category: '科幻片', type: '电影', year: '2014' }),
+      createHistory(2, '三体', { category: '科幻剧', episodes: 'E01', seasons: 'S01', type: '电视剧' }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory('/history?grouped=true')
+    expect(await screen.findByText('星际穿越')).toBeInTheDocument()
+
+    const moviePrimary = container.querySelector('[data-history-id="1"] .text-high-emphasis')
+    const tvPrimary = container.querySelector('[data-history-id="2"] .text-high-emphasis')
+    expect(moviePrimary?.textContent?.trim()).toBe('星际穿越')
+    expect(tvPrimary?.textContent?.trim()).toBe('S01E01')
+  })
+
+  it('resets the desktop table scroll position when page or search changes, but preserves it on failure', async () => {
+    const secondPage = createDeferred<ReturnType<typeof historyResponse>>()
+    const failedPage = createDeferred<ReturnType<typeof historyResponse>>()
+    let historyCalls = 0
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      historyCalls += 1
+      if (historyCalls === 1) return Promise.resolve(historyResponse([createHistory(1, '第一页记录')], 100))
+      if (historyCalls === 2) return secondPage.promise
+      if (historyCalls === 3) return Promise.resolve(historyResponse([createHistory(3, '新搜索记录')], 10))
+      return failedPage.promise
+    })
+
+    const { container, router } = await renderHistory('/history?currentPage=1')
+    await screen.findByText('第一页记录')
+    const viewport = container.querySelector<HTMLElement>('.v-table__wrapper')!
+    viewport.scrollTop = 420
+
+    await router.push('/history?currentPage=2')
+    await waitFor(() => expect(historyCalls).toBe(2))
+    expect(viewport.scrollTop).toBe(420)
+
+    secondPage.resolve(historyResponse([createHistory(2, '第二页记录')], 100))
+    await screen.findByText('第二页记录')
+    await waitFor(() => expect(viewport.scrollTop).toBe(0))
+
+    viewport.scrollTop = 360
+    await router.push('/history?currentPage=1&search=%E6%96%B0%E8%AF%8D')
+    await screen.findByText('新搜索记录')
+    await waitFor(() => expect(viewport.scrollTop).toBe(0))
+
+    viewport.scrollTop = 280
+    await router.push('/history?currentPage=2&search=%E6%96%B0%E8%AF%8D')
+    await waitFor(() => expect(historyCalls).toBe(4))
+    failedPage.reject(new Error('network error'))
+    await flushPromises()
+    expect(viewport.scrollTop).toBe(280)
+  })
+
+  it('parses timezone-aware ISO dates, preserves invalid dates, and refreshes relative labels across minutes on mobile', async () => {
+    mocks.desktop = false
+    vi.useFakeTimers()
+    // 固定本地时间为 2026-11-12 23:59:30
+    vi.setSystemTime(new Date(2026, 10, 12, 23, 59, 30))
+
+    // 构造本地 2026-11-12 00:15:00 对应的 UTC ISO 字符串（在正偏移时区下其 UTC 日期为前一天 11-11）
+    const localEarlyMorningIso = new Date(2026, 10, 12, 0, 15, 0).toISOString()
+    const histories = [
+      createHistory(1, '时区跨日记录', { date: localEarlyMorningIso }),
+      createHistory(2, '跨午夜记录', { date: '2026-11-12 23:58:00' }),
+      createHistory(3, '非法小时记录', { date: '2026-11-12 25:00:00' }),
+      createHistory(4, '越界日历记录', { date: '2026-02-31 10:00:00' }),
+      createHistory(5, '非日期文本记录', { date: 'not-a-date' }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory()
+    await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
+    await screen.findByText('非日期文本记录')
+
+    expect(screen.getByText('今天 00:15')).toBeInTheDocument()
+    expect(screen.getByText('今天 23:58')).toBeInTheDocument()
+    expect(screen.getByText('2026-11-12 25:00:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-02-31 10:00:00')).toBeInTheDocument()
+    expect(screen.getByText('not-a-date')).toBeInTheDocument()
+    expect(container).not.toHaveTextContent(/Invalid Date/)
+
+    // 推进 60 秒跨过本地午夜（进入 2026-11-13 00:00:30），相对日期应自动刷新为“昨天”
+    await vi.advanceTimersByTimeAsync(60_000)
+    await nextTick()
+    expect(screen.getByText('昨天 00:15')).toBeInTheDocument()
+    expect(screen.getByText('昨天 23:58')).toBeInTheDocument()
   })
 })

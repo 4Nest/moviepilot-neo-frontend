@@ -22,7 +22,6 @@ const SubscribeEditDialog = defineAsyncComponent(() => import('@/components/dial
 
 const subType = route.meta.subType?.toString()
 const subId = ref(route.query.id as string)
-const activeTab = ref((route.query.tab as string) || '')
 const subscribeListViewRef = ref<InstanceType<typeof SubscribeListView> | null>(null)
 
 // 订阅批量模式状态快照，来源于订阅列表组件。
@@ -40,7 +39,7 @@ const subscribeBatchState = ref<SubscribeBatchState>({
   allSelected: false,
 })
 
-// 获取标签页
+// 获取当前用户可见的标签页白名单
 const subscribeTabs = computed(() => {
   if (subType === '电影') {
     return getSubscribeMovieTabs(t)
@@ -48,6 +47,18 @@ const subscribeTabs = computed(() => {
     return getSubscribeTvTabs(t)
   }
 })
+
+// 校验目标标签页是否属于当前用户可见列表，非超管或未知值自动回退到默认可见标签页。
+function resolveValidSubscribeTab(candidate: unknown): string {
+  const defaultTab = subscribeTabs.value[0]?.tab || 'mysub'
+  if (typeof candidate === 'string' && subscribeTabs.value.some(item => item.tab === candidate)) {
+    return candidate
+  }
+  return defaultTab
+}
+
+const hasShareTab = computed(() => subscribeTabs.value.some(item => item.tab === 'share'))
+const activeTab = ref(resolveValidSubscribeTab(route.query.tab))
 
 // 订阅过滤弹窗
 const filterSubscribeDialog = ref(false)
@@ -290,7 +301,27 @@ watch(shareKeywordInput, newKeyword => {
   shareKeywordUpdater(newKeyword || '')
 })
 
+watch(
+  () => route.query.tab,
+  nextQueryTab => {
+    activeTab.value = resolveValidSubscribeTab(nextQueryTab)
+  },
+)
+
+watch(subscribeTabs, () => {
+  const validTab = resolveValidSubscribeTab(activeTab.value)
+  if (activeTab.value !== validTab) {
+    activeTab.value = validTab
+  }
+})
+
 watch(activeTab, newTab => {
+  const validTab = resolveValidSubscribeTab(newTab)
+  if (newTab !== validTab) {
+    activeTab.value = validTab
+    return
+  }
+
   if (newTab !== 'share') {
     searchShareDialog.value = false
   }
@@ -476,10 +507,7 @@ registerHeaderTab({
 
 // 注册动态标签页
 onMounted(() => {
-  // 设置初始activeTab值
-  if (!activeTab.value && subscribeTabs.value.length > 0) {
-    activeTab.value = subscribeTabs.value[0].tab
-  }
+  activeTab.value = resolveValidSubscribeTab(activeTab.value)
 })
 </script>
 
@@ -504,7 +532,7 @@ onMounted(() => {
         </div>
       </VWindowItem>
 
-      <VWindowItem value="share">
+      <VWindowItem v-if="hasShareTab" value="share">
         <div>
           <SubscribeShareView :keyword="shareKeyword" />
         </div>

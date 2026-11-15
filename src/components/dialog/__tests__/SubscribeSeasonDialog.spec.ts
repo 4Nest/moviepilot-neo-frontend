@@ -534,4 +534,23 @@ describe('SubscribeSeasonDialog', () => {
     await user.click(screen.getByRole('button', { name: '查看上一组剧集组' }))
     expect(rail.scrollBy).toHaveBeenCalledWith({ behavior: 'smooth', left: -288 })
   })
+
+  it('labels each season switch and constrains its inline width to 52px', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync('src/components/dialog/SubscribeSeasonDialog.vue', 'utf8')
+    expect(source).toMatch(/\.subscribe-season-switch\s*\{[\s\S]*?inline-size:\s*52px;/)
+
+    const media = createTvMedia({ tmdb_id: 7315 })
+    server.use(
+      mediaSeasonsHandler([createMediaSeason({ season_number: 1 })]),
+      mediaNotExistsHandler([]),
+      mediaEpisodeGroupsHandler(media.tmdb_id!, []),
+    )
+    await renderDialog({ media })
+
+    expect(await screen.findByText('第 1 季')).toBeInTheDocument()
+    const switchRoot = seasonRow(1).querySelector('.subscribe-season-switch')
+    expect(switchRoot).not.toBeNull()
+    expect(within(seasonRow(1)).getByRole('checkbox', { name: '第 1 季' })).toBeInTheDocument()
+  })
 })

@@ -151,6 +151,8 @@ async function installPlugin(releaseVersion?: string, repoUrl?: string) {
     )
 
     const result: ApiResponse<unknown> = await api.get(`plugin/install/${props.plugin?.id}`, {
+      // 安装事务跨页面继续完成，切换路由不中断进行中的请求。
+      cancelOnNavigation: false,
       params: {
         repo_url: repoUrl || props.plugin?.repo_url,
         release_version: releaseVersion,

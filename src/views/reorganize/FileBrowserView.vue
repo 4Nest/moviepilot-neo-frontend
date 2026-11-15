@@ -227,7 +227,6 @@ onMounted(loadDownloadDirectories)
 <style lang="scss" scoped>
 .file-browser-view {
   position: relative;
-  overflow: hidden;
   block-size: 100%;
 }
 </style>

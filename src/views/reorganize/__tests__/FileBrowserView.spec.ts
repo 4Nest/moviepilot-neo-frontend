@@ -181,4 +181,11 @@ describe('FileBrowserView initialization', () => {
 
     expect(browser.props('itemstack').map((item: { path: string }) => item.path)).toEqual(['/', '/downloads/'])
   })
+
+  it('does not clip outer surface shadows on .file-browser-view', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync('src/views/reorganize/FileBrowserView.vue', 'utf8')
+    const styleBlock = source.match(/\.file-browser-view\s*\{[\s\S]*?\}/)?.[0] ?? ''
+    expect(styleBlock).not.toContain('overflow: hidden')
+  })
 })

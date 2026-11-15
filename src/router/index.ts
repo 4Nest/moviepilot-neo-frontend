@@ -1,4 +1,5 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { nextTick } from 'vue'
+import { createRouter, createWebHashHistory, type Router } from 'vue-router'
 import { configureNProgress } from '@/api/nprogress'
 import { useAuthStore, useUserStore } from '@/stores'
 import { setNavigatingState as setRequestNavigatingState } from '@/utils/requestOptimizer'
@@ -245,38 +246,73 @@ const router = createRouter({
   ],
 })
 
-// 路由导航守卫
-router.beforeEach(async (to: any, from: any, next: any) => {
-  // 仅在切换页面路径时中断在途请求，避免同页面清理地址栏参数时误杀当前页的异步加载
-  if (!from?.matched?.length || to.path !== from.path) {
-    setRequestNavigatingState(true)
+let navigationResetTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearNavigationResetTimer() {
+  if (navigationResetTimer !== null) {
+    clearTimeout(navigationResetTimer)
+    navigationResetTimer = null
   }
+}
 
-  // 认证与用户 Store
-  const authStore = useAuthStore()
-  const userStore = useUserStore()
-  // 登录页的实验参数不是登录后可恢复的业务目标。
-  if (to.path !== '/login') authStore.originalPath = to.fullPath
-  const isAuthenticated = authStore.token !== null
+function scheduleNavigationStateReset() {
+  clearNavigationResetTimer()
+  void nextTick(() => {
+    clearNavigationResetTimer()
+    navigationResetTimer = setTimeout(() => {
+      navigationResetTimer = null
+      setRequestNavigatingState(false)
+    }, 0)
+  })
+}
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    // 用户未登录，重定向到登录页
-    setRequestNavigatingState(false)
-    next('/login')
-  } else if (isAuthenticated && !userStore.superUser && to.path !== '/login' && !isAllowedSubscribeUserPath(to.path)) {
-    setRequestNavigatingState(false)
-    next('/recommend')
-  } else {
-    next()
-  }
-})
+/** 为指定路由器注册鉴权与请求中断状态守卫。 */
+export function attachRouterNavigationGuards(targetRouter: Router) {
+  targetRouter.beforeEach(async (to: any, from: any, next: any) => {
+    clearNavigationResetTimer()
 
-// 路由导航完成后
-router.afterEach(() => {
-  setTimeout(() => {
-    setRequestNavigatingState(false)
-  }, 100)
-})
+    // 仅在切换页面路径时中断在途请求，避免同页面清理地址栏参数时误杀当前页的异步加载
+    if (!from?.matched?.length || to.path !== from.path) {
+      setRequestNavigatingState(true)
+    }
+
+    // 认证与用户 Store
+    const authStore = useAuthStore()
+    const userStore = useUserStore()
+    // 登录页的实验参数不是登录后可恢复的业务目标。
+    if (to.path !== '/login') authStore.originalPath = to.fullPath
+    const isAuthenticated = authStore.token !== null
+
+    if (to.meta.requiresAuth && !isAuthenticated) {
+      // 用户未登录，重定向到登录页
+      clearNavigationResetTimer()
+      setRequestNavigatingState(false)
+      next('/login')
+    } else if (
+      isAuthenticated &&
+      !userStore.superUser &&
+      to.path !== '/login' &&
+      !isAllowedSubscribeUserPath(to.path)
+    ) {
+      clearNavigationResetTimer()
+      setRequestNavigatingState(false)
+      next('/recommend')
+    } else {
+      next()
+    }
+  })
+
+  // 路由导航完成后通过 nextTick 结合短宏任务归位，防止连跳时旧定时器提前清空新导航状态
+  targetRouter.afterEach(() => {
+    scheduleNavigationStateReset()
+  })
+
+  targetRouter.onError(() => {
+    scheduleNavigationStateReset()
+  })
+}
+
+attachRouterNavigationGuards(router)
 
 // 导出默认对象
 export default router

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { authState } from '@/stores/types'
+import { clearSharedDialogs } from '@/composables/useSharedDialog'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
 import { clearCachedMediaSubscribeStatuses } from '@/utils/mediaStatusCache'
 import { revokeNativeNotificationBinding } from '@/native/notifications'
@@ -16,10 +17,14 @@ export const useAuthStore = defineStore('auth', {
 
   actions: {
     setToken(token: string | null) {
+      if (this.token !== token) {
+        clearSharedDialogs()
+      }
       this.token = token
     },
     clearToken() {
       this.token = null
+      clearSharedDialogs()
     },
     setRemember(remember: boolean) {
       this.remember = remember

@@ -31,7 +31,10 @@ describe('SiteStatisticsDialog', () => {
 
     expect(await screen.findByText('熔断保护中')).toBeInTheDocument()
     expect(screen.getByText('恢复时间：2026-11-11 18:30:00')).toBeInTheDocument()
-    expect(screen.getByText('最近异常：Cookie 失效')).toBeInTheDocument()
+    const errorNode = screen.getByText('最近异常：Cookie 失效')
+    expect(errorNode).toBeInTheDocument()
+    expect(errorNode).toHaveAttribute('title', 'Cookie 失效')
+    expect(errorNode).toHaveClass('site-last-error', 'text-truncate')
     expect(screen.getByText('连续失败').parentElement).toHaveTextContent('连续失败: 3')
   })
 })

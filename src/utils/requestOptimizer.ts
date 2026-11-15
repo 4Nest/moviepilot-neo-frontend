@@ -97,6 +97,11 @@ export function getActiveRequestsCount() {
   return activeRequests.size
 }
 
+// 获取当前是否处于路由导航切换态
+export function isNavigatingState() {
+  return isNavigating
+}
+
 // 手动中断所有请求（备用方法）
 export function abortAllRequests() {
   abortAllActiveRequests()

@@ -106,7 +106,9 @@ function visitPluginPage() {
   if (!repoUrl) {
     repoUrl = props.plugin?.author_url
   }
-  window.open(repoUrl, '_blank')
+  if (repoUrl) {
+    window.open(repoUrl, '_blank')
+  }
 }
 
 /** 安装插件并通知父级刷新市场列表。 */
@@ -142,6 +144,8 @@ async function installPlugin(releaseVersion?: string, repoUrl?: string) {
     )
 
     const result: ApiResponse<unknown> = await api.get(`plugin/install/${props.plugin?.id}`, {
+      // 安装或更新事务跨页面继续完成，切换路由不中断进行中的请求。
+      cancelOnNavigation: false,
       params: {
         repo_url: repoUrl || props.plugin?.repo_url,
         release_version: releaseVersion,

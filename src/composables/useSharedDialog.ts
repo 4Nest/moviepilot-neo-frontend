@@ -67,6 +67,16 @@ export function openSharedDialogWithOptions(component: Component, options: Share
   })
 }
 
+// 判断指定弹窗是否仍处于活动栈中。
+export function isSharedDialogActive(id: number) {
+  return dialogStack.value.some(entry => entry.id === id)
+}
+
+// 清空所有共享弹窗，供退出登录或会话失效时立即撤销残留实例。
+export function clearSharedDialogs() {
+  setDialogStack([])
+}
+
 // 关闭指定弹窗；未传 id 时关闭最上层弹窗。
 export function closeSharedDialog(id?: number) {
   if (id === undefined) {
@@ -91,6 +101,7 @@ export function useSharedDialog() {
     openDialog: openSharedDialog,
     openDialogWithOptions: openSharedDialogWithOptions,
     closeDialog: closeSharedDialog,
+    clearDialogs: clearSharedDialogs,
     updateDialogProps: updateSharedDialogProps,
   }
 }

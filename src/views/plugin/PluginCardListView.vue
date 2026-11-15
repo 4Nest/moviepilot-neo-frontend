@@ -191,8 +191,8 @@ const isAppMarketLoaded = ref(false)
 
 const marketLoadError = ref(false)
 
-// 只复用当前页面最近五分钟的完整市场清单；手动刷新和安装状态变化仍重新查询。
-const MARKET_CACHE_TTL = 5 * 60 * 1000
+// 只复用当前页面最近 60 秒的完整市场清单；手动 force 刷新和安装状态变化仍重新查询。
+const MARKET_CACHE_TTL = 60 * 1000
 let marketFetchedAt = Number.NEGATIVE_INFINITY
 let marketInstalledKey = ''
 
@@ -855,40 +855,90 @@ function closePluginProgressDialog() {
   progressDialogController = null
 }
 
-// 安装插件
+/** 原地替换已安装列表中的指定插件并清除其更新标记，保留当前浏览与过滤上下文。 */
+async function replaceUpdatedPluginInPlace(item: Plugin) {
+  const targetId = item.id
+  if (!targetId) return
+
+  uninstalledList.value = uninstalledList.value.map(plugin =>
+    plugin.id === targetId ? { ...plugin, has_update: false } : plugin,
+  )
+  marketList.value = uninstalledList.value.filter(plugin => !(plugin.has_update && plugin.installed))
+
+  let latestInstalled: Plugin | undefined
+  try {
+    const installedPlugins: Plugin[] = await api.get('plugin/', {
+      params: { state: 'installed' },
+    })
+    latestInstalled = installedPlugins.find(plugin => plugin.id === targetId)
+  } catch (error) {
+    console.error(error)
+  }
+
+  const targetIndex = dataList.value.findIndex(plugin => plugin.id === targetId)
+  if (targetIndex < 0) return
+
+  const currentPlugin = dataList.value[targetIndex]
+  const replacedPlugin: Plugin = {
+    ...currentPlugin,
+    ...item,
+    ...(latestInstalled || {}),
+    installed: true,
+    has_update: false,
+  }
+  mergeRatingsIntoPlugins([replacedPlugin])
+
+  const nextDataList = [...dataList.value]
+  nextDataList[targetIndex] = replacedPlugin
+  dataList.value = nextDataList
+  marketInstalledKey = getMarketInstalledKey()
+}
+
+// 安装或更新插件
 async function installPlugin(item: Plugin) {
   if (item?.system_version_compatible === false) {
     $toast.error(item.system_version_message || t('plugin.incompatibleSystemVersion'))
     return
   }
 
+  const isUpdate = Boolean(item?.installed) || dataList.value.some(plugin => plugin.id === item?.id)
+  const failureMessageKey = isUpdate ? 'plugin.updateFailed' : 'plugin.installFailed'
+
   try {
     // 显示等待提示框
-    progressText.value = t('plugin.installing', { name: item?.plugin_name, version: item?.plugin_version })
+    progressText.value = isUpdate
+      ? t('plugin.updating', { name: item?.plugin_name })
+      : t('plugin.installing', { name: item?.plugin_name, version: item?.plugin_version })
     openPluginProgressDialog(progressText.value)
 
     const result = await api.get<ApiResponse<unknown>, ApiResponse<unknown>>(`plugin/install/${item?.id}`, {
+      // 安装事务跨页面继续完成，切换路由不中断进行中的请求。
+      cancelOnNavigation: false,
       params: {
         repo_url: item?.repo_url,
-        force: item?.has_update,
+        force: isUpdate || item?.has_update,
       },
     })
 
     if (result.success) {
-      $toast.success(t('plugin.installSuccess', { name: item?.plugin_name }))
-      // 清空过滤条件
-      hasUpdateFilter.value = false
-      enabledFilter.value = false
-      installedFilter.value = null
-      // 刷新
-      await refreshData()
+      if (isUpdate) {
+        $toast.success(t('plugin.updateSuccess', { name: item?.plugin_name }))
+        await replaceUpdatedPluginInPlace(item)
+      } else {
+        $toast.success(t('plugin.installSuccess', { name: item?.plugin_name }))
+        // 仅首次安装清空过滤条件以确保新装插件可见
+        hasUpdateFilter.value = false
+        enabledFilter.value = false
+        installedFilter.value = null
+        await refreshData()
+      }
       await pluginSidebarNavStore.ensureSidebarNav(true)
     } else {
-      $toast.error(t('plugin.installFailed', { name: item?.plugin_name, message: result.message }))
+      $toast.error(t(failureMessageKey, { name: item?.plugin_name, message: result.message }))
     }
   } catch (error) {
     console.error(error)
-    $toast.error(t('plugin.installFailed', { name: item?.plugin_name, message: '' }))
+    $toast.error(t(failureMessageKey, { name: item?.plugin_name, message: '' }))
   } finally {
     closePluginProgressDialog()
   }

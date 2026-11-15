@@ -113,17 +113,9 @@ describe('PluginCard about menu', () => {
     })
   })
 
-  it('resolves a missing installed repo from market metadata before opening the project page', async () => {
+  it('opens the author fallback directly without fetching the full market catalog when installed repo is local', async () => {
     mocks.apiGet.mockImplementation((url: string) => {
       if (url === 'plugin/history/DemoPlugin') return Promise.resolve({ ...plugin, repo_url: 'local://DemoPlugin' })
-      if (url === 'plugin/') {
-        return Promise.resolve([
-          {
-            ...plugin,
-            repo_url: 'https://raw.githubusercontent.com/example/plugins/main/package.json',
-          },
-        ])
-      }
       throw new Error(`Unexpected request: ${url}`)
     })
     const replace = vi.fn()
@@ -139,13 +131,47 @@ describe('PluginCard about menu', () => {
     await fireEvent.click(await screen.findByText('项目主页'))
 
     await waitFor(() => {
-      expect(mocks.apiGet).toHaveBeenCalledWith('plugin/', {
-        params: { force: false, state: 'market' },
+      expect(mocks.apiGet).toHaveBeenCalledWith('plugin/history/DemoPlugin', {
+        params: { force: false },
       })
     })
+    expect(mocks.apiGet).not.toHaveBeenCalledWith('plugin/', expect.anything())
     expect(open).toHaveBeenCalledWith('about:blank', '_blank')
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('https://github.com/example/plugins'))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('https://github.com/MoviePilot'))
     expect(popup.opener).toBeNull()
+  })
+
+  it('extracts GitHub owner avatars from user or repository URLs and avoids undefined.png for empty URLs', async () => {
+    const ImageSrcStub = {
+      name: 'VImg',
+      props: ['src'],
+      template: '<img data-testid="vimg-src" :data-src="src" />',
+    }
+
+    const emptyAuthor = await renderWithProviders(PluginCard, {
+      props: { plugin: { ...plugin, author_url: undefined } },
+      global: { stubs: { VImg: ImageSrcStub } },
+    })
+    const [, emptyAvatar] = emptyAuthor.container.querySelectorAll<HTMLElement>('[data-testid="vimg-src"]')
+    expect(emptyAvatar.dataset.src).toBe('')
+    expect(emptyAvatar.dataset.src).not.toContain('undefined')
+    emptyAuthor.unmount()
+
+    const rootGithubAuthor = await renderWithProviders(PluginCard, {
+      props: { plugin: { ...plugin, author_url: 'https://github.com/' } },
+      global: { stubs: { VImg: ImageSrcStub } },
+    })
+    const [, rootAvatar] = rootGithubAuthor.container.querySelectorAll<HTMLElement>('[data-testid="vimg-src"]')
+    expect(rootAvatar.dataset.src).toBe('')
+    rootGithubAuthor.unmount()
+
+    const repoAuthor = await renderWithProviders(PluginCard, {
+      props: { plugin: { ...plugin, author_url: 'https://github.com/4Nest/MoviePilot-Plugins' } },
+      global: { stubs: { VImg: ImageSrcStub } },
+    })
+    const [, repoAvatar] = repoAuthor.container.querySelectorAll<HTMLElement>('[data-testid="vimg-src"]')
+    expect(decodeURIComponent(repoAvatar.dataset.src || '')).toContain('https://github.com/4Nest.png')
+    expect(decodeURIComponent(repoAvatar.dataset.src || '')).not.toContain('MoviePilot-Plugins')
   })
 
   it('prioritizes the update status over the rating status', async () => {

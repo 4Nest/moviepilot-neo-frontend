@@ -186,6 +186,7 @@ describe('PluginCard lifecycle actions', () => {
     await versionEvents.update('0.9.0', 'https://github.com/example/releases')
 
     expect(mocks.apiGet).toHaveBeenCalledWith('plugin/install/DemoPlugin', {
+      cancelOnNavigation: false,
       params: {
         force: true,
         release_version: '0.9.0',

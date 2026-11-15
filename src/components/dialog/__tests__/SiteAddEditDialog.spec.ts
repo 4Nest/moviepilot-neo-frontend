@@ -297,4 +297,23 @@ describe('SiteAddEditDialog', () => {
     await waitFor(() => expect(updated).toHaveBeenCalledOnce())
     expect(updated.mock.calls[0][0].note).toEqual({ sentinel_alert: false })
   })
+
+  it.each([
+    { label: 'plain string note', originalNote: 'plain-text-note' },
+    { label: 'array note', originalNote: ['tag-a', 'tag-b'] },
+    { label: 'JSON string without sentinel_alert', originalNote: '{"custom":"keep"}' },
+    { label: 'null note', originalNote: null },
+  ])('preserves $label without overwriting to {} when sentinelAlert stays enabled', async ({ originalNote }) => {
+    const site = createSite({ name: '保留备注站点', note: originalNote as unknown as string })
+    const updated = vi.fn()
+    server.use(siteDetailsHandler(site.id, site), updateSiteHandler({ success: true }, 200, updated))
+    const user = userEvent.setup()
+    await renderDialog('edit', site.id)
+
+    expect(await screen.findByLabelText('健康预警通知')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    expect(updated.mock.calls[0][0].note).toEqual(originalNote)
+  })
 })

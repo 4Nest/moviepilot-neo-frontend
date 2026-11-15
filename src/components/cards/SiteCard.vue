@@ -373,7 +373,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
             <div v-if="cardProps.stats.circuit_until">
               {{ t('site.circuitUntil', { time: cardProps.stats.circuit_until }) }}
             </div>
-            <div v-if="cardProps.stats.last_error" class="text-truncate">
+            <div v-if="cardProps.stats.last_error" class="text-truncate" :title="cardProps.stats.last_error">
               {{ t('site.circuitLastError', { reason: cardProps.stats.last_error }) }}
             </div>
           </VAlert>

@@ -1,6 +1,8 @@
+import { openSharedDialog, useSharedDialog } from '@/composables/useSharedDialog'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent, h } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('auth store', () => {
@@ -38,12 +40,14 @@ describe('auth store', () => {
     expect(authStore.getToken).toBeNull()
   })
 
-  it('logs out and clears plugin navigation state', () => {
+  it('logs out and clears plugin navigation state and shared dialogs', () => {
     const authStore = useAuthStore()
     const pluginNavStore = usePluginSidebarNavStore()
     const pendingRequest = Promise.resolve()
 
     authStore.login({ token: 'test-token', remember: true })
+    openSharedDialog(defineComponent({ setup: () => () => h('div', 'active-dialog') }))
+    expect(useSharedDialog().dialogs.value).toHaveLength(1)
     authStore.setOriginalPath('/plugins')
     pluginNavStore.$patch({
       inflight: pendingRequest,
@@ -68,6 +72,7 @@ describe('auth store', () => {
     expect(pluginNavStore.items).toEqual([])
     expect(pluginNavStore.loaded).toBe(false)
     expect(pluginNavStore.inflight).toBeNull()
+    expect(useSharedDialog().dialogs.value).toHaveLength(0)
   })
 
   it('重启或认证失效后重新登录保留通知绑定，主动退出仍撤销当前安装', () => {

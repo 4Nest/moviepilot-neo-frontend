@@ -2,7 +2,7 @@ import type { Plugin, PluginRating } from '@/api/types'
 import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import PluginCardListView from '@/views/plugin/PluginCardListView.vue'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
-import { getActiveRequestsCount } from '@/utils/requestOptimizer'
+import { getActiveRequestsCount, setNavigatingState } from '@/utils/requestOptimizer'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
@@ -776,6 +776,29 @@ describe('PluginCardListView loading and request ownership', () => {
     expect(screen.getByLabelText('installed-rating-Installed-0')).toHaveTextContent('4')
     expect(await screen.findByLabelText('rating-Market-0')).toHaveTextContent('4.8')
   })
+
+  it('keeps a 600-plugin catalog to one in-flight rating request while the list remains visible', async () => {
+    const ratings = createDeferred<Record<string, PluginRating>>()
+    const requestedUrls: string[] = []
+    await renderList({
+      installed: () => [createPlugin({ id: 'Installed', installed: true })],
+      market: () => Array.from({ length: 599 }, (_, index) => createPlugin({ id: `Market-${index}` })),
+      rating: request => {
+        requestedUrls.push(request.url)
+        return ratings.promise
+      },
+    })
+
+    try {
+      expect(await screen.findByTestId('market-Market-0')).toBeInTheDocument()
+      await waitFor(() => expect(requestedUrls.length).toBeGreaterThan(0))
+      expect(requestedUrls).toEqual([apiUrls.rating])
+    } finally {
+      ratings.resolve({})
+      await waitForRequestsToFinish()
+    }
+    expect(screen.getByLabelText('rating-Market-0')).toHaveTextContent('0')
+  })
 })
 
 describe('PluginCardListView market snapshot reuse', () => {
@@ -785,7 +808,7 @@ describe('PluginCardListView market snapshot reuse', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('reuses the catalog on reactivation for five minutes and bypasses it for manual refresh', async () => {
+  it('reuses the catalog on reactivation for 60 seconds and bypasses it for manual refresh', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
     let marketRequests = 0
     await renderList({
@@ -802,10 +825,11 @@ describe('PluginCardListView market snapshot reuse', () => {
       await nextTick()
       expect(marketRequests).toBe(1)
 
+      now.mockReturnValue(60999)
       await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
       expect(marketRequests).toBe(1)
 
-      now.mockReturnValue(301001)
+      now.mockReturnValue(61001)
       await mocks.keepAliveHandler?.({ silent: true, source: 'activated' })
       expect(marketRequests).toBe(2)
 
@@ -1135,6 +1159,88 @@ describe('PluginCardListView search installation', () => {
     expect(installUrl?.searchParams.get('repo_url')).toBe('https://github.com/example/search-plugin')
     expect(installUrl?.searchParams.get('force')).toBe('true')
     expect(mocks.toastSuccess).toHaveBeenCalledWith('插件 搜索安装插件 安装成功！')
+    await waitForRequestsToFinish()
+  })
+
+  it('keeps in-flight installation alive across route navigation and updates installed plugins in place without resetting filters', async () => {
+    const installGate = createDeferred<{ data: null; success: boolean }>()
+    let updated = false
+    await renderList({
+      installed: () => [
+        createPlugin({
+          has_update: !updated,
+          id: 'Alpha',
+          installed: true,
+          plugin_name: updated ? 'Alpha v2' : 'Alpha',
+          plugin_version: updated ? '2.0.0' : '1.0.0',
+          repo_url: updated ? 'https://github.com/example/alpha-v2' : 'https://github.com/example/alpha-v1',
+          state: true,
+        }),
+        createPlugin({
+          has_update: false,
+          id: 'Beta',
+          installed: true,
+          plugin_name: 'Beta',
+          state: false,
+        }),
+      ],
+      market: () => [
+        createPlugin({
+          has_update: true,
+          id: 'Alpha',
+          installed: true,
+          plugin_name: 'Alpha v2',
+          plugin_version: '2.0.0',
+          repo_url: 'https://github.com/example/alpha-v2',
+        }),
+      ],
+    })
+    await waitForRequestsToFinish()
+
+    // 开启「运行中」筛选，Beta 被隐藏，仅 Alpha 可见
+    const installedFilterButton = getHeaderConfig().appendButtons.find(
+      button => button.dataAttr === 'installed-filter-btn',
+    )
+    installedFilterButton?.action?.()
+    await nextTick()
+    await fireEvent.click(screen.getByText('运行中'))
+    await waitFor(() => expect(screen.queryByText('plugin:Beta')).not.toBeInTheDocument())
+    expect(screen.getByLabelText('update-Alpha')).toHaveTextContent('true')
+
+    server.use(
+      http.get(apiUrls.install('Alpha'), async () => {
+        const payload = await installGate.promise
+        updated = true
+        return HttpResponse.json(payload)
+      }),
+    )
+
+    getDynamicButtonConfig().onClick()
+    const installPromise = getDialogEvents()['open-plugin'](
+      createPlugin({
+        has_update: true,
+        id: 'Alpha',
+        installed: false,
+        plugin_name: 'Alpha v2',
+        plugin_version: '2.0.0',
+        repo_url: 'https://github.com/example/alpha-v2',
+      }),
+    )
+
+    // 模拟安装请求在途时发生路由切换，验证 cancelOnNavigation: false 保护请求不被取消
+    await nextTick()
+    setNavigatingState(true)
+    setNavigatingState(false)
+
+    installGate.resolve({ data: null, success: true })
+    await installPromise
+
+    await waitFor(() => expect(screen.getByText('plugin:Alpha v2')).toBeInTheDocument())
+    expect(screen.getByLabelText('update-Alpha')).toHaveTextContent('false')
+    expect(screen.getByLabelText('repo-Alpha')).toHaveTextContent('https://github.com/example/alpha-v2')
+    // 原有筛选条件未被清空，Beta 依旧保持被过滤状态
+    expect(screen.queryByText('plugin:Beta')).not.toBeInTheDocument()
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('插件 Alpha v2 更新成功！')
     await waitForRequestsToFinish()
   })
 })

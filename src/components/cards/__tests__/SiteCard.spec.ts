@@ -153,7 +153,9 @@ describe('SiteCard display', () => {
     expect(container.querySelector('.site-card')).toHaveClass('border-error')
     expect(screen.getByText('熔断保护中')).toBeInTheDocument()
     expect(screen.getByText('恢复时间：2026-11-11 18:30:00')).toBeInTheDocument()
-    expect(screen.getByText('最近异常：Cookie 失效')).toBeInTheDocument()
+    const errorNode = screen.getByText('最近异常：Cookie 失效')
+    expect(errorNode).toBeInTheDocument()
+    expect(errorNode).toHaveAttribute('title', 'Cookie 失效')
   })
 
   it('omits optional recovery time and error lines when circuit metadata is partial', async () => {

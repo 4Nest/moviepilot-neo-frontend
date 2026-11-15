@@ -5,7 +5,15 @@ import type { WorkflowShare } from '@/api/types'
 import WorkflowSummaryPreview from '@/components/workflow/WorkflowSummaryPreview.vue'
 import { useToast } from 'vue-toastification'
 import { useI18n } from '@/composables/useChineseText'
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
+
+interface WorkflowActionResponse {
+  success?: boolean
+  message?: string
+  data?: {
+    id?: number | string
+  } | null
+}
 
 // 国际化
 const { t } = useI18n()
@@ -22,10 +30,10 @@ const props = defineProps({
 // 定义事件
 const emit = defineEmits(['fork', 'delete', 'close'])
 
-// 从 provide 中获取全局设置
-// 全局设置
+// 全局设置与当前用户
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
+const userStore = useUserStore()
 
 // 提示框
 const $toast = useToast()
@@ -35,6 +43,15 @@ const processing = ref(false)
 
 // 删除中
 const deleting = ref(false)
+
+// 仅对超级管理员且具备分享所有权或中心端管理权限的用户展示删除按钮（对齐后端 get_current_admin_async）
+const canDeleteShare = computed(() =>
+  Boolean(
+    userStore.superUser &&
+    ((props.workflow?.share_uid && props.workflow.share_uid === globalSettings.USER_UNIQUE_ID) ||
+      globalSettings.WORKFLOW_SHARE_MANAGE),
+  ),
+)
 
 // 根据事件类型值获取显示文本
 const getEventTypeText = (eventTypeValue: string) => {
@@ -78,12 +95,12 @@ async function doFork() {
   try {
     processing.value = true
     // 请求API
-    const result: { [key: string]: any } = await api.post('workflow/fork', props.workflow)
+    const result: WorkflowActionResponse = await api.post('workflow/fork', props.workflow)
     // 工作流状态
     if (result.success) {
       $toast.success(t('workflow.addSuccess', { name: props.workflow?.share_title }))
       // 完成
-      emit('fork', result.data.id)
+      emit('fork', result.data?.id)
     } else {
       $toast.error(t('workflow.addFailed', { name: props.workflow?.share_title, message: result.message }))
     }
@@ -97,21 +114,19 @@ async function doFork() {
 
 // 删除工作流分享
 async function doDelete() {
+  if (!props.workflow?.id || !canDeleteShare.value) return
+
   // 开始处理
   startNProgress()
   try {
     deleting.value = true
     // 请求API
-    const result: { [key: string]: any } = await api.delete(`workflow/share/${props.workflow?.id}`, {
-      params: {
-        share_uid: globalSettings.USER_UNIQUE_ID,
-      },
-    })
+    const result: WorkflowActionResponse = await api.delete(`workflow/share/${props.workflow.id}`)
     // 工作流状态
     if (result.success) {
       $toast.success(t('workflow.cancelSuccess'))
       // 完成
-      emit('delete', result.data.id)
+      emit('delete')
     } else {
       $toast.error(t('workflow.cancelFailed', { message: result.message }))
     }
@@ -189,10 +204,7 @@ async function doDelete() {
                       {{ t('workflow.normalFork') }}
                     </VBtn>
                     <VBtn
-                      v-if="
-                        (props.workflow?.share_uid && props.workflow?.share_uid === globalSettings.USER_UNIQUE_ID) ||
-                        globalSettings.WORKFLOW_SHARE_MANAGE
-                      "
+                      v-if="canDeleteShare"
                       color="error"
                       :disabled="deleting"
                       @click="doDelete"

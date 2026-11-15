@@ -199,12 +199,39 @@ const iconPath: Ref<string> = computed(() => {
   return `./plugin_icon/${props.plugin?.plugin_icon}`
 })
 
+/** 解析插件作者头像地址，支持从 GitHub 用户主页及仓库地址提取 owner，空值时返回空字符串避免无效代理请求。 */
+function resolvePluginAuthorAvatarPath(authorUrl?: string): string {
+  const rawUrl = authorUrl?.trim()
+  if (!rawUrl) return ''
+
+  let trimmedEnd = rawUrl.length
+  while (trimmedEnd > 0 && rawUrl[trimmedEnd - 1] === '/') {
+    trimmedEnd -= 1
+  }
+  let avatarUrl = `${rawUrl.slice(0, trimmedEnd)}.png`
+  try {
+    const url = new URL(rawUrl)
+    const hostname = url.hostname.toLowerCase()
+    if (['http:', 'https:'].includes(url.protocol) && (hostname === 'github.com' || hostname === 'www.github.com')) {
+      const owner = url.pathname
+        .split('/')
+        .filter(Boolean)[0]
+        ?.replace(/\.png$/i, '')
+      if (!owner) return ''
+      avatarUrl = `https://github.com/${owner}.png`
+    }
+  } catch {
+    // 非标准地址保持原有拼接方式
+  }
+
+  return `${import.meta.env.VITE_API_BASE_URL}system/img/1?imgurl=${encodeURIComponent(avatarUrl)}&cache=true`
+}
+
 // 插件作者头像路径
-const authorPath: Ref<string> = computed(() => {
-  // 网络图片则使用代理后返回
-  return `${import.meta.env.VITE_API_BASE_URL}system/img/1?imgurl=${encodeURIComponent(
-    props.plugin?.author_url + '.png',
-  )}&cache=true`
+const authorPath: Ref<string> = computed(() => resolvePluginAuthorAvatarPath(props.plugin?.author_url))
+
+watch(authorPath, () => {
+  isAvatarLoaded.value = false
 })
 
 // 重置插件
@@ -270,6 +297,7 @@ async function updatePlugin(releaseVersion?: string, repoUrl?: string) {
     )
 
     const result: ApiResponse<unknown> = await api.get(`plugin/install/${props.plugin?.id}`, {
+      cancelOnNavigation: false,
       params: {
         repo_url: repoUrl || props.plugin?.repo_url,
         release_version: releaseVersion,
@@ -336,25 +364,6 @@ function resolvePluginPageUrl(plugin?: Plugin) {
   return repoUrl || plugin.author_url || ''
 }
 
-/** 从插件市场中查找同 ID 插件，补齐已安装插件缺失的 repo_url。 */
-async function fetchMarketPlugin(pluginId?: string) {
-  if (!pluginId) return null
-
-  try {
-    const marketPlugins: Plugin[] = await api.get('plugin/', {
-      params: {
-        state: 'market',
-        force: false,
-      },
-    })
-
-    return marketPlugins.find(plugin => plugin.id === pluginId) || null
-  } catch (error) {
-    console.error(error)
-    return null
-  }
-}
-
 /** 读取已安装插件的最新市场详情，并保留本地运行状态字段。 */
 async function fetchInstalledPluginDetail(force = false) {
   let pluginDetail = props.plugin
@@ -398,21 +407,12 @@ async function showPluginAbout() {
   )
 }
 
-// 访问插件项目主页
+/** 使用单插件查询返回的可信仓库打开主页，未绑定远程来源时直接回退到作者主页。 */
 async function visitPluginPage() {
   const popup = window.open('about:blank', '_blank')
-  let pluginDetail = await fetchInstalledPluginDetail()
+  const pluginDetail = await fetchInstalledPluginDetail()
 
   if (popup) popup.opener = null
-
-  if (!hasRemoteRepoUrl(pluginDetail)) {
-    const marketPlugin = await fetchMarketPlugin(props.plugin?.id)
-
-    if (marketPlugin) {
-      // 插件市场条目通常包含真实仓库地址，优先使用它来对齐市场卡片跳转。
-      pluginDetail = { ...(pluginDetail || {}), ...marketPlugin } as Plugin
-    }
-  }
 
   const repoUrl = resolvePluginPageUrl(pluginDetail)
 

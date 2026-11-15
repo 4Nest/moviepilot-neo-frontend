@@ -1,6 +1,7 @@
 <script lang="ts" setup>
+import { nextTick } from 'vue'
 import type { SharedDialogEntry } from '@/composables/useSharedDialog'
-import { closeSharedDialog, useSharedDialog } from '@/composables/useSharedDialog'
+import { closeSharedDialog, isSharedDialogActive, useSharedDialog } from '@/composables/useSharedDialog'
 
 const { dialogs } = useSharedDialog()
 type ReadonlySharedDialogEntry = Readonly<SharedDialogEntry> & {
@@ -9,18 +10,20 @@ type ReadonlySharedDialogEntry = Readonly<SharedDialogEntry> & {
   readonly props: Readonly<SharedDialogEntry['props']>
 }
 
-// 关闭弹窗并同步组件自身的 v-model 状态。
+/** 等待当前同步保存事件发完再释放实例，避免先关闭的弹窗丢失 save/done 回调。 */
 function closeEntry(entry: ReadonlySharedDialogEntry) {
-  closeSharedDialog(entry.id)
+  void nextTick(() => closeSharedDialog(entry.id))
 }
 
-// 处理弹窗内部 v-model 变化，用户点击遮罩或返回键关闭时也能释放实例。
+/** 模型关闭沿用延迟释放；身份切换或登出仍由 clearSharedDialogs 同步撤销回调。 */
 function handleModelUpdate(entry: ReadonlySharedDialogEntry, value: boolean) {
-  if (!value) closeSharedDialog(entry.id)
+  if (!value) closeEntry(entry)
 }
 
-// 转发业务事件给调用方，并按配置自动关闭当前弹窗。
+/** 仅转发有效弹窗的业务事件，并按配置调度关闭。 */
 function handleDialogEvent(entry: ReadonlySharedDialogEntry, eventName: string, args: any[]) {
+  if (!isSharedDialogActive(entry.id)) return
+
   entry.events[eventName]?.(...args)
 
   if (entry.closeOn.includes(eventName) && (eventName !== 'update:modelValue' || args[0] === false)) {
@@ -28,11 +31,12 @@ function handleDialogEvent(entry: ReadonlySharedDialogEntry, eventName: string, 
   }
 }
 
-// 生成动态组件事件监听器，让不同业务弹窗复用同一个 Host。
+/** 生成动态组件事件监听器，统一模型关闭和业务事件的生命周期。 */
 function createDialogListeners(entry: ReadonlySharedDialogEntry) {
   const listeners: Record<string, (...args: any[]) => void> = {}
 
   listeners['update:modelValue'] = value => {
+    if (!isSharedDialogActive(entry.id)) return
     handleModelUpdate(entry, Boolean(value))
     entry.events['update:modelValue']?.(value)
   }

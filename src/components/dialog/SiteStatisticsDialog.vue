@@ -278,7 +278,11 @@ onMounted(() => {
                       <div v-if="item.stats.circuit_until">
                         {{ t('site.circuitUntil', { time: item.stats.circuit_until }) }}
                       </div>
-                      <div v-if="item.stats.last_error">
+                      <div
+                        v-if="item.stats.last_error"
+                        class="site-last-error text-truncate"
+                        :title="item.stats.last_error"
+                      >
                         {{ t('site.circuitLastError', { reason: item.stats.last_error }) }}
                       </div>
                       <div>
@@ -290,7 +294,7 @@ onMounted(() => {
                 </div>
 
                 <!-- 右侧：统计信息 -->
-                <div class="d-flex align-center gap-4">
+                <div class="d-flex align-center gap-4 flex-shrink-0 ms-3">
                   <!-- 平均耗时 -->
                   <div class="text-center">
                     <div class="text-h6 font-weight-bold" :class="`text-${getTimeColor(item.stats?.seconds)}`">
@@ -434,6 +438,10 @@ onMounted(() => {
 
 .site-item:hover {
   background: var(--v-theme-surface-variant);
+}
+
+.site-last-error {
+  max-inline-size: min(32rem, 100%);
 }
 
 .status-indicator {

@@ -121,14 +121,6 @@ const SubscribeListViewStub = defineComponent({
   },
 })
 
-const SubscribePopularViewStub = defineComponent({
-  name: 'SubscribePopularView',
-  props: { type: String },
-  setup(props) {
-    return () => h('section', { 'aria-label': 'popular subscription stub' }, props.type ?? '')
-  },
-})
-
 const SubscribeShareViewStub = defineComponent({
   name: 'SubscribeShareView',
   props: { keyword: String },
@@ -168,6 +160,7 @@ interface RenderSubscribeOptions {
   appMode?: boolean
   initialRoute?: string
   subType?: '电影' | '电视剧'
+  superUser?: boolean
 }
 
 async function renderSubscribe(options: RenderSubscribeOptions = {}) {
@@ -177,10 +170,14 @@ async function renderSubscribe(options: RenderSubscribeOptions = {}) {
   return renderWithProviders(SubscribePage, {
     initialRoute: options.initialRoute ?? `/subscribe/${subType === '电影' ? 'movie' : 'tv'}`,
     initialRouteMeta: { subType },
+    initialState: {
+      user: {
+        superUser: options.superUser ?? true,
+      },
+    },
     global: {
       stubs: {
         SubscribeListView: SubscribeListViewStub,
-        SubscribePopularView: SubscribePopularViewStub,
         SubscribeShareView: SubscribeShareViewStub,
       },
     },
@@ -350,12 +347,44 @@ describe('subscribe page', () => {
     await renderSubscribe({ appMode: true, subType: '电视剧' })
     await fireEvent.click(screen.getByRole('button', { name: 'publish batch selection' }))
 
-    getHeaderConfig().modelValue.value = 'popular'
+    getHeaderConfig().modelValue.value = 'share'
     await nextTick()
 
     expect(getListOutput('last list command')).toHaveTextContent('exit-batch')
     expect(getListOutput('list active state')).toHaveTextContent('false')
     expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-clipboard-edit-outline')
+  })
+
+  it('falls back to the default visible tab and never mounts SubscribeShareView when a non-superuser visits ?tab=share', async () => {
+    const { router } = await renderSubscribe({
+      initialRoute: '/subscribe/tv?tab=share',
+      subType: '电视剧',
+      superUser: false,
+    })
+
+    const header = getHeaderConfig()
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
+    expect(header.modelValue.value).toBe('mysub')
+    expect(getListOutput('list active state')).toHaveTextContent('true')
+    expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
+
+    await router.push('/subscribe/tv?tab=unknown')
+    await nextTick()
+    expect(header.modelValue.value).toBe('mysub')
+    expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
+  })
+
+  it('rejects ?tab=share on the movie subscription page where share is not a visible tab', async () => {
+    await renderSubscribe({
+      initialRoute: '/subscribe/movie?tab=share',
+      subType: '电影',
+      superUser: true,
+    })
+
+    const header = getHeaderConfig()
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
+    expect(header.modelValue.value).toBe('mysub')
+    expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
   })
 
   it('exposes history and default-rule actions on desktop and PWA', async () => {

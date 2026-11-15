@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { debounce } from 'lodash-es'
+import { useNow } from '@vueuse/core'
 import { useToast } from 'vue-toastification'
 import api from '@/api'
 import type { StorageConf, TransferHistory } from '@/api/types'
@@ -41,6 +42,9 @@ const { appMode } = usePWA()
 
 // 计算列表可用高度
 const { availableHeight } = useAvailableHeight(135, 300)
+const desktopHistoryCardRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
+let displayedDesktopQueryKey: string | undefined
+let historyViewActive = true
 
 // 提示框
 const $toast = useToast()
@@ -449,7 +453,9 @@ watch(isDesktop, desktop => {
 
 // 获取历史记录数据，keep-alive 重新进入时可静默刷新，避免表格出现重新加载感。
 async function fetchData(page = currentPage.value, count = itemsPerPage.value, options: { silent?: boolean } = {}) {
+  if (!historyViewActive) return
   const requestSeed = ++fetchDataRequestSeed
+  const queryKey = JSON.stringify([page, count, search.value ?? ''])
   const shouldShowLoading = !options.silent
   if (shouldShowLoading) {
     loading.value = true
@@ -472,6 +478,13 @@ async function fetchData(page = currentPage.value, count = itemsPerPage.value, o
     totalItems.value = ensureNumber(result.data?.total, 0)
     updateSearchHintList(list)
 
+    // 等新数据和虚拟列表更新后再归零；同页刷新及 KeepAlive 返回保留阅读位置。
+    await nextTick()
+    if (historyViewActive && isDesktop.value && requestSeed === fetchDataRequestSeed) {
+      if (displayedDesktopQueryKey !== queryKey) resetDesktopHistoryScroll()
+      displayedDesktopQueryKey = queryKey
+    }
+
     return {
       list,
       total: totalItems.value,
@@ -484,6 +497,14 @@ async function fetchData(page = currentPage.value, count = itemsPerPage.value, o
       loading.value = false
     }
   }
+}
+
+/** 重置虚拟表格自身的滚动位置，让新一页或新查询从首条记录开始显示。 */
+function resetDesktopHistoryScroll() {
+  const rootEl =
+    desktopHistoryCardRef.value instanceof HTMLElement ? desktopHistoryCardRef.value : desktopHistoryCardRef.value?.$el
+  const viewport = rootEl?.querySelector<HTMLElement>('.v-table__wrapper')
+  if (viewport) viewport.scrollTop = 0
 }
 
 // 更新搜索建议，移动端追加加载时会合并已加载记录的标题。
@@ -984,22 +1005,55 @@ function getHistoryStatusText(item: TransferHistory) {
   return item.status ? t('transferHistory.status.success') : t('transferHistory.status.failed')
 }
 
-// 将历史记录时间压缩成移动端卡片展示文本。
+// 共享时钟每分钟驱动相对日期更新，避免跨自然日后停留在旧的“今天/昨天”文案。
+const historyTimeNow = useNow({ interval: 60000 })
+
+/**
+ * 解析展示用日期时间：无时区整理记录按浏览器本地时间解释，ISO 时区偏移与毫秒保持不变。
+ * 空值、日历越界或无法解析的文本返回 null，由调用方保留原始文本。
+ */
+function parseDisplayDate(value?: string): Date | null {
+  if (!value) return null
+
+  const normalized = value.trim().replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T')
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})T/.exec(normalized)
+  if (dateMatch) {
+    const year = Number(dateMatch[1])
+    const month = Number(dateMatch[2])
+    const day = Number(dateMatch[3])
+    const utcProbe = new Date(Date.UTC(year, month - 1, day))
+    if (utcProbe.getUTCFullYear() !== year || utcProbe.getUTCMonth() + 1 !== month || utcProbe.getUTCDate() !== day) {
+      return null
+    }
+  }
+
+  const date = new Date(normalized)
+  return Number.isFinite(date.getTime()) ? date : null
+}
+
+/**
+ * 将有效日期的浏览器本地年月日编码为连续自然日序号，不受夏令时的 23/25 小时影响。
+ */
+function getLocalCalendarDay(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000
+}
+
+// 按浏览器本地自然日压缩移动端卡片时间，无法解析时保留原文本。
 function getHistoryDateText(date?: string) {
   if (!date) return ''
 
-  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/)
-  if (!match) return date
+  const recordDate = parseDisplayDate(date)
+  if (!recordDate) return date
 
-  const [, year, month, day, hour, minute] = match
-  const recordDate = new Date(Number(year), Number(month) - 1, Number(day))
-  const today = new Date()
-  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const diffDays = Math.round((todayDate.getTime() - recordDate.getTime()) / 86400000)
+  const diffDays = getLocalCalendarDay(recordDate) - getLocalCalendarDay(historyTimeNow.value)
+  const month = String(recordDate.getMonth() + 1).padStart(2, '0')
+  const day = String(recordDate.getDate()).padStart(2, '0')
+  const hour = String(recordDate.getHours()).padStart(2, '0')
+  const minute = String(recordDate.getMinutes()).padStart(2, '0')
   const time = `${hour}:${minute}`
 
   if (diffDays === 0) return `今天 ${time}`
-  if (diffDays === 1) return `昨天 ${time}`
+  if (diffDays === -1) return `昨天 ${time}`
 
   return `${month}-${day} ${time}`
 }
@@ -1267,6 +1321,7 @@ onActivated(() => {
 })
 
 onUnmounted(() => {
+  historyViewActive = false
   debouncedReloadPage.cancel()
   debouncedReloadSearchPage.cancel()
   debouncedReloadMobileSearchPage.cancel()
@@ -1275,7 +1330,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VCard v-if="isDesktop">
+  <VCard v-if="isDesktop" ref="desktopHistoryCardRef">
     <VCardItem>
       <VCardTitle>
         <VRow>
@@ -1383,8 +1438,8 @@ onUnmounted(() => {
             <span v-if="item.type === '电视剧'" class="d-block text-high-emphasis min-w-20">
               <template v-if="!group">{{ item?.title }} </template>{{ item?.seasons }}{{ item?.episodes }}
             </span>
-            <span v-else-if="!group" class="d-block text-high-emphasis min-w-20">
-              {{ item?.title }}
+            <span v-else class="d-block text-high-emphasis min-w-20">
+              {{ item?.title || item?.year || item?.type }}
             </span>
             <small>{{ item?.category }}</small>
           </div>
@@ -1454,15 +1509,7 @@ onUnmounted(() => {
       <div class="transfer-history-pagination__info w-auto text-sm">
         {{ t('transferHistory.pageInfo', pageTip) }}
       </div>
-      <VPagination
-        v-model="currentPage"
-        show-first-last-page
-        :length="totalPage"
-        :total-visible="7"
-        @next="currentPage + 1"
-        @prev="currentPage - 1"
-      >
-      </VPagination>
+      <VPagination v-model="currentPage" show-first-last-page :length="totalPage" :total-visible="7" />
     </div>
   </VCard>
 

@@ -84,8 +84,8 @@ async function loadDownloaderSetting() {
   }
 }
 
-// 解析站点扩展配置对象
-function parseSiteNoteObject(rawNote: Site['note']): Record<string, unknown> {
+// 解析站点扩展配置字典；普通字符串、数组或空值返回 null，避免误覆盖原有备注。
+function parseSiteNoteObject(rawNote: Site['note']): Record<string, unknown> | null {
   if (rawNote && typeof rawNote === 'object' && !Array.isArray(rawNote)) {
     return { ...rawNote }
   }
@@ -96,18 +96,18 @@ function parseSiteNoteObject(rawNote: Site['note']): Record<string, unknown> {
         return { ...parsed }
       }
     } catch {
-      return {}
+      return null
     }
   }
-  return {}
+  return null
 }
 
-// 将单站点健康预警通知开关写回 note 扩展配置
+// 将单站点健康预警通知开关安全写回 note 扩展配置
 function syncSentinelAlertToNote() {
   const noteObj = parseSiteNoteObject(siteForm.value.note)
   if (!sentinelAlert.value) {
-    siteForm.value.note = { ...noteObj, sentinel_alert: false }
-  } else if (siteForm.value.note != null) {
+    siteForm.value.note = { ...(noteObj ?? {}), sentinel_alert: false }
+  } else if (noteObj !== null && 'sentinel_alert' in noteObj) {
     delete noteObj.sentinel_alert
     siteForm.value.note = noteObj
   }
@@ -120,7 +120,7 @@ async function fetchSiteInfo() {
     siteForm.value.proxy = siteForm.value.proxy === 1
     siteForm.value.render = siteForm.value.render === 1
     const noteObj = parseSiteNoteObject(siteForm.value.note)
-    sentinelAlert.value = noteObj.sentinel_alert !== false
+    sentinelAlert.value = noteObj?.sentinel_alert !== false
   } catch (error) {
     console.error(error)
   }
