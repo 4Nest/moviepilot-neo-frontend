@@ -1121,6 +1121,8 @@ export default {
       page: '本页搜索情况',
       search: '本次搜索情况',
       counts: '候选 {candidates} · 保留 {retained}',
+      effectiveRules: '已应用：{names}',
+      skippedRules: '未适用规则（类型或分类不符）',
       rawCount: '（返回 {count} 个）',
       success: '已完成',
       empty: '已完成，无资源',
@@ -1170,6 +1172,7 @@ export default {
       },
       warnings: {
         rule_group_not_applicable: '规则“{name}”未应用：类型或分类不符',
+        rule_groups_not_applicable_more: '规则“{names}”等 {count} 项未应用：类型或分类不符',
         rule_group_missing: '规则“{name}”不存在',
         rule_id_invalid: '规则组“{name}”引用了无效的规则 ID：{ids}，请改用英文字母和数字（至少包含一个字母）',
         rule_id_missing: '规则组“{name}”引用的规则 ID 不存在：{ids}，请修复引用',

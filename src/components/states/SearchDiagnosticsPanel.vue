@@ -13,7 +13,34 @@ const { t } = useI18n()
 // 搜索诊断属于辅助信息，首次展示仅保留摘要，详细来源由用户主动展开。
 const expanded = ref(false)
 const detailsId = useId()
-const hasDetails = computed(() => props.diagnostics.searched_sites.length || props.diagnostics.rejection_reasons.length)
+const effectiveRuleNames = computed(() =>
+  Array.from(
+    new Set(
+      props.diagnostics.rule_groups
+        .filter(group => group.status === 'effective' && group.name)
+        .map(group => group.name),
+    ),
+  ),
+)
+const routedOutRuleNames = computed(() => {
+  if (!effectiveRuleNames.value.length) return []
+  const fromGroups = props.diagnostics.rule_groups
+    .filter(group => group.status === 'skipped' && group.reason === 'rule_group_not_applicable' && group.name)
+    .map(group => group.name)
+  const source = fromGroups.length
+    ? fromGroups
+    : props.diagnostics.warnings
+        .filter(warning => warning.code === 'rule_group_not_applicable' && warning.rule_group)
+        .map(warning => warning.rule_group as string)
+  return Array.from(new Set(source))
+})
+const hasDetails = computed(() =>
+  Boolean(
+    props.diagnostics.searched_sites.length ||
+    props.diagnostics.rejection_reasons.length ||
+    routedOutRuleNames.value.length,
+  ),
+)
 const reasonCodes = new Set([
   'filter_params',
   'filter_rules',
@@ -33,6 +60,44 @@ const warningCodes: Record<string, true> = {
   provider_circuit_open: true,
   provider_outcome_unknown: true,
 }
+const displayWarnings = computed<string[]>(() => {
+  const hasEffective = effectiveRuleNames.value.length > 0
+  const notApplicableNames: string[] = []
+  const messages: string[] = []
+  let notApplicableIndex = -1
+
+  for (const warning of props.diagnostics.warnings) {
+    if (warning.code === 'rule_group_not_applicable') {
+      if (hasEffective) continue
+      if (notApplicableIndex === -1) {
+        notApplicableIndex = messages.length
+        messages.push('')
+      }
+      notApplicableNames.push(warning.rule_group || t('resource.diagnostics.unnamedRule'))
+      continue
+    }
+    messages.push(
+      t(`resource.diagnostics.warnings.${warningCodes[warning.code] ? warning.code : 'other'}`, {
+        name: warning.rule_group || t('resource.diagnostics.unnamedRule'),
+        ids: (warning.rule_ids ?? []).join('、'),
+      }),
+    )
+  }
+
+  if (notApplicableIndex !== -1) {
+    const uniqueNames = Array.from(new Set(notApplicableNames))
+    messages[notApplicableIndex] =
+      uniqueNames.length > 3
+        ? t('resource.diagnostics.warnings.rule_groups_not_applicable_more', {
+            names: uniqueNames.slice(0, 3).join('、'),
+            count: uniqueNames.length,
+          })
+        : t('resource.diagnostics.warnings.rule_group_not_applicable', {
+            name: uniqueNames.join('、'),
+          })
+  }
+  return messages
+})
 </script>
 
 <template>
@@ -42,6 +107,9 @@ const warningCodes: Record<string, true> = {
       <div class="search-diagnostics__summary">
         <span>{{ t(`resource.diagnostics.${diagnostics.scope}`) }}</span>
         <span class="search-diagnostics__counts">{{ t('resource.diagnostics.counts', diagnostics.stage_counts) }}</span>
+        <span v-if="effectiveRuleNames.length" class="search-diagnostics__effective">
+          {{ t('resource.diagnostics.effectiveRules', { names: effectiveRuleNames.join('、') }) }}
+        </span>
       </div>
       <VBtn
         v-if="rejectedCount > 0"
@@ -115,19 +183,16 @@ const warningCodes: Record<string, true> = {
             </li>
           </ul>
         </div>
+        <div v-if="routedOutRuleNames.length" class="search-diagnostics__skipped-rules">
+          <p class="search-diagnostics__label">{{ t('resource.diagnostics.skippedRules') }}</p>
+          <p class="search-diagnostics__skipped-text">{{ routedOutRuleNames.join('、') }}</p>
+        </div>
       </div>
     </VExpandTransition>
-    <div v-if="diagnostics.warnings.length" class="search-diagnostics__notes">
-      <p v-for="(warning, index) in diagnostics.warnings" :key="index" class="search-diagnostics__note">
+    <div v-if="displayWarnings.length" class="search-diagnostics__notes">
+      <p v-for="(message, index) in displayWarnings" :key="index" class="search-diagnostics__note">
         <VIcon icon="mdi-information-outline" size="15" class="search-diagnostics__icon" />
-        <span>
-          {{
-            t(`resource.diagnostics.warnings.${warningCodes[warning.code] ? warning.code : 'other'}`, {
-              name: warning.rule_group || t('resource.diagnostics.unnamedRule'),
-              ids: (warning.rule_ids ?? []).join('、'),
-            })
-          }}
-        </span>
+        <span>{{ message }}</span>
       </p>
     </div>
   </section>
@@ -160,7 +225,8 @@ const warningCodes: Record<string, true> = {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
-  gap: 0 10px;
+  align-items: center;
+  gap: 4px 10px;
   min-inline-size: 0;
 }
 
@@ -172,6 +238,25 @@ const warningCodes: Record<string, true> = {
   font-weight: 600;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.search-diagnostics__effective {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.search-diagnostics__skipped-rules {
+  grid-column: 1 / -1;
+}
+
+.search-diagnostics__skipped-text {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  overflow-wrap: anywhere;
 }
 
 .search-diagnostics__toggle {

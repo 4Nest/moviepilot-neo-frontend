@@ -133,4 +133,59 @@ describe('SearchDiagnosticsPanel', () => {
     expect(panel).toHaveTextContent('还有其他搜索提示')
     expect(panel.querySelector('img')).toBeNull()
   })
+
+  it('shows effective rules in header and tucks category-routed skipped rules into details without spamming warnings', async () => {
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.scope = 'search'
+    diagnostics.stage_counts = { candidates: 76, retained: 54 }
+    diagnostics.searched_sites = []
+    diagnostics.rule_groups = [
+      {
+        name: '动画电影',
+        status: 'skipped',
+        reason: 'rule_group_not_applicable',
+        media_type: '电影',
+        categories: ['动画电影'],
+      },
+      {
+        name: '国产剧',
+        status: 'skipped',
+        reason: 'rule_group_not_applicable',
+        media_type: '电视剧',
+        categories: ['国产剧'],
+      },
+      { name: '日韩剧', status: 'effective', reason: null, media_type: '电视剧', categories: ['日韩剧'] },
+      { name: '旧规则', status: 'skipped', reason: 'rule_group_missing', media_type: null, categories: [] },
+    ]
+    diagnostics.warnings = [
+      { code: 'rule_group_not_applicable', rule_group: '动画电影' },
+      { code: 'rule_group_not_applicable', rule_group: '国产剧' },
+      { code: 'rule_group_missing', rule_group: '旧规则' },
+    ]
+
+    await renderWithProviders(SearchDiagnosticsPanel, { props: { diagnostics } })
+    const panel = screen.getByRole('status', { name: '本次搜索情况' })
+    expect(panel).toHaveTextContent('候选 76 · 保留 54')
+    expect(panel).toHaveTextContent('已应用：日韩剧')
+    expect(panel).not.toHaveTextContent('类型或分类不符')
+    expect(panel).toHaveTextContent('规则“旧规则”不存在')
+
+    await fireEvent.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(panel).toHaveTextContent('未适用规则（类型或分类不符）')
+    expect(panel).toHaveTextContent('动画电影、国产剧')
+  })
+
+  it('collapses multiple non-applicable rule warnings into a single summary line when no rule is effective', async () => {
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.rule_groups = []
+    diagnostics.warnings = ['动画电影', '华语电影', '外语电影', '日番', '欧美剧'].map(name => ({
+      code: 'rule_group_not_applicable',
+      rule_group: name,
+    }))
+
+    await renderWithProviders(SearchDiagnosticsPanel, { props: { diagnostics } })
+    const panel = screen.getByRole('status')
+    expect(panel).toHaveTextContent('规则“动画电影、华语电影、外语电影”等 5 项未应用：类型或分类不符')
+    expect(panel).not.toHaveTextContent('日番')
+  })
 })
