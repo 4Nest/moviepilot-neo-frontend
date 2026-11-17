@@ -6,7 +6,7 @@ import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   id: {
     type: String,
     required: true,
@@ -16,6 +16,8 @@ defineProps({
     required: true,
   },
 })
+
+const nodeData = computed(() => props.data)
 
 // 电影/电视剧下拉框
 const typeOptions = ref([
@@ -88,7 +90,7 @@ onMounted(() => {
         <VRow>
           <VCol cols="12">
             <VSelect
-              v-model="data.search_type"
+              v-model="nodeData.search_type"
               :label="t('workflow.fetchTorrents.searchType')"
               :items="searchOptions"
               outlined
@@ -96,16 +98,16 @@ onMounted(() => {
             />
           </VCol>
         </VRow>
-        <VRow v-if="data.search_type === 'keyword'">
+        <VRow v-if="nodeData.search_type === 'keyword'">
           <VCol cols="6">
-            <VTextField v-model="data.name" :label="t('workflow.fetchTorrents.name')" outlined dense />
+            <VTextField v-model="nodeData.name" :label="t('workflow.fetchTorrents.name')" outlined dense />
           </VCol>
           <VCol cols="6">
-            <VTextField v-model="data.year" :label="t('workflow.fetchTorrents.year')" outlined dense />
+            <VTextField v-model="nodeData.year" :label="t('workflow.fetchTorrents.year')" outlined dense />
           </VCol>
           <VCol cols="6">
             <VSelect
-              v-model="data.type"
+              v-model="nodeData.type"
               :label="t('workflow.fetchTorrents.type')"
               :items="typeOptions"
               outlined
@@ -114,7 +116,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="6">
             <VTextField
-              v-model="data.season"
+              v-model="nodeData.season"
               type="number"
               :label="t('workflow.fetchTorrents.season')"
               outlined
@@ -125,7 +127,7 @@ onMounted(() => {
         <VRow>
           <VCol cols="12">
             <VSelect
-              v-model="data.sites"
+              v-model="nodeData.sites"
               :label="t('workflow.fetchTorrents.sites')"
               :items="siteOptions"
               chips
@@ -136,9 +138,30 @@ onMounted(() => {
             />
           </VCol>
         </VRow>
-        <VRow v-if="data.search_type === 'keyword'">
-          <VCol cols="12">
-            <VSwitch v-model="data.match_media" :label="t('workflow.fetchTorrents.matchMedia')" />
+        <VRow>
+          <VCol v-if="nodeData.search_type === 'keyword'" cols="12" class="py-1">
+            <VSwitch
+              v-model="nodeData.match_media"
+              :label="t('workflow.fetchTorrents.matchMedia')"
+              hide-details
+              density="compact"
+            />
+          </VCol>
+          <VCol cols="12" class="py-1">
+            <div class="d-flex align-center">
+              <VSwitch
+                v-model="nodeData.only_new"
+                :label="t('workflow.fetchTorrents.onlyNew')"
+                hide-details
+                density="compact"
+              />
+              <VTooltip location="top" max-width="260">
+                <template #activator="{ props: tipProps }">
+                  <VIcon v-bind="tipProps" icon="mdi-help-circle-outline" size="16" class="ms-1 text-medium-emphasis" />
+                </template>
+                <span>{{ t('workflow.fetchTorrents.onlyNewHint') }}</span>
+              </VTooltip>
+            </div>
           </VCol>
         </VRow>
       </VCardText>

@@ -4,7 +4,7 @@ import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   id: {
     type: String,
     required: true,
@@ -14,6 +14,8 @@ defineProps({
     required: true,
   },
 })
+
+const nodeData = computed(() => props.data)
 </script>
 <template>
   <div>
@@ -32,14 +34,14 @@ defineProps({
       <VCardText>
         <VRow>
           <VCol cols="12">
-            <VTextField v-model="data.url" :label="t('workflow.fetchRss.url')" outlined dense clearable />
+            <VTextField v-model="nodeData.url" :label="t('workflow.fetchRss.url')" outlined dense clearable />
           </VCol>
           <VCol cols="12">
-            <VTextField v-model="data.ua" :label="t('workflow.fetchRss.userAgent')" outlined dense clearable />
+            <VTextField v-model="nodeData.ua" :label="t('workflow.fetchRss.userAgent')" outlined dense clearable />
           </VCol>
           <VCol cols="12">
             <VTextField
-              v-model="data.timeout"
+              v-model="nodeData.timeout"
               type="number"
               :label="t('workflow.fetchRss.timeout')"
               outlined
@@ -47,11 +49,32 @@ defineProps({
               clearable
             />
           </VCol>
-          <VCol cols="6">
-            <VSwitch v-model="data.match_media" :label="t('workflow.fetchRss.matchMedia')" />
+          <VCol cols="6" class="py-1">
+            <VSwitch
+              v-model="nodeData.match_media"
+              :label="t('workflow.fetchRss.matchMedia')"
+              hide-details
+              density="compact"
+            />
           </VCol>
-          <VCol cols="6">
-            <VSwitch v-model="data.proxy" :label="t('workflow.fetchRss.useProxy')" />
+          <VCol cols="6" class="py-1">
+            <VSwitch v-model="nodeData.proxy" :label="t('workflow.fetchRss.useProxy')" hide-details density="compact" />
+          </VCol>
+          <VCol cols="12" class="py-1">
+            <div class="d-flex align-center">
+              <VSwitch
+                v-model="nodeData.only_new"
+                :label="t('workflow.fetchRss.onlyNew')"
+                hide-details
+                density="compact"
+              />
+              <VTooltip location="top" max-width="260">
+                <template #activator="{ props: tipProps }">
+                  <VIcon v-bind="tipProps" icon="mdi-help-circle-outline" size="16" class="ms-1 text-medium-emphasis" />
+                </template>
+                <span>{{ t('workflow.fetchRss.onlyNewHint') }}</span>
+              </VTooltip>
+            </div>
           </VCol>
         </VRow>
       </VCardText>

@@ -652,8 +652,13 @@ export default {
       items: {
         rssAutoDownload: {
           name: 'RSS 订阅过滤自动下载',
-          description: '定时拉取 RSS 订阅源，按规则过滤资源后自动推送下载并发送通知。',
+          description: '定时拉取 RSS 订阅源，启用增量追新跳过历史存量，按规则过滤后自动下载并通知。',
           badge: '资源订阅',
+        },
+        siteGroupChaseNew: {
+          name: '站点官组追新自动下载',
+          description: '按官组/压制组关键字定时搜站，首次静默建立存量基线，后续仅过滤并下载新发布资源。',
+          badge: '官组追新',
         },
         rankingAutoSubscribe: {
           name: '榜单高分影视自动订阅',
@@ -746,6 +751,8 @@ export default {
       forceResume: '强制继续',
       firstLastPiece: '优先首尾文件',
       onlyLack: '仅下载缺失资源',
+      maxDownloads: '单次最大下载数',
+      maxDownloadsPlaceholder: '留空不限（防爆仓上限）',
       categoryPlaceholder: '多个使用,分隔',
       savePathPlaceholder: '留空自动',
     },
@@ -813,6 +820,8 @@ export default {
       timeout: '超时时间',
       matchMedia: '匹配媒体数据',
       useProxy: '使用代理',
+      onlyNew: '增量追新（跳过存量）',
+      onlyNewHint: '首次运行仅记录当前存量种子基线不下载，后续仅放行新发布资源；重置工作流可重建基线',
     },
     fetchTorrents: {
       title: '获取站点资源',
@@ -828,6 +837,8 @@ export default {
       season: '季',
       sites: '站点',
       matchMedia: '匹配媒体数据',
+      onlyNew: '增量追新（跳过存量）',
+      onlyNewHint: '首次运行仅记录当前存量种子基线不下载，后续仅放行新发布资源；重置工作流可重建基线',
     },
     sendMessage: {
       title: '发送消息',
@@ -851,6 +862,8 @@ export default {
       resolution: '分辨率',
       effect: '特效',
       size: '大小范围',
+      maxAgeHours: '发布时效（最近N小时）',
+      maxAgeHoursPlaceholder: '留空不限，如 24',
       include: '包含（关键字、正则式）',
       exclude: '排除（关键字、正则式）',
       ruleGroups: '过滤规则组',

@@ -6,7 +6,7 @@ import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   id: {
     type: String,
     required: true,
@@ -17,6 +17,8 @@ defineProps({
   },
 })
 
+const nodeData = computed(() => props.data)
+
 // 下载器选项
 const downloaderOptions = ref<{ title: string; value: string }[]>([])
 
@@ -26,7 +28,7 @@ async function loadDownloaderSetting() {
     const downloaders: DownloaderConf[] = await api.get('download/clients')
     downloaderOptions.value = [
       { title: t('common.default'), value: '' },
-      ...downloaders.map((item: { name: any }) => ({
+      ...downloaders.map((item: DownloaderConf) => ({
         title: item.name,
         value: item.name,
       })),
@@ -58,7 +60,7 @@ onMounted(() => {
         <VRow>
           <VCol cols="12">
             <VSelect
-              v-model="data.downloader"
+              v-model="nodeData.downloader"
               :items="downloaderOptions"
               :label="t('workflow.addDownload.downloader')"
               outlined
@@ -67,7 +69,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="12">
             <VTextField
-              v-model="data.labels"
+              v-model="nodeData.labels"
               :label="t('workflow.addDownload.category')"
               :placeholder="t('workflow.addDownload.categoryPlaceholder')"
               outlined
@@ -76,7 +78,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="12">
             <VPathField
-              v-model="data.save_path"
+              v-model="nodeData.save_path"
               storage="local"
               :label="t('workflow.addDownload.savePath')"
               clearable
@@ -84,7 +86,24 @@ onMounted(() => {
             />
           </VCol>
           <VCol cols="12">
-            <VSwitch v-model="data.only_lack" :label="t('workflow.addDownload.onlyLack')" />
+            <VTextField
+              v-model="nodeData.max_downloads"
+              type="number"
+              min="1"
+              clearable
+              :label="t('workflow.addDownload.maxDownloads')"
+              :placeholder="t('workflow.addDownload.maxDownloadsPlaceholder')"
+              outlined
+              dense
+            />
+          </VCol>
+          <VCol cols="12" class="py-1">
+            <VSwitch
+              v-model="nodeData.only_lack"
+              :label="t('workflow.addDownload.onlyLack')"
+              hide-details
+              density="compact"
+            />
           </VCol>
         </VRow>
       </VCardText>

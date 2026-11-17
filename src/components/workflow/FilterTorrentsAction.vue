@@ -6,7 +6,7 @@ import { useI18n } from '@/composables/useChineseText'
 import { qualityOptions, resolutionOptions, effectOptions } from '@/api/constants'
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   id: {
     type: String,
     required: true,
@@ -16,6 +16,8 @@ defineProps({
     required: true,
   },
 })
+
+const nodeData = computed(() => props.data)
 
 // 所有规则组列表
 const filterRuleGroups = ref<FilterRuleGroup[]>([])
@@ -60,7 +62,7 @@ onMounted(() => {
         <VRow>
           <VCol cols="6">
             <VSelect
-              v-model="data.quality"
+              v-model="nodeData.quality"
               :label="t('workflow.filterTorrents.quality')"
               :items="qualityOptions"
               outlined
@@ -69,7 +71,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="6">
             <VSelect
-              v-model="data.resolution"
+              v-model="nodeData.resolution"
               :label="t('workflow.filterTorrents.resolution')"
               :items="resolutionOptions"
               outlined
@@ -78,7 +80,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="6">
             <VSelect
-              v-model="data.effect"
+              v-model="nodeData.effect"
               :label="t('workflow.filterTorrents.effect')"
               :items="effectOptions"
               outlined
@@ -87,7 +89,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="6">
             <VTextField
-              v-model="data.size"
+              v-model="nodeData.size"
               :label="t('workflow.filterTorrents.size')"
               placeholder="MB"
               outlined
@@ -95,14 +97,26 @@ onMounted(() => {
             />
           </VCol>
           <VCol cols="12">
-            <VTextField v-model="data.include" :label="t('workflow.filterTorrents.include')" outlined dense />
+            <VTextField
+              v-model="nodeData.max_age_hours"
+              type="number"
+              min="1"
+              clearable
+              :label="t('workflow.filterTorrents.maxAgeHours')"
+              :placeholder="t('workflow.filterTorrents.maxAgeHoursPlaceholder')"
+              outlined
+              dense
+            />
           </VCol>
           <VCol cols="12">
-            <VTextField v-model="data.exclude" :label="t('workflow.filterTorrents.exclude')" outlined dense />
+            <VTextField v-model="nodeData.include" :label="t('workflow.filterTorrents.include')" outlined dense />
+          </VCol>
+          <VCol cols="12">
+            <VTextField v-model="nodeData.exclude" :label="t('workflow.filterTorrents.exclude')" outlined dense />
           </VCol>
           <VCol cols="12">
             <VSelect
-              v-model="data.rule_groups"
+              v-model="nodeData.rule_groups"
               chips
               multiple
               :label="t('workflow.filterTorrents.ruleGroups')"

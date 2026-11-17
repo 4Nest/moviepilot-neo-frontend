@@ -7,12 +7,13 @@ import {
 import { describe, expect, it } from 'vitest'
 
 describe('workflowTemplates library', () => {
-  it('provides all 5 built-in templates with valid DAG coordinates and handles', () => {
+  it('provides all 6 built-in templates with valid DAG coordinates and handles', () => {
     const templates = getWorkflowTemplates(translate)
 
-    expect(templates).toHaveLength(5)
+    expect(templates).toHaveLength(6)
     expect(WORKFLOW_TEMPLATE_DEFINITIONS.map(item => item.id)).toEqual([
       'rss-auto-download',
+      'site-group-chase-new',
       'ranking-auto-subscribe',
       'scan-scrape-transfer',
       'downloads-patrol-transfer',
@@ -51,13 +52,19 @@ describe('workflowTemplates library', () => {
   })
 
   it('clones preset payload cleanly for WorkflowAddEditDialog creation', () => {
-    const [rssTemplate, , scanTemplate, , eventTemplate] = getWorkflowTemplates(translate)
+    const [rssTemplate, chaseTemplate, , scanTemplate, , eventTemplate] = getWorkflowTemplates(translate)
 
     const rssPreset = buildWorkflowPresetFromTemplate(rssTemplate)
     expect(rssPreset.name).toBe('RSS 订阅过滤自动下载')
     expect(rssPreset.trigger_type).toBe('timer')
     expect(rssPreset.timer).toBe('*/30 * * * *')
     expect(rssPreset.actions).toHaveLength(4)
+
+    const chasePreset = buildWorkflowPresetFromTemplate(chaseTemplate)
+    expect(chasePreset.name).toBe('站点官组追新自动下载')
+    expect(chasePreset.actions?.[0]?.data).toMatchObject({ only_new: true, search_type: 'keyword' })
+    expect(chasePreset.actions?.[1]?.data).toMatchObject({ max_age_hours: 72 })
+    expect(chasePreset.actions?.[2]?.data).toMatchObject({ max_downloads: 5 })
 
     const scanPreset = buildWorkflowPresetFromTemplate(scanTemplate)
     const transferNode = scanPreset.actions?.find(
