@@ -113,7 +113,7 @@ describe('WorkflowTaskCard redesign', () => {
     expect(emitted().refresh).toBeUndefined()
   })
 
-  it('maps the generated card icon to the workflow trigger type', async () => {
+  it('maps the generated card icon to the workflow trigger type and displays event filter count', async () => {
     const { container, rerender } = await renderCard()
 
     expect(container.querySelector('[data-workflow-trigger-icon="mdi-hand-pointing-up"]')).toBeInTheDocument()
@@ -128,10 +128,15 @@ describe('WorkflowTaskCard redesign', () => {
 
     await rerender({
       eventTypes: [{ title: '下载完成', value: 'download.completed' }],
-      workflow: createWorkflow({ event_type: 'download.completed', trigger_type: 'event' }),
+      workflow: createWorkflow({
+        event_type: 'download.completed',
+        trigger_type: 'event',
+        event_conditions: { type: { equals: '电影' }, title: { contains: '4K' } },
+      }),
     })
     expect(container.querySelector('[data-workflow-trigger-icon="mdi-calendar-check-outline"]')).toBeInTheDocument()
     expect(screen.getByText('下载完成')).toBeInTheDocument()
+    expect(screen.getByText(/已设 2 项过滤/)).toBeInTheDocument()
   })
 
   it.each([
@@ -192,16 +197,39 @@ describe('WorkflowTaskCard redesign', () => {
     expect(screen.getByText('从未执行')).toBeInTheDocument()
   })
 
-  it('keeps card navigation and enable controls as separate actions', async () => {
-    const { container } = await renderCard({ state: 'P' })
+  it('keeps card navigation, enable, quick-run, execution detail, and clone controls independent', async () => {
+    mocks.apiPost.mockImplementation((url: string) => {
+      if (url.endsWith('/clone')) {
+        return Promise.resolve({ success: true, data: { id: 'workflow-2', name: '扫描和刮削 - 副本' } })
+      }
+      return Promise.resolve({ success: true })
+    })
+    const { container, emitted } = await renderCard({ state: 'P' })
 
     await fireEvent.click(screen.getByRole('button', { name: '启用' }))
     await waitFor(() => expect(mocks.apiPost).toHaveBeenCalledWith('workflow/workflow-1/start'))
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
 
+    // 快捷立即执行按钮
+    await fireEvent.click(screen.getByRole('button', { name: '立即执行' }))
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith('workflow/workflow-1/run?from_begin=true', { from_begin: true }),
+    )
+
+    // 快捷执行详情按钮
+    await fireEvent.click(screen.getByRole('button', { name: '执行详情' }))
+    expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
+
+    // 更多菜单中的复制副本
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    await fireEvent.click(await screen.findByText('复制副本', { exact: true }))
+    await waitFor(() => expect(mocks.apiPost).toHaveBeenCalledWith('workflow/workflow-1/clone'))
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已复制工作流副本：扫描和刮削 - 副本')
+    expect(emitted().refresh).toBeTruthy()
+
+    // 点击卡片本身进入流程编辑
     await fireEvent.click(container.querySelector('.workflow-task-card') as Element)
-    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
-    expect(mocks.openSharedDialog.mock.calls[0][1]).toEqual({ workflow: expect.objectContaining({ id: 'workflow-1' }) })
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledTimes(2))
   })
 
   it('derives all custom card colors and geometry from global theme tokens', () => {

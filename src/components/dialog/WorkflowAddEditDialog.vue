@@ -7,13 +7,22 @@ import api from '@/api'
 import { useDisplay } from 'vuetify'
 import { useI18n } from '@/composables/useChineseText'
 
+interface EventConditionRow {
+  id: string
+  field: string
+  operator: string
+  value: string
+}
+
 // 多语言支持
 const { t } = useI18n()
 
 // 输入参数
 const props = defineProps({
-  // 任务信息
+  // 任务信息（编辑已有工作流时传入）
   workflow: Object as PropType<Workflow>,
+  // 预设模板（从内置模板或导入 JSON 新建工作流时传入）
+  initialTemplate: Object as PropType<Partial<Workflow>>,
 })
 
 // 新增或修改字样
@@ -28,22 +37,123 @@ const display = useDisplay()
 const emit = defineEmits(['save', 'remove', 'close'])
 const saving = ref(false)
 
-// 站点编辑表单数据
-const workflowForm = ref<Workflow>(
-  props.workflow || {
+let conditionRowSeed = 0
+function nextConditionRowId() {
+  return `cond_${++conditionRowSeed}`
+}
+
+// 事件过滤条件行
+const eventConditionRows = ref<EventConditionRow[]>([])
+
+// 反向解析后端 event_conditions 对象为可视化行
+function parseEventConditions(conditions?: Record<string, unknown> | null): EventConditionRow[] {
+  if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) {
+    return []
+  }
+  const rows: EventConditionRow[] = []
+  Object.entries(conditions).forEach(([field, rawRule]) => {
+    const cleanField = String(field || '').trim()
+    if (!cleanField) return
+    if (rawRule && typeof rawRule === 'object' && !Array.isArray(rawRule)) {
+      Object.entries(rawRule).forEach(([operator, expectedValue]) => {
+        if (expectedValue === undefined || expectedValue === null) return
+        rows.push({
+          id: nextConditionRowId(),
+          field: cleanField,
+          operator: String(operator || 'equals'),
+          value: String(expectedValue),
+        })
+      })
+    } else if (rawRule !== undefined && rawRule !== null) {
+      rows.push({
+        id: nextConditionRowId(),
+        field: cleanField,
+        operator: 'equals',
+        value: String(rawRule),
+      })
+    }
+  })
+  return rows
+}
+
+// 将可视化行组装为后端 event_conditions 结构
+function buildEventConditions(): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {}
+  eventConditionRows.value.forEach(row => {
+    const field = String(row.field || '').trim()
+    const operator = String(row.operator || 'equals').trim() || 'equals'
+    const value = String(row.value ?? '').trim()
+    if (!field || !value) return
+    if (!result[field]) {
+      result[field] = {}
+    }
+    result[field][operator] = value
+  })
+  return result
+}
+
+function addEventConditionRow() {
+  eventConditionRows.value.push({
+    id: nextConditionRowId(),
+    field: '',
+    operator: 'equals',
+    value: '',
+  })
+}
+
+function removeEventConditionRow(id: string) {
+  eventConditionRows.value = eventConditionRows.value.filter(row => row.id !== id)
+}
+
+function createInitialForm(): Workflow {
+  if (props.workflow) {
+    return {
+      ...props.workflow,
+      trigger_type: props.workflow.trigger_type || 'timer',
+      execution_config: { ...(props.workflow.execution_config || {}) },
+    }
+  }
+  if (props.initialTemplate) {
+    return {
+      name: props.initialTemplate.name,
+      timer: props.initialTemplate.timer,
+      description: props.initialTemplate.description,
+      trigger_type: props.initialTemplate.trigger_type || 'timer',
+      event_type: props.initialTemplate.event_type,
+      event_conditions: { ...(props.initialTemplate.event_conditions || {}) },
+      actions: props.initialTemplate.actions ? JSON.parse(JSON.stringify(props.initialTemplate.actions)) : undefined,
+      flows: props.initialTemplate.flows ? JSON.parse(JSON.stringify(props.initialTemplate.flows)) : undefined,
+      state: props.initialTemplate.state || 'P',
+      run_count: 0,
+      execution_config: { ...(props.initialTemplate.execution_config || {}) },
+    }
+  }
+  return {
     name: undefined,
     timer: undefined,
     description: undefined,
     trigger_type: 'timer',
     event_type: undefined,
+    event_conditions: {},
     state: 'P',
     run_count: 0,
     execution_config: {},
-  },
+  }
+}
+
+// 表单数据
+const workflowForm = ref<Workflow>(createInitialForm())
+
+// 预设流程统计
+const presetActionCount = computed(() =>
+  !props.workflow && Array.isArray(workflowForm.value.actions) ? workflowForm.value.actions.length : 0,
+)
+const presetFlowCount = computed(() =>
+  !props.workflow && Array.isArray(workflowForm.value.flows) ? workflowForm.value.flows.length : 0,
 )
 
 // 将并发数清洗为正整数，空值表示使用后端默认值
-const normalizePositiveInteger = (value: any) => {
+const normalizePositiveInteger = (value: unknown) => {
   if (value === undefined || value === null || value === '') return undefined
   const numberValue = Number(value)
   if (!Number.isFinite(numberValue) || numberValue < 1) return undefined
@@ -67,12 +177,11 @@ const workflowMaxWorkers = computed<number | null>({
   },
 })
 
-// 监听props变化，处理存量数据
+// 监听props变化，处理存量数据或预设模板
 watch(
-  () => props.workflow,
-  newWorkflow => {
+  () => [props.workflow, props.initialTemplate] as const,
+  ([newWorkflow, newTemplate]) => {
     if (newWorkflow) {
-      // 如果trigger_type为空，默认为timer
       if (!newWorkflow.trigger_type) {
         newWorkflow.trigger_type = 'timer'
       }
@@ -80,6 +189,12 @@ watch(
         ...newWorkflow,
         execution_config: { ...(newWorkflow.execution_config || {}) },
       }
+      eventConditionRows.value = parseEventConditions(newWorkflow.event_conditions)
+    } else if (newTemplate) {
+      workflowForm.value = createInitialForm()
+      eventConditionRows.value = parseEventConditions(newTemplate.event_conditions)
+    } else {
+      eventConditionRows.value = []
     }
   },
   { immediate: true },
@@ -107,6 +222,26 @@ const triggerTypeOptions = computed(() => [
   },
 ])
 
+// 事件过滤字段预设选项
+const conditionFieldOptions = computed(() => [
+  { title: t('dialog.workflowAddEdit.conditionFields.type'), value: 'type' },
+  { title: t('dialog.workflowAddEdit.conditionFields.category'), value: 'category' },
+  { title: t('dialog.workflowAddEdit.conditionFields.title'), value: 'title' },
+  { title: t('dialog.workflowAddEdit.conditionFields.year'), value: 'year' },
+  { title: t('dialog.workflowAddEdit.conditionFields.site_name'), value: 'site_name' },
+  { title: t('dialog.workflowAddEdit.conditionFields.downloader'), value: 'downloader' },
+  { title: t('dialog.workflowAddEdit.conditionFields.username'), value: 'username' },
+])
+
+// 事件过滤操作符选项
+const conditionOperatorOptions = computed(() => [
+  { title: t('dialog.workflowAddEdit.conditionOperators.equals'), value: 'equals' },
+  { title: t('dialog.workflowAddEdit.conditionOperators.not_equals'), value: 'not_equals' },
+  { title: t('dialog.workflowAddEdit.conditionOperators.contains'), value: 'contains' },
+  { title: t('dialog.workflowAddEdit.conditionOperators.not_contains'), value: 'not_contains' },
+  { title: t('dialog.workflowAddEdit.conditionOperators.regex'), value: 'regex' },
+])
+
 // 加载事件类型列表
 async function loadEventTypes() {
   try {
@@ -122,6 +257,8 @@ watch(
   newType => {
     if (newType !== 'event') {
       workflowForm.value.event_type = undefined
+      workflowForm.value.event_conditions = {}
+      eventConditionRows.value = []
     }
   },
 )
@@ -129,8 +266,8 @@ watch(
 // 提示框
 const $toast = useToast()
 
-// 保存前统一清洗工作流执行配置
-function normalizeWorkflowExecutionConfig() {
+// 保存前统一清洗工作流执行配置与事件过滤条件
+function normalizeBeforeSubmit() {
   const executionConfig = { ...(workflowForm.value.execution_config || {}) }
   const maxWorkers = normalizePositiveInteger(executionConfig.max_workers)
   if (maxWorkers) {
@@ -139,33 +276,41 @@ function normalizeWorkflowExecutionConfig() {
     delete executionConfig.max_workers
   }
   workflowForm.value.execution_config = Object.keys(executionConfig).length ? executionConfig : undefined
+
+  if (workflowForm.value.trigger_type === 'event') {
+    workflowForm.value.event_conditions = buildEventConditions()
+  } else {
+    workflowForm.value.event_conditions = {}
+  }
+}
+
+// 校验必填项
+function validateForm() {
+  if (!workflowForm.value.name) {
+    $toast.error(t('dialog.workflowAddEdit.nameRequired'))
+    return false
+  }
+  if (!workflowForm.value.trigger_type) {
+    $toast.error(t('dialog.workflowAddEdit.triggerRequired'))
+    return false
+  }
+  if (workflowForm.value.trigger_type === 'timer' && !workflowForm.value.timer) {
+    $toast.error(t('dialog.workflowAddEdit.timerRequired'))
+    return false
+  }
+  if (workflowForm.value.trigger_type === 'event' && !workflowForm.value.event_type) {
+    $toast.error(t('dialog.workflowAddEdit.eventTypeRequired'))
+    return false
+  }
+  return true
 }
 
 // 调用API 新增任务
 async function addWorkflow() {
   if (saving.value) return
-  if (!workflowForm.value.name) {
-    $toast.error(t('dialog.workflowAddEdit.nameRequired'))
-    return
-  }
+  if (!validateForm()) return
 
-  if (!workflowForm.value.trigger_type) {
-    $toast.error(t('dialog.workflowAddEdit.triggerRequired'))
-    return
-  }
-
-  // 根据触发类型验证必填字段
-  if (workflowForm.value.trigger_type === 'timer' && !workflowForm.value.timer) {
-    $toast.error(t('dialog.workflowAddEdit.timerRequired'))
-    return
-  }
-
-  if (workflowForm.value.trigger_type === 'event' && !workflowForm.value.event_type) {
-    $toast.error(t('dialog.workflowAddEdit.eventTypeRequired'))
-    return
-  }
-
-  normalizeWorkflowExecutionConfig()
+  normalizeBeforeSubmit()
   saving.value = true
   startNProgress()
   try {
@@ -174,7 +319,11 @@ async function addWorkflow() {
       workflowForm.value,
     )
     if (result.success) {
-      $toast.success(t('dialog.workflowAddEdit.addSuccess'))
+      $toast.success(
+        presetActionCount.value > 0
+          ? t('dialog.workflowAddEdit.addWithFlowSuccess')
+          : t('dialog.workflowAddEdit.addSuccess'),
+      )
       emit('save', result.data?.id)
     } else {
       $toast.error(t('dialog.workflowAddEdit.addFailed', { message: result.message }))
@@ -189,28 +338,9 @@ async function addWorkflow() {
 
 // 调用API 编辑任务
 async function editWorkflow() {
-  if (!workflowForm.value.name) {
-    $toast.error(t('dialog.workflowAddEdit.nameRequired'))
-    return
-  }
+  if (!validateForm()) return
 
-  if (!workflowForm.value.trigger_type) {
-    $toast.error(t('dialog.workflowAddEdit.triggerRequired'))
-    return
-  }
-
-  // 根据触发类型验证必填字段
-  if (workflowForm.value.trigger_type === 'timer' && !workflowForm.value.timer) {
-    $toast.error(t('dialog.workflowAddEdit.timerRequired'))
-    return
-  }
-
-  if (workflowForm.value.trigger_type === 'event' && !workflowForm.value.event_type) {
-    $toast.error(t('dialog.workflowAddEdit.eventTypeRequired'))
-    return
-  }
-
-  normalizeWorkflowExecutionConfig()
+  normalizeBeforeSubmit()
   startNProgress()
   try {
     const result: { [key: string]: string } = await api.put(`workflow/${workflowForm.value.id}`, workflowForm.value)
@@ -233,7 +363,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog scrollable :close-on-back="false" eager max-width="30rem" :fullscreen="!display.mdAndUp.value">
+  <VDialog scrollable :close-on-back="false" eager max-width="38rem" :fullscreen="!display.mdAndUp.value">
     <VCard>
       <VCardItem>
         <template #prepend>
@@ -244,6 +374,22 @@ onMounted(() => {
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
       <VCardText>
+        <VAlert
+          v-if="presetActionCount > 0"
+          type="info"
+          variant="tonal"
+          density="compact"
+          icon="mdi-auto-fix"
+          class="mb-4"
+        >
+          {{
+            t('dialog.workflowAddEdit.presetFlowBanner', {
+              actionCount: presetActionCount,
+              flowCount: presetFlowCount,
+            })
+          }}
+        </VAlert>
+
         <VForm @submit.prevent="() => {}">
           <VRow>
             <VCol cols="12">
@@ -299,6 +445,77 @@ onMounted(() => {
                 prepend-inner-icon="mdi-calendar-check"
               />
             </VCol>
+
+            <!-- 事件过滤条件可视化配置 -->
+            <VCol v-if="workflowForm.trigger_type === 'event'" cols="12">
+              <div class="workflow-event-conditions">
+                <div class="workflow-event-conditions__header">
+                  <div>
+                    <div class="workflow-event-conditions__title">
+                      <VIcon icon="mdi-filter-variant" size="18" />
+                      <span>{{ t('dialog.workflowAddEdit.eventConditionsTitle') }}</span>
+                    </div>
+                    <div class="workflow-event-conditions__hint">
+                      {{ t('dialog.workflowAddEdit.eventConditionsHint') }}
+                    </div>
+                  </div>
+                  <VBtn
+                    color="primary"
+                    variant="tonal"
+                    size="small"
+                    prepend-icon="mdi-plus"
+                    @click="addEventConditionRow"
+                  >
+                    {{ t('dialog.workflowAddEdit.addCondition') }}
+                  </VBtn>
+                </div>
+
+                <div v-if="eventConditionRows.length > 0" class="workflow-event-conditions__rows">
+                  <div v-for="row in eventConditionRows" :key="row.id" class="workflow-event-conditions__row">
+                    <VCombobox
+                      v-model="row.field"
+                      :items="conditionFieldOptions"
+                      item-title="title"
+                      item-value="value"
+                      :return-object="false"
+                      :label="t('dialog.workflowAddEdit.conditionField')"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      class="workflow-event-conditions__field"
+                    />
+                    <VSelect
+                      v-model="row.operator"
+                      :items="conditionOperatorOptions"
+                      item-title="title"
+                      item-value="value"
+                      :label="t('dialog.workflowAddEdit.conditionOperator')"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      class="workflow-event-conditions__operator"
+                    />
+                    <VTextField
+                      v-model="row.value"
+                      :label="t('dialog.workflowAddEdit.conditionValue')"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      class="workflow-event-conditions__value"
+                    />
+                    <IconBtn
+                      size="small"
+                      color="error"
+                      :aria-label="t('common.delete')"
+                      @click="removeEventConditionRow(row.id)"
+                    >
+                      <VIcon icon="mdi-delete-outline" size="18" />
+                    </IconBtn>
+                  </div>
+                </div>
+              </div>
+            </VCol>
+
             <VCol cols="12">
               <VTextarea
                 v-model="workflowForm.description"
@@ -347,3 +564,72 @@ onMounted(() => {
     </VCard>
   </VDialog>
 </template>
+
+<style scoped lang="scss">
+.workflow-event-conditions {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: var(--app-control-radius);
+  background: rgba(var(--v-theme-on-surface), 0.025);
+  gap: 12px;
+}
+
+.workflow-event-conditions__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workflow-event-conditions__title {
+  display: flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.workflow-event-conditions__hint {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  margin-block-start: 2px;
+}
+
+.workflow-event-conditions__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-event-conditions__row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.9fr) minmax(120px, 1.2fr) auto;
+}
+
+@media (width <= 600px) {
+  .workflow-event-conditions__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workflow-event-conditions__row {
+    padding: 8px;
+    border-radius: var(--app-control-radius);
+    background: rgba(var(--v-theme-surface), 0.5);
+    grid-template-columns: 1fr auto;
+  }
+
+  .workflow-event-conditions__field {
+    grid-column: 1 / -1;
+  }
+
+  .workflow-event-conditions__operator {
+    grid-column: 1 / -1;
+  }
+}
+</style>

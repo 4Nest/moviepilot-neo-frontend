@@ -1941,6 +1941,82 @@ export interface SiteCategory {
   desc: string
 }
 
+// 工作流模拟场景
+export type WorkflowSimulationScenario = 'normal' | 'empty_source' | 'empty_filter'
+
+// 工作流模拟节点结果
+export interface WorkflowSimulationNodeResult {
+  id: string
+  name: string
+  type: string
+  state: 'success' | 'failed' | 'skipped' | 'unreached'
+  message: string
+  outputs_summary: Record<string, number>
+  step?: number
+}
+
+// 工作流模拟连线结果
+export interface WorkflowSimulationEdgeResult {
+  id: string
+  source: string
+  target: string
+  condition?: string
+  state: 'matched' | 'unmatched' | 'skipped' | 'failed'
+}
+
+// 工作流模拟诊断项
+export interface WorkflowSimulationDiagnostic {
+  level: 'error' | 'warning' | 'info'
+  node_id?: string
+  message: string
+}
+
+// 工作流模拟结果数据
+export interface WorkflowSimulationResult {
+  success: boolean
+  scenario: string
+  summary: string
+  execution_order: string[]
+  nodes: Record<string, WorkflowSimulationNodeResult>
+  edges: Record<string, WorkflowSimulationEdgeResult>
+  diagnostics: WorkflowSimulationDiagnostic[]
+}
+
+// 工作流执行诊断节点详情
+export interface WorkflowExecutionNodeDetail {
+  id: string
+  name: string
+  type: string
+  state: string
+  started_at?: string
+  finished_at?: string
+  duration_ms?: number | null
+  attempt?: number
+  message?: string
+  error?: string
+  outputs_summary?: Record<string, number>
+}
+
+// 工作流执行历史步骤
+export interface WorkflowExecutionHistoryItem {
+  action: string
+  result: boolean
+  message?: string
+}
+
+// 工作流最近执行诊断详情
+export interface WorkflowExecutionDetail {
+  id: number | string
+  name: string
+  state: string
+  result?: string
+  run_count: number
+  last_time?: string
+  progress: number
+  nodes: WorkflowExecutionNodeDetail[]
+  execute_history: WorkflowExecutionHistoryItem[]
+}
+
 // 工作流
 export interface Workflow {
   // 工作流ID
@@ -1955,6 +2031,8 @@ export interface Workflow {
   trigger_type?: string
   // 事件类型（当trigger_type为event时使用）
   event_type?: string
+  // 事件过滤条件（当trigger_type为event时使用）
+  event_conditions?: Record<string, unknown>
   // 状态
   state?: string
   // 当前执行动作

@@ -4,7 +4,7 @@ import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   id: {
     type: String,
     required: true,
@@ -15,11 +15,11 @@ defineProps({
   },
 })
 
-// 来源下拉框
-const sourceOptions = ref([
+// 来源下拉框（兼容模板与后端契约中的 fileitems 与存量 files）
+const sourceOptions = computed(() => [
   {
     title: t('workflow.transferFile.sourceOptions.fileList'),
-    value: 'files',
+    value: props.data?.source === 'fileitems' ? 'fileitems' : 'files',
   },
   {
     title: t('workflow.transferFile.sourceOptions.downloads'),

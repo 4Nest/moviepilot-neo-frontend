@@ -10,6 +10,7 @@ import { formatDateDifference } from '@/@core/utils/formatters'
 const WorkflowActionsDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowActionsDialog.vue'))
 const WorkflowAddEditDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowAddEditDialog.vue'))
 const WorkflowShareDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowShareDialog.vue'))
+const WorkflowExecutionDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowExecutionDialog.vue'))
 
 const { t } = useI18n()
 
@@ -85,6 +86,43 @@ async function handleFlow(item: Workflow) {
     },
     { closeOn: ['close', 'save'] },
   )
+}
+
+// 执行详情透视
+function handleExecutionDetail(item: Workflow) {
+  const dialogCtrl = openSharedDialog(
+    WorkflowExecutionDialog,
+    { workflow: item },
+    {
+      refresh: editDone,
+      'open-flow': async (targetWorkflow: Workflow) => {
+        dialogCtrl.close()
+        await handleFlow(targetWorkflow || item)
+      },
+    },
+    { closeOn: ['close'] },
+  )
+}
+
+// 复制工作流副本
+async function handleClone(item: Workflow) {
+  if (loading.value) return
+  loading.value = true
+  try {
+    const result: { success: boolean; message?: string; data?: { id?: number | string; name?: string } } =
+      await api.post(`workflow/${item.id}/clone`)
+    if (result.success) {
+      $toast.success(t('workflow.task.cloneSuccess', { name: result.data?.name || `${item.name}` }))
+      emit('refresh')
+    } else {
+      $toast.error(t('workflow.task.cloneFailed', { message: result.message || '' }))
+    }
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
+  }
 }
 
 // 分享工作流
@@ -256,6 +294,22 @@ const triggerDisplay = computed(() => {
   }
 })
 
+// 事件触发条件数量统计（支持单字段多操作符计算）
+const eventConditionCount = computed(() => {
+  if (props.workflow.trigger_type !== 'event') return 0
+  const conditions = props.workflow.event_conditions
+  if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) return 0
+  let count = 0
+  Object.values(conditions).forEach(rule => {
+    if (rule && typeof rule === 'object' && !Array.isArray(rule)) {
+      count += Object.keys(rule).length
+    } else if (rule !== undefined && rule !== null && rule !== '') {
+      count += 1
+    }
+  })
+  return count
+})
+
 const workflowActions = computed<WorkflowActionDisplay[]>(() =>
   Array.isArray(props.workflow.actions) ? props.workflow.actions : [],
 )
@@ -403,7 +457,10 @@ const executionStatus = computed(() => {
               {{ workflow.name }}
             </VCardTitle>
             <VCardSubtitle class="workflow-task-card__trigger-text">
-              {{ triggerDisplay.text }}
+              <span>{{ triggerDisplay.text }}</span>
+              <span v-if="eventConditionCount > 0" class="workflow-task-card__condition-hint">
+                · {{ t('workflow.task.info.eventConditionCount', { count: eventConditionCount }) }}
+              </span>
             </VCardSubtitle>
 
             <template #append>
@@ -430,6 +487,18 @@ const executionStatus = computed(() => {
                         <VIcon icon="mdi-vector-polyline" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.editFlow') }}</VListItemTitle>
+                    </VListItem>
+                    <VListItem base-color="primary" @click="handleExecutionDetail(workflow)">
+                      <template #prepend>
+                        <VIcon icon="mdi-timeline-text-outline" />
+                      </template>
+                      <VListItemTitle>{{ t('workflow.task.executionDetail') }}</VListItemTitle>
+                    </VListItem>
+                    <VListItem base-color="info" @click="handleClone(workflow)">
+                      <template #prepend>
+                        <VIcon icon="mdi-content-copy" />
+                      </template>
+                      <VListItemTitle>{{ t('workflow.task.clone') }}</VListItemTitle>
                     </VListItem>
                     <VListItem v-if="workflow.current_action" base-color="info" @click="handleRun(workflow, false)">
                       <template #prepend>
@@ -479,30 +548,69 @@ const executionStatus = computed(() => {
                 {{ statusVariant.text }}
               </VChip>
 
-              <VBtn
-                v-if="workflow.state === 'P'"
-                color="success"
-                variant="text"
-                size="small"
-                density="compact"
-                prepend-icon="mdi-play"
-                :aria-label="t('common.enable')"
-                @click.stop="handleEnable(workflow)"
-              >
-                {{ t('common.enable') }}
-              </VBtn>
-              <VBtn
-                v-else
-                :color="statusVariant.color"
-                variant="text"
-                size="small"
-                density="compact"
-                prepend-icon="mdi-pause"
-                :aria-label="t('common.pause')"
-                @click.stop="handlePause(workflow)"
-              >
-                {{ t('common.pause') }}
-              </VBtn>
+              <div class="workflow-task-card__quick-actions">
+                <IconBtn
+                  v-if="workflow.state === 'R'"
+                  color="error"
+                  size="x-small"
+                  density="comfortable"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.stop')"
+                  @click.stop="handlePause(workflow)"
+                >
+                  <VIcon icon="mdi-stop-circle-outline" size="18" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.stop') }}</VTooltip>
+                </IconBtn>
+                <IconBtn
+                  v-else
+                  color="primary"
+                  size="x-small"
+                  density="comfortable"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.run')"
+                  @click.stop="handleRun(workflow, true)"
+                >
+                  <VIcon icon="mdi-play-circle-outline" size="18" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.run') }}</VTooltip>
+                </IconBtn>
+
+                <IconBtn
+                  color="info"
+                  size="x-small"
+                  density="comfortable"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.executionDetail')"
+                  @click.stop="handleExecutionDetail(workflow)"
+                >
+                  <VIcon icon="mdi-timeline-text-outline" size="18" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.executionDetail') }}</VTooltip>
+                </IconBtn>
+
+                <VBtn
+                  v-if="workflow.state === 'P'"
+                  color="success"
+                  variant="text"
+                  size="small"
+                  density="compact"
+                  prepend-icon="mdi-play"
+                  :aria-label="t('common.enable')"
+                  @click.stop="handleEnable(workflow)"
+                >
+                  {{ t('common.enable') }}
+                </VBtn>
+                <VBtn
+                  v-else
+                  :color="statusVariant.color"
+                  variant="text"
+                  size="small"
+                  density="compact"
+                  prepend-icon="mdi-pause"
+                  :aria-label="t('common.pause')"
+                  @click.stop="handlePause(workflow)"
+                >
+                  {{ t('common.pause') }}
+                </VBtn>
+              </div>
             </div>
 
             <div class="workflow-task-card__metrics">
@@ -648,6 +756,11 @@ const executionStatus = computed(() => {
   white-space: nowrap;
 }
 
+.workflow-task-card__condition-hint {
+  margin-inline-start: 3px;
+  opacity: 0.92;
+}
+
 .workflow-task-card__menu {
   flex: 0 0 auto;
   color: rgb(var(--workflow-card-header-content-rgb)) !important;
@@ -667,7 +780,14 @@ const executionStatus = computed(() => {
   min-inline-size: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
+}
+
+.workflow-task-card__quick-actions {
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 2px;
 }
 
 .workflow-task-card__metrics {
