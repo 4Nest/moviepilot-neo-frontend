@@ -41,6 +41,14 @@ vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => mocks.confirm,
 }))
 
+vi.mock('nprogress', () => ({
+  default: {
+    done: vi.fn(),
+    remove: vi.fn(),
+    start: vi.fn(),
+  },
+}))
+
 describe('WorkflowExecutionDialog & WorkflowAddEditDialog & WorkflowActionsDialog', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset()
