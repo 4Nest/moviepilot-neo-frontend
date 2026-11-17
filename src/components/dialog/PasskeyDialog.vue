@@ -43,9 +43,49 @@ const passkeyName = ref('')
 
 const passkeyTransactionToken = ref('')
 
+// 拆分包含 {domain} 占位符的域名安全警告文案，兼容无状态中文翻译器并加粗关键词
+const domainWarningParts = computed(() => {
+  const raw = t('profile.passkeyDomainWarning')
+  const marker = '{domain}'
+  const idx = raw.indexOf(marker)
+  if (idx === -1) {
+    return { prefix: raw, domain: '', suffix: '' }
+  }
+  return {
+    prefix: raw.slice(0, idx),
+    domain: t('profile.accessDomain'),
+    suffix: raw.slice(idx + marker.length),
+  }
+})
+
+// 判断当前主机名是否为裸 IPv4 / IPv6 地址（WebAuthn 规范禁止裸 IP 作为 RP ID）
+function isIpHostname(hostname: string): boolean {
+  if (!hostname) return false
+  const cleaned = hostname.replace(/^\[|\]$/g, '')
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(cleaned)) return true
+  return cleaned.includes(':')
+}
+
+// 当前浏览器环境不可用原因提示
+const environmentError = computed(() => {
+  if (typeof window === 'undefined') return ''
+  if (isIpHostname(window.location.hostname)) {
+    return t('profile.passkeyIpNotSupported')
+  }
+  if (!window.isSecureContext) {
+    return t('login.passkeySecureContextRequired')
+  }
+  if (!window.PublicKeyCredential) {
+    return t('login.passkeyNotSupported')
+  }
+  return ''
+})
+
 // 格式化日期
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('zh-CN')
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return '-'
+  const parsed = new Date(dateStr)
+  return Number.isNaN(parsed.getTime()) ? dateStr : parsed.toLocaleDateString('zh-CN')
 }
 
 // 获取PassKey列表
@@ -63,18 +103,15 @@ async function fetchPassKeyList() {
 
 // 注册PassKey
 async function registerPassKey() {
-  if (!passkeyName.value) {
+  const trimmedName = passkeyName.value.trim()
+  if (!trimmedName) {
     $toast.error(t('profile.passkeyNameRequired'))
     return
   }
 
   // 检查浏览器环境
-  if (!window.PublicKeyCredential) {
-    if (!window.isSecureContext) {
-      $toast.error(t('login.passkeySecureContextRequired'))
-    } else {
-      $toast.error(t('login.passkeyNotSupported'))
-    }
+  if (environmentError.value) {
+    $toast.error(environmentError.value)
     return
   }
 
@@ -82,7 +119,7 @@ async function registerPassKey() {
   try {
     // 1. 开始注册
     const startResult = (await api.post('mfa/passkey/register/start', {
-      name: passkeyName.value,
+      name: trimmedName,
     })) as ApiResponse<{ options: string; transaction_token: string }>
 
     if (!startResult.success) {
@@ -132,7 +169,7 @@ async function registerPassKey() {
     const finishResult = (await api.post('mfa/passkey/register/finish', {
       credential: credentialJSON,
       transaction_token: passkeyTransactionToken.value,
-      name: passkeyName.value,
+      name: trimmedName,
     })) as ApiResponse
 
     if (finishResult.success) {
@@ -142,18 +179,27 @@ async function registerPassKey() {
     } else {
       $toast.error(finishResult.message || t('profile.passkeyRegisterFailed'))
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PassKey注册失败:', error)
-    if (error.name === 'NotAllowedError') {
+    const errObj = error as {
+      name?: string
+      message?: string
+      response?: { data?: { message?: string; detail?: string } }
+    }
+    if (errObj?.name === 'NotAllowedError') {
       $toast.error(t('profile.passkeyRegisterCancelled'))
-    } else if (error.name === 'NotSupportedError') {
+    } else if (errObj?.name === 'InvalidStateError') {
+      $toast.error(t('profile.passkeyAlreadyRegistered'))
+    } else if (errObj?.name === 'SecurityError') {
+      $toast.error(t('profile.passkeyDomainMismatch'))
+    } else if (errObj?.name === 'NotSupportedError') {
       $toast.error(t('login.passkeyNotSupported'))
-    } else if (error.message?.includes('start failed')) {
+    } else if (errObj?.message?.includes('start failed')) {
       $toast.error(t('login.passkeyLoginStartFailed'))
-    } else if (error.response) {
-      $toast.error(error.response.data?.message || error.response.data?.detail || t('profile.passkeyRegisterFailed'))
+    } else if (errObj?.response) {
+      $toast.error(errObj.response.data?.message || errObj.response.data?.detail || t('profile.passkeyRegisterFailed'))
     } else {
-      $toast.error(error.message || t('profile.passkeyRegisterFailed'))
+      $toast.error(errObj?.message || t('profile.passkeyRegisterFailed'))
     }
   } finally {
     passkeyRegistering.value = false
@@ -221,11 +267,15 @@ watch(
 
         <!-- 安全警告 -->
         <VAlert type="warning" variant="tonal" class="mb-6" icon="mdi-alert">
-          <i18n-t keypath="profile.passkeyDomainWarning" tag="span">
-            <template #domain>
-              <b>{{ t('profile.accessDomain') }}</b>
-            </template>
-          </i18n-t>
+          <span>
+            {{ domainWarningParts.prefix }}<b v-if="domainWarningParts.domain">{{ domainWarningParts.domain }}</b
+            >{{ domainWarningParts.suffix }}
+          </span>
+        </VAlert>
+
+        <!-- 当前访问环境不支持时的明确告警 -->
+        <VAlert v-if="environmentError" type="error" variant="tonal" class="mb-6" icon="mdi-shield-alert-outline">
+          {{ environmentError }}
         </VAlert>
 
         <!-- 注册新通行密钥 -->

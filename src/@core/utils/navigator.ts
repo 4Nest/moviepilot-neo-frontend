@@ -21,17 +21,21 @@ export async function copyToClipboard(content: string) {
   return success
 }
 
-// Uint8Array 转 Base64URL
+// Uint8Array 转 Base64URL（循环拼接字节，避免大缓冲区展开参数栈溢出）
 export function bufferToBase64Url(buffer: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-// Base64URL 转 Uint8Array
+// Base64URL 转 Uint8Array（自动补齐标准 Base64 填充符 =）
 export function base64UrlToUint8Array(base64Url: string): Uint8Array {
-  return Uint8Array.from(atob(base64Url.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
+  const normalized = base64Url.trim().replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+  return Uint8Array.from(atob(padded), c => c.charCodeAt(0))
 }
 
 // 判断是否为PWA

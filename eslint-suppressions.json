@@ -179,11 +179,6 @@
       "count": 1
     }
   },
-  "src/components/dialog/PasskeyDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
   "src/components/dialog/PluginMarketSettingDialog.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
