@@ -277,6 +277,7 @@ const triggerDisplay = computed(() => {
   if (props.workflow.trigger_type === 'event') {
     return {
       icon: 'mdi-calendar-check-outline',
+      isCron: false,
       text: getEventTypeText(props.workflow.event_type || ''),
     }
   }
@@ -284,12 +285,14 @@ const triggerDisplay = computed(() => {
   if (props.workflow.trigger_type === 'manual') {
     return {
       icon: 'mdi-hand-pointing-up',
+      isCron: false,
       text: t('workflow.task.info.manualTrigger'),
     }
   }
 
   return {
     icon: 'mdi-clock-outline',
+    isCron: Boolean(props.workflow.timer),
     text: props.workflow.timer || t('workflow.task.info.timer'),
   }
 })
@@ -315,6 +318,8 @@ const workflowActions = computed<WorkflowActionDisplay[]>(() =>
 )
 
 const totalActionCount = computed(() => workflowActions.value.length)
+
+const formattedRunCount = computed(() => Number(props.workflow.run_count || 0).toLocaleString('zh-CN'))
 
 const currentActionIds = computed(() => {
   return new Set(
@@ -437,198 +442,140 @@ const executionStatus = computed(() => {
           :loading="loading"
           :class="[
             `workflow-task-card--status-${statusVariant.color}`,
-            { 'app-hover-lift-card--hovering': hover.isHovering },
+            {
+              'workflow-task-card--paused': workflow.state === 'P',
+              'app-hover-lift-card--hovering': hover.isHovering,
+            },
           ]"
         >
-          <VCardItem class="workflow-task-card__header">
-            <template #prepend>
-              <VAvatar
+          <!-- 顶栏：触发图标 + 名称/触发规则 + 状态胶囊 + 更多菜单 -->
+          <div class="workflow-task-card__header">
+            <div class="workflow-task-card__trigger-badge">
+              <VIcon :icon="triggerDisplay.icon" size="18" :data-workflow-trigger-icon="triggerDisplay.icon" />
+            </div>
+
+            <div class="workflow-task-card__heading">
+              <div class="workflow-task-card__title" :title="workflow.description || workflow.name">
+                {{ workflow.name }}
+              </div>
+              <div class="workflow-task-card__trigger-meta">
+                <span :class="{ 'workflow-task-card__cron': triggerDisplay.isCron }">{{ triggerDisplay.text }}</span>
+                <span v-if="eventConditionCount > 0" class="workflow-task-card__condition-hint">
+                  · {{ t('workflow.task.info.eventConditionCount', { count: eventConditionCount }) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="workflow-task-card__header-actions">
+              <VChip
                 :color="statusVariant.color"
+                :prepend-icon="statusVariant.icon"
+                size="x-small"
                 variant="tonal"
-                rounded="md"
-                size="32"
-                class="workflow-task-card__trigger-icon"
+                class="workflow-task-card__status-chip"
               >
-                <VIcon :icon="triggerDisplay.icon" :data-workflow-trigger-icon="triggerDisplay.icon" />
-              </VAvatar>
-            </template>
+                {{ statusVariant.text }}
+              </VChip>
 
-            <VCardTitle class="workflow-task-card__title text-body-1" :title="workflow.description || workflow.name">
-              {{ workflow.name }}
-            </VCardTitle>
-            <VCardSubtitle class="workflow-task-card__trigger-text">
-              <span>{{ triggerDisplay.text }}</span>
-              <span v-if="eventConditionCount > 0" class="workflow-task-card__condition-hint">
-                · {{ t('workflow.task.info.eventConditionCount', { count: eventConditionCount }) }}
-              </span>
-            </VCardSubtitle>
-
-            <template #append>
               <IconBtn
                 class="workflow-task-card__menu"
                 :disabled="loading"
-                size="small"
-                density="compact"
+                size="x-small"
+                density="comfortable"
                 :aria-label="t('workflow.task.moreActions')"
                 @click.stop
               >
-                <VIcon icon="mdi-dots-vertical" />
+                <VIcon icon="mdi-dots-vertical" size="18" />
                 <VTooltip activator="parent" location="top">{{ t('workflow.task.moreActions') }}</VTooltip>
                 <VMenu activator="parent" close-on-content-click>
-                  <VList>
+                  <VList density="compact">
                     <VListItem base-color="primary" @click="handleEdit(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-note-edit" />
+                        <VIcon icon="mdi-note-edit" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.edit') }}</VListItemTitle>
                     </VListItem>
                     <VListItem base-color="success" @click="handleFlow(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-vector-polyline" />
+                        <VIcon icon="mdi-vector-polyline" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.editFlow') }}</VListItemTitle>
                     </VListItem>
                     <VListItem base-color="primary" @click="handleExecutionDetail(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-timeline-text-outline" />
+                        <VIcon icon="mdi-timeline-text-outline" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.executionDetail') }}</VListItemTitle>
                     </VListItem>
                     <VListItem base-color="info" @click="handleClone(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-content-copy" />
+                        <VIcon icon="mdi-content-copy" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.clone') }}</VListItemTitle>
                     </VListItem>
                     <VListItem v-if="workflow.current_action" base-color="info" @click="handleRun(workflow, false)">
                       <template #prepend>
-                        <VIcon icon="mdi-play-speed" />
+                        <VIcon icon="mdi-play-speed" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.continue') }}</VListItemTitle>
                     </VListItem>
                     <VListItem v-if="workflow.current_action" base-color="info" @click="handleRun(workflow, true)">
                       <template #prepend>
-                        <VIcon icon="mdi-replay" />
+                        <VIcon icon="mdi-replay" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.restart') }}</VListItemTitle>
                     </VListItem>
                     <VListItem v-else base-color="info" @click="handleRun(workflow, true)">
                       <template #prepend>
-                        <VIcon icon="mdi-run" />
+                        <VIcon icon="mdi-run" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.run') }}</VListItemTitle>
                     </VListItem>
                     <VListItem base-color="warning" @click="handleReset(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-restore-alert" />
+                        <VIcon icon="mdi-restore-alert" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.reset') }}</VListItemTitle>
                     </VListItem>
                     <VListItem base-color="info" @click="handleShare(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-share" />
+                        <VIcon icon="mdi-share" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.share') }}</VListItemTitle>
                     </VListItem>
+                    <VDivider class="my-1" />
                     <VListItem base-color="error" @click="handleDelete(workflow)">
                       <template #prepend>
-                        <VIcon icon="mdi-delete" />
+                        <VIcon icon="mdi-delete" size="18" />
                       </template>
                       <VListItemTitle>{{ t('workflow.task.delete') }}</VListItemTitle>
                     </VListItem>
                   </VList>
                 </VMenu>
               </IconBtn>
-            </template>
-          </VCardItem>
+            </div>
+          </div>
 
           <VCardText class="workflow-task-card__body">
-            <div class="workflow-task-card__status-row">
-              <VChip :color="statusVariant.color" :prepend-icon="statusVariant.icon" size="small" variant="tonal">
-                {{ statusVariant.text }}
-              </VChip>
+            <!-- 中段：动作分段进度与累计运行指标合一面板 -->
+            <div class="workflow-task-card__progress-panel">
+              <div class="workflow-task-card__telemetry-row">
+                <div class="workflow-task-card__progress-summary">
+                  <span class="workflow-task-card__telemetry-label">{{ t('workflow.task.info.actionProgress') }}</span>
+                  <strong class="workflow-task-card__telemetry-value">
+                    {{ finishedActionCount }} / {{ totalActionCount }}
+                  </strong>
+                </div>
 
-              <div class="workflow-task-card__quick-actions">
-                <IconBtn
-                  v-if="workflow.state === 'R'"
-                  color="error"
-                  size="x-small"
-                  density="comfortable"
-                  :disabled="loading"
-                  :aria-label="t('workflow.task.stop')"
-                  @click.stop="handlePause(workflow)"
+                <div
+                  class="workflow-task-card__run-stat"
+                  :title="`${t('workflow.task.info.runCount')}: ${formattedRunCount}`"
                 >
-                  <VIcon icon="mdi-stop-circle-outline" size="18" />
-                  <VTooltip activator="parent" location="top">{{ t('workflow.task.stop') }}</VTooltip>
-                </IconBtn>
-                <IconBtn
-                  v-else
-                  color="primary"
-                  size="x-small"
-                  density="comfortable"
-                  :disabled="loading"
-                  :aria-label="t('workflow.task.run')"
-                  @click.stop="handleRun(workflow, true)"
-                >
-                  <VIcon icon="mdi-play-circle-outline" size="18" />
-                  <VTooltip activator="parent" location="top">{{ t('workflow.task.run') }}</VTooltip>
-                </IconBtn>
-
-                <IconBtn
-                  color="info"
-                  size="x-small"
-                  density="comfortable"
-                  :disabled="loading"
-                  :aria-label="t('workflow.task.executionDetail')"
-                  @click.stop="handleExecutionDetail(workflow)"
-                >
-                  <VIcon icon="mdi-timeline-text-outline" size="18" />
-                  <VTooltip activator="parent" location="top">{{ t('workflow.task.executionDetail') }}</VTooltip>
-                </IconBtn>
-
-                <VBtn
-                  v-if="workflow.state === 'P'"
-                  color="success"
-                  variant="text"
-                  size="small"
-                  density="compact"
-                  prepend-icon="mdi-play"
-                  :aria-label="t('common.enable')"
-                  @click.stop="handleEnable(workflow)"
-                >
-                  {{ t('common.enable') }}
-                </VBtn>
-                <VBtn
-                  v-else
-                  :color="statusVariant.color"
-                  variant="text"
-                  size="small"
-                  density="compact"
-                  prepend-icon="mdi-pause"
-                  :aria-label="t('common.pause')"
-                  @click.stop="handlePause(workflow)"
-                >
-                  {{ t('common.pause') }}
-                </VBtn>
+                  <span class="workflow-task-card__telemetry-label">{{ t('workflow.task.info.runCount') }}</span>
+                  <strong class="workflow-task-card__telemetry-value">{{ formattedRunCount }}</strong>
+                </div>
               </div>
-            </div>
 
-            <div class="workflow-task-card__metrics">
-              <div class="workflow-task-card__metric">
-                <span>{{ t('workflow.task.info.actionCount') }}</span>
-                <strong>{{ totalActionCount }}</strong>
-              </div>
-              <div class="workflow-task-card__metric">
-                <span>{{ t('workflow.task.info.runCount') }}</span>
-                <strong>{{ workflow.run_count || 0 }}</strong>
-              </div>
-            </div>
-
-            <div class="workflow-task-card__progress">
-              <div class="workflow-task-card__progress-label">
-                <span>{{ t('workflow.task.info.actionProgress') }}</span>
-                <strong>{{ finishedActionCount }} / {{ totalActionCount }}</strong>
-              </div>
               <div
                 class="workflow-task-card__action-track"
                 role="progressbar"
@@ -650,13 +597,75 @@ const executionStatus = computed(() => {
               </div>
             </div>
 
-            <div
-              class="workflow-task-card__execution-status"
-              :class="executionStatus.color ? `text-${executionStatus.color}` : 'text-medium-emphasis'"
-              :title="executionStatus.text"
-            >
-              <VIcon :icon="executionStatus.icon" size="small" />
-              <span>{{ executionStatus.text }}</span>
+            <!-- 底栏：左侧最近执行动态 + 右侧统一同色系工具栏 -->
+            <div class="workflow-task-card__footer">
+              <div
+                class="workflow-task-card__execution-status"
+                :class="executionStatus.color ? `text-${executionStatus.color}` : 'text-medium-emphasis'"
+                :title="executionStatus.text"
+              >
+                <VIcon :icon="executionStatus.icon" size="15" />
+                <span>{{ executionStatus.text }}</span>
+              </div>
+
+              <div class="workflow-task-card__toolbar" @click.stop>
+                <button
+                  v-if="workflow.state === 'R'"
+                  type="button"
+                  class="workflow-task-card__tool-btn workflow-task-card__tool-btn--danger"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.stop')"
+                  @click.stop="handlePause(workflow)"
+                >
+                  <VIcon icon="mdi-stop" size="15" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.stop') }}</VTooltip>
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="workflow-task-card__tool-btn"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.run')"
+                  @click.stop="handleRun(workflow, true)"
+                >
+                  <VIcon icon="mdi-play-outline" size="16" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.run') }}</VTooltip>
+                </button>
+
+                <button
+                  type="button"
+                  class="workflow-task-card__tool-btn"
+                  :disabled="loading"
+                  :aria-label="t('workflow.task.executionDetail')"
+                  @click.stop="handleExecutionDetail(workflow)"
+                >
+                  <VIcon icon="mdi-timeline-text-outline" size="15" />
+                  <VTooltip activator="parent" location="top">{{ t('workflow.task.executionDetail') }}</VTooltip>
+                </button>
+
+                <button
+                  v-if="workflow.state === 'P'"
+                  type="button"
+                  class="workflow-task-card__toggle-btn workflow-task-card__toggle-btn--enable"
+                  :disabled="loading"
+                  :aria-label="t('common.enable')"
+                  @click.stop="handleEnable(workflow)"
+                >
+                  <VIcon icon="mdi-play" size="14" />
+                  <span>{{ t('common.enable') }}</span>
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="workflow-task-card__toggle-btn"
+                  :disabled="loading"
+                  :aria-label="t('common.pause')"
+                  @click.stop="handlePause(workflow)"
+                >
+                  <VIcon icon="mdi-pause" size="14" />
+                  <span>{{ t('common.pause') }}</span>
+                </button>
+              </div>
             </div>
           </VCardText>
         </VCard>
@@ -673,19 +682,25 @@ const executionStatus = computed(() => {
 .workflow-task-card {
   --workflow-status-rgb: var(--v-theme-info);
   --workflow-status-on-rgb: var(--v-theme-on-info);
-  --workflow-card-header-content-rgb: var(--workflow-status-on-rgb);
+  --workflow-card-header-content-rgb: var(--v-theme-on-surface);
   --workflow-card-header-background: linear-gradient(
-    118deg,
-    color-mix(in srgb, rgb(var(--workflow-status-rgb)) 88%, rgb(var(--v-theme-on-surface)) 12%) 0%,
-    rgb(var(--workflow-status-rgb)) 52%,
-    color-mix(in srgb, rgb(var(--workflow-status-rgb)) 78%, rgb(var(--v-theme-surface)) 22%) 100%
+    125deg,
+    rgba(var(--workflow-status-rgb), 0.16) 0%,
+    rgba(var(--workflow-status-rgb), 0.06) 56%,
+    rgba(var(--workflow-status-rgb), 0.01) 100%
   );
-  --workflow-card-header-shadow: none;
+  --workflow-card-header-shadow: inset 0 -1px 0 rgba(var(--v-theme-on-surface), 0.06);
 
   display: flex;
-  min-block-size: 226px;
+  min-block-size: 176px;
   flex-direction: column;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   overflow: hidden;
+  cursor: pointer;
+}
+
+.workflow-task-card--paused {
+  opacity: 0.88;
 }
 
 .workflow-task-card--status-primary {
@@ -719,51 +734,89 @@ const executionStatus = computed(() => {
 }
 
 .workflow-task-card__header {
+  display: flex;
   flex: 0 0 auto;
-  padding: 6px 10px !important;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 11px 14px;
   background: var(--workflow-card-header-background);
   box-shadow: var(--workflow-card-header-shadow);
 }
 
-.workflow-task-card__trigger-icon {
+.workflow-task-card__trigger-badge {
+  display: inline-flex;
   flex: 0 0 auto;
-  color: rgb(var(--workflow-card-header-content-rgb)) !important;
+  align-items: center;
+  justify-content: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: var(--app-control-radius);
+  background: rgba(var(--workflow-status-rgb), 0.14);
+  box-shadow: inset 0 0 0 1px rgba(var(--workflow-status-rgb), 0.22);
+  color: rgb(var(--workflow-status-rgb));
+}
+
+.workflow-task-card__heading {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .workflow-task-card__title {
-  display: -webkit-box;
   min-inline-size: 0;
   overflow: hidden;
-  color: rgb(var(--workflow-card-header-content-rgb));
-  font-weight: 500;
-  line-height: 20px !important;
-  letter-spacing: 0;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.workflow-task-card__trigger-text {
-  min-inline-size: 0;
-  margin-block-start: 1px;
-  overflow: hidden;
-  color: rgba(var(--workflow-card-header-content-rgb), 0.78);
-  font-size: 0.75rem;
-  letter-spacing: 0;
-  line-height: 16px !important;
+  color: rgba(var(--workflow-card-header-content-rgb), var(--v-high-emphasis-opacity));
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.workflow-task-card__trigger-meta {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  overflow: hidden;
+  color: rgba(var(--workflow-card-header-content-rgb), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-task-card__cron {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+}
+
 .workflow-task-card__condition-hint {
-  margin-inline-start: 3px;
-  opacity: 0.92;
+  margin-inline-start: 4px;
+  opacity: 0.85;
+}
+
+.workflow-task-card__header-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.workflow-task-card__status-chip {
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .workflow-task-card__menu {
   flex: 0 0 auto;
-  color: rgb(var(--workflow-card-header-content-rgb)) !important;
+  color: rgba(var(--workflow-card-header-content-rgb), var(--v-medium-emphasis-opacity)) !important;
+}
+
+.workflow-task-card__menu:hover {
+  color: rgba(var(--workflow-card-header-content-rgb), var(--v-high-emphasis-opacity)) !important;
 }
 
 .workflow-task-card__body {
@@ -771,79 +824,67 @@ const executionStatus = computed(() => {
   min-inline-size: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 10px;
-  padding: 11px 12px !important;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px !important;
 }
 
-.workflow-task-card__status-row {
+.workflow-task-card__progress-panel {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: var(--app-control-radius);
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.workflow-task-card__telemetry-row {
   display: flex;
   min-inline-size: 0;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-task-card__progress-summary,
+.workflow-task-card__run-stat {
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: baseline;
   gap: 6px;
 }
 
-.workflow-task-card__quick-actions {
-  display: inline-flex;
-  min-inline-size: 0;
-  align-items: center;
-  gap: 2px;
-}
-
-.workflow-task-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.workflow-task-card__metric {
-  display: grid;
-  min-inline-size: 0;
-  gap: 1px;
-  padding-inline-end: 10px;
-}
-
-.workflow-task-card__metric + .workflow-task-card__metric {
-  padding-inline: 10px 0;
-  border-inline-start: 1px solid rgba(var(--v-theme-on-surface), var(--v-border-opacity));
-}
-
-.workflow-task-card__metric span,
-.workflow-task-card__progress-label span {
+.workflow-task-card__telemetry-label {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  line-height: 1.2;
 }
 
-.workflow-task-card__metric strong,
-.workflow-task-card__progress-label strong {
+.workflow-task-card__telemetry-value {
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-weight: 500;
+  font-size: 0.82rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.workflow-task-card__progress {
-  min-inline-size: 0;
-}
-
-.workflow-task-card__progress-label {
-  display: flex;
-  min-inline-size: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  line-height: 1.2;
 }
 
 .workflow-task-card__action-track {
   display: flex;
   min-inline-size: 0;
-  gap: 4px;
-  margin-block-start: 6px;
+  gap: 5px;
 }
 
 .workflow-task-card__action-segment {
-  block-size: 6px;
-  min-inline-size: 2px;
+  block-size: 5px;
+  min-inline-size: 3px;
   flex: 1 1 0;
   border-radius: var(--app-control-radius);
   background: rgba(var(--v-theme-on-surface), 0.12);
+  transition:
+    background-color 0.25s ease,
+    opacity 0.25s ease;
 }
 
 .workflow-task-card__action-segment--complete {
@@ -851,8 +892,9 @@ const executionStatus = computed(() => {
 }
 
 .workflow-task-card__action-segment--active {
-  background: rgba(var(--workflow-status-rgb), 0.22);
+  background: rgba(var(--workflow-status-rgb), 0.35);
   box-shadow: inset 0 0 0 1px rgb(var(--workflow-status-rgb));
+  animation: workflow-segment-pulse 1.5s ease-in-out infinite;
 }
 
 .workflow-task-card__action-segment--failed {
@@ -863,14 +905,40 @@ const executionStatus = computed(() => {
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
 
-.workflow-task-card__execution-status {
+@keyframes workflow-segment-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-task-card__action-segment--active {
+    animation: none;
+  }
+}
+
+.workflow-task-card__footer {
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 8px;
   margin-block-start: auto;
-  padding-block-start: 9px;
-  border-block-start: 1px solid rgba(var(--v-theme-on-surface), var(--v-border-opacity));
+  padding-block-start: 2px;
+}
+
+.workflow-task-card__execution-status {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
 }
 
 .workflow-task-card__execution-status .v-icon {
@@ -884,18 +952,102 @@ const executionStatus = computed(() => {
   white-space: nowrap;
 }
 
+.workflow-task-card__toolbar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.workflow-task-card__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 26px;
+  block-size: 26px;
+  padding: 0;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  border-radius: var(--app-control-radius);
+  background: rgba(var(--v-theme-on-surface), 0.03);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.workflow-task-card__tool-btn:hover:not(:disabled) {
+  border-color: rgba(var(--v-theme-primary), 0.35);
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+}
+
+.workflow-task-card__tool-btn--danger {
+  border-color: rgba(var(--v-theme-error), 0.3);
+  background: rgba(var(--v-theme-error), 0.1);
+  color: rgb(var(--v-theme-error));
+}
+
+.workflow-task-card__tool-btn--danger:hover:not(:disabled) {
+  border-color: rgba(var(--v-theme-error), 0.5);
+  background: rgba(var(--v-theme-error), 0.18);
+  color: rgb(var(--v-theme-error));
+}
+
+.workflow-task-card__toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  block-size: 26px;
+  padding-inline: 8px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  border-radius: var(--app-control-radius);
+  background: rgba(var(--v-theme-on-surface), 0.03);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.workflow-task-card__toggle-btn:hover:not(:disabled) {
+  border-color: rgba(var(--v-theme-on-surface), 0.22);
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+.workflow-task-card__toggle-btn--enable {
+  border-color: rgba(var(--v-theme-success), 0.32);
+  background: rgba(var(--v-theme-success), 0.12);
+  color: rgb(var(--v-theme-success));
+}
+
+.workflow-task-card__toggle-btn--enable:hover:not(:disabled) {
+  border-color: rgba(var(--v-theme-success), 0.5);
+  background: rgba(var(--v-theme-success), 0.2);
+  color: rgb(var(--v-theme-success));
+}
+
+.workflow-task-card__tool-btn:disabled,
+.workflow-task-card__toggle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (width <= 599.98px) {
   .workflow-task-card {
-    min-block-size: 222px;
+    min-block-size: 170px;
   }
 
   .workflow-task-card__header,
   .workflow-task-card__body {
-    padding-inline: 10px !important;
-  }
-
-  .workflow-task-card__body {
-    gap: 9px;
+    padding-inline: 12px !important;
   }
 }
 </style>
