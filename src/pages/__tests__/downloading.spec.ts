@@ -1,7 +1,7 @@
 import DownloadingPage from '@/pages/downloading.vue'
-import { fireEvent, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { computed, defineComponent, h, unref, type ComputedRef } from 'vue'
+import { computed, defineComponent, h, KeepAlive, ref, unref, type ComputedRef } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -87,12 +87,12 @@ describe('Downloading page download actions', () => {
     mocks.useDynamicButton.mockReset()
   })
 
-  it('renders add and history desktop FABs and passes the active downloader', async () => {
+  it('renders inline add and history toolbar buttons on desktop and passes the active downloader', async () => {
     await renderPage(false)
 
-    await waitFor(() => expect(document.querySelectorAll('.compact-fab button')).toHaveLength(2))
-    const addButton = document.querySelector('.compact-fab--primary button') as HTMLButtonElement
-    const historyButton = document.querySelector('.compact-fab--secondary button') as HTMLButtonElement
+    await waitFor(() => expect(document.querySelector('[data-testid="downloading-add-btn"]')).not.toBeNull())
+    const addButton = document.querySelector('[data-testid="downloading-add-btn"]') as HTMLButtonElement
+    const historyButton = document.querySelector('[data-testid="downloading-history-btn"]') as HTMLButtonElement
     expect(addButton).toBeInTheDocument()
     expect(historyButton).toBeInTheDocument()
 
@@ -116,7 +116,7 @@ describe('Downloading page download actions', () => {
     await renderPage(true)
     const dynamicButton = getDynamicButtonConfig()
 
-    expect(document.querySelector('.compact-fab')).not.toBeInTheDocument()
+    expect(document.querySelector('[data-testid="downloading-add-btn"]')).not.toBeInTheDocument()
     expect(dynamicButton.icon).toBe('mdi-plus')
     expect(dynamicButton.color).toBeUndefined()
     expect(unref(dynamicButton.show)).toBe(true)
@@ -135,5 +135,39 @@ describe('Downloading page download actions', () => {
 
     dynamicButton.menuItems[1].action()
     expect(mocks.openSharedDialog).toHaveBeenLastCalledWith(expect.any(Object), {}, {}, { closeOn: ['close'] })
+  })
+
+  it('passes active=false to DownloadingListView when deactivated under KeepAlive and restores active=true on reactivation', async () => {
+    mocks.apiGet.mockResolvedValue([{ name: 'qb-main' }])
+    const hostActive = ref(true)
+    const KeepAliveHost = defineComponent({
+      setup() {
+        return () =>
+          h('div', [
+            h('button', { type: 'button', onClick: () => (hostActive.value = !hostActive.value) }, '切换页面激活'),
+            h(KeepAlive, null, {
+              default: () => (hostActive.value ? h(DownloadingPage) : h('div', 'away')),
+            }),
+          ])
+      },
+    })
+
+    await renderWithProviders(KeepAliveHost, {
+      initialRoute: '/downloading',
+      global: {
+        stubs: {
+          DownloadingListView: DownloadingListViewStub,
+          NoDataFound: true,
+        },
+      },
+    })
+
+    expect(await screen.findByText('qb-main:true')).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: '切换页面激活' }))
+    expect(await screen.findByText('away')).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: '切换页面激活' }))
+    expect(await screen.findByText('qb-main:true')).toBeInTheDocument()
   })
 })

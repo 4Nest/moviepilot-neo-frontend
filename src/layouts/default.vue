@@ -1,10 +1,8 @@
 <script lang="ts" setup>
 import DefaultLayout from './default/components/DefaultLayout.vue'
-import { usePagePresentationMotion } from '@/composables/usePagePresentationMotion'
 import { useRouteEnterMotion } from '@/composables/useRouteEnterMotion'
 
 const route = useRoute()
-const pagePresentationMotion = usePagePresentationMotion()
 const routeEnterMotion = useRouteEnterMotion()
 
 // keep-alive 缓存按页面身份命中，避免 query 变化导致同一页面反复新建实例。
@@ -21,11 +19,9 @@ const routeCacheKey = computed(() => {
 const routeTransitionKey = computed(() => (route.meta.keepAlive ? routeCacheKey.value : route.fullPath))
 const pageRouteRef = ref<HTMLElement | null>(null)
 
-// 默认布局只编排路由事务；普通页面与玻璃材质分别由各自 driver 执行动画。
+// 编排路由切换入场动画。
 function playPageEnterMotion() {
   routeEnterMotion.cancel()
-  if (pagePresentationMotion.start(routeTransitionKey.value, pageRouteRef.value)) return
-
   routeEnterMotion.start(pageRouteRef.value)
 }
 
@@ -35,7 +31,6 @@ onMounted(playPageEnterMotion)
 
 onBeforeUnmount(() => {
   routeEnterMotion.cancel()
-  pagePresentationMotion.cancel()
 })
 </script>
 

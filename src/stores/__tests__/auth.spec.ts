@@ -1,6 +1,7 @@
 import { openSharedDialog, useSharedDialog } from '@/composables/useSharedDialog'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
+import { useUserStore } from '@/stores/user'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -102,5 +103,32 @@ describe('auth store', () => {
       origin: location.origin,
     })
     expect(authStore.token).toBeNull()
+  })
+
+  it('resetSession 同步调用 userStore.reset() 清空缓存的用户资料与权限', () => {
+    const authStore = useAuthStore()
+    const userStore = useUserStore()
+
+    authStore.login({ token: 'active-token', remember: true })
+    userStore.loginUser({
+      superUser: false,
+      userID: 42,
+      userName: 'demo-user',
+      avatar: 'data:image/png;base64,abc',
+      level: 2,
+      wizard: true,
+      permissions: { subscribe: true },
+    })
+
+    authStore.resetSession()
+
+    expect(authStore.token).toBeNull()
+    expect(userStore.userID).toBe(-1)
+    expect(userStore.userName).toBe('')
+    expect(userStore.avatar).toBe('')
+    expect(userStore.superUser).toBe(true)
+    expect(userStore.level).toBe(1)
+    expect(userStore.wizard).toBe(false)
+    expect(userStore.permissions).toEqual({})
   })
 })

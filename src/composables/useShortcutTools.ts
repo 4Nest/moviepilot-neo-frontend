@@ -13,7 +13,7 @@ const ShortcutLogDialog = defineAsyncComponent(() => import('@/components/dialog
 const ShortcutToolDialog = defineAsyncComponent(() => import('@/components/dialog/ShortcutToolDialog.vue'))
 
 // 定时服务在捷径与仪表板中共用的图标，避免两个入口的视觉语义漂移。
-export const SCHEDULER_SHORTCUT_ICON = 'mdi-list-box'
+export const SCHEDULER_SHORTCUT_ICON = 'mdi-clipboard-list-outline'
 
 export type ShortcutToolItem = {
   bodyClass?: string
@@ -52,7 +52,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.rule.title'),
       subtitle: t('shortcut.rule.subtitle'),
-      icon: 'mdi-filter-cog',
+      icon: 'mdi-filter-cog-outline',
       dialog: 'ruleTest',
       component: RuleTestView,
       maxWidth: '65rem',
@@ -61,7 +61,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.log.title'),
       subtitle: t('shortcut.log.subtitle'),
-      icon: 'mdi-file-document',
+      icon: 'mdi-file-document-outline',
       dialog: 'logging',
       pinned: true,
       customDialog: ShortcutLogDialog,
@@ -69,7 +69,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.network.title'),
       subtitle: t('shortcut.network.subtitle'),
-      icon: 'mdi-network',
+      icon: 'mdi-network-outline',
       dialog: 'netTest',
       component: NetTestView,
       titleText: t('shortcut.network.subtitle'),
@@ -77,7 +77,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.words.title'),
       subtitle: t('shortcut.words.subtitle'),
-      icon: 'mdi-file-word-box',
+      icon: 'mdi-text-box-outline',
       dialog: 'words',
       pinned: true,
       bodyClass: 'words-shortcut-dialog-body pa-0',
@@ -89,7 +89,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.cache.title'),
       subtitle: t('shortcut.cache.subtitle'),
-      icon: 'mdi-database',
+      icon: 'mdi-database-outline',
       dialog: 'cache',
       bodyClass: 'cache-shortcut-dialog-body',
       cardClass: 'cache-shortcut-dialog-card',
@@ -112,7 +112,7 @@ export function useShortcutTools() {
     {
       title: t('shortcut.system.title'),
       subtitle: t('shortcut.system.subtitle'),
-      icon: 'mdi-cog',
+      icon: 'mdi-cog-outline',
       dialog: 'systemTest',
       bodyClass: 'system-health-dialog-body pa-0',
       cardClass: 'system-health-dialog-card',

@@ -50,10 +50,10 @@ function handleNavScroll(evt: Event) {
     <!-- 👉 Header -->
     <div class="nav-header">
       <slot name="nav-header">
-        <RouterLink to="/" class="app-logo d-flex align-center app-title-wrapper">
+        <RouterLink to="/" class="app-logo app-title-wrapper">
           <NeoLogoMark class="brand-logo-mark" />
 
-          <h1 class="app-logo-title leading-normal text-nowrap">
+          <h1 class="app-logo-title text-nowrap">
             <span class="moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
           </h1>
         </RouterLink>
@@ -106,6 +106,9 @@ function handleNavScroll(evt: Event) {
   .nav-header {
     display: flex;
     align-items: center;
+    justify-content: center;
+    margin-inline: 0 !important;
+    padding-inline: 0 !important;
 
     .header-action {
       cursor: pointer;
@@ -113,15 +116,38 @@ function handleNavScroll(evt: Event) {
   }
 
   .app-title-wrapper {
-    flex: 1;
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    margin-inline-end: 0;
+    gap: 9px;
+    margin: 0;
+    text-decoration: none;
+
+    .brand-logo-mark {
+      block-size: 1.5rem;
+      inline-size: 1.5rem;
+    }
   }
 
   .app-logo-title {
-    font-size: 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    color: rgba(var(--v-theme-on-surface), 0.92);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     line-height: 1;
+
+    .moviepilot-neo-badge {
+      display: block;
+      color: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+      letter-spacing: inherit;
+      line-height: 1;
+    }
   }
 
   .nav-items {

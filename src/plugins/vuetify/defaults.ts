@@ -4,7 +4,7 @@ export default {
     color: 'default',
     variant: 'text',
     VIcon: {
-      size: 24,
+      size: 20,
     },
   },
   VAlert: {
@@ -53,9 +53,11 @@ export default {
   },
   VList: {
     color: 'primary',
+    density: 'compact',
     elevation: 0,
   },
   VListItem: {
+    density: 'compact',
     rounded: 'md',
   },
   VPagination: {
@@ -94,7 +96,7 @@ export default {
     variant: 'outlined',
     color: 'primary',
     hideDetails: 'auto',
-    menuProps: { elevation: 0 },
+    menuProps: { elevation: 0, offset: 4, contentClass: 'mp-dropdown-menu' },
   },
   VRangeSlider: {
     // set v-range-slider default color to primary
@@ -127,12 +129,13 @@ export default {
     variant: 'outlined',
     color: 'primary',
     hideDetails: 'auto',
+    menuProps: { elevation: 0, offset: 4, contentClass: 'mp-dropdown-menu' },
   },
   VCombobox: {
     variant: 'outlined',
     color: 'primary',
     hideDetails: 'auto',
-    menuProps: { elevation: 0 },
+    menuProps: { elevation: 0, offset: 4, contentClass: 'mp-dropdown-menu' },
   },
   VFileInput: {
     variant: 'outlined',
@@ -147,6 +150,8 @@ export default {
   VSwitch: {
     // set v-switch default color to primary
     color: 'primary',
+    density: 'compact',
+    inset: true,
     hideDetails: 'auto',
   },
 }

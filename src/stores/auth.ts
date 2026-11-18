@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { authState } from '@/stores/types'
 import { clearSharedDialogs } from '@/composables/useSharedDialog'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
+import { useUserStore } from '@/stores/user'
 import { clearCachedMediaSubscribeStatuses } from '@/utils/mediaStatusCache'
 import { revokeNativeNotificationBinding } from '@/native/notifications'
 
@@ -42,6 +43,7 @@ export const useAuthStore = defineStore('auth', {
       this.setOriginalPath(null)
       clearCachedMediaSubscribeStatuses()
       usePluginSidebarNavStore().reset()
+      useUserStore().reset()
     },
     /** 用户主动退出时先撤销本机及配对网页通知，再清理当前登录会话。 */
     logout() {

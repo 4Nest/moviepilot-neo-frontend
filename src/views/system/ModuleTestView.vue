@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import api from '@/api'
 import { useI18n } from '@/composables/useChineseText'
-import { useTheme } from 'vuetify'
 
 // 国际化
 const { t } = useI18n()
-
-// 主题
-const theme = useTheme()
 
 interface ModuleListItem {
   id: string
@@ -31,7 +27,6 @@ const modules = ref<
     errmsg: string
     loading: boolean
     visible: boolean
-    delay: number
   }[]
 >([])
 
@@ -39,88 +34,95 @@ const modules = ref<
 const overallProgress = ref(0)
 const isChecking = ref(false)
 const checkComplete = ref(false)
+let checkGeneration = 0
+let isUnmounted = false
 
 // 调用API查询模块列表
 async function getModules() {
+  const generation = ++checkGeneration
   try {
     isChecking.value = true
+    checkComplete.value = false
     overallProgress.value = 0
 
     const result: { [key: string]: any } = await api.get('system/modulelist')
+    if (generation !== checkGeneration || isUnmounted) return
+
     if (result.success) {
       const moduleList = result.data?.modules
       if (moduleList) {
-        // 初始化模块列表
-        modules.value = moduleList.map((module: ModuleListItem, index: number) => ({
+        // 初始化模块列表并直接展示，避免人工延迟导致进度与条目显示脱节
+        modules.value = moduleList.map((module: ModuleListItem) => ({
           id: module.id,
           name: module.name_i18n || module.name,
           state: undefined,
           errmsg: '',
           loading: false,
-          visible: false,
-          delay: index * 200, // 每个模块延迟200ms出现
+          visible: true,
         }))
 
         // 开始检查
-        await startModuleCheck()
+        await startModuleCheck(generation)
+        return
       }
+    }
+    if (generation === checkGeneration && !isUnmounted) {
+      isChecking.value = false
     }
   } catch (error) {
     console.error(error)
-    isChecking.value = false
+    if (generation === checkGeneration && !isUnmounted) {
+      isChecking.value = false
+    }
   }
 }
 
 // 开始模块检查
-async function startModuleCheck() {
+async function startModuleCheck(generation: number) {
   const totalModules = modules.value.length
 
-  for (let i = 0; i < modules.value.length; i++) {
-    const module = modules.value[i]
-
-    // 显示当前模块
-    setTimeout(() => {
-      module.visible = true
-    }, module.delay)
+  for (let i = 0; i < totalModules; i++) {
+    if (generation !== checkGeneration || isUnmounted) return
 
     // 开始检查
-    await moduleTest(i)
+    await moduleTest(i, generation)
+    if (generation !== checkGeneration || isUnmounted) return
 
     // 更新总体进度
     overallProgress.value = ((i + 1) / totalModules) * 100
   }
 
-  // 检查完成
-  setTimeout(() => {
+  if (generation === checkGeneration && !isUnmounted) {
     isChecking.value = false
     checkComplete.value = true
-  }, 500)
+  }
 }
 
 // 调用API测试模块
-async function moduleTest(index: number) {
+async function moduleTest(index: number, generation: number) {
+  const target = modules.value[index]
+  if (!target) return
   try {
-    const target = modules.value[index]
     const moduleid = target.id
     target.loading = true
 
     const result = (await api.get(`system/moduletest/${moduleid}`)) as ModuleTestResponse
+    if (generation !== checkGeneration || isUnmounted) return
     target.loading = false
 
     if (result.success) {
       target.state = 'success'
-      target.name = `${target.name} - ${t('moduleTest.normal')}`
+      target.errmsg = ''
     } else if (!result.message) {
       target.state = undefined
-      target.name = `${target.name} - ${t('moduleTest.disabled')}`
+      target.errmsg = ''
     } else {
       target.state = 'error'
-      target.name = `${target.name} - ${t('moduleTest.error')}！`
       target.errmsg = result.message_i18n || result.message || ''
     }
   } catch (error) {
     console.error(error)
-    const target = modules.value[index]
+    if (generation !== checkGeneration || isUnmounted) return
     target.loading = false
     target.state = 'error'
     target.errmsg = t('moduleTest.requestFailed')
@@ -133,26 +135,32 @@ function recheck() {
   overallProgress.value = 0
   isChecking.value = false
   checkComplete.value = false
-  getModules()
+  void getModules()
 }
 
 // 加载
 onMounted(getModules)
+
+onBeforeUnmount(() => {
+  isUnmounted = true
+  checkGeneration++
+})
 </script>
 
 <template>
   <div class="system-health-check">
-    <!-- 动态进度框 - 固定在顶部 -->
+    <!-- 动态进度与操作面板 -->
     <div class="progress-container">
-      <div class="progress-card app-surface" :class="{ 'dark-theme': theme.global.current.value.dark }">
+      <div class="progress-card">
         <div class="progress-header">
-          <VIcon
-            :icon="isChecking ? 'mdi-cog-sync' : checkComplete ? 'mdi-check-circle' : 'mdi-cog'"
-            :class="isChecking ? 'rotating' : ''"
-            size="28"
-            color="white"
-          />
-          <h3 class="progress-title text-white">
+          <span class="progress-icon-box" :class="{ 'is-complete': checkComplete }" aria-hidden="true">
+            <VIcon
+              :icon="isChecking ? 'mdi-cog-sync' : checkComplete ? 'mdi-check-circle' : 'mdi-cog'"
+              :class="isChecking ? 'rotating' : ''"
+              size="18"
+            />
+          </span>
+          <h3 class="progress-title">
             {{
               isChecking
                 ? t('moduleTest.checking')
@@ -161,17 +169,21 @@ onMounted(getModules)
                   : t('moduleTest.preparing')
             }}
           </h3>
+          <span class="progress-text">{{ Math.round(overallProgress) }}%</span>
+          <VBtn
+            color="primary"
+            variant="flat"
+            prepend-icon="mdi-refresh"
+            :loading="isChecking"
+            :disabled="isChecking"
+            @click="recheck"
+          >
+            {{ t('moduleTest.recheck') }}
+          </VBtn>
         </div>
 
         <div class="progress-bar-container">
-          <VProgressLinear
-            v-model="overallProgress"
-            :color="checkComplete ? 'success' : 'white'"
-            height="6"
-            rounded
-            class="progress-bar"
-          />
-          <div class="progress-text">{{ Math.round(overallProgress) }}%</div>
+          <VProgressLinear v-model="overallProgress" color="primary" height="5" rounded class="progress-bar" />
         </div>
 
         <div class="progress-stats">
@@ -191,37 +203,45 @@ onMounted(getModules)
       </div>
     </div>
 
-    <!-- 检查结果列表 - 可滚动区域 -->
+    <!-- 检查结果结构化列表 -->
     <div class="results-container">
       <div class="module-list">
-        <Transition v-for="(module, index) in modules" :key="module.id" name="module-item" appear>
-          <div
-            v-show="module.visible"
-            class="module-item app-surface"
-            :class="[module.state, { 'dark-theme': theme.global.current.value.dark }]"
-          >
+        <Transition v-for="module in modules" :key="module.id" name="module-item" appear>
+          <div v-show="module.visible" class="module-item" :class="[module.state]">
             <div class="module-header">
-              <div class="module-icon">
-                <VIcon v-if="module.loading" icon="mdi-loading" class="rotating" color="primary" size="20" />
-                <VIcon v-else-if="module.state === 'success'" icon="mdi-check-circle" color="success" size="20" />
-                <VIcon v-else-if="module.state === 'error'" icon="mdi-alert-circle" color="error" size="20" />
-                <VIcon v-else icon="mdi-minus-circle" color="grey" size="20" />
+              <div class="module-icon" :class="[module.state]">
+                <VIcon v-if="module.loading" icon="mdi-loading" class="rotating" color="primary" size="16" />
+                <VIcon v-else-if="module.state === 'success'" icon="mdi-check-circle" color="success" size="16" />
+                <VIcon v-else-if="module.state === 'error'" icon="mdi-alert-circle" color="error" size="16" />
+                <VIcon v-else icon="mdi-minus-circle" size="16" />
               </div>
               <div class="module-info">
                 <div class="module-name">{{ module.name }}</div>
                 <div v-if="module.errmsg" class="module-error">{{ module.errmsg }}</div>
               </div>
               <div class="module-status">
-                <VChip v-if="module.loading" color="primary" size="x-small" variant="tonal">
+                <VChip v-if="module.loading" color="primary" size="x-small" variant="tonal" class="module-status-chip">
                   {{ t('moduleTest.checking') }}
                 </VChip>
-                <VChip v-else-if="module.state === 'success'" color="success" size="x-small" variant="tonal">
+                <VChip
+                  v-else-if="module.state === 'success'"
+                  color="success"
+                  size="x-small"
+                  variant="tonal"
+                  class="module-status-chip"
+                >
                   {{ t('moduleTest.normal') }}
                 </VChip>
-                <VChip v-else-if="module.state === 'error'" color="error" size="x-small" variant="tonal">
+                <VChip
+                  v-else-if="module.state === 'error'"
+                  color="error"
+                  size="x-small"
+                  variant="tonal"
+                  class="module-status-chip"
+                >
                   {{ t('moduleTest.error') }}
                 </VChip>
-                <VChip v-else-if="module.state === undefined" color="grey" size="x-small" variant="tonal">
+                <VChip v-else-if="module.state === undefined" size="x-small" variant="tonal" class="module-status-chip">
                   {{ t('moduleTest.disabled') }}
                 </VChip>
               </div>
@@ -229,13 +249,6 @@ onMounted(getModules)
           </div>
         </Transition>
       </div>
-    </div>
-
-    <!-- 重新检查按钮 -->
-    <div v-if="checkComplete" class="recheck-container">
-      <VBtn color="primary" variant="outlined" prepend-icon="mdi-refresh" size="small" @click="recheck">
-        {{ t('moduleTest.recheck') }}
-      </VBtn>
     </div>
   </div>
 </template>
@@ -255,76 +268,109 @@ onMounted(getModules)
 }
 
 .progress-card {
-  padding: 20px;
-  margin: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 13px 16px;
+  margin: 10px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .progress-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-block-end: 16px;
+  gap: 10px;
+  margin-block-end: 10px;
+}
+
+.progress-icon-box {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: rgba(var(--v-theme-primary), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 34px;
+}
+
+.progress-icon-box.is-complete {
+  background: rgba(var(--v-theme-success), 0.1);
+  color: rgb(var(--v-theme-success));
 }
 
 .progress-title {
+  flex: 1;
+  min-inline-size: 120px;
   margin: 0;
-  font-size: 1.1rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .progress-bar-container {
   position: relative;
-  margin-block-end: 16px;
+  margin-block-end: 12px;
 }
 
 .progress-bar {
-  background: rgba(255, 255, 255, 20%) !important;
+  background: rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .progress-text {
-  position: absolute;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 90%);
-  color: #333;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(var(--v-theme-primary), 0.24);
+  border-radius: 6px;
+  background: rgba(var(--v-theme-primary), 0.1);
+  block-size: 22px;
+  color: rgb(var(--v-theme-primary));
+  font-size: 11.5px;
   font-weight: 600;
-  inset-block-start: -6px;
-  inset-inline-end: 0;
-  padding-block: 2px;
-  padding-inline: 6px;
+  font-variant-numeric: tabular-nums;
+  padding-inline: 8px;
 }
 
 .progress-stats {
-  display: flex;
-  justify-content: space-around;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block-start: 1px solid var(--mp-border-subtle);
+  padding-block-start: 10px;
 }
 
 .stat-item {
-  flex: 1;
   text-align: center;
+}
+
+.stat-item + .stat-item {
+  border-inline-start: 1px solid var(--mp-border-subtle);
 }
 
 .stat-number {
   display: block;
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-block-end: 2px;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.15;
 }
 
 .stat-number.success {
-  color: #4caf50;
+  color: rgb(var(--v-theme-success));
 }
 
 .stat-number.error {
-  color: #f44336;
+  color: rgb(var(--v-theme-error));
 }
 
 .stat-label {
-  font-size: 0.7rem;
-  opacity: 0.8;
+  display: block;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  margin-block-start: 2px;
 }
 
 .results-container {
@@ -332,8 +378,8 @@ onMounted(getModules)
   min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-block: 0 16px;
-  padding-inline: 16px;
+  padding-block: 0 14px;
+  padding-inline: 14px;
 }
 
 .module-list {
@@ -343,29 +389,22 @@ onMounted(getModules)
 }
 
 .module-item {
-  padding: 12px;
-  background: var(--v-surface);
-  transition: all 0.3s ease;
+  padding: 10px 13px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 .module-item.success {
-  border-color: #4caf50;
-  background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
-}
-
-.module-item.success.dark-theme {
-  border-color: #4caf50;
-  background: linear-gradient(135deg, rgba(31, 47, 31, 30%) 0%, rgba(24, 32, 24, 60%) 100%);
+  border-color: rgba(var(--v-theme-success), 0.28);
 }
 
 .module-item.error {
-  border-color: #f44336;
-  background: linear-gradient(135deg, #fff8f8 0%, #ffe8e8 100%);
-}
-
-.module-item.error.dark-theme {
-  border-color: #f44336;
-  background: linear-gradient(135deg, rgba(47, 31, 31, 30%) 0%, rgba(34, 24, 24, 60%) 100%);
+  border-color: rgba(var(--v-theme-error), 0.32);
+  background: rgba(var(--v-theme-error), 0.04);
 }
 
 .module-header {
@@ -375,7 +414,15 @@ onMounted(getModules)
 }
 
 .module-icon {
+  display: grid;
   flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: var(--mp-item-bg);
+  block-size: 28px;
+  color: rgba(var(--v-theme-on-surface), 0.45);
+  inline-size: 28px;
 }
 
 .module-info {
@@ -384,15 +431,16 @@ onMounted(getModules)
 }
 
 .module-name {
-  color: var(--v-on-surface);
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-block-end: 2px;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .module-error {
-  color: #f44336;
-  font-size: 0.75rem;
+  color: rgb(var(--v-theme-error));
+  font-size: 12px;
+  line-height: 1.4;
   margin-block-start: 2px;
 }
 
@@ -400,13 +448,10 @@ onMounted(getModules)
   flex-shrink: 0;
 }
 
-.recheck-container {
-  display: flex;
-  flex-shrink: 0;
-  justify-content: center;
-  padding: 16px;
-  background: var(--v-surface-variant);
-  border-block-start: 1px solid var(--v-border-color);
+.module-status-chip {
+  block-size: 20px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* 动画效果 */
@@ -426,12 +471,12 @@ onMounted(getModules)
 
 /* 模块项单独动画 - 从下方滑出 */
 .module-item-enter-active {
-  transition: all 0.5s ease;
+  transition: all 0.32s ease;
 }
 
 .module-item-enter-from {
   opacity: 0;
-  transform: translateY(30px);
+  transform: translateY(12px);
 }
 
 .module-item-enter-to {

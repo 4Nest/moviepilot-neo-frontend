@@ -58,6 +58,7 @@ const rating = ref<PluginRating>({
 const selectedRating = ref(props.plugin?.user_rating || 0)
 const ratingLoading = ref(false)
 const ratingSubmitting = ref(false)
+const installing = ref(false)
 
 // 图片是否加载失败
 const imageLoadError = ref(false)
@@ -113,6 +114,7 @@ function visitPluginPage() {
 
 /** 安装插件并通知父级刷新市场列表。 */
 async function installPlugin(releaseVersion?: string, repoUrl?: string) {
+  if (installing.value) return
   if (!releaseVersion && props.plugin?.system_version_compatible === false) {
     $toast.error(props.plugin?.system_version_message || t('plugin.incompatibleSystemVersion'))
     return
@@ -133,6 +135,8 @@ async function installPlugin(releaseVersion?: string, repoUrl?: string) {
 
   const failureMessageKey = isInstalled.value ? 'plugin.updateFailed' : 'plugin.installFailed'
 
+  installing.value = true
+  versionHistoryDialogController?.updateProps({ updating: true })
   try {
     showInstallProgress(
       isInstalled.value && !releaseVersion
@@ -175,6 +179,8 @@ async function installPlugin(releaseVersion?: string, repoUrl?: string) {
     )
     console.error(error)
   } finally {
+    installing.value = false
+    versionHistoryDialogController?.updateProps({ updating: false })
     closeInstallProgress()
   }
 }
@@ -188,6 +194,7 @@ function showUpdateHistory() {
       plugin: props.plugin,
       actionMode: isInstalled.value ? 'update' : 'install',
       showUpdateAction: isInstalled.value && Boolean(props.plugin?.has_update),
+      updating: installing.value,
     },
     {
       update: installPlugin,
@@ -253,11 +260,11 @@ onUnmounted(() => {
 
 <template>
   <VDialog v-if="visible" v-model="visible" width="100%" max-width="25rem" max-height="90dvh" scrollable>
-    <VCard class="plugin-market-detail">
+    <VCard class="plugin-market-detail mp-dialog-card">
       <VDialogCloseBtn v-model="visible" />
       <VCardText class="plugin-market-detail__content">
         <header class="plugin-market-detail__header">
-          <VAvatar size="64" class="plugin-market-detail__avatar">
+          <VAvatar size="56" rounded="lg" class="plugin-market-detail__avatar">
             <VImg :src="pluginIconPath()" aspect-ratio="4/3" cover @error="imageLoadError = true" />
           </VAvatar>
           <h2 class="plugin-market-detail__title">
@@ -267,7 +274,7 @@ onUnmounted(() => {
             {{ props.plugin?.plugin_desc }}
           </p>
           <div v-if="rating.rating_count > 0" class="plugin-market-detail__header-rating">
-            <PluginRatingDisplay :rating="rating.average_rating" :count="rating.rating_count" :icon-size="18" />
+            <PluginRatingDisplay :rating="rating.average_rating" :count="rating.rating_count" :icon-size="16" />
           </div>
         </header>
 
@@ -300,8 +307,12 @@ onUnmounted(() => {
             <VBtn
               v-if="!isInstalled"
               color="primary"
+              variant="flat"
+              size="small"
+              class="px-4"
               prepend-icon="mdi-download"
-              :disabled="props.plugin?.system_version_compatible === false"
+              :loading="installing"
+              :disabled="installing || props.plugin?.system_version_compatible === false"
               @click="installPlugin()"
             >
               {{ t('plugin.installToLocal') }}
@@ -309,18 +320,29 @@ onUnmounted(() => {
             <VBtn
               v-else-if="props.plugin?.has_update"
               color="primary"
+              variant="flat"
+              size="small"
+              class="px-4"
               prepend-icon="mdi-arrow-up-circle-outline"
-              :disabled="props.plugin?.system_version_compatible === false"
+              :loading="installing"
+              :disabled="installing || props.plugin?.system_version_compatible === false"
               @click="installPlugin()"
             >
               {{ t('plugin.update') }}
             </VBtn>
-            <VBtn variant="tonal" prepend-icon="mdi-update" @click="showUpdateHistory">
+            <VBtn
+              variant="tonal"
+              size="small"
+              class="px-3"
+              prepend-icon="mdi-update"
+              :disabled="installing"
+              @click="showUpdateHistory"
+            >
               {{ t('plugin.versionHistory') }}
             </VBtn>
           </div>
           <div v-if="props.count" class="plugin-market-detail-actions__downloads">
-            <VIcon icon="mdi-fire" size="18" />
+            <VIcon icon="mdi-fire" size="15" />
             <span>{{ t('plugin.totalDownloads', { count: formatDownloadCount(props.count) }) }}</span>
           </div>
         </div>
@@ -357,7 +379,7 @@ onUnmounted(() => {
 
 <style scoped>
 .plugin-market-detail__content {
-  padding: 1.75rem 1.25rem 1.25rem;
+  padding: 1.5rem 1.25rem 1.25rem !important;
 }
 
 .plugin-market-detail__header {
@@ -369,22 +391,23 @@ onUnmounted(() => {
 
 .plugin-market-detail__avatar {
   flex: 0 0 auto;
+  border: 1px solid var(--mp-border-subtle);
 }
 
 .plugin-market-detail__title {
   max-inline-size: 100%;
-  margin: 0.75rem 0 0;
-  font-size: 1.125rem;
+  margin: 0.65rem 0 0;
+  font-size: 1.05rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .plugin-market-detail__description {
-  max-inline-size: 24rem;
+  max-inline-size: 22rem;
   margin: 0.25rem 0 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-line;
@@ -394,26 +417,31 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-block: 0.75rem 0.375rem;
+  margin-block: 0.5rem 0.25rem;
 }
 
 .plugin-market-detail__metadata {
   display: grid;
-  gap: 0.625rem;
-  margin: 1.125rem 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-item-bg);
+  gap: 0.45rem;
+  margin: 0.875rem 0;
 }
 
 .plugin-market-detail__metadata-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.5rem;
   min-inline-size: 0;
 }
 
 .plugin-market-detail__metadata dt {
-  font-size: 0.875rem;
-  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.8125rem;
+  font-weight: 500;
   line-height: 1.4;
   text-align: end;
   white-space: nowrap;
@@ -422,7 +450,8 @@ onUnmounted(() => {
 .plugin-market-detail__metadata dd {
   min-inline-size: 0;
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: 0.84rem;
+  font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
   text-align: start;

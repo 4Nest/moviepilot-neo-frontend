@@ -34,6 +34,12 @@ async function fetchData() {
   }
 }
 
+// 立即从本地列表剔除已删除任务，释放网格单元并触发后方卡片弹性补位
+function removeDownloadItem(hash?: string) {
+  if (!hash) return
+  dataList.value = dataList.value.filter(item => item.hash !== hash)
+}
+
 // 每个下载器独立持有刷新身份，非活动标签不占用轮询资源。
 useConditionalDataRefresh(
   `downloading-list-${props.name}`,
@@ -53,16 +59,17 @@ defineExpose({ fetchData })
 </script>
 
 <template>
-  <LoadingBanner v-if="!isRefreshed" class="mt-12" />
+  <LoadingBanner v-if="!isRefreshed" class="mt-10" />
   <ProgressiveCardGrid
     v-if="dataList.length > 0"
     :items="dataList"
     :get-item-key="item => item.hash || item.name"
     :min-item-width="320"
+    :gap="14"
     :estimated-item-height="230"
   >
     <template #default="{ item }">
-      <DownloadingCard :info="item" :downloader-name="props.name" />
+      <DownloadingCard :info="item" :downloader-name="props.name" @remove="removeDownloadItem" />
     </template>
   </ProgressiveCardGrid>
   <NoDataFound

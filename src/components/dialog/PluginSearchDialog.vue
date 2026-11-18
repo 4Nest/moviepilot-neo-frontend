@@ -76,28 +76,32 @@ function closeDialog() {
     :max-height="!display.mdAndUp.value ? '' : '85vh'"
     :fullscreen="!display.mdAndUp.value"
   >
-    <VCard class="mx-auto" width="100%">
-      <VToolbar flat class="p-0">
+    <VCard class="mx-auto mp-dialog-card" width="100%">
+      <div class="plugin-search-header">
         <VTextField
           v-model="searchKeyword"
-          :label="t('plugin.searchPlugins')"
+          :aria-label="t('plugin.searchPlugins')"
           :mobile-layout="false"
           single-line
           :placeholder="t('plugin.searchPlaceholder')"
-          variant="solo"
+          variant="solo-filled"
+          density="compact"
           prepend-inner-icon="mdi-magnify"
           flat
           autofocus
-          class="mx-1"
+          clearable
+          hide-details
+          class="plugin-search-input"
         />
-      </VToolbar>
+      </div>
       <VDialogCloseBtn @click="closeDialog" />
-      <VList v-if="plugins.length > 0" class="plugin-search-list" lines="two">
+      <VDivider />
+      <VList v-if="plugins.length > 0" class="plugin-search-list py-1" lines="two" density="compact">
         <VVirtualScroll :items="plugins">
           <template #default="{ item }">
-            <VListItem @click="emit('open-plugin', item)">
+            <VListItem class="plugin-search-item" @click="emit('open-plugin', item)">
               <template #prepend>
-                <VAvatar>
+                <VAvatar size="36" rounded="lg" class="me-3 plugin-search-avatar">
                   <VImg :src="pluginIcon(item)" @error="pluginIconError(item)">
                     <template #placeholder>
                       <div class="w-full h-full">
@@ -107,17 +111,18 @@ function closeDialog() {
                   </VImg>
                 </VAvatar>
               </template>
-              <VListItemTitle>
-                {{ item.plugin_name }}<span class="text-sm ms-2 mt-1 text-gray-500">v{{ item?.plugin_version }}</span>
-                <VIcon v-if="item.installed" color="success" icon="mdi-check-circle" class="ms-2" size="small" />
+              <VListItemTitle class="font-weight-medium">
+                {{ item.plugin_name
+                }}<span class="text-caption ms-2 text-medium-emphasis">v{{ item?.plugin_version }}</span>
+                <VIcon v-if="item.installed" color="success" icon="mdi-check-circle" class="ms-1.5" size="15" />
               </VListItemTitle>
-              <VListItemSubtitle>
+              <VListItemSubtitle class="mt-0.5">
                 <VChip
                   v-for="label in pluginLabels(item.plugin_label)"
                   :key="label"
                   variant="tonal"
-                  size="small"
-                  class="me-1 my-1"
+                  size="x-small"
+                  class="me-1 my-0.5"
                   color="info"
                   label
                 >
@@ -129,11 +134,31 @@ function closeDialog() {
           </template>
         </VVirtualScroll>
       </VList>
+      <VCardText v-else class="text-center text-medium-emphasis py-8">
+        {{ t('common.noMatchingData') }}
+      </VCardText>
     </VCard>
   </VDialog>
 </template>
 <style lang="scss" scoped>
+.plugin-search-header {
+  padding-block: 10px;
+  padding-inline: 14px 50px;
+}
+
+.plugin-search-input :deep(.v-field) {
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-field-bg);
+  box-shadow: none;
+  min-block-size: 36px;
+}
+
 .plugin-search-list {
   border-radius: 0 !important;
+}
+
+.plugin-search-avatar {
+  border: 1px solid var(--mp-border-subtle);
 }
 </style>

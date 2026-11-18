@@ -25,6 +25,7 @@ const newRepoUrl = ref('')
 const editingIndex = ref<number | null>(null)
 const editingUrl = ref('')
 const syncingSources = ref(false)
+const saving = ref(false)
 
 const emit = defineEmits(['save', 'close'])
 
@@ -123,10 +124,12 @@ async function queryMarketRepoSetting() {
 
 /** 保存插件市场仓库配置。 */
 async function saveHandle() {
-  try {
-    const reposToSave = normalizeCurrentRepos()
-    if (!reposToSave) return
+  if (saving.value) return
+  const reposToSave = normalizeCurrentRepos()
+  if (!reposToSave) return
 
+  saving.value = true
+  try {
     const repoStringToSave = reposToSave.join(',')
     const result: { [key: string]: any } = await api.post('system/setting/PLUGIN_MARKET', repoStringToSave)
 
@@ -136,6 +139,9 @@ async function saveHandle() {
     } else $toast.error(t('dialog.pluginMarketSetting.saveFailed', { message: result?.message }))
   } catch (error) {
     console.log(error)
+    $toast.error(t('dialog.pluginMarketSetting.saveFailed', { message: error instanceof Error ? error.message : '' }))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -279,17 +285,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog width="56rem" :fullscreen="!display.mdAndUp.value">
-    <VCard class="plugin-market-dialog-card">
+  <VDialog max-width="52rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="plugin-market-dialog-card mp-dialog-card">
       <VCardItem class="plugin-market-card-item">
         <div class="plugin-market-header">
           <VCardTitle class="plugin-market-title d-flex align-center pa-0">
-            <VIcon icon="mdi-store-cog" class="me-2" />
+            <VIcon icon="mdi-store-cog" size="20" class="me-2 text-primary" />
             {{ t('dialog.pluginMarketSetting.title') }}
           </VCardTitle>
         </div>
-        <VDialogCloseBtn @click="emit('close')" />
       </VCardItem>
+      <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
       <VCardText class="plugin-market-dialog-body pt-4">
         <div class="plugin-market-toolbar">
@@ -347,6 +353,7 @@ onMounted(() => {
               <template #append>
                 <VBtn
                   icon="mdi-plus"
+                  size="small"
                   variant="tonal"
                   color="primary"
                   :aria-label="t('dialog.pluginMarketSetting.addRepo')"
@@ -400,7 +407,7 @@ onMounted(() => {
                         hide-details
                         autofocus
                         @keyup.enter="saveEdit(index)"
-                        @keyup.escape="cancelEdit"
+                        @keydown.esc.stop="cancelEdit"
                       />
 
                       <template #append v-if="editingIndex !== index">
@@ -422,8 +429,17 @@ onMounted(() => {
                             icon="mdi-check"
                             size="small"
                             variant="text"
-                            color="success"
+                            color="primary"
+                            :aria-label="t('common.confirm')"
                             @click.stop="saveEdit(index)"
+                          />
+                          <VBtn
+                            icon="mdi-close"
+                            size="small"
+                            variant="text"
+                            color="default"
+                            :aria-label="t('common.cancel')"
+                            @click.stop="cancelEdit"
                           />
                         </div>
                       </template>
@@ -477,11 +493,12 @@ onMounted(() => {
           </VAlert>
         </div>
       </VCardText>
-
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VBtn
-          color="success"
-          variant="tonal"
+          color="default"
+          variant="outlined"
+          size="small"
           prepend-icon="mdi-cloud-sync-outline"
           :loading="syncingSources"
           :disabled="syncingSources"
@@ -490,13 +507,17 @@ onMounted(() => {
           {{ t('dialog.pluginMarketSetting.syncSources') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="saving || syncingSources" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
+          class="px-4"
+          :loading="saving"
+          :disabled="saveDisabled || saving || syncingSources"
           @click="saveHandle"
-          prepend-icon="mdi-content-save-check"
-          class="px-5"
-          :disabled="saveDisabled"
         >
           {{ t('dialog.pluginMarketSetting.save') }}
         </VBtn>
@@ -516,7 +537,13 @@ onMounted(() => {
 
 .plugin-market-card-item {
   flex: 0 0 auto;
-  padding-block: 0.875rem;
+  padding-block: 14px;
+  padding-inline: 22px;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
 }
 
 .plugin-market-header {
@@ -538,7 +565,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.875rem;
   min-block-size: 0;
-  padding-block: 0.875rem !important;
+  padding: 18px 22px !important;
 }
 
 .plugin-market-toolbar {
@@ -556,11 +583,11 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: rgba(var(--v-theme-info), 0.08);
   color: rgb(var(--v-theme-info));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   gap: 0.5rem;
   min-inline-size: 0;
-  padding-block: 0.5rem;
-  padding-inline: 1rem;
+  padding-block: 0.4rem;
+  padding-inline: 0.75rem;
 
   span {
     overflow: hidden;
@@ -574,8 +601,6 @@ onMounted(() => {
   padding: 0.125rem;
   border: var(--app-grouped-list-border);
   border-radius: var(--app-control-radius);
-  -webkit-backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
   background: var(--app-grouped-list-background);
   box-shadow: var(--app-surface-shadow);
   gap: 0.125rem;
@@ -631,8 +656,6 @@ onMounted(() => {
   flex: 1;
   border: var(--app-grouped-list-border);
   border-radius: var(--app-grouped-list-radius);
-  -webkit-backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
   background: var(--app-grouped-list-background);
   box-shadow: var(--app-surface-shadow);
   min-block-size: 0;
@@ -642,14 +665,12 @@ onMounted(() => {
 .plugin-market-repo-list {
   border: 0;
   border-radius: inherit !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
 .plugin-market-repo-item {
-  min-block-size: 4.5rem;
+  min-block-size: 3.5rem;
 }
 
 .plugin-market-repo-title {
@@ -698,8 +719,6 @@ onMounted(() => {
   flex: 1;
   border: var(--app-grouped-list-border);
   border-radius: var(--app-grouped-list-radius);
-  -webkit-backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
   background: var(--app-grouped-list-background);
   box-shadow: var(--app-surface-shadow);
   min-block-size: 0;
@@ -729,13 +748,13 @@ onMounted(() => {
   block-size: 100%;
   color: rgb(var(--v-theme-on-surface));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  font-size: 1rem;
+  font-size: 0.8125rem;
   line-height: 1.6;
   min-block-size: 0;
   outline: none;
   overflow-y: auto;
-  padding-block: 1rem;
-  padding-inline: 3.25rem 1rem;
+  padding-block: 0.875rem;
+  padding-inline: 2.875rem 1rem;
   resize: none;
   white-space: pre-wrap;
   word-break: break-word;

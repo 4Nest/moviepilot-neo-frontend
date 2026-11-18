@@ -462,8 +462,12 @@ watch(
   },
 )
 
-// 切换媒体类型或识别源时，非 TMDB 电视剧不保留剧集组选择。
+// 切换媒体类型或识别源时，非 TMDB 电视剧不保留剧集组选择；切回自动媒体类型时清空残留媒体ID。
 watch([() => transferForm.type_name, () => mediaSource.value], ([typeName, source]) => {
+  if (!typeName) {
+    transferForm.media_id = null
+    mediaSelectorDialog.value = false
+  }
   if (typeName === '电视剧' && source === 'themoviedb' && transferForm.media_id) {
     getEpisodeGroups(transferForm.media_id)
     return
@@ -1391,9 +1395,16 @@ function stopLoadingProgress() {
   }
 }
 
+// 整理表单引用
+const reorganizeFormRef = ref()
+const optionalNumberValidator = (val: unknown) =>
+  val === undefined || val === null || val === '' || numberValidator(val)
+
 // 整理文件
 async function transfer(background: boolean = false) {
   if ((!props.logids?.length && !normalizedItems.value.length) || transferSubmitting.value) return
+  const { valid } = (await reorganizeFormRef.value?.validate()) || { valid: true }
+  if (!valid) return
 
   transferSubmitting.value = true
   progressDialog.value = true
@@ -1461,8 +1472,8 @@ onUnmounted(() => {
       class="reorganize-dialog-card"
       :class="{ 'reorganize-dialog-card--split': previewVisible && display.mdAndUp.value }"
     >
-      <VCardItem class="py-2">
-        <template #prepend> <VIcon icon="mdi-folder-move" class="me-2" /> </template>
+      <VCardItem class="mp-dialog-header">
+        <template #prepend> <VIcon icon="mdi-folder-move" size="20" class="me-2 text-primary" /> </template>
         <VCardTitle>{{ dialogTitle }}</VCardTitle>
         <VCardSubtitle>{{ dialogSubtitle }}</VCardSubtitle>
       </VCardItem>
@@ -1471,236 +1482,268 @@ onUnmounted(() => {
       <VCardText class="pa-0 reorganize-dialog-card__body">
         <div class="reorganize-main-row" :class="{ 'reorganize-main-row--preview-visible': previewVisible }">
           <div class="reorganize-form-pane">
-            <div class="reorganize-form-pane__content pa-6">
-              <VForm @submit.prevent="() => {}">
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VSelect
-                      v-model="transferForm.target_storage"
-                      :items="storageOptions"
-                      :label="t('dialog.reorganize.targetStorage')"
-                      :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
-                      :hint="t('dialog.reorganize.targetStorageHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-harddisk"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VSelect
-                      v-model="transferForm.transfer_type"
-                      :label="t('dialog.reorganize.transferType')"
-                      :items="manualTransferTypeOptions"
-                      :hint="t('dialog.reorganize.transferTypeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-swap-horizontal"
-                    />
-                  </VCol>
-                  <VCol cols="12">
-                    <VCombobox
-                      v-model="targetPathSelection"
-                      :items="targetDirectoryOptions"
-                      item-title="title"
-                      item-value="value"
-                      :return-object="false"
-                      :label="t('dialog.reorganize.targetPath')"
-                      :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
-                      :hint="t('dialog.reorganize.targetPathHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-folder-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="4">
-                    <VSelect
-                      v-model="transferForm.type_name"
-                      :label="t('dialog.reorganize.mediaType')"
-                      :items="[
-                        { title: t('dialog.reorganize.auto'), value: '' },
-                        { title: t('dialog.reorganize.movie'), value: '电影' },
-                        { title: t('dialog.reorganize.tv'), value: '电视剧' },
-                      ]"
-                      :hint="t('dialog.reorganize.mediaTypeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-movie-open"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="4">
-                    <VSelect
-                      v-model="transferForm.media_source"
-                      :items="mediaSourceItems"
-                      :label="t('dialog.reorganize.mediaSource')"
-                      :hint="t('dialog.reorganize.mediaSourceHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-database-search"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="4">
-                    <VTextField
-                      v-model="transferForm.media_id"
-                      :disabled="transferForm.type_name === ''"
-                      :label="mediaIdLabel"
-                      :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
-                      :rules="[numberValidator]"
-                      append-inner-icon="mdi-magnify"
-                      :hint="t('dialog.reorganize.mediaIdHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-identifier"
-                      @click:append-inner="mediaSelectorDialog = true"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow v-show="transferForm.type_name === '电视剧'">
-                  <VCol v-if="mediaSource === 'themoviedb'" cols="12" md="6">
-                    <VSelect
-                      v-model="transferForm.episode_group"
-                      :items="episodeGroupOptions"
-                      item-title="title"
-                      item-value="value"
-                      :item-props="episodeGroupItemProps"
-                      :loading="episodeGroupLoading"
-                      :disabled="!transferForm.media_id"
-                      clearable
-                      :label="t('dialog.reorganize.episodeGroup')"
-                      :placeholder="t('dialog.reorganize.episodeGroupPlaceholder')"
-                      :hint="t('dialog.reorganize.episodeGroupHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-view-list"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="3">
-                    <VSelect
-                      v-model.number="transferForm.season"
-                      :label="t('dialog.reorganize.season')"
-                      :items="seasonItems"
-                      :hint="t('dialog.reorganize.seasonHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-calendar"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="3">
-                    <VTextField
-                      v-model="transferForm.episode_detail"
-                      :disabled="disableEpisodeDetail"
-                      :label="t('dialog.reorganize.episodeDetail')"
-                      :placeholder="t('dialog.reorganize.episodeDetailPlaceholder')"
-                      :hint="t('dialog.reorganize.episodeDetailHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-playlist-play"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="transferForm.episode_format"
-                      :label="t('dialog.reorganize.episodeFormat')"
-                      :placeholder="t('dialog.reorganize.episodeFormatPlaceholder')"
-                      :hint="t('dialog.reorganize.episodeFormatHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-format-text"
+            <div class="reorganize-form-pane__content">
+              <VForm ref="reorganizeFormRef" @submit.prevent="() => {}" class="mp-form-sections">
+                <!-- 目标存储与目录 -->
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="6">
+                      <VSelect
+                        v-model="transferForm.target_storage"
+                        :items="storageOptions"
+                        :label="t('dialog.reorganize.targetStorage')"
+                        :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
+                        :hint="t('dialog.reorganize.targetStorageHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-harddisk"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VSelect
+                        v-model="transferForm.transfer_type"
+                        :label="t('dialog.reorganize.transferType')"
+                        :items="manualTransferTypeOptions"
+                        :hint="t('dialog.reorganize.transferTypeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-swap-horizontal"
+                      />
+                    </VCol>
+                    <VCol cols="12">
+                      <VCombobox
+                        v-model="targetPathSelection"
+                        :items="targetDirectoryOptions"
+                        item-title="title"
+                        item-value="value"
+                        :return-object="false"
+                        :label="t('dialog.reorganize.targetPath')"
+                        :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
+                        :hint="t('dialog.reorganize.targetPathHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-folder-outline"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <!-- 媒体识别与季集规则 -->
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="6">
+                      <VSelect
+                        v-model="transferForm.type_name"
+                        :label="t('dialog.reorganize.mediaType')"
+                        :items="[
+                          { title: t('dialog.reorganize.auto'), value: '' },
+                          { title: t('dialog.reorganize.movie'), value: '电影' },
+                          { title: t('dialog.reorganize.tv'), value: '电视剧' },
+                        ]"
+                        :hint="t('dialog.reorganize.mediaTypeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-movie-open"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VSelect
+                        v-model="transferForm.media_source"
+                        :items="mediaSourceItems"
+                        :label="t('dialog.reorganize.mediaSource')"
+                        :hint="t('dialog.reorganize.mediaSourceHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-database-search"
+                      />
+                    </VCol>
+                    <VCol cols="12">
+                      <VTextField
+                        v-model="transferForm.media_id"
+                        :disabled="transferForm.type_name === ''"
+                        :label="mediaIdLabel"
+                        :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
+                        :rules="[optionalNumberValidator]"
+                        append-inner-icon="mdi-magnify"
+                        :hint="t('dialog.reorganize.mediaIdHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-identifier"
+                        @click:append-inner="mediaSelectorDialog = true"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <section v-show="transferForm.type_name === '电视剧'" class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol v-if="mediaSource === 'themoviedb'" cols="12">
+                      <VSelect
+                        v-model="transferForm.episode_group"
+                        :items="episodeGroupOptions"
+                        item-title="title"
+                        item-value="value"
+                        :item-props="episodeGroupItemProps"
+                        :loading="episodeGroupLoading"
+                        :disabled="!transferForm.media_id"
+                        clearable
+                        :label="t('dialog.reorganize.episodeGroup')"
+                        :placeholder="t('dialog.reorganize.episodeGroupPlaceholder')"
+                        :hint="t('dialog.reorganize.episodeGroupHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-view-list"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VSelect
+                        v-model.number="transferForm.season"
+                        :label="t('dialog.reorganize.season')"
+                        :items="seasonItems"
+                        :hint="t('dialog.reorganize.seasonHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-calendar"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="transferForm.episode_detail"
+                        :disabled="disableEpisodeDetail"
+                        :label="t('dialog.reorganize.episodeDetail')"
+                        :placeholder="t('dialog.reorganize.episodeDetailPlaceholder')"
+                        :hint="t('dialog.reorganize.episodeDetailHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-playlist-play"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="transferForm.episode_format"
+                        :label="t('dialog.reorganize.episodeFormat')"
+                        :placeholder="t('dialog.reorganize.episodeFormatPlaceholder')"
+                        :hint="t('dialog.reorganize.episodeFormatHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-format-text"
+                      >
+                        <template #append-inner>
+                          <VTooltip location="top">
+                            <template #activator="{ props: tooltipProps }">
+                              <IconBtn
+                                v-bind="tooltipProps"
+                                type="button"
+                                color="primary"
+                                variant="text"
+                                size="small"
+                                class="ms-1"
+                                icon="mdi-auto-fix"
+                                :loading="episodeFormatRecommendState.loading"
+                                :disabled="!canRecommendEpisodeFormat"
+                                @click.stop="handleRecommendEpisodeFormat"
+                              />
+                            </template>
+                            <span>
+                              {{ episodeFormatRecommendTooltip }}
+                            </span>
+                          </VTooltip>
+                        </template>
+                      </VTextField>
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="transferForm.episode_offset"
+                        :label="t('dialog.reorganize.episodeOffset')"
+                        :placeholder="t('dialog.reorganize.episodeOffsetPlaceholder')"
+                        :hint="t('dialog.reorganize.episodeOffsetHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-numeric"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="transferForm.episode_part"
+                        :label="t('dialog.reorganize.episodePart')"
+                        :placeholder="t('dialog.reorganize.episodePartPlaceholder')"
+                        :hint="t('dialog.reorganize.episodePartHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-file-multiple"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model.number="transferForm.min_filesize"
+                        :label="t('dialog.reorganize.minFileSize')"
+                        :rules="[optionalNumberValidator]"
+                        placeholder="0"
+                        :hint="t('dialog.reorganize.minFileSizeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-file-document-outline"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <!-- 整理选项紧凑开关组 -->
+                <section class="mp-form-section">
+                  <div class="mp-settings-card">
+                    <div class="mp-setting-row" :title="t('dialog.reorganize.typeFolderHint')">
+                      <VSwitch
+                        v-model="transferForm.library_type_folder"
+                        :label="t('dialog.reorganize.typeFolderOption')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div class="mp-setting-row" :title="t('dialog.reorganize.categoryFolderHint')">
+                      <VSwitch
+                        v-model="transferForm.library_category_folder"
+                        :label="t('dialog.reorganize.categoryFolderOption')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div class="mp-setting-row" :title="t('dialog.reorganize.scrapeHint')">
+                      <VSwitch
+                        v-model="transferForm.scrape"
+                        :label="t('dialog.reorganize.scrapeOption')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div
+                      v-if="props.logids?.length"
+                      class="mp-setting-row"
+                      :title="t('dialog.reorganize.fromHistoryHint')"
                     >
-                      <template #append-inner>
-                        <VTooltip location="top">
-                          <template #activator="{ props: tooltipProps }">
-                            <IconBtn
-                              v-bind="tooltipProps"
-                              type="button"
-                              color="primary"
-                              variant="text"
-                              size="small"
-                              class="ms-1"
-                              icon="mdi-auto-fix"
-                              :loading="episodeFormatRecommendState.loading"
-                              :disabled="!canRecommendEpisodeFormat"
-                              @click.stop="handleRecommendEpisodeFormat"
-                            />
-                          </template>
-                          <span>
-                            {{ episodeFormatRecommendTooltip }}
-                          </span>
-                        </VTooltip>
-                      </template>
-                    </VTextField>
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="transferForm.episode_offset"
-                      :label="t('dialog.reorganize.episodeOffset')"
-                      :placeholder="t('dialog.reorganize.episodeOffsetPlaceholder')"
-                      :hint="t('dialog.reorganize.episodeOffsetHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-numeric"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="transferForm.episode_part"
-                      :label="t('dialog.reorganize.episodePart')"
-                      :placeholder="t('dialog.reorganize.episodePartPlaceholder')"
-                      :hint="t('dialog.reorganize.episodePartHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-file-multiple"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model.number="transferForm.min_filesize"
-                      :label="t('dialog.reorganize.minFileSize')"
-                      :rules="[numberValidator]"
-                      placeholder="0"
-                      :hint="t('dialog.reorganize.minFileSizeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-file-document-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VSwitch
-                      v-model="transferForm.library_type_folder"
-                      :label="t('dialog.reorganize.typeFolderOption')"
-                      :hint="t('dialog.reorganize.typeFolderHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VSwitch
-                      v-model="transferForm.library_category_folder"
-                      :label="t('dialog.reorganize.categoryFolderOption')"
-                      :hint="t('dialog.reorganize.categoryFolderHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VSwitch
-                      v-model="transferForm.scrape"
-                      :label="t('dialog.reorganize.scrapeOption')"
-                      :hint="t('dialog.reorganize.scrapeHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6" v-if="props.logids?.length">
-                    <VSwitch
-                      v-model="transferForm.from_history"
-                      :label="t('dialog.reorganize.fromHistoryOption')"
-                      :hint="t('dialog.reorganize.fromHistoryHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6" v-else>
-                    <VSwitch
-                      v-model="skipTransferred"
-                      :label="t('dialog.reorganize.skipTransferredOption')"
-                      :hint="t('dialog.reorganize.skipTransferredHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                </VRow>
+                      <VSwitch
+                        v-model="transferForm.from_history"
+                        :label="t('dialog.reorganize.fromHistoryOption')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div v-else class="mp-setting-row" :title="t('dialog.reorganize.skipTransferredHint')">
+                      <VSwitch
+                        v-model="skipTransferred"
+                        :label="t('dialog.reorganize.skipTransferredOption')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                  </div>
+                </section>
+
                 <Transition name="fade-transition">
                   <div
                     v-if="manualHistoryCount > 0"
-                    class="reorganize-history-notice mt-4"
+                    class="reorganize-history-notice"
                     :class="skipTransferred ? 'reorganize-history-notice--info' : 'reorganize-history-notice--warning'"
                     role="status"
                   >
@@ -1723,10 +1766,12 @@ onUnmounted(() => {
                 </Transition>
               </VForm>
             </div>
+            <VDivider />
             <VCardActions class="app-dialog-actions reorganize-form-pane__actions">
               <VBtn
-                color="info"
-                variant="tonal"
+                color="default"
+                variant="outlined"
+                size="small"
                 @click="togglePreview"
                 :prepend-icon="previewToggleIcon"
                 class="reorganize-action-btn reorganize-action-btn--preview"
@@ -1736,8 +1781,9 @@ onUnmounted(() => {
                 {{ t('dialog.reorganize.previewResult') }}
               </VBtn>
               <VBtn
-                color="success"
-                variant="tonal"
+                color="default"
+                variant="outlined"
+                size="small"
                 @click="transfer(true)"
                 prepend-icon="mdi-plus"
                 class="reorganize-action-btn reorganize-action-btn--queue"
@@ -1747,12 +1793,16 @@ onUnmounted(() => {
                 {{ t('dialog.reorganize.addToQueue') }}
               </VBtn>
               <VSpacer />
+              <VBtn color="default" variant="text" size="small" :disabled="transferSubmitting" @click="emit('close')">
+                {{ t('common.cancel') }}
+              </VBtn>
               <VBtn
                 color="primary"
                 variant="flat"
+                size="small"
                 @click="transfer(false)"
                 :prepend-icon="isReorganize ? 'mdi-refresh' : 'mdi-arrow-right-bold'"
-                class="reorganize-action-btn reorganize-action-btn--primary"
+                class="reorganize-action-btn reorganize-action-btn--primary px-4"
                 :loading="manualHistoryLoading || transferSubmitting"
                 :disabled="transferSubmitting"
               >
@@ -1915,6 +1965,21 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
 .reorganize-dialog-card {
   max-block-size: min(92vh, 64rem);
 }
@@ -1952,7 +2017,7 @@ onUnmounted(() => {
 }
 
 .reorganize-main-row--preview-visible {
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
 }
 
 .reorganize-form-pane {
@@ -1965,7 +2030,7 @@ onUnmounted(() => {
 }
 
 .reorganize-main-row--preview-visible .reorganize-form-pane {
-  border-inline-end: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-inline-end: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
 }
 
 .reorganize-form-pane__content {
@@ -1973,6 +2038,7 @@ onUnmounted(() => {
   flex: 1;
   flex-direction: column;
   min-block-size: 0;
+  padding: 18px 22px;
 }
 
 .reorganize-dialog-card--split .reorganize-form-pane,
@@ -1985,22 +2051,26 @@ onUnmounted(() => {
 }
 
 .reorganize-form-pane__actions {
+  gap: 8px;
   margin-block-start: auto;
+  padding: 10px 20px !important;
 }
 
 .reorganize-action-btn--active {
-  background: rgba(var(--v-theme-info), 0.12);
+  border-color: rgba(var(--v-theme-primary), 0.45) !important;
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
 }
 
 .reorganize-history-notice {
   display: flex;
   align-items: center;
-  border-radius: 0.5rem;
+  border-radius: 10px;
   font-size: 0.8125rem;
   gap: 0.5rem;
   line-height: 1.25rem;
-  padding-block: 0.45rem;
-  padding-inline: 0.75rem;
+  padding-block: 0.5rem;
+  padding-inline: 0.875rem;
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -2009,13 +2079,13 @@ onUnmounted(() => {
 
 .reorganize-history-notice--info {
   border: 1px solid rgba(var(--v-theme-info), 0.22);
-  background: rgba(var(--v-theme-info), 0.1);
+  background: rgba(var(--v-theme-info), 0.08);
   color: rgb(var(--v-theme-info));
 }
 
 .reorganize-history-notice--warning {
   border: 1px solid rgba(var(--v-theme-warning), 0.26);
-  background: rgba(var(--v-theme-warning), 0.12);
+  background: rgba(var(--v-theme-warning), 0.1);
   color: rgb(var(--v-theme-warning));
 }
 
@@ -2044,10 +2114,10 @@ onUnmounted(() => {
   flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
-  border-block-end: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-block-end: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   gap: 1rem;
-  padding-block: 1.5rem 1rem;
-  padding-inline: 1.5rem;
+  padding-block: 14px 12px;
+  padding-inline: 22px;
 }
 
 .reorganize-preview-pane__title-block {
@@ -2081,34 +2151,38 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.875rem;
-  padding-block-start: 1.25rem;
-  padding-inline: 1.5rem;
+  gap: 0.75rem;
+  padding-block-start: 16px;
+  padding-inline: 22px;
 }
 
 .preview-note {
+  border: 1px solid rgba(var(--v-theme-error), 0.24);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-error), 0.06);
   color: rgb(var(--v-theme-error));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
-  padding-block: 0.875rem;
-  padding-inline: 1rem;
+  padding-block: 0.625rem;
+  padding-inline: 0.875rem;
 }
 
 .preview-summary-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.625rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .preview-overview-card {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 0.5rem;
-  gap: 0.375rem;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  gap: 0.25rem;
   min-inline-size: 0;
-  padding-block: 0.875rem;
-  padding-inline: 1rem;
+  padding-block: 0.75rem;
+  padding-inline: 0.875rem;
 }
 
 .preview-overview-card__label {
@@ -2121,7 +2195,7 @@ onUnmounted(() => {
 .preview-overview-card__value {
   overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.9375rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2130,18 +2204,19 @@ onUnmounted(() => {
 .preview-custom-words {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 0.5rem;
-  gap: 0.75rem;
-  padding-block: 0.875rem;
-  padding-inline: 1rem;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  gap: 0.625rem;
+  padding-block: 0.75rem;
+  padding-inline: 0.875rem;
 }
 
 .preview-custom-words__title {
   display: inline-flex;
   align-items: center;
   color: rgb(var(--v-theme-info));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   gap: 0.375rem;
 }
@@ -2149,14 +2224,14 @@ onUnmounted(() => {
 .preview-custom-words__items {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
   min-inline-size: 0;
 }
 
 .preview-custom-words__item {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.25rem;
   min-inline-size: 0;
 }
 
@@ -2196,7 +2271,7 @@ onUnmounted(() => {
   overflow: hidden auto;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.875rem;
   min-block-size: 0;
   padding-block-end: 1rem;
 }
@@ -2227,10 +2302,10 @@ onUnmounted(() => {
   overflow: visible;
   flex: 0 0 auto;
   flex-direction: column;
-  margin-block-end: 1.5rem;
+  margin-block-end: 1.25rem;
   min-block-size: 0;
   min-inline-size: 0;
-  padding-inline: 1.5rem;
+  padding-inline: 22px;
 }
 
 .preview-file-body {
@@ -2238,7 +2313,7 @@ onUnmounted(() => {
   overflow: visible;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
   min-block-size: 0;
   min-inline-size: 0;
 }
@@ -2246,17 +2321,19 @@ onUnmounted(() => {
 .preview-file-row {
   display: grid;
   align-items: center;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 0.5rem;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.02));
   gap: 0.875rem;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  min-block-size: 5.25rem;
+  min-block-size: 4.75rem;
   min-inline-size: 0;
-  padding-block: 0.875rem;
+  padding-block: 0.75rem;
   padding-inline: 1rem;
 }
 
 .preview-file-row--failed {
+  border-color: rgba(var(--v-theme-error), 0.3);
   background: rgba(var(--v-theme-error), 0.04);
 }
 

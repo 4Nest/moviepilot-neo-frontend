@@ -83,7 +83,11 @@ const VirtualScrollStub = defineComponent({
   },
   setup(props, { slots }) {
     const itemRef = () => {}
-    return () => h('div', props.items.map(item => slots.default?.({ item, itemRef })))
+    return () =>
+      h(
+        'div',
+        props.items.map(item => slots.default?.({ item, itemRef })),
+      )
   },
 })
 
@@ -339,10 +343,7 @@ describe('SubscribeHistoryDialog', () => {
 
   it('toasts a business failure when resubscribing and does not emit save', async () => {
     const movie = createHistory({ name: '业务失败电影' })
-    server.use(
-      subscribeHistoryHandler('电影', [movie]),
-      createSubscribeHandler({ success: false }),
-    )
+    server.use(subscribeHistoryHandler('电影', [movie]), createSubscribeHandler({ success: false }))
     const user = userEvent.setup()
     const { events } = await renderDialog()
     expect(await screen.findByText(movie.name)).toBeInTheDocument()
@@ -418,7 +419,7 @@ describe('SubscribeHistoryDialog', () => {
     const user = userEvent.setup()
     const { events } = await renderDialog()
     expect(await screen.findByText('没有已完成的订阅')).toBeInTheDocument()
-    const closeButton = document.querySelector('.absolute.right-3.top-3')
+    const closeButton = document.querySelector('.app-dialog-close-btn')
     if (!(closeButton instanceof HTMLButtonElement)) throw new Error('Dialog close button was not rendered')
 
     await user.click(closeButton)

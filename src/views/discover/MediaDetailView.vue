@@ -17,7 +17,6 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import { formatSeasonLabel } from '@/@core/utils/season'
 import router from '@/router'
 import { isNullOrEmptyObject } from '@/@core/utils'
-import { useTheme } from 'vuetify'
 import { useI18n } from '@/composables/useChineseText'
 import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { openMediaServerItem, openDoubanApp } from '@/utils/appDeepLink'
@@ -51,9 +50,6 @@ const mediaProps = defineProps({
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
 const userStore = useUserStore()
-
-// 获取主题信息
-const theme = useTheme()
 
 // 媒体详情
 const mediaDetail = ref<MediaInfo>({} as MediaInfo)
@@ -116,6 +112,12 @@ const pendingSearchResultType = ref<'torrent' | 'subtitle'>('torrent')
 // 站点选择后待执行的季集参数
 const pendingSearchOptions = ref<MediaSearchOptions>({})
 
+// 首次拉取站点、主订阅、分季订阅及播放防连点加载态
+const searchingSites = ref(false)
+const mainSubscribing = ref(false)
+const seasonSubscribing = ref<{ [key: number]: boolean }>({})
+const playingLoading = ref(false)
+
 // 可用剧集组
 const episodeGroups = ref<EpisodeGroupInfo[]>([])
 
@@ -143,16 +145,6 @@ let episodeGroupSeasonRequestId = 0
 let seasonNotExistsRequestId = 0
 let episodeExistsRequestId = 0
 let seasonEpisodesRequestGeneration = 0
-
-// 计算主题是否为透明
-const isTransparentTheme = computed(() => {
-  return theme.name.value === 'transparent'
-})
-
-// 计算主题是否为玻璃
-const isGlassTheme = computed(() => {
-  return theme.name.value === 'glass'
-})
 
 // 打开站点选择弹窗，并把站点选择结果交回详情页执行搜索。
 function openSearchSiteDialog() {
@@ -207,19 +199,46 @@ function getSubscribeStatusKey(season: number | null = mediaDetail.value?.season
   return `${getMediaId()}::${season ?? 'all'}`
 }
 
+let detailRequestGeneration = 0
+
+// 重置当前媒体的衍生局部状态，避免实例复用切换媒体时残留旧数据
+function resetMediaLocalState() {
+  mediaDetail.value = {} as MediaInfo
+  existsItemId.value = ''
+  isSubscribed.value = false
+  seasonEpisodesInfo.value = {}
+  existsEpisodes.value = {}
+  seasonsNotExisted.value = {}
+  seasonsSubscribed.value = {}
+  subscribedSeasonModes.value = {}
+  episodeGroups.value = []
+  selectedEpisodeGroup.value = ''
+  episodeGroupSeasons.value = []
+  episodeGroupsLoading.value = false
+  episodeGroupSeasonsLoading.value = false
+  episodeGroupSeasonRequestId += 1
+  seasonNotExistsRequestId += 1
+  episodeExistsRequestId += 1
+  seasonEpisodesRequestGeneration += 1
+}
+
 // 调用API查询详情
 async function getMediaDetail() {
+  const generation = ++detailRequestGeneration
+  resetMediaLocalState()
   if (mediaProps.mediaid && mediaProps.type) {
     detailLoadFailed.value = false
     isRefreshed.value = false
     try {
-      mediaDetail.value = await api.get(`media/${mediaProps.mediaid}`, {
+      const detail: MediaInfo = await api.get(`media/${mediaProps.mediaid}`, {
         params: {
           title: mediaProps.title,
           year: mediaProps.year,
           type_name: mediaProps.type,
         },
       })
+      if (generation !== detailRequestGeneration) return
+      mediaDetail.value = detail
       if (!hasMediaIdentity()) return
 
       const supportsEpisodeGroups = getMediaSubscribeIdentity(mediaDetail.value)?.source === 'themoviedb'
@@ -240,11 +259,17 @@ async function getMediaDetail() {
       if (mediaDetail.value.type === '电影') checkMovieSubscribed()
       else checkSeasonsSubscribed()
     } catch (error) {
+      if (generation !== detailRequestGeneration) return
       console.error(error)
       detailLoadFailed.value = true
     } finally {
-      isRefreshed.value = true
+      if (generation === detailRequestGeneration) {
+        isRefreshed.value = true
+      }
     }
+  } else {
+    detailLoadFailed.value = false
+    isRefreshed.value = true
   }
 }
 
@@ -528,14 +553,191 @@ const isAllSeasonsSubscribed = computed(
 )
 
 // 订阅按钮响应；单季入口同时传递详情页当前选择的剧集组。
-function handleSubscribe(season: number | null = null, episodeGroup = '') {
-  subscribeActions.handleSubscribe(season, episodeGroup)
+async function handleSubscribe(season: number | null = null, episodeGroup = '') {
+  if (season !== null) {
+    if (seasonSubscribing.value[season]) return
+    seasonSubscribing.value[season] = true
+    try {
+      if (seasonsSubscribed.value[season]) {
+        await subscribeActions.removeSubscribe(season)
+      } else {
+        await subscribeActions.openSubscribeSeasonDialog(season, episodeGroup)
+      }
+    } finally {
+      seasonSubscribing.value[season] = false
+    }
+    return
+  }
+
+  if (mainSubscribing.value) return
+  mainSubscribing.value = true
+  try {
+    if (mediaDetail.value.type === '电视剧') {
+      await subscribeActions.openSubscribeSeasonDialog()
+    } else if (isSubscribed.value) {
+      await subscribeActions.removeSubscribe(mediaDetail.value?.season ?? null)
+    } else if (existsItemId.value) {
+      subscribeActions.handleSubscribe()
+    } else {
+      await subscribeActions.addSubscribe(null)
+    }
+  } finally {
+    mainSubscribing.value = false
+  }
 }
 
-// 从genres中获取name，使用、分隔
-function getGenresName(genres: Array<string | { name: string }>) {
-  return genres.map(genre => (typeof genre === 'string' ? genre : genre.name)).join('、')
+// 安全提取运行时长（兼容电影 runtime 与剧集 episode_run_time）
+const displayRuntime = computed(() => mediaDetail.value.runtime || mediaDetail.value.episode_run_time?.[0])
+
+interface CrewMemberItem {
+  id: number | string
+  job?: string
+  name: string
+  roles?: string[]
+  url?: string
 }
+
+interface GroupedCrewEntry {
+  label: string
+  members: Array<{ id: number | string; name: string; url?: string }>
+}
+
+const CREW_JOB_LABEL_MAP: Record<string, string> = {
+  Creator: '主创',
+  Director: '导演',
+  'Director of Photography': '摄影',
+  Editor: '剪辑',
+  'Executive Producer': '执行制片',
+  Novel: '原著',
+  'Original Music Composer': '配乐',
+  Producer: '制片人',
+  Screenplay: '编剧',
+  Series_Composition: '系列构成',
+  Story: '故事',
+  Writer: '编剧',
+}
+
+const MEDIA_STATUS_LABEL_MAP: Record<string, string> = {
+  Released: '已上映',
+  'Returning Series': '连载中',
+  Ended: '已完结',
+  Canceled: '已取消',
+  Cancelled: '已取消',
+  'In Production': '制作中',
+  'Post Production': '后期制作',
+  Planned: '筹备中',
+  Rumored: '传闻中',
+  Pilot: '试播集',
+}
+
+function formatMediaStatus(status?: string) {
+  if (!status) return ''
+  return MEDIA_STATUS_LABEL_MAP[status] ?? status
+}
+
+function formatCrewJobLabel(job?: string) {
+  if (!job) return '主创'
+  return CREW_JOB_LABEL_MAP[job] ?? job
+}
+
+const CREW_ROLE_PRIORITY: Record<string, number> = {
+  导演: 1,
+  主创: 2,
+  系列构成: 3,
+  编剧: 4,
+  故事: 5,
+  原著: 6,
+  制片人: 7,
+  执行制片: 8,
+  摄影: 9,
+  配乐: 10,
+  剪辑: 11,
+}
+
+function getCrewRolePriority(label: string) {
+  if (label in CREW_ROLE_PRIORITY) return CREW_ROLE_PRIORITY[label]
+  for (const [role, priority] of Object.entries(CREW_ROLE_PRIORITY)) {
+    if (label.includes(role)) return priority
+  }
+  return 99
+}
+
+// 按职位合并同职能主创人员并按工业标准优先级排序（确保导演始终排在制片人之前）
+const groupedTmdbCrew = computed<GroupedCrewEntry[]>(() => {
+  const rawList = (mediaDetail.value.directors ?? []) as CrewMemberItem[]
+  const map = new Map<string, Array<{ id: number | string; name: string }>>()
+  for (const item of rawList) {
+    if (!item?.name) continue
+    const label = formatCrewJobLabel(item.job)
+    let bucket = map.get(label)
+    if (!bucket) {
+      bucket = []
+      map.set(label, bucket)
+    }
+    if (!bucket.some(existing => existing.id === item.id && existing.name === item.name)) {
+      bucket.push({ id: item.id, name: item.name })
+    }
+  }
+  return Array.from(map.entries())
+    .map(([label, members]) => ({ label, members }))
+    .sort((a, b) => getCrewRolePriority(a.label) - getCrewRolePriority(b.label))
+})
+
+// 豆瓣主创同职能归并并按职能优先级排序，保留每位成员独立外链可点击
+const groupedDoubanCrew = computed<GroupedCrewEntry[]>(() => {
+  const rawList = (mediaDetail.value.directors ?? []) as CrewMemberItem[]
+  const map = new Map<string, Array<{ id: number | string; name: string; url?: string }>>()
+  for (const item of rawList) {
+    if (!item?.name) continue
+    const label = item.roles?.length ? joinArray(item.roles) : '主创'
+    let bucket = map.get(label)
+    if (!bucket) {
+      bucket = []
+      map.set(label, bucket)
+    }
+    if (!bucket.some(existing => existing.id === item.id && existing.name === item.name)) {
+      bucket.push({ id: item.id, name: item.name, url: item.url })
+    }
+  }
+  return Array.from(map.entries())
+    .map(([label, members]) => ({ label, members }))
+    .sort((a, b) => getCrewRolePriority(a.label) - getCrewRolePriority(b.label))
+})
+
+// 格式化十分制评分显示（如 8.4）
+const formattedVoteScore = computed(() => {
+  const score = Number(mediaDetail.value.vote_average)
+  if (!Number.isFinite(score) || score <= 0) return ''
+  return score.toFixed(1)
+})
+
+// 提取流派名称列表，供 Hero 区胶囊标签渲染
+const displayGenres = computed(() => {
+  const rawGenres = (mediaDetail.value.genres ?? []) as Array<string | { name?: string }>
+  return rawGenres.map(genre => (typeof genre === 'string' ? genre : genre?.name || '')).filter(Boolean)
+})
+
+const hasExternalLinks = computed(() =>
+  Boolean(
+    mediaDetail.value.tmdb_id ||
+    mediaDetail.value.douban_id ||
+    mediaDetail.value.imdb_id ||
+    mediaDetail.value.tvdb_id ||
+    mediaDetail.value.bangumi_id ||
+    mediaDetail.value.anilist_id,
+  ),
+)
+
+const hasActiveCrew = computed(() =>
+  Boolean(
+    (mediaDetail.value.tmdb_id && groupedTmdbCrew.value.length > 0) ||
+    (!mediaDetail.value.tmdb_id && mediaDetail.value.douban_id && groupedDoubanCrew.value.length > 0),
+  ),
+)
+
+const hasOverviewCardContent = computed(() =>
+  Boolean(mediaDetail.value.overview || hasActiveCrew.value || hasExternalLinks.value),
+)
 
 // 拼装TheMovieDb地址
 function getTheMovieDbLink() {
@@ -659,17 +861,6 @@ const getSubscribeIcon = computed(() => {
   else return 'mdi-heart-outline'
 })
 
-// 计算订阅按钮颜色
-const getSubscribeColor = computed(() => {
-  if (mediaDetail.value.type === '电视剧') {
-    if (isAllSeasonsSubscribed.value) return 'error'
-    if (subscribedSeasonNumbers.value.length > 0) return 'warning'
-    return 'warning'
-  }
-  if (isSubscribed.value) return 'error'
-  else return 'warning'
-})
-
 // 计算订阅按钮文案
 const getSubscribeText = computed(() => {
   if (mediaDetail.value.type === '电视剧') {
@@ -710,6 +901,8 @@ function handleSearch(resultType: 'torrent' | 'subtitle' = 'torrent', options: M
 
 // 跳转播放页面
 async function handlePlay() {
+  if (playingLoading.value) return
+  playingLoading.value = true
   // 获取播放链接地址
   try {
     const result: ApiResponse<{ item_id: string; server_id: string; server_type: string; url: string }> = await api.get(
@@ -729,6 +922,8 @@ async function handlePlay() {
   } catch (error) {
     console.error(error)
     $toast.error('获取播放链接失败！')
+  } finally {
+    playingLoading.value = false
   }
 }
 
@@ -756,12 +951,18 @@ async function clickSearch(
   resultType: 'torrent' | 'subtitle' = 'torrent',
   options: MediaSearchOptions = {},
 ) {
+  if (searchingSites.value) return
   searchType.value = type
   pendingSearchResultType.value = resultType
   pendingSearchOptions.value = options
   if (allSites.value?.length == 0) {
-    await querySites()
-    await querySelectedSites()
+    searchingSites.value = true
+    try {
+      await querySites()
+      await querySelectedSites()
+    } finally {
+      searchingSites.value = false
+    }
   }
   if (allSites.value?.length > 0) {
     openSearchSiteDialog()
@@ -781,6 +982,13 @@ async function handleSubtitleSearch() {
   await clickSearch('title', 'subtitle')
 }
 
+watch(
+  () => [mediaProps.mediaid, mediaProps.type, mediaProps.title, mediaProps.year],
+  () => {
+    void getMediaDetail()
+  },
+)
+
 onBeforeMount(() => {
   getMediaDetail()
 })
@@ -796,356 +1004,428 @@ onUnmounted(() => {
 
 <template>
   <LoadingBanner v-if="!isRefreshed" class="mt-12" />
-  <div
-    v-if="hasMediaIdentity()"
-    class="max-w-8xl mx-auto px-4"
-    :class="{
-      'media-detail-transparent': isTransparentTheme,
-      'media-detail-glass': isGlassTheme,
-    }"
-  >
-    <template v-if="getBackdropUrl || getPosterUrl">
-      <div class="vue-media-back vue-media-back-image absolute left-0 top-0 w-full h-96">
-        <VImg class="h-96" position="top" :src="getBackdropUrl || getPosterUrl" cover />
-      </div>
-      <div class="vue-media-back vue-media-back-overlay absolute left-0 top-0 w-full h-96" />
-    </template>
+  <div v-if="hasMediaIdentity()" class="media-detail-shell">
     <div class="media-page">
-      <div class="media-header">
-        <div class="media-poster">
-          <VImg
-            :src="getW500Image(mediaDetail.poster_path)"
-            cover
-            class="object-cover aspect-w-2 aspect-h-3 ring-1 ring-gray-500"
-          >
-            <template #placeholder>
-              <div class="w-full h-full">
-                <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
-              </div>
-            </template>
-          </VImg>
-        </div>
-        <div class="media-title">
-          <div v-if="existsItemId" class="media-status">
-            <span
-              class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap transition !no-underline bg-green-500 bg-opacity-80 border border-green-500 !text-green-100 hover:bg-green-500 hover:bg-opacity-100 false overflow-hidden"
-            >
-              <div class="relative z-20 flex items-center false">
-                <span>{{ t('media.status.inLibrary') }}</span>
-              </div>
-            </span>
+      <section class="media-hero-stage" :class="{ 'media-hero-stage--no-backdrop': !(getBackdropUrl || getPosterUrl) }">
+        <template v-if="getBackdropUrl || getPosterUrl">
+          <div class="vue-media-back vue-media-back-image">
+            <VImg class="w-full h-full" position="center 20%" :src="getBackdropUrl || getPosterUrl" cover />
           </div>
-          <h1 class="d-flex flex-column flex-lg-row align-baseline justify-center justify-lg-start">
-            <div class="align-self-center align-self-lg-end">
-              {{ mediaDetail.title }}
-            </div>
-            <div v-if="mediaDetail.year" class="text-lg align-self-center align-self-lg-end">
-              （{{ mediaDetail.year }}）
-            </div>
-          </h1>
-          <span class="media-attributes">
-            <span v-if="mediaDetail.runtime || mediaDetail.episode_run_time[0]"
-              >{{ mediaDetail.runtime || mediaDetail.episode_run_time[0] }} {{ t('media.minutes') }}</span
-            >
-            <span v-if="(mediaDetail.runtime || mediaDetail.episode_run_time[0]) && mediaDetail.genres" class="mx-1">
-              |
-            </span>
-            <span v-if="mediaDetail.genres">{{ getGenresName(mediaDetail.genres || []) }}</span>
-          </span>
-        </div>
-        <div class="media-actions">
-          <VBtn
-            v-if="userStore.superUser && hasMediaIdentity()"
-            variant="tonal"
-            color="primary"
-            class="media-action-button"
-          >
-            <template #prepend>
-              <VIcon icon="mdi-magnify" />
-            </template>
-            {{ t('media.actions.searchResource') }}
-            <VMenu activator="parent" close-on-content-click>
-              <VList>
-                <VListItem @click="clickSearch('title')">
-                  <VListItemTitle>{{ t('media.search.byTitle') }}</VListItemTitle>
-                </VListItem>
-                <VListItem @click="clickSearch('imdbid')">
-                  <VListItemTitle>{{ t('media.search.byImdb') }}</VListItemTitle>
-                </VListItem>
-              </VList>
-            </VMenu>
-          </VBtn>
-          <VBtn
-            v-if="userStore.superUser && hasMediaIdentity()"
-            variant="tonal"
-            color="info"
-            class="media-action-button"
-            @click="handleSubtitleSearch"
-          >
-            <template #prepend>
-              <VIcon icon="mdi-subtitles-outline" />
-            </template>
-            {{ t('media.actions.searchSubtitle') }}
-          </VBtn>
-          <VBtn
-            v-if="mediaDetail.type === '电影' || hasMediaIdentity()"
-            class="media-action-button"
-            :color="getSubscribeColor"
-            variant="tonal"
-            @click="handleSubscribe()"
-          >
-            <template #prepend>
-              <VIcon :icon="getSubscribeIcon" />
-            </template>
-            {{ getSubscribeText }}
-          </VBtn>
-          <VBtn v-if="existsItemId" class="media-action-button" variant="tonal" @click="handlePlay()" color="success">
-            <template #prepend>
-              <VIcon icon="mdi-play" />
-            </template>
-            {{ t('media.actions.playOnline') }}
-          </VBtn>
-        </div>
-      </div>
-      <div class="media-overview">
-        <div class="media-overview-left">
-          <div v-if="mediaDetail.tagline" class="tagline">
-            {{ mediaDetail.tagline }}
-          </div>
-          <h2 v-if="mediaDetail.overview">{{ t('media.overview') }}</h2>
-          <p>{{ mediaDetail.overview }}</p>
-          <ul v-if="mediaDetail.tmdb_id" class="media-crew">
-            <li v-for="director in mediaDetail.directors" :key="director.id">
-              <span>{{ director.job }}</span>
-              <RouterLink :to="`/person?personid=${director.id}`" class="crew-name" target="_blank">
-                {{ director.name }}
-              </RouterLink>
-            </li>
-          </ul>
-          <ul v-if="!mediaDetail.tmdb_id && mediaDetail.douban_id" class="media-crew">
-            <li v-for="director in mediaDetail.directors" :key="director.id">
-              <span>{{ joinArray(director.roles) }}</span>
-              <a class="crew-name" :href="`${director.url}`" target="_blank">{{ director.name }}</a>
-            </li>
-          </ul>
-          <div class="mt-6">
-            <a
-              v-if="mediaDetail.tmdb_id"
-              class="mb-2 mr-2 inline-flex last:mr-0"
-              :href="getTheMovieDbLink()"
-              target="_blank"
-            >
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">TheMovieDb</span>
-              </div>
-            </a>
-            <div v-if="mediaDetail.douban_id" class="mb-2 mr-2 inline-flex last:mr-0" @click="handleDoubanClick">
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">豆瓣</span>
-              </div>
-            </div>
-            <a v-if="mediaDetail.imdb_id" class="mb-2 mr-2 inline-flex last:mr-0" :href="getImdbLink()" target="_blank">
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">IMDb</span>
-              </div>
-            </a>
-            <a v-if="mediaDetail.tvdb_id" class="mb-2 mr-2 inline-flex last:mr-0" :href="getTvdbLink()" target="_blank">
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">TheTvDb</span>
-              </div>
-            </a>
-            <a
-              v-if="mediaDetail.bangumi_id"
-              class="mb-2 mr-2 inline-flex last:mr-0"
-              :href="getBangumiLink()"
-              target="_blank"
-            >
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">Bangumi</span>
-              </div>
-            </a>
-            <a
-              v-if="mediaDetail.anilist_id"
-              class="mb-2 mr-2 inline-flex last:mr-0"
-              :href="getAniListLink()"
-              target="_blank"
-            >
-              <div
-                class="inline-flex cursor-pointer items-center rounded-full bg-gray-600 px-2 py-1 text-sm text-gray-200 ring-1 ring-gray-500 transition hover:bg-gray-700"
-              >
-                <VIcon icon="mdi-link" />
-                <span class="ms-1">AniList</span>
-              </div>
-            </a>
-          </div>
-          <h2 v-if="mediaDetail.type === '电视剧' && mediaDetail.tmdb_id" class="py-4">{{ t('media.seasons') }}</h2>
-          <div v-if="mediaDetail.type === '电视剧' && mediaDetail.tmdb_id" class="flex w-full flex-col space-y-2">
-            <div v-if="episodeGroupsLoading || episodeGroupOptions.length > 1" class="episode-group-selector">
-              <div class="episode-group-label">{{ t('media.episodeGroups.select') }}</div>
-              <VProgressLinear v-if="episodeGroupsLoading" color="primary" indeterminate rounded />
-              <template v-else>
-                <div class="episode-group-rail-shell">
-                  <button
-                    v-if="canScrollEpisodeGroupsBackward"
-                    type="button"
-                    class="episode-group-nav episode-group-nav--backward"
-                    :aria-label="t('media.episodeGroups.previous')"
-                    @click="scrollEpisodeGroups('backward')"
-                  >
-                    <VIcon icon="mdi-chevron-left" />
-                  </button>
-                  <div
-                    ref="episodeGroupRail"
-                    class="episode-group-rail"
-                    @scroll.passive="updateEpisodeGroupScrollState"
-                  >
-                    <button
-                      v-for="group in episodeGroupOptions"
-                      :key="group.id || 'default'"
-                      type="button"
-                      class="episode-group-option"
-                      :class="{ 'episode-group-option--active': selectedEpisodeGroup === group.id }"
-                      :aria-pressed="selectedEpisodeGroup === group.id"
-                      @click="setEpisodeGroup(group.id)"
-                    >
-                      <VIcon :icon="group.icon" size="small" class="episode-group-option__icon" />
-                      <span class="episode-group-option__text">
-                        <span class="episode-group-option__title">{{ group.name }}</span>
-                        <span class="episode-group-option__meta">
-                          {{
-                            t('media.episodeGroups.summary', {
-                              seasons: group.group_count,
-                              episodes: group.episode_count,
-                            })
-                          }}
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                  <button
-                    v-if="canScrollEpisodeGroupsForward"
-                    type="button"
-                    class="episode-group-nav episode-group-nav--forward"
-                    :aria-label="t('media.episodeGroups.next')"
-                    @click="scrollEpisodeGroups('forward')"
-                  >
-                    <VIcon icon="mdi-chevron-right" />
-                  </button>
-                </div>
-                <div class="episode-group-current">
-                  {{
-                    t('media.episodeGroups.current', {
-                      name: selectedEpisodeGroupOption.name,
-                      seasons: selectedEpisodeGroupOption.group_count,
-                      episodes: selectedEpisodeGroupOption.episode_count,
-                    })
-                  }}
+          <div class="vue-media-back vue-media-back-overlay" />
+        </template>
+        <div class="media-header">
+          <div class="media-poster">
+            <VImg :src="getW500Image(mediaDetail.poster_path)" cover class="object-cover aspect-w-2 aspect-h-3">
+              <template #placeholder>
+                <div class="w-full h-full">
+                  <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
                 </div>
               </template>
-            </div>
-            <LoadingBanner v-if="episodeGroupSeasonsLoading" class="mt-3" />
-            <VExpansionPanels v-else :key="selectedEpisodeGroup || 'default'">
-              <VExpansionPanel
-                v-for="season in getMediaSeasons"
-                :key="season.season_number"
-                @group:selected="loadSeasonEpisodes(season.season_number || 0)"
-              >
-                <VExpansionPanelTitle>
-                  <template #default>
-                    <div class="flex flex-row items-center justify-between">
-                      <span class="font-weight-bold">{{
-                        season.season_number === 0
-                          ? season.name || formatSeasonLabel(0, t('media.specials'))
-                          : t('media.seasonNumber', { number: season.season_number })
-                      }}</span>
-                      <VChip size="small" class="ms-1">
-                        {{ t('media.episodeCount', { count: season.episode_count }) }}
-                      </VChip>
-                      <div class="absolute right-12">
-                        <VChip v-if="seasonsNotExisted" :color="getExistColor(season.season_number || 0)" flat>
-                          {{ getExistText(season.season_number || 0) }}
-                        </VChip>
-                        <IconBtn
-                          class="ms-1"
-                          :color="seasonsSubscribed[season.season_number || 0] ? 'error' : 'warning'"
-                          variant="text"
-                          @click.stop="handleSubscribe(season.season_number ?? null, selectedEpisodeGroup)"
-                        >
-                          <VIcon
-                            :icon="seasonsSubscribed[season.season_number || 0] ? 'mdi-heart' : 'mdi-heart-outline'"
-                          />
-                        </IconBtn>
-                      </div>
-                    </div>
-                  </template>
-                </VExpansionPanelTitle>
-                <VExpansionPanelText>
-                  <template #default>
-                    <LoadingBanner v-if="!seasonEpisodesInfo[season.season_number || 0]" class="mt-3" />
-                    <div class="flex flex-col justify-center divide-y divide-gray-700">
-                      <div
-                        v-for="episode in seasonEpisodesInfo[season.season_number || 0]"
-                        :key="episode.episode_number"
-                        class="flex flex-col space-y-4 py-4 xl:flex-row xl:space-y-4 xl:space-x-4"
-                      >
-                        <div class="episode-info flex-1">
-                          <VIcon
-                            v-if="isEpisodeExists(season.season_number || 0, episode.episode_number || 0)"
-                            color="success"
-                            icon="mdi-check-circle"
-                            class="episode-exists-badge"
-                            size="small"
-                          />
-                          <div class="flex flex-col space-y-2 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-2">
-                            <h3 class="text-lg">{{ episode.episode_number }} - {{ episode.name }}</h3>
-                            <div class="flex items-center space-x-2">
-                              <span
-                                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap cursor-default bg-gray-700 !text-gray-300"
-                              >
-                                {{ episode.air_date }}
-                              </span>
-                            </div>
-                          </div>
-                          <p>{{ episode.overview }}</p>
-                        </div>
-                        <VImg
-                          cover
-                          class="rounded-lg"
-                          max-width="15rem"
-                          :src="getEpisodeImage(episode.still_path || '')"
-                          alt=""
-                        />
-                      </div>
-                    </div>
-                  </template>
-                </VExpansionPanelText>
-              </VExpansionPanel>
-            </VExpansionPanels>
+            </VImg>
           </div>
+          <div class="media-title">
+            <div v-if="existsItemId" class="media-status">
+              <span class="media-in-library-badge">
+                <VIcon icon="mdi-check-circle" size="13" class="me-1" />
+                <span>{{ t('media.status.inLibrary') }}</span>
+              </span>
+            </div>
+            <h1 class="media-heading">
+              <span class="media-heading__text">{{ mediaDetail.title }}</span>
+              <span v-if="mediaDetail.year" class="media-heading__year">（{{ mediaDetail.year }}）</span>
+            </h1>
+            <div v-if="formattedVoteScore || displayRuntime || displayGenres.length > 0" class="media-attributes">
+              <span v-if="formattedVoteScore" class="media-inline-score">
+                <VIcon icon="mdi-star" size="13" />
+                <span>{{ formattedVoteScore }}</span>
+              </span>
+              <span v-if="displayRuntime" class="media-runtime-pill">
+                <VIcon icon="mdi-clock-outline" size="12" />
+                <span>{{ displayRuntime }} {{ t('media.minutes') }}</span>
+              </span>
+              <div v-if="displayGenres.length > 0" class="media-genre-list">
+                <span v-for="genre in displayGenres" :key="genre" class="media-genre-pill">{{ genre }}</span>
+              </div>
+            </div>
+            <blockquote v-if="mediaDetail.tagline" class="tagline">
+              {{ mediaDetail.tagline }}
+            </blockquote>
+          </div>
+          <div class="media-actions">
+            <VBtn
+              v-if="userStore.superUser && hasMediaIdentity()"
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              class="media-action-button media-action-button--ghost"
+              :loading="searchingSites && pendingSearchResultType === 'torrent'"
+              :disabled="searchingSites"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-magnify" />
+              </template>
+              {{ t('media.actions.searchResource') }}
+              <VMenu activator="parent" close-on-content-click>
+                <VList>
+                  <VListItem @click="clickSearch('title')">
+                    <VListItemTitle>{{ t('media.search.byTitle') }}</VListItemTitle>
+                  </VListItem>
+                  <VListItem @click="clickSearch('imdbid')">
+                    <VListItemTitle>{{ t('media.search.byImdb') }}</VListItemTitle>
+                  </VListItem>
+                </VList>
+              </VMenu>
+            </VBtn>
+            <VBtn
+              v-if="userStore.superUser && hasMediaIdentity()"
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              class="media-action-button media-action-button--ghost"
+              :loading="searchingSites && pendingSearchResultType === 'subtitle'"
+              :disabled="searchingSites"
+              @click="handleSubtitleSearch"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-subtitles-outline" />
+              </template>
+              {{ t('media.actions.searchSubtitle') }}
+            </VBtn>
+            <VBtn
+              v-if="mediaDetail.type === '电影' || hasMediaIdentity()"
+              size="small"
+              class="media-action-button"
+              :color="isSubscribed || subscribedSeasonNumbers.length > 0 ? 'error' : 'primary'"
+              :variant="isSubscribed || subscribedSeasonNumbers.length > 0 ? 'tonal' : 'flat'"
+              rounded="lg"
+              :loading="mainSubscribing"
+              :disabled="mainSubscribing"
+              @click="handleSubscribe()"
+            >
+              <template #prepend>
+                <VIcon :icon="getSubscribeIcon" />
+              </template>
+              {{ getSubscribeText }}
+            </VBtn>
+            <VBtn
+              v-if="existsItemId"
+              size="small"
+              class="media-action-button media-action-button--play"
+              variant="tonal"
+              color="primary"
+              rounded="lg"
+              :loading="playingLoading"
+              :disabled="playingLoading"
+              @click="handlePlay()"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-play" />
+              </template>
+              {{ t('media.actions.playOnline') }}
+            </VBtn>
+          </div>
+        </div>
+      </section>
+
+      <div class="media-overview">
+        <div class="media-overview-left">
+          <div v-if="hasOverviewCardContent" class="media-detail-card">
+            <section v-if="mediaDetail.overview" class="media-story-block">
+              <h2 class="media-section-heading">{{ t('media.overview') }}</h2>
+              <p class="media-overview-text">{{ mediaDetail.overview }}</p>
+            </section>
+            <ul
+              v-if="mediaDetail.tmdb_id && groupedTmdbCrew.length"
+              class="media-crew"
+              :class="{ 'media-crew--standalone': !mediaDetail.overview }"
+            >
+              <li v-for="group in groupedTmdbCrew" :key="group.label">
+                <span class="crew-role">{{ group.label }}</span>
+                <div class="crew-members">
+                  <template v-for="(member, idx) in group.members" :key="`${member.id}-${member.name}`">
+                    <RouterLink
+                      :to="`/person?personid=${member.id}&source=themoviedb`"
+                      class="crew-name"
+                      target="_blank"
+                    >
+                      {{ member.name }}
+                    </RouterLink>
+                    <span v-if="idx < group.members.length - 1" class="crew-sep">·</span>
+                  </template>
+                </div>
+              </li>
+            </ul>
+            <ul
+              v-if="!mediaDetail.tmdb_id && mediaDetail.douban_id && groupedDoubanCrew.length"
+              class="media-crew"
+              :class="{ 'media-crew--standalone': !mediaDetail.overview }"
+            >
+              <li v-for="group in groupedDoubanCrew" :key="group.label">
+                <span class="crew-role">{{ group.label }}</span>
+                <div class="crew-members">
+                  <template v-for="(member, idx) in group.members" :key="`${member.id}-${member.name}`">
+                    <a class="crew-name" :href="`${member.url || ''}`" target="_blank" rel="noopener noreferrer">
+                      {{ member.name }}
+                    </a>
+                    <span v-if="idx < group.members.length - 1" class="crew-sep">·</span>
+                  </template>
+                </div>
+              </li>
+            </ul>
+            <div
+              v-if="hasExternalLinks"
+              class="media-ext-links"
+              :class="{ 'media-ext-links--standalone': !mediaDetail.overview && !hasActiveCrew }"
+            >
+              <a
+                v-if="mediaDetail.tmdb_id"
+                class="inline-flex"
+                :href="getTheMovieDbLink()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>TheMovieDb</span>
+                </div>
+              </a>
+              <div v-if="mediaDetail.douban_id" class="inline-flex" @click="handleDoubanClick">
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>豆瓣</span>
+                </div>
+              </div>
+              <a
+                v-if="mediaDetail.imdb_id"
+                class="inline-flex"
+                :href="getImdbLink()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>IMDb</span>
+                </div>
+              </a>
+              <a
+                v-if="mediaDetail.tvdb_id"
+                class="inline-flex"
+                :href="getTvdbLink()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>TheTvDb</span>
+                </div>
+              </a>
+              <a
+                v-if="mediaDetail.bangumi_id"
+                class="inline-flex"
+                :href="getBangumiLink()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>Bangumi</span>
+                </div>
+              </a>
+              <a
+                v-if="mediaDetail.anilist_id"
+                class="inline-flex"
+                :href="getAniListLink()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="media-ext-link-pill">
+                  <VIcon icon="mdi-open-in-new" size="13" />
+                  <span>AniList</span>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <section v-if="mediaDetail.type === '电视剧' && mediaDetail.tmdb_id" class="media-seasons-section">
+            <h2 class="media-section-heading mb-3">
+              {{ t('media.seasons') }}
+            </h2>
+            <div class="flex w-full flex-col space-y-2">
+              <div v-if="episodeGroupsLoading || episodeGroupOptions.length > 1" class="episode-group-selector">
+                <div class="episode-group-label">{{ t('media.episodeGroups.select') }}</div>
+                <VProgressLinear v-if="episodeGroupsLoading" color="primary" indeterminate rounded />
+                <template v-else>
+                  <div class="episode-group-rail-shell">
+                    <button
+                      v-if="canScrollEpisodeGroupsBackward"
+                      type="button"
+                      class="episode-group-nav episode-group-nav--backward"
+                      :aria-label="t('media.episodeGroups.previous')"
+                      @click="scrollEpisodeGroups('backward')"
+                    >
+                      <VIcon icon="mdi-chevron-left" />
+                    </button>
+                    <div
+                      ref="episodeGroupRail"
+                      class="episode-group-rail"
+                      @scroll.passive="updateEpisodeGroupScrollState"
+                    >
+                      <button
+                        v-for="group in episodeGroupOptions"
+                        :key="group.id || 'default'"
+                        type="button"
+                        class="episode-group-option"
+                        :class="{ 'episode-group-option--active': selectedEpisodeGroup === group.id }"
+                        :aria-pressed="selectedEpisodeGroup === group.id"
+                        @click="setEpisodeGroup(group.id)"
+                      >
+                        <VIcon :icon="group.icon" size="small" class="episode-group-option__icon" />
+                        <span class="episode-group-option__text">
+                          <span class="episode-group-option__title">{{ group.name }}</span>
+                          <span class="episode-group-option__meta">
+                            {{
+                              t('media.episodeGroups.summary', {
+                                seasons: group.group_count,
+                                episodes: group.episode_count,
+                              })
+                            }}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                    <button
+                      v-if="canScrollEpisodeGroupsForward"
+                      type="button"
+                      class="episode-group-nav episode-group-nav--forward"
+                      :aria-label="t('media.episodeGroups.next')"
+                      @click="scrollEpisodeGroups('forward')"
+                    >
+                      <VIcon icon="mdi-chevron-right" />
+                    </button>
+                  </div>
+                  <div class="episode-group-current">
+                    {{
+                      t('media.episodeGroups.current', {
+                        name: selectedEpisodeGroupOption.name,
+                        seasons: selectedEpisodeGroupOption.group_count,
+                        episodes: selectedEpisodeGroupOption.episode_count,
+                      })
+                    }}
+                  </div>
+                </template>
+              </div>
+              <LoadingBanner v-if="episodeGroupSeasonsLoading" class="mt-3" />
+              <VExpansionPanels v-else :key="selectedEpisodeGroup || 'default'">
+                <VExpansionPanel
+                  v-for="season in getMediaSeasons"
+                  :key="season.season_number"
+                  @group:selected="loadSeasonEpisodes(season.season_number || 0)"
+                >
+                  <VExpansionPanelTitle>
+                    <template #default>
+                      <div class="d-flex align-center w-full pr-2">
+                        <span class="font-weight-semibold text-body-2">{{
+                          season.season_number === 0
+                            ? season.name || formatSeasonLabel(0, t('media.specials'))
+                            : t('media.seasonNumber', { number: season.season_number })
+                        }}</span>
+                        <VChip size="x-small" class="ms-2">
+                          {{ t('media.episodeCount', { count: season.episode_count }) }}
+                        </VChip>
+                        <div class="ms-auto d-flex align-center gap-1">
+                          <VChip
+                            v-if="seasonsNotExisted"
+                            :color="getExistColor(season.season_number || 0)"
+                            variant="tonal"
+                            size="x-small"
+                          >
+                            {{ getExistText(season.season_number || 0) }}
+                          </VChip>
+                          <IconBtn
+                            size="small"
+                            :color="seasonsSubscribed[season.season_number || 0] ? 'error' : undefined"
+                            variant="text"
+                            :loading="Boolean(seasonSubscribing[season.season_number || 0])"
+                            :disabled="Boolean(seasonSubscribing[season.season_number || 0])"
+                            @click.stop="handleSubscribe(season.season_number ?? null, selectedEpisodeGroup)"
+                          >
+                            <VIcon
+                              size="18"
+                              :icon="seasonsSubscribed[season.season_number || 0] ? 'mdi-heart' : 'mdi-heart-outline'"
+                            />
+                          </IconBtn>
+                        </div>
+                      </div>
+                    </template>
+                  </VExpansionPanelTitle>
+                  <VExpansionPanelText>
+                    <template #default>
+                      <LoadingBanner v-if="!seasonEpisodesInfo[season.season_number || 0]" class="mt-3" />
+                      <div class="media-episode-list flex flex-col justify-center">
+                        <div
+                          v-for="episode in seasonEpisodesInfo[season.season_number || 0]"
+                          :key="episode.episode_number"
+                          class="media-episode-row flex flex-col space-y-3 py-3.5 xl:flex-row xl:items-start xl:space-y-0 xl:space-x-4"
+                        >
+                          <div class="episode-info flex-1">
+                            <VIcon
+                              v-if="isEpisodeExists(season.season_number || 0, episode.episode_number || 0)"
+                              color="success"
+                              icon="mdi-check-circle"
+                              class="episode-exists-badge"
+                              size="small"
+                            />
+                            <div
+                              class="flex flex-col space-y-1.5 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-2"
+                            >
+                              <h3 class="media-episode-title">{{ episode.episode_number }} - {{ episode.name }}</h3>
+                              <div v-if="episode.air_date" class="flex items-center space-x-2">
+                                <span class="media-episode-date">
+                                  {{ episode.air_date }}
+                                </span>
+                              </div>
+                            </div>
+                            <p v-if="episode.overview" class="media-episode-overview">{{ episode.overview }}</p>
+                          </div>
+                          <VImg
+                            v-if="episode.still_path"
+                            cover
+                            width="176"
+                            max-width="176"
+                            aspect-ratio="16/9"
+                            class="media-episode-still rounded-lg flex-grow-0 flex-shrink-0"
+                            :src="getEpisodeImage(episode.still_path)"
+                            alt=""
+                          />
+                        </div>
+                      </div>
+                    </template>
+                  </VExpansionPanelText>
+                </VExpansionPanel>
+              </VExpansionPanels>
+            </div>
+          </section>
         </div>
         <div v-if="mediaDetail.tmdb_id" class="media-overview-right">
           <div class="media-facts">
-            <div v-if="mediaDetail.vote_average" class="media-ratings">
-              <VRating v-model="mediaDetail.vote_average" density="compact" length="10" class="ma-2" readonly />
+            <div v-if="formattedVoteScore" class="media-ratings">
+              <div class="media-ratings__score-group">
+                <VIcon icon="mdi-star" size="16" class="media-ratings__star-icon" />
+                <span class="media-ratings__score">{{ formattedVoteScore }}</span>
+                <span class="media-ratings__scale">/ 10</span>
+              </div>
+              <VRating
+                :model-value="(mediaDetail.vote_average || 0) / 2"
+                density="compact"
+                length="5"
+                size="14"
+                half-increments
+                readonly
+              />
             </div>
             <div v-if="mediaDetail.tmdb_id" class="media-fact">
-              <span>ID</span>
-              <span class="media-fact-value">{{ mediaDetail.tmdb_id }}</span>
+              <span>TMDB ID</span>
+              <span class="media-fact-value media-fact-value--mono">{{ mediaDetail.tmdb_id }}</span>
             </div>
             <div v-if="mediaDetail.original_title || mediaDetail.original_name" class="media-fact">
               <span>{{ t('media.info.originalTitle') }}</span>
@@ -1153,89 +1433,75 @@ onUnmounted(() => {
             </div>
             <div v-if="mediaDetail.status" class="media-fact">
               <span>{{ t('media.info.status') }}</span>
-              <span class="media-fact-value">{{ mediaDetail.status }}</span>
+              <span class="media-fact-value">{{ formatMediaStatus(mediaDetail.status) }}</span>
             </div>
             <div v-if="mediaDetail.release_date || mediaDetail.first_air_date" class="media-fact">
               <span>{{ t('media.info.releaseDate') }}</span>
               <span class="media-fact-value">
-                <span class="flex items-center justify-end">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    aria-hidden="true"
-                    class="h-4 w-4"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"
-                    />
-                  </svg>
-                  <span class="ml-1.5">{{ mediaDetail.release_date || mediaDetail.first_air_date }}</span>
+                <span class="media-fact-inline">
+                  <VIcon icon="mdi-calendar-blank-outline" size="13" class="media-fact-icon" />
+                  <span class="media-fact-value--mono">{{
+                    mediaDetail.release_date || mediaDetail.first_air_date
+                  }}</span>
                 </span>
               </span>
             </div>
             <div v-if="mediaDetail.type === '电影' && getEarliestDigitalReleaseDate" class="media-fact">
               <span>{{ t('media.info.digitalRelease') }}</span>
               <span class="media-fact-value">
-                <span class="flex items-center justify-end">
-                  <span
-                    class="inline-flex items-center justify-center h-4 w-4 text-[0.6rem] font-bold text-current border border-current leading-none"
-                  >
-                    {{ getEarliestDigitalReleaseDate.iso_code }}
-                  </span>
-                  <span class="ml-1.5">{{ getEarliestDigitalReleaseDate.date.slice(0, 10) }}</span>
+                <span class="media-fact-inline">
+                  <span class="media-iso-badge">{{ getEarliestDigitalReleaseDate.iso_code }}</span>
+                  <span class="media-fact-value--mono">{{ getEarliestDigitalReleaseDate.date.slice(0, 10) }}</span>
                 </span>
               </span>
             </div>
             <div v-if="mediaDetail.type === '电影' && getEarliestPhysicalReleaseDate" class="media-fact">
               <span>{{ t('media.info.physicalRelease') }}</span>
               <span class="media-fact-value">
-                <span class="flex items-center justify-end">
-                  <span
-                    class="inline-flex items-center justify-center h-4 w-4 text-[0.6rem] font-bold text-current border border-current leading-none"
-                  >
-                    {{ getEarliestPhysicalReleaseDate.iso_code }}
-                  </span>
-                  <span class="ml-1.5">{{ getEarliestPhysicalReleaseDate.date.slice(0, 10) }}</span>
+                <span class="media-fact-inline">
+                  <span class="media-iso-badge">{{ getEarliestPhysicalReleaseDate.iso_code }}</span>
+                  <span class="media-fact-value--mono">{{ getEarliestPhysicalReleaseDate.date.slice(0, 10) }}</span>
                 </span>
               </span>
             </div>
             <div v-if="mediaDetail.original_language" class="media-fact">
               <span>{{ t('media.info.originalLanguage') }}</span>
-              <span class="media-fact-value">{{ mediaDetail.original_language }}</span>
+              <span class="media-fact-value media-fact-value--upper">{{ mediaDetail.original_language }}</span>
             </div>
-            <div v-if="mediaDetail.production_countries" class="media-fact">
+            <div v-if="getProductionCountries?.length" class="media-fact">
               <span>{{ t('media.info.productionCountries') }}</span>
-              <span class="media-fact-value">
-                <span
-                  v-for="country in getProductionCountries"
-                  :key="country"
-                  class="flex items-center justify-end text-end"
-                >
-                  {{ country }}
-                </span>
+              <span class="media-fact-value media-fact-stack">
+                <span v-for="country in getProductionCountries" :key="country">{{ country }}</span>
               </span>
             </div>
-            <div class="media-fact border-b-0">
+            <div v-if="getProductionCompanies?.length" class="media-fact border-b-0">
               <span>{{ t('media.info.productionCompanies') }}</span>
-              <span class="media-fact-value text-end">
-                <span v-for="company in getProductionCompanies" :key="company" class="block">{{ company }}</span>
+              <span class="media-fact-value media-fact-stack">
+                <span v-for="company in getProductionCompanies" :key="company">{{ company }}</span>
               </span>
             </div>
           </div>
         </div>
         <div v-else-if="mediaDetail.douban_id" class="media-overview-right">
           <div class="media-facts">
-            <div v-if="mediaDetail.vote_average" class="media-ratings">
-              <VRating v-model="mediaDetail.vote_average" density="compact" length="10" class="ma-2" readonly />
+            <div v-if="formattedVoteScore" class="media-ratings">
+              <div class="media-ratings__score-group">
+                <VIcon icon="mdi-star" size="16" class="media-ratings__star-icon" />
+                <span class="media-ratings__score">{{ formattedVoteScore }}</span>
+                <span class="media-ratings__scale">/ 10</span>
+              </div>
+              <VRating
+                :model-value="(mediaDetail.vote_average || 0) / 2"
+                density="compact"
+                length="5"
+                size="14"
+                half-increments
+                readonly
+              />
             </div>
             <div v-if="mediaDetail.douban_id" class="media-fact">
               <span>{{ t('media.info.doubanId') }}</span>
-              <span class="media-fact-value">{{ mediaDetail.douban_id }}</span>
+              <span class="media-fact-value media-fact-value--mono">{{ mediaDetail.douban_id }}</span>
             </div>
             <div v-if="mediaDetail.original_title" class="media-fact">
               <span>{{ t('media.info.originalTitle') }}</span>
@@ -1243,36 +1509,42 @@ onUnmounted(() => {
             </div>
             <div v-if="mediaDetail.release_date" class="media-fact">
               <span>{{ t('media.info.releaseDate') }}</span>
-              <span class="media-fact-value">
+              <span class="media-fact-value media-fact-value--mono">
                 {{ mediaDetail.release_date }}
               </span>
             </div>
-            <div v-if="mediaDetail.production_countries" class="media-fact border-b-0">
+            <div v-if="getProductionCountries?.length" class="media-fact border-b-0">
               <span>{{ t('media.info.productionCountries') }}</span>
-              <span class="media-fact-value">
-                <span
-                  v-for="country in getProductionCountries"
-                  :key="country"
-                  class="flex items-center justify-end text-end"
-                >
-                  {{ country }}
-                </span>
+              <span class="media-fact-value media-fact-stack">
+                <span v-for="country in getProductionCountries" :key="country">{{ country }}</span>
               </span>
             </div>
           </div>
         </div>
         <div v-else-if="mediaDetail.bangumi_id || mediaDetail.anilist_id" class="media-overview-right">
           <div class="media-facts">
-            <div v-if="mediaDetail.vote_average" class="media-ratings">
-              <VRating v-model="mediaDetail.vote_average" density="compact" length="10" class="ma-2" readonly />
+            <div v-if="formattedVoteScore" class="media-ratings">
+              <div class="media-ratings__score-group">
+                <VIcon icon="mdi-star" size="16" class="media-ratings__star-icon" />
+                <span class="media-ratings__score">{{ formattedVoteScore }}</span>
+                <span class="media-ratings__scale">/ 10</span>
+              </div>
+              <VRating
+                :model-value="(mediaDetail.vote_average || 0) / 2"
+                density="compact"
+                length="5"
+                size="14"
+                half-increments
+                readonly
+              />
             </div>
             <div v-if="mediaDetail.bangumi_id" class="media-fact">
-              <span>ID</span>
-              <span class="media-fact-value">{{ mediaDetail.bangumi_id }}</span>
+              <span>Bangumi ID</span>
+              <span class="media-fact-value media-fact-value--mono">{{ mediaDetail.bangumi_id }}</span>
             </div>
             <div v-if="mediaDetail.anilist_id" class="media-fact">
-              <span>ID</span>
-              <span class="media-fact-value">{{ mediaDetail.anilist_id }}</span>
+              <span>AniList ID</span>
+              <span class="media-fact-value media-fact-value--mono">{{ mediaDetail.anilist_id }}</span>
             </div>
             <div v-if="mediaDetail.original_title" class="media-fact">
               <span>{{ t('media.info.originalTitle') }}</span>
@@ -1280,87 +1552,89 @@ onUnmounted(() => {
             </div>
             <div v-if="mediaDetail.release_date" class="media-fact border-b-0">
               <span>{{ t('media.info.releaseDate') }}</span>
-              <span class="media-fact-value">
+              <span class="media-fact-value media-fact-value--mono">
                 {{ mediaDetail.release_date }}
               </span>
             </div>
           </div>
         </div>
       </div>
-      <div v-if="mediaDetail.tmdb_id">
-        <PersonCardSlideView
-          :apipath="`tmdb/credits/${mediaDetail.tmdb_id}/${mediaProps.type}`"
-          :linkurl="`/credits/tmdb/credits/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t(
-            'media.castAndCrew',
-          )}&type=tmdb`"
-          :title="t('media.castAndCrew')"
-          type="tmdb"
-        />
-      </div>
-      <div v-else-if="mediaDetail.douban_id">
-        <PersonCardSlideView
-          :apipath="`douban/credits/${mediaDetail.douban_id}/${mediaProps.type}`"
-          :linkurl="`/credits/douban/credits/${mediaDetail.douban_id}/${mediaProps.type}?title=${t(
-            'media.castAndCrew',
-          )}&type=douban`"
-          :title="t('media.castAndCrew')"
-          type="douban"
-        />
-      </div>
-      <div v-else-if="mediaDetail.bangumi_id">
-        <PersonCardSlideView
-          :apipath="`bangumi/credits/${mediaDetail.bangumi_id}`"
-          :linkurl="`/credits/bangumi/credits/${mediaDetail.bangumi_id}?title=${t('media.castAndCrew')}&type=bangumi`"
-          :title="t('media.castAndCrew')"
-          type="bangumi"
-        />
-      </div>
-      <div v-else-if="mediaDetail.anilist_id">
-        <PersonCardSlideView
-          :apipath="`anilist/credits/${mediaDetail.anilist_id}`"
-          :linkurl="`/credits/anilist/credits/${mediaDetail.anilist_id}?title=${t('media.castAndCrew')}&type=anilist`"
-          :title="t('media.castAndCrew')"
-          type="anilist"
-        />
-      </div>
-      <div v-if="mediaDetail.tmdb_id">
-        <MediaCardSlideView
-          :apipath="`tmdb/recommend/${mediaDetail.tmdb_id}/${mediaProps.type}`"
-          :linkurl="`/browse/tmdb/recommend/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t(
-            'media.recommendations',
-          )}`"
-          :title="t('media.recommendations')"
-        />
-      </div>
-      <div v-else-if="mediaDetail.douban_id">
-        <MediaCardSlideView
-          :apipath="`douban/recommend/${mediaDetail.douban_id}/${mediaProps.type}`"
-          :linkurl="`/browse/douban/recommend/${mediaDetail.douban_id}/${mediaProps.type}?title=${t(
-            'media.recommendations',
-          )}`"
-          :title="t('media.recommendations')"
-        />
-      </div>
-      <div v-else-if="mediaDetail.bangumi_id">
-        <MediaCardSlideView
-          :apipath="`bangumi/recommend/${mediaDetail.bangumi_id}`"
-          :linkurl="`/browse/bangumi/recommend/${mediaDetail.bangumi_id}?title=${t('media.recommendations')}`"
-          :title="t('media.recommendations')"
-        />
-      </div>
-      <div v-else-if="mediaDetail.anilist_id">
-        <MediaCardSlideView
-          :apipath="`anilist/recommend/${mediaDetail.anilist_id}`"
-          :linkurl="`/browse/anilist/recommend/${mediaDetail.anilist_id}?title=${t('media.recommendations')}`"
-          :title="t('media.recommendations')"
-        />
-      </div>
-      <div v-if="mediaDetail.tmdb_id">
-        <MediaCardSlideView
-          :apipath="`tmdb/similar/${mediaDetail.tmdb_id}/${mediaProps.type}`"
-          :linkurl="`/browse/tmdb/similar/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t('media.similar')}`"
-          :title="t('media.similar')"
-        />
+      <div class="media-related-stack">
+        <div v-if="mediaDetail.tmdb_id">
+          <PersonCardSlideView
+            :apipath="`tmdb/credits/${mediaDetail.tmdb_id}/${mediaProps.type}`"
+            :linkurl="`/credits/tmdb/credits/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t(
+              'media.castAndCrew',
+            )}&type=tmdb`"
+            :title="t('media.castAndCrew')"
+            type="tmdb"
+          />
+        </div>
+        <div v-else-if="mediaDetail.douban_id">
+          <PersonCardSlideView
+            :apipath="`douban/credits/${mediaDetail.douban_id}/${mediaProps.type}`"
+            :linkurl="`/credits/douban/credits/${mediaDetail.douban_id}/${mediaProps.type}?title=${t(
+              'media.castAndCrew',
+            )}&type=douban`"
+            :title="t('media.castAndCrew')"
+            type="douban"
+          />
+        </div>
+        <div v-else-if="mediaDetail.bangumi_id">
+          <PersonCardSlideView
+            :apipath="`bangumi/credits/${mediaDetail.bangumi_id}`"
+            :linkurl="`/credits/bangumi/credits/${mediaDetail.bangumi_id}?title=${t('media.castAndCrew')}&type=bangumi`"
+            :title="t('media.castAndCrew')"
+            type="bangumi"
+          />
+        </div>
+        <div v-else-if="mediaDetail.anilist_id">
+          <PersonCardSlideView
+            :apipath="`anilist/credits/${mediaDetail.anilist_id}`"
+            :linkurl="`/credits/anilist/credits/${mediaDetail.anilist_id}?title=${t('media.castAndCrew')}&type=anilist`"
+            :title="t('media.castAndCrew')"
+            type="anilist"
+          />
+        </div>
+        <div v-if="mediaDetail.tmdb_id">
+          <MediaCardSlideView
+            :apipath="`tmdb/recommend/${mediaDetail.tmdb_id}/${mediaProps.type}`"
+            :linkurl="`/browse/tmdb/recommend/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t(
+              'media.recommendations',
+            )}`"
+            :title="t('media.recommendations')"
+          />
+        </div>
+        <div v-else-if="mediaDetail.douban_id">
+          <MediaCardSlideView
+            :apipath="`douban/recommend/${mediaDetail.douban_id}/${mediaProps.type}`"
+            :linkurl="`/browse/douban/recommend/${mediaDetail.douban_id}/${mediaProps.type}?title=${t(
+              'media.recommendations',
+            )}`"
+            :title="t('media.recommendations')"
+          />
+        </div>
+        <div v-else-if="mediaDetail.bangumi_id">
+          <MediaCardSlideView
+            :apipath="`bangumi/recommend/${mediaDetail.bangumi_id}`"
+            :linkurl="`/browse/bangumi/recommend/${mediaDetail.bangumi_id}?title=${t('media.recommendations')}`"
+            :title="t('media.recommendations')"
+          />
+        </div>
+        <div v-else-if="mediaDetail.anilist_id">
+          <MediaCardSlideView
+            :apipath="`anilist/recommend/${mediaDetail.anilist_id}`"
+            :linkurl="`/browse/anilist/recommend/${mediaDetail.anilist_id}?title=${t('media.recommendations')}`"
+            :title="t('media.recommendations')"
+          />
+        </div>
+        <div v-if="mediaDetail.tmdb_id">
+          <MediaCardSlideView
+            :apipath="`tmdb/similar/${mediaDetail.tmdb_id}/${mediaProps.type}`"
+            :linkurl="`/browse/tmdb/similar/${mediaDetail.tmdb_id}/${mediaProps.type}?title=${t('media.similar')}`"
+            :title="t('media.similar')"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -1383,126 +1657,125 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
-.vue-media-back {
-  --media-backdrop-edge-opacity: 1;
-
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(var(--v-theme-background), 0) 50%,
-      rgba(var(--v-theme-background), var(--media-backdrop-edge-opacity)) 100%
-    ),
-    linear-gradient(
-      0deg,
-      rgba(var(--v-theme-background), 0) 80%,
-      rgba(var(--v-theme-background), var(--media-backdrop-edge-opacity)) 100%
-    ),
-    linear-gradient(
-      90deg,
-      rgba(var(--v-theme-background), 0) 50%,
-      rgba(var(--v-theme-background), var(--media-backdrop-edge-opacity)) 100%
-    ),
-    linear-gradient(
-      270deg,
-      rgba(var(--v-theme-background), 0) 50%,
-      rgba(var(--v-theme-background), var(--media-backdrop-edge-opacity)) 100%
-    );
-  margin-block-start: calc(-70px - env(safe-area-inset-top));
-}
-
-.vue-media-back-image {
-  background-image: none;
-}
-
-.media-detail-transparent .vue-media-back-overlay,
-.media-detail-glass .vue-media-back-overlay {
-  display: none;
-}
-
-.media-detail-transparent .vue-media-back-image,
-.media-detail-glass .vue-media-back-image {
-  mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 16%, #000 58%, transparent 100%),
-    linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
-  mask-composite: intersect;
-  -webkit-mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 16%, #000 58%, transparent 100%),
-    linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
-  -webkit-mask-composite: source-in;
-}
-
-.media-detail-transparent .vue-media-back-image {
-  opacity: 0.78;
-}
-
-.media-detail-glass .vue-media-back-image {
-  opacity: 0.88;
+.media-detail-shell {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .media-page {
   position: relative;
   z-index: 1;
-  background-position: 50%;
-  background-size: cover;
-  margin-block-start: calc(-4rem - env(safe-area-inset-top));
-  margin-inline: -1rem;
-  padding-block-start: calc(4rem + env(safe-area-inset-top));
-  padding-inline: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+// 闭合式宽银幕 Hero 舞台：彻底消除绝对定位背景硬切文字与不同影片上下跳动问题
+.media-hero-stage {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 100% at 15% 0%, rgba(56, 189, 248, 0.14), transparent 55%),
+    linear-gradient(135deg, #121621 0%, #191e2c 100%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  min-block-size: 17.5rem;
+  padding-block: 1.25rem;
+  padding-inline: 1.25rem;
+}
+
+.media-hero-stage--no-backdrop {
+  background:
+    radial-gradient(90% 120% at 88% 12%, rgba(var(--v-theme-primary), 0.2), transparent 62%),
+    radial-gradient(70% 100% at 8% 100%, rgba(99, 102, 241, 0.14), transparent 58%),
+    linear-gradient(135deg, #131824 0%, #1b2232 100%);
+}
+
+@media (width >= 1280px) {
+  .media-hero-stage {
+    min-block-size: 20rem;
+    padding-block: 1.375rem;
+    padding-inline: 1.5rem;
+  }
+}
+
+.vue-media-back {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.vue-media-back-image {
+  opacity: 0.94;
+}
+
+.vue-media-back-overlay {
+  background:
+    linear-gradient(180deg, rgba(12, 15, 23, 0.14) 0%, rgba(12, 15, 23, 0.44) 52%, rgba(12, 15, 23, 0.92) 100%),
+    linear-gradient(
+      90deg,
+      rgba(12, 15, 23, 0.88) 0%,
+      rgba(12, 15, 23, 0.48) 38%,
+      rgba(12, 15, 23, 0.22) 68%,
+      rgba(12, 15, 23, 0.68) 100%
+    );
 }
 
 .media-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-block-start: 1rem;
+  inline-size: 100%;
 }
 
 @media (width >= 1280px) {
   .media-header {
     flex-direction: row;
     align-items: flex-end;
+    gap: 1.375rem;
   }
 }
 
 .media-overview {
   display: flex;
   flex-direction: column;
-  padding-block: 2rem 1rem;
+  gap: 1.125rem;
+  margin-block-start: 1.125rem;
 }
 
 @media (width >= 1024px) {
   .media-overview {
     flex-direction: row;
+    align-items: flex-start;
+    gap: 1.125rem;
   }
 }
 
 .media-poster {
+  flex-shrink: 0;
   overflow: hidden;
-  border-radius: var(--app-surface-radius);
-  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-  inline-size: 8rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.42);
+  inline-size: 7.75rem;
   transition: border-radius 0.2s ease;
-
-  --tw-shadow: 0 1px 3px 0 rgba(0, 0, 0, 10%), 0 1px 2px -1px rgba(0, 0, 0, 10%);
-  --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
-}
-
-@media (width >= 1280px) {
-  .media-poster {
-    inline-size: 13rem;
-    margin-inline-end: 1rem;
-  }
 }
 
 @media (width >= 768px) {
   .media-poster {
-    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-    inline-size: 11rem;
+    inline-size: 9.5rem;
+  }
+}
 
-    --tw-shadow: 0 25px 50px -12px rgba(0, 0, 0, 25%);
-    --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color);
+@media (width >= 1280px) {
+  .media-poster {
+    inline-size: 10.5rem;
   }
 }
 
@@ -1510,57 +1783,316 @@ onUnmounted(() => {
   display: flex;
   flex: 1 1 0%;
   flex-direction: column;
-  margin-block-start: 1rem;
+  align-items: center;
+  margin-block-start: 0.875rem;
+  min-inline-size: 0;
   text-align: center;
 }
 
 @media (width >= 1280px) {
   .media-title {
+    align-items: flex-start;
     margin-block-start: 0;
-    margin-inline-end: 1rem;
+    padding-block-end: 2px;
     text-align: start;
   }
 }
 
-.media-title > h1 {
-  font-size: 1.5rem;
+.media-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  color: #f8fafc;
+  font-size: 1.375rem;
   font-weight: 700;
-  line-height: 2rem;
+  gap: 0.25rem;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
 }
 
 @media (width >= 1280px) {
-  .media-title > h1 {
-    font-size: 2.25rem;
-    line-height: 2.5rem;
+  .media-heading {
+    justify-content: flex-start;
+    font-size: 1.6875rem;
   }
+}
+
+.media-heading__year {
+  color: rgba(241, 245, 249, 0.66);
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+
+.media-inline-score {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 3px;
+  line-height: 1.25;
+  padding-block: 2px;
+  padding-inline: 7px;
+}
+
+.media-runtime-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(6px);
+  color: rgba(241, 245, 249, 0.88);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  gap: 4px;
+  line-height: 1.25;
+  padding-block: 2px;
+  padding-inline: 7px;
+}
+
+.media-genre-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+@media (width >= 1280px) {
+  .media-genre-list {
+    justify-content: flex-start;
+  }
+}
+
+.media-genre-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(6px);
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  padding-block: 2px;
+  padding-inline: 8px;
+}
+
+.media-detail-card {
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
+  padding-block: 18px;
+  padding-inline: 20px;
+}
+
+.media-story-block {
+  margin-block-end: 0;
+}
+
+.media-section-heading {
+  display: flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.94);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: 8px;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  margin-block-end: 0.625rem;
+
+  &::before {
+    border-radius: 999px;
+    background: rgb(var(--v-theme-primary));
+    block-size: 14px;
+    content: '';
+    flex-shrink: 0;
+    inline-size: 3px;
+  }
+}
+
+.media-overview-text {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-size: 0.859375rem;
+  line-height: 1.72;
 }
 
 ul.media-crew {
   display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-block-start: 1.5rem;
+  padding: 0;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 12px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  list-style: none;
+  margin-block-start: 1rem;
+  padding-block-start: 0.9375rem;
 }
 
-@media (width >= 640px) {
-  ul.media-crew {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+ul.media-crew.media-crew--standalone {
+  border-block-start: 0;
+  margin-block-start: 0;
+  padding-block-start: 0;
 }
 
 ul.media-crew > li {
   display: flex;
   flex-direction: column;
-  font-weight: 700;
-  grid-column: span 1 / span 1;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.crew-role {
+  color: rgba(var(--v-theme-on-surface), 0.48);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.crew-members {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  line-height: 1.4;
+}
+
+.crew-sep {
+  color: rgba(var(--v-theme-on-surface), 0.32);
+  font-size: 12px;
 }
 
 a.crew-name {
-  font-weight: 400;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: rgb(var(--v-theme-primary));
+  }
 }
 
 .media-status {
-  margin-block-end: 0.5rem;
+  margin-block-end: 0.4375rem;
+}
+
+.media-in-library-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(34, 197, 94, 0.36);
+  border-radius: 6px;
+  background: rgba(22, 163, 74, 0.22);
+  backdrop-filter: blur(6px);
+  color: #4ade80;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  padding-block: 2px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.media-ext-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 6px;
+  margin-block-start: 0.9375rem;
+  padding-block-start: 0.875rem;
+}
+
+.media-ext-links--standalone {
+  border-block-start: 0;
+  margin-block-start: 0;
+  padding-block-start: 0;
+}
+
+.media-ext-link-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 6px;
+  background: var(--mp-item-bg);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 4px;
+  line-height: 1.3;
+  padding-block: 3.5px;
+  padding-inline: 9px;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+
+  &:hover {
+    border-color: var(--mp-border-hover);
+    background: var(--mp-item-active-bg);
+    color: rgba(var(--v-theme-on-surface), 0.96);
+  }
+}
+
+.media-seasons-section {
+  margin-block-start: 1.125rem;
+}
+
+.media-related-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-block-start: 1.25rem;
+}
+
+.media-episode-list > .media-episode-row + .media-episode-row {
+  border-block-start: 1px solid var(--mp-border-subtle);
+}
+
+.media-episode-title {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.94);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.media-episode-overview {
+  margin: 0.25rem 0 0;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.78125rem;
+  line-height: 1.55;
+}
+
+.media-episode-still {
+  flex: 0 0 auto !important;
+  border: 1px solid var(--mp-border-subtle);
+  inline-size: 176px;
+  max-inline-size: 176px;
+}
+
+.media-episode-date {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  padding-block: 1px;
+  padding-inline: 8px;
+  white-space: nowrap;
 }
 
 .media-attributes {
@@ -1568,34 +2100,26 @@ a.crew-name {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  margin-block-start: 0.25rem;
+  gap: 6px;
+  line-height: 1.4;
+  margin-block-start: 0.5rem;
 }
 
 @media (width >= 1280px) {
   .media-attributes {
     justify-content: flex-start;
-    font-size: 1rem;
-    line-height: 1.5rem;
-    margin-block-start: 0;
-  }
-}
-
-@media (width >= 640px) {
-  .media-attributes {
-    font-size: 0.875rem;
-    line-height: 1.25rem;
   }
 }
 
 .media-actions {
-  --media-action-gap: 0.75rem;
+  --media-action-gap: 0.5rem;
 
   position: relative;
   display: grid;
   flex-shrink: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--media-action-gap);
-  inline-size: min(100%, 22rem);
+  inline-size: min(100%, 20rem);
   justify-content: center;
   margin-block-start: 1rem;
 }
@@ -1603,6 +2127,22 @@ a.crew-name {
 .media-action-button {
   inline-size: 100%;
   min-inline-size: 0;
+}
+
+.media-action-button--ghost {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(15, 20, 30, 0.56) !important;
+  backdrop-filter: blur(8px);
+  color: #f8fafc !important;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.36) !important;
+    background: rgba(255, 255, 255, 0.14) !important;
+  }
+}
+
+.media-action-button--play {
+  backdrop-filter: blur(8px);
 }
 
 .media-actions > .media-action-button:only-child,
@@ -1615,6 +2155,7 @@ a.crew-name {
 @media (width >= 1280px) {
   .media-actions {
     margin-block-start: 0;
+    padding-block-end: 2px;
   }
 }
 
@@ -1636,12 +2177,6 @@ a.crew-name {
 .media-overview-left {
   flex: 1 1 0%;
   min-inline-size: 0;
-}
-
-@media (width >= 1024px) {
-  .media-overview-left {
-    margin-inline-end: 2rem;
-  }
 }
 
 .episode-group-selector {
@@ -1692,10 +2227,9 @@ a.crew-name {
   display: inline-flex;
   flex: 0 0 12rem;
   align-items: center;
-  backdrop-filter: var(--app-grouped-list-backdrop-filter, blur(var(--transparent-blur-light, 6px)));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border: 1px solid var(--mp-border-card);
   border-radius: var(--app-control-radius);
-  background: rgba(var(--v-theme-surface), 0.82);
+  background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
   gap: 0.625rem;
   min-inline-size: 0;
@@ -1711,8 +2245,7 @@ a.crew-name {
 
 .episode-group-option:hover {
   border-color: rgba(var(--v-theme-primary), 0.5);
-  background: rgba(var(--v-theme-surface), 0.9);
-  box-shadow: 0 6px 18px rgba(var(--v-theme-on-surface), 0.08);
+  background: var(--mp-elevated-bg);
 }
 
 .episode-group-option--active {
@@ -1769,10 +2302,9 @@ a.crew-name {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: var(--app-grouped-list-backdrop-filter, blur(var(--transparent-blur-light, 6px)));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border: 1px solid var(--mp-border-hover);
   border-radius: 9999px;
-  background: rgba(var(--v-theme-surface), 0.96);
+  background: var(--mp-elevated-bg);
   block-size: 2.5rem;
   color: rgb(var(--v-theme-on-surface));
   inline-size: 2.5rem;
@@ -1786,8 +2318,7 @@ a.crew-name {
 
 .episode-group-nav:hover {
   border-color: rgba(var(--v-theme-primary), 0.45);
-  background: rgba(var(--v-theme-surface), 0.96);
-  box-shadow: 0 6px 18px rgba(var(--v-theme-on-surface), 0.12);
+  background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-primary));
 }
 
@@ -1803,28 +2334,6 @@ a.crew-name {
   color: rgba(var(--v-theme-on-surface), 0.66);
   font-size: 0.8125rem;
   line-height: 1.25rem;
-}
-
-.media-detail-transparent .episode-group-option {
-  backdrop-filter: blur(var(--transparent-blur, 10px));
-  background: rgba(var(--v-theme-surface), var(--transparent-opacity, 0.3));
-}
-
-.media-detail-transparent .episode-group-option:hover {
-  background: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy, 0.5));
-}
-
-.media-detail-transparent .episode-group-option--active {
-  background: rgba(var(--v-theme-primary), 0.22);
-}
-
-.media-detail-transparent .episode-group-option--active:hover {
-  background: rgba(var(--v-theme-primary), 0.28);
-}
-
-.media-detail-transparent .episode-group-nav {
-  backdrop-filter: blur(var(--transparent-blur, 10px));
-  background: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy, 0.5));
 }
 
 @media (width <= 640px) {
@@ -1850,78 +2359,139 @@ a.crew-name {
 }
 
 .media-overview-right {
+  flex-shrink: 0;
   inline-size: 100%;
-  margin-block-start: 2rem;
 }
 
 @media (width >= 1024px) {
   .media-overview-right {
-    inline-size: 20rem;
-    margin-block-start: 0;
+    inline-size: 19rem;
   }
 }
 
 .media-facts {
-  border-width: 1px;
-  border-color: rgb(55 65 81 / var(--tw-border-opacity));
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.25rem;
-
-  --tw-border-opacity: 1;
-  --tw-bg-opacity: 1;
-  --tw-text-opacity: 1;
+  overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 
 .media-ratings {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-color: rgb(55 65 81 / var(--tw-border-opacity));
-  border-block-end-width: 1px;
-  font-weight: 500;
-  padding-block: 0.5rem;
-  padding-inline: 1rem;
+  justify-content: space-between;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  padding-block: 10px;
+  padding-inline: 14px;
+}
 
-  --tw-border-opacity: 1;
+.media-ratings__score-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.media-ratings__star-icon {
+  align-self: center;
+  color: #f59e0b;
+}
+
+.media-ratings__score {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.media-ratings__scale {
+  color: rgba(var(--v-theme-on-surface), 0.45);
+  font-size: 11.5px;
+  font-weight: 500;
 }
 
 .media-fact {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  border-color: rgb(55 65 81 / var(--tw-border-opacity));
-  border-block-end-width: 1px;
-  padding-block: 0.5rem;
-  padding-inline: 1rem;
+  gap: 0.75rem;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  padding-block: 7.5px;
+  padding-inline: 14px;
 
-  --tw-border-opacity: 1;
-}
-
-.media-overview h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.75rem;
-}
-
-@media (width >= 640px) {
-  .media-overview h2 {
-    font-size: 1.5rem;
-    line-height: 2rem;
+  > span:first-child {
+    flex-shrink: 0;
+    color: rgba(var(--v-theme-on-surface), 0.54);
+    font-size: 12px;
+    font-weight: 500;
   }
+
+  .media-fact-value {
+    color: rgba(var(--v-theme-on-surface), 0.9);
+    font-size: 12.5px;
+    font-weight: 500;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    text-align: end;
+  }
+}
+
+.media-fact-value--mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.media-fact-value--upper {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.media-fact-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.media-fact-icon {
+  color: rgba(var(--v-theme-on-surface), 0.48);
+}
+
+.media-iso-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-hover);
+  border-radius: 4px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  block-size: 15px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding-inline: 4px;
+}
+
+.media-fact-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  line-height: 1.35;
 }
 
 .tagline {
-  font-size: 1.25rem;
+  margin: 0.625rem 0 0;
+  border-inline-start: 2px solid rgba(251, 191, 36, 0.78);
+  color: rgba(241, 245, 249, 0.8);
+  font-size: 0.875rem;
   font-style: italic;
-  line-height: 1.75rem;
-  margin-block-end: 1rem;
-}
-
-@media (width >= 1024px) {
-  .tagline {
-    font-size: 1.5rem;
-    line-height: 2rem;
-  }
+  line-height: 1.45;
+  max-inline-size: 42rem;
+  padding-inline-start: 9px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
 }
 </style>

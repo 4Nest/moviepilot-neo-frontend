@@ -8,7 +8,7 @@ import { querySubscribeByMediaHandler, subscribeListHandler } from '@tests/suppo
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
 import { HttpResponse, http } from 'msw'
-import { defineComponent, h, reactive, ref } from 'vue'
+import { defineComponent, h, reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -88,8 +88,6 @@ interface ControlledImageRequest {
   fail: () => void
   /** 模拟当前 VImg 请求成功。 */
   load: () => void
-  /** 模拟当前 VImg 的 opacity 淡入完成。 */
-  reveal: () => void
   /** 当前 VImg 实例发起的图片地址。 */
   src: string
 }
@@ -102,15 +100,9 @@ function createControlledImageStub(requests: ControlledImageRequest[]) {
     props: { src: String },
     setup(props, { emit, slots }) {
       const src = props.src ?? ''
-      const imageElement = ref<HTMLImageElement | null>(null)
       const request = {
         fail: () => emit('error', src),
         load: () => emit('load', src),
-        reveal: () => {
-          const event = new Event('transitionend', { bubbles: true }) as TransitionEvent
-          Object.defineProperty(event, 'propertyName', { value: 'opacity' })
-          imageElement.value?.dispatchEvent(event)
-        },
         src,
       }
       requests.push(request)
@@ -118,7 +110,6 @@ function createControlledImageStub(requests: ControlledImageRequest[]) {
       return () =>
         h('div', { 'data-src': src }, [
           h('img', {
-            ref: imageElement,
             class: 'v-img__img',
           }),
           slots.default?.(),
@@ -624,13 +615,8 @@ describe('MediaCard', () => {
       global: { stubs: { VImg: VImgStub } },
     })
 
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
     requests[0].load()
     await waitFor(() => expect(container.querySelector('.media-card')).toHaveClass('ring-1'))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
-
-    requests[0].reveal()
-    await waitFor(() => expect(getCard(container)).toHaveAttribute('data-glass-optical-mode', 'excluded'))
     expect(container).toHaveTextContent('电视剧')
     expect(container).toHaveTextContent('8.6')
 
@@ -639,19 +625,13 @@ describe('MediaCard', () => {
       expect(container.querySelector('.media-card-title')?.parentElement).not.toHaveStyle({ display: 'none' }),
     )
     await waitFor(() => expect(requests.some(request => request.src.includes('no-image'))).toBe(true))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
 
     const fallbackRequest = requests.find(request => request.src.includes('no-image'))
     fallbackRequest?.load()
     await waitFor(() => expect(getCard(container)).toHaveClass('ring-1'))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
-
-    fallbackRequest?.reveal()
-    await Promise.resolve()
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
   })
 
-  it('keeps placeholder-only cards inside the renderer after the image loads', async () => {
+  it('marks placeholder-only cards as loaded once the fallback image finishes loading', async () => {
     const requests: ControlledImageRequest[] = []
     const { container } = await renderWithProviders(MediaCard, {
       props: { media: createMediaInfo({ poster_path: undefined, tmdb_id: 9553 }), width: '9rem' },
@@ -661,7 +641,6 @@ describe('MediaCard', () => {
     requests[0].load()
 
     await waitFor(() => expect(getCard(container)).toHaveClass('ring-1'))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
   })
 
   it('ignores a previous poster load after the card is reused for another media item', async () => {
@@ -673,25 +652,16 @@ describe('MediaCard', () => {
       global: { stubs: { VImg: createControlledImageStub(requests) } },
     })
 
-    requests[0].load()
-    await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
-
     await rerender({ media: mediaB, width: '9rem' })
     await waitFor(() => expect(requests.some(request => request.src.includes('/w500/b.jpg'))).toBe(true))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
 
-    requests[0].reveal()
+    requests[0].load()
     await Promise.resolve()
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
+    expect(getCard(container)).not.toHaveClass('media-card--image-loaded')
 
     const currentRequest = requests.find(request => request.src.includes('/w500/b.jpg'))
     currentRequest?.load()
     await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
-    expect(getCard(container)).not.toHaveAttribute('data-glass-optical-mode')
-
-    currentRequest?.reveal()
-    await waitFor(() => expect(getCard(container)).toHaveAttribute('data-glass-optical-mode', 'excluded'))
   })
 
   it('renders the AniList source badge after the poster loads', async () => {
@@ -724,6 +694,59 @@ describe('MediaCard', () => {
     await fireEvent.click(container.querySelector('[aria-label="图片加载成功"]') as HTMLElement)
 
     await waitFor(() => expect(container.querySelector('[data-icon="mdi-alpha-a-circle"]')).not.toBeNull())
+  })
+
+  it('uses the full-color Douban logo and omits empty source avatars for unknown extension sources', async () => {
+    const ImageSrcStub = defineComponent({
+      name: 'VImg',
+      emits: ['load'],
+      props: { src: String },
+      setup(props, { emit, slots }) {
+        return () =>
+          h('div', { 'data-vimg-src': props.src ?? '' }, [
+            h('button', { 'aria-label': '海报加载完成', onClick: () => emit('load') }),
+            slots.default?.(),
+          ])
+      },
+    })
+
+    const doubanCard = await renderWithProviders(MediaCard, {
+      props: {
+        media: createMediaInfo({
+          douban_id: 'db-9901',
+          poster_path: '/original/douban.jpg',
+          source: 'douban',
+          tmdb_id: undefined,
+        }),
+        width: '9rem',
+      },
+      global: { stubs: { VImg: ImageSrcStub } },
+    })
+
+    await fireEvent.click(doubanCard.container.querySelector('[aria-label="海报加载完成"]') as HTMLElement)
+    await waitFor(() => expect(doubanCard.container.querySelectorAll('[data-vimg-src]')).toHaveLength(2))
+    const doubanBadgeSrc = doubanCard.container.querySelectorAll<HTMLElement>('[data-vimg-src]')[1]?.dataset.vimgSrc
+    expect(doubanBadgeSrc).toContain('douban')
+    expect(doubanBadgeSrc).not.toContain('douban-black')
+    doubanCard.unmount()
+
+    const customCard = await renderWithProviders(MediaCard, {
+      props: {
+        media: createMediaInfo({
+          media_id: 'ext-1',
+          mediaid_prefix: 'custom',
+          poster_path: '/original/custom.jpg',
+          source: 'custom_plugin_source',
+          tmdb_id: undefined,
+        }),
+        width: '9rem',
+      },
+      global: { stubs: { VImg: ImageSrcStub } },
+    })
+
+    await fireEvent.click(customCard.container.querySelector('[aria-label="海报加载完成"]') as HTMLElement)
+    await waitFor(() => expect(getCard(customCard.container)).toHaveClass('media-card--image-loaded'))
+    expect(customCard.container.querySelectorAll('[data-vimg-src]')).toHaveLength(1)
   })
 
   it('uses first tap to reveal details, second tap to route, and outside pointerdown to collapse', async () => {

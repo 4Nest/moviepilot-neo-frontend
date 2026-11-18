@@ -182,6 +182,26 @@ describe('FileBrowserView initialization', () => {
     expect(browser.props('itemstack').map((item: { path: string }) => item.path)).toEqual(['/', '/downloads/'])
   })
 
+  it('rebuilds the full ancestor breadcrumb stack when jumping directly to a deep directory', async () => {
+    mockSettings([{ name: '本地', type: 'local' }], null)
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    browser.vm.$emit('pathchanged', {
+      name: 'Season 01',
+      path: '/downloads/tv/Season 01/',
+      storage: 'local',
+      type: 'dir',
+    })
+    await flushPromises()
+
+    expect(browser.props('itemstack')).toEqual([
+      { fileid: 'root', name: '/', path: '/', storage: 'local', type: 'dir' },
+      { name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' },
+      { name: 'tv', path: '/downloads/tv/', storage: 'local', type: 'dir' },
+      { name: 'Season 01', path: '/downloads/tv/Season 01/', storage: 'local', type: 'dir' },
+    ])
+  })
+
   it('does not clip outer surface shadows on .file-browser-view', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync('src/views/reorganize/FileBrowserView.vue', 'utf8')

@@ -96,6 +96,7 @@ const browserStubs = {
   Teleport: true,
   VFab: true,
   VIcon: true,
+  VProgressLinear: { template: '<div class="file-browser-progress" />' },
 }
 
 function mountBrowser() {
@@ -239,11 +240,15 @@ describe('FileBrowser state and child contracts', () => {
     ])
   })
 
-  it('tracks child loading and refresh lifecycle through observable props', async () => {
+  it('tracks child loading and refresh lifecycle without invalid native loading attribute', async () => {
     const wrapper = mountBrowser()
 
+    expect(wrapper.find('.file-browser-progress').exists()).toBe(false)
+    expect(wrapper.get('.file-browser-shell').attributes('loading')).toBeUndefined()
+
     await wrapper.get('.emit-loading').trigger('click')
-    expect(wrapper.get('.mx-auto').attributes('loading')).toBe('true')
+    expect(wrapper.get('.file-browser-shell').attributes('aria-busy')).toBe('true')
+    expect(wrapper.find('.file-browser-progress').exists()).toBe(true)
 
     await wrapper.get('.emit-folder').trigger('click')
     expect(wrapper.getComponent(FileListStub).props('refreshpending')).toBe(true)
@@ -263,11 +268,11 @@ describe('FileBrowser state and child contracts', () => {
     expect(wrapper.getComponent(FileNavigatorStub).props('items')).toEqual(items)
   })
 
-  it('moves the new-folder entry to the floating action on the filemanager route', () => {
+  it('keeps the new-folder entry inline on the toolbar on desktop and removes floating FAB', () => {
     const wrapper = mountBrowser()
 
-    expect(wrapper.getComponent(FileToolbarStub).props('showNewFolderButton')).toBe(false)
-    expect(wrapper.findComponent({ name: 'VFab' }).exists()).toBe(true)
+    expect(wrapper.getComponent(FileToolbarStub).props('showNewFolderButton')).toBe(true)
+    expect(wrapper.findComponent({ name: 'VFab' }).exists()).toBe(false)
   })
 
   it('connects the dynamic new-folder action to the toolbar controller', () => {

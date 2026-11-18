@@ -9,6 +9,7 @@ type UnknownRecord = Record<string, any>
 
 const props = withDefaults(
   defineProps<{
+    colors?: Record<string, string>
     enabled: Record<string, boolean>
     elevated?: boolean
     hint: string
@@ -23,6 +24,7 @@ const props = withDefaults(
     valueGetter?: (item: UnknownRecord) => string
   }>(),
   {
+    colors: undefined,
     elevated: false,
     labelGetter: undefined,
     modelValue: true,
@@ -135,21 +137,22 @@ function submitSettings() {
   <VDialog
     v-if="visible"
     v-model="visible"
-    width="35rem"
+    max-width="44rem"
+    width="100%"
     class="settings-dialog"
     scrollable
     :fullscreen="!display.mdAndUp.value"
   >
     <VCard class="settings-card">
       <VCardItem class="settings-card-header">
-        <VCardTitle>
-          <VIcon icon="mdi-tune" size="small" class="me-2" />
-          {{ props.title }}
+        <VCardTitle class="d-flex align-center">
+          <VIcon icon="mdi-tune" size="18" class="me-2" />
+          <span>{{ props.title }}</span>
         </VCardTitle>
         <VDialogCloseBtn v-model="visible" />
       </VCardItem>
       <VDivider />
-      <VCardText>
+      <VCardText class="settings-card-body">
         <p class="settings-hint">{{ props.hint }}</p>
         <div class="settings-grid">
           <button
@@ -159,36 +162,61 @@ function submitSettings() {
             class="setting-item"
             :class="{ 'enabled': localEnabled[getItemValue(item)] }"
             :aria-pressed="Boolean(localEnabled[getItemValue(item)])"
+            :title="getItemLabel(item)"
             @click="toggleItem(item)"
           >
-            <div class="setting-item-inner">
-              <div class="setting-check">
+            <span class="setting-item-inner">
+              <span class="setting-check">
                 <VIcon
-                  :icon="localEnabled[getItemValue(item)] ? 'mdi-check-circle' : 'mdi-circle-outline'"
-                  :color="localEnabled[getItemValue(item)] ? 'primary' : undefined"
-                  size="small"
+                  :icon="localEnabled[getItemValue(item)] ? 'mdi-check-circle' : 'mdi-checkbox-blank-circle-outline'"
+                  size="18"
+                  class="setting-check-icon"
                 />
-              </div>
+              </span>
               <span class="setting-label">{{ getItemLabel(item) }}</span>
-            </div>
+            </span>
           </button>
         </div>
-        <p v-if="props.switchLabel" class="mt-3">
-          <VSwitch v-model="elevatedValue" :label="props.switchLabel" />
-        </p>
+        <div v-if="props.switchLabel" class="mp-settings-card mt-4">
+          <div class="mp-setting-row">
+            <VSwitch
+              v-model="elevatedValue"
+              :label="props.switchLabel"
+              color="primary"
+              inset
+              density="compact"
+              hide-details
+            />
+          </div>
+        </div>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
-        <VBtn v-if="props.showBulkActions" color="success" variant="tonal" @click="setAllItems(true)">
+      <VDivider />
+      <VCardActions class="app-dialog-actions settings-card-actions">
+        <VBtn
+          v-if="props.showBulkActions"
+          color="default"
+          variant="outlined"
+          size="small"
+          class="setting-action-btn"
+          @click="setAllItems(true)"
+        >
           {{ props.selectAllText }}
         </VBtn>
-        <VBtn v-if="props.showBulkActions" color="warning" variant="tonal" @click="setAllItems(false)">
+        <VBtn
+          v-if="props.showBulkActions"
+          color="default"
+          variant="outlined"
+          size="small"
+          class="setting-action-btn"
+          @click="setAllItems(false)"
+        >
           {{ props.selectNoneText }}
         </VBtn>
         <VSpacer />
-        <VBtn color="primary" variant="flat" class="px-5" @click="submitSettings">
-          <template #prepend>
-            <VIcon icon="mdi-content-save" />
-          </template>
+        <VBtn color="default" variant="text" size="small" class="setting-action-btn" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="setting-action-btn px-4" @click="submitSettings">
           {{ t('common.save') }}
         </VBtn>
       </VCardActions>
@@ -196,16 +224,28 @@ function submitSettings() {
   </VDialog>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
+.settings-card {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 14px;
+  background-color: rgb(var(--v-theme-surface));
+}
+
 .settings-card-header {
-  padding-block: 16px;
+  padding-block: 14px;
+  padding-inline: 20px;
+}
+
+.settings-card-body {
+  padding-block: 16px 18px;
   padding-inline: 20px;
 }
 
 .settings-hint {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.9rem;
-  margin-block-end: 16px;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-block-end: 14px;
 }
 
 .settings-grid {
@@ -214,86 +254,104 @@ function submitSettings() {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.setting-label {
-  flex: 1;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.9rem;
-  font-weight: 550;
-  line-height: 1.35;
-  text-align: start;
-  transition: color 0.2s ease;
-}
-
 .setting-item {
   appearance: none;
   position: relative;
   overflow: hidden;
-  min-block-size: 48px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 10px;
-  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
   font: inherit;
+  min-block-size: 42px;
   padding-block: 10px;
   padding-inline: 12px;
+  text-align: start;
   transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.setting-item::before {
-  position: absolute;
-  background: rgb(var(--v-theme-primary));
-  content: '';
-  inline-size: 3px;
-  inset-block: 0;
-  inset-inline-start: 0;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.setting-item.enabled {
-  border-color: rgba(var(--v-theme-primary), 0.3);
-  background-color: rgba(var(--v-theme-primary), 0.08);
-}
-
-.setting-item.enabled::before {
-  opacity: 1;
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .setting-item:hover {
-  border-color: rgba(var(--v-theme-primary), 0.32);
-  background-color: rgba(var(--v-theme-primary), 0.06);
+  border-color: var(--mp-border-hover, rgba(var(--v-theme-on-surface), 0.22));
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.setting-item:active {
-  transform: scale(0.99);
+.setting-item.enabled {
+  border-color: rgba(var(--v-theme-primary), 0.45);
+  background-color: var(--mp-item-active-bg, rgba(var(--v-theme-on-surface), 0.055));
 }
 
 .setting-item:focus-visible {
-  outline: 3px solid rgba(var(--v-theme-primary), 0.28);
+  outline: 2px solid rgba(var(--v-theme-primary), 0.36);
   outline-offset: 2px;
-}
-
-.setting-item.enabled .setting-label {
-  color: rgb(var(--v-theme-on-surface));
 }
 
 .setting-item-inner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-inline-size: 0;
 }
 
 .setting-check {
-  display: flex;
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.setting-check-icon {
+  color: rgba(var(--v-theme-on-surface), 0.38);
+  transition: color 0.16s ease;
+}
+
+.setting-item.enabled .setting-check-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.setting-label {
+  overflow: hidden;
+  flex: 1;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  min-inline-size: 0;
+  text-align: start;
+  text-overflow: ellipsis;
+  transition: color 0.16s ease;
+  white-space: nowrap;
+}
+
+.setting-item.enabled .setting-label {
+  color: rgba(var(--v-theme-on-surface), 0.94);
+  font-weight: 500;
+}
+
+.settings-card-actions {
+  gap: 8px;
+  padding-block: 12px 16px;
+  padding-inline: 20px;
+}
+
+.setting-action-btn {
+  border-radius: 8px;
 }
 
 @media (width <= 760px) {
   .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 480px) {
+  .settings-card {
+    border-radius: 0;
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

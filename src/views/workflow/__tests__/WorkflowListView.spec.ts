@@ -7,11 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
+  appMode: false,
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({ default: { get: (...args: unknown[]) => mocks.apiGet(...args) } }))
+vi.mock('@/composables/usePWA', async () => {
+  const { computed } = await import('vue')
+  return { usePWA: () => ({ appMode: computed(() => mocks.appMode) }) }
+})
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
 }))
@@ -49,14 +54,42 @@ const host = defineComponent({
   template: '<button @click="view.openAddDialog()">新增</button><WorkflowListView ref="view" />',
 })
 
+const noDataStub = defineComponent({
+  name: 'NoDataFound',
+  props: ['errorTitle', 'errorDescription'],
+  setup(props, { slots }) {
+    return () =>
+      h('section', { 'data-testid': 'no-data-found' }, [
+        h('span', props.errorTitle),
+        h('span', props.errorDescription),
+        slots.button?.(),
+      ])
+  },
+})
+
+const loadingStub = defineComponent({
+  name: 'LoadingBanner',
+  setup() {
+    return () => h('div', { role: 'status' }, 'loading')
+  },
+})
+
 async function renderList() {
   return renderWithProviders(host, {
-    global: { stubs: { ProgressiveCardGrid: grid, WorkflowTaskCard: card, LoadingBanner: true, NoDataFound: true } },
+    global: {
+      stubs: {
+        ProgressiveCardGrid: grid,
+        WorkflowTaskCard: card,
+        LoadingBanner: loadingStub,
+        NoDataFound: noDataStub,
+      },
+    },
   })
 }
 
 describe('WorkflowListView incremental updates and enhancements', () => {
   beforeEach(() => {
+    mocks.appMode = false
     mocks.apiGet.mockReset()
     mocks.openSharedDialog.mockReset()
     mocks.toastError.mockReset()
@@ -224,5 +257,34 @@ describe('WorkflowListView incremental updates and enhancements', () => {
     expect(closeTemplateFn).toHaveBeenCalledOnce()
     expect(mocks.openSharedDialog).toHaveBeenCalledTimes(2)
     expect(mocks.openSharedDialog.mock.calls[1][1]).toEqual({ initialTemplate: preset })
+  })
+
+  it('shows retryable error state when initial load fails and hides duplicate toolbar creation buttons in appMode', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.appMode = true
+    let failFirst = true
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url === 'workflow/event_types') return Promise.resolve([])
+      if (failFirst) {
+        failFirst = false
+        return Promise.reject(new Error('network error'))
+      }
+      return Promise.resolve([{ id: 1, name: '工作流 A' }])
+    })
+
+    await renderList()
+    await flushPromises()
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    const retryBtn = await screen.findByRole('button', { name: '重试' })
+    await fireEvent.click(retryBtn)
+    await flushPromises()
+
+    expect(await screen.findByText('工作流 A', { exact: true })).toBeInTheDocument()
+    // appMode 下隐藏顶部重复的 3 个新建按钮，保留刷新按钮
+    expect(screen.queryByRole('button', { name: '新建工作流' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '从模板创建' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '导入 JSON 新建' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument()
   })
 })

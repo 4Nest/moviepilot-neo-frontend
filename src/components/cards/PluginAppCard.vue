@@ -196,8 +196,8 @@ function showPluginDetail() {
   )
 }
 
-// 弹出菜单
-const dropdownItems = ref([
+// 弹出菜单（动态响应 props.plugin 更新）
+const dropdownItems = computed(() => [
   {
     title: t('plugin.versionHistory'),
     value: 2,
@@ -225,7 +225,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <VHover>
       <template #default="hover">
         <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
@@ -241,45 +241,44 @@ onUnmounted(() => {
             :style="accentStyle"
           >
             <div class="plugin-card__banner flex-grow">
-              <VCardText class="px-2 pt-2 pb-0">
+              <div class="plugin-app-card__header">
                 <VCardTitle
-                  class="plugin-app-card__title text-white px-2 pb-0 text-lg text-shadow whitespace-nowrap overflow-hidden text-ellipsis"
+                  class="plugin-app-card__title text-high-emphasis whitespace-nowrap overflow-hidden text-ellipsis"
                   :class="{ 'plugin-app-card__title--with-rating': (props.plugin?.rating_count || 0) > 0 }"
                 >
                   {{ props.plugin?.plugin_name }}
-                  <span class="text-sm mt-1 text-gray-200"> v{{ props.plugin?.plugin_version }} </span>
+                  <span class="plugin-app-card__version text-medium-emphasis">v{{ props.plugin?.plugin_version }}</span>
                 </VCardTitle>
-              </VCardText>
-              <div class="relative flex flex-row items-start px-2 justify-between grow">
+              </div>
+              <div class="plugin-app-card__main relative flex flex-row items-start justify-between grow">
                 <div class="relative flex-1 min-w-0">
                   <div
-                    class="text-white text-sm px-2 py-1 text-shadow overflow-hidden ..."
+                    class="plugin-app-card__desc text-medium-emphasis overflow-hidden"
                     :class="{ 'line-clamp-3': !props.plugin?.plugin_label, 'line-clamp-2': props.plugin?.plugin_label }"
                   >
                     {{ props.plugin?.plugin_desc }}
                   </div>
                   <!-- 插件标签 -->
-                  <div v-if="pluginLabels.length > 0" class="plugin-app-card__tags-section px-2 mb-2">
+                  <div v-if="pluginLabels.length > 0" class="plugin-app-card__tags-section">
                     <VChip
                       v-for="tag in pluginLabels"
                       :key="tag"
                       size="x-small"
                       variant="tonal"
-                      color="info"
+                      color="secondary"
                       class="plugin-app-card__tag"
-                      tile
                     >
                       {{ tag }}
                     </VChip>
                   </div>
                 </div>
-                <div class="relative flex-shrink-0 self-center pb-3">
-                  <VAvatar size="48">
+                <div class="plugin-app-card__icon-slot relative flex-shrink-0 self-center">
+                  <VAvatar size="42" rounded="lg" class="plugin-app-card__icon-avatar">
                     <VImg
                       ref="imageRef"
                       :src="iconPath"
-                      aspect-ratio="4/3"
-                      cover
+                      contain
+                      class="w-full h-full"
                       @load="imageLoaded"
                       @error="imageFailed"
                     />
@@ -288,11 +287,11 @@ onUnmounted(() => {
               </div>
             </div>
             <VCardText
-              class="flex flex-col align-self-baseline justify-between px-2 py-2 w-full overflow-hidden max-h-10 min-h-10"
+              class="plugin-app-card__footer relative flex items-center justify-between w-full overflow-hidden"
             >
-              <div class="flex flex-nowrap items-center w-full pe-10">
-                <div class="flex flex-nowrap max-w-40 items-center align-middle">
-                  <VIcon icon="mdi-github" class="me-1" />
+              <div class="flex flex-nowrap items-center w-full pe-8 min-w-0">
+                <div class="plugin-app-card__author flex flex-nowrap max-w-40 items-center">
+                  <VIcon size="14" icon="mdi-github" class="me-1 flex-shrink-0" />
                   <a
                     class="overflow-hidden text-ellipsis whitespace-nowrap"
                     :href="props.plugin?.author_url"
@@ -302,16 +301,19 @@ onUnmounted(() => {
                     {{ props.plugin?.plugin_author }}
                   </a>
                 </div>
-                <div v-if="props.count" class="ms-2 flex-shrink-0 download-count align-middle items-center">
-                  <VIcon size="small" icon="mdi-download" />
-                  <span class="text-sm">{{ formatDownloadCount(props.count) }}</span>
-                </div>
+                <span
+                  v-if="props.count"
+                  class="plugin-app-card__downloads ms-2.5 flex-shrink-0 inline-flex items-center"
+                >
+                  <VIcon size="13" icon="mdi-download" class="me-0.5" />
+                  <span>{{ formatDownloadCount(props.count) }}</span>
+                </span>
               </div>
-              <div class="absolute bottom-0 right-0">
-                <IconBtn @click.stop>
-                  <VIcon size="small" icon="mdi-dots-vertical" />
+              <div class="plugin-app-card__menu-wrap">
+                <IconBtn class="plugin-app-card__menu-btn" @click.stop>
+                  <VIcon size="16" icon="mdi-dots-vertical" />
                   <VMenu activator="parent" close-on-content-click>
-                    <VList>
+                    <VList density="compact">
                       <VListItem
                         v-for="(item, i) in dropdownItems"
                         v-show="item.show"
@@ -319,7 +321,7 @@ onUnmounted(() => {
                         @click="item.props.click"
                       >
                         <template #prepend>
-                          <VIcon :icon="item.props.prependIcon" />
+                          <VIcon :icon="item.props.prependIcon" size="18" />
                         </template>
                         <VListItemTitle>{{ item.title }}</VListItemTitle>
                       </VListItem>
@@ -344,7 +346,7 @@ onUnmounted(() => {
                 })
               "
             >
-              <VIcon icon="mdi-star" color="warning" size="16" />
+              <VIcon icon="mdi-star" color="warning" size="13" />
               <span>{{ Number(props.plugin?.average_rating || 0).toFixed(1) }}</span>
             </div>
           </VCard>
@@ -359,22 +361,148 @@ onUnmounted(() => {
   inline-size: 100%;
 }
 
+.plugin-card {
+  border: 1px solid var(--mp-border-card) !important;
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+  transition:
+    border-color 0.16s ease,
+    transform 0.18s ease;
+}
+
+.plugin-card:hover {
+  border-color: var(--mp-border-hover) !important;
+}
+
+.plugin-card__banner {
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 11px;
+  background: rgba(var(--v-theme-on-surface), 0.025) !important;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  gap: 6px;
+}
+
+.plugin-app-card__header {
+  min-inline-size: 0;
+}
+
+.plugin-app-card__title {
+  padding: 0 !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+.plugin-app-card__title--with-rating {
+  padding-inline-end: 3.5rem !important;
+}
+
+.plugin-app-card__version {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin-inline-start: 4px;
+}
+
+.plugin-app-card__main {
+  gap: 12px;
+}
+
+.plugin-app-card__desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.plugin-app-card__icon-slot {
+  padding-block-end: 2px;
+}
+
+.plugin-app-card__icon-avatar {
+  padding: 5px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.plugin-app-card__icon-avatar :deep(.v-img__img) {
+  object-fit: contain !important;
+}
+
 .plugin-app-card__tags-section {
   display: flex;
   overflow: hidden;
   flex-wrap: nowrap;
   gap: 4px;
+  margin-block-start: 6px;
   max-inline-size: 100%;
-}
-
-.plugin-app-card__title--with-rating {
-  padding-inline-end: 4rem !important;
 }
 
 .plugin-app-card__tag {
   flex: 0 0 auto;
+  border-radius: 5px !important;
+  block-size: 20px !important;
+  font-size: 11px !important;
   max-inline-size: 100%;
   min-inline-size: 0;
+  padding-inline: 6px !important;
+}
+
+.plugin-app-card__tag :deep(.v-chip__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-app-card__footer {
+  block-size: 36px;
+  max-block-size: 36px;
+  min-block-size: 36px;
+  padding: 0 14px !important;
+}
+
+.plugin-app-card__author {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.plugin-app-card__author a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.plugin-app-card__author a:hover {
+  color: rgb(var(--v-theme-primary));
+}
+
+.plugin-app-card__downloads {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.plugin-app-card__menu-wrap {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  inset-block: 0;
+  inset-inline-end: 8px;
+}
+
+.plugin-app-card__menu-btn {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
+}
+
+.plugin-app-card__menu-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .plugin-app-card__rating {
@@ -382,19 +510,17 @@ onUnmounted(() => {
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  gap: 0.125rem;
-  color: white;
-  font-size: 0.75rem;
+  border-radius: 5px;
+  background: rgba(var(--v-theme-warning), 0.14);
+  block-size: 20px;
+  color: rgb(var(--v-theme-warning));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  inset-block-start: 0.625rem;
-  inset-inline-end: 0.625rem;
+  gap: 2px;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 65%);
-}
-
-.plugin-app-card__tag :deep(.v-chip__content) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding-inline: 6px;
 }
 </style>

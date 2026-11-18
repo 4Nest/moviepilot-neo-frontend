@@ -290,8 +290,8 @@ async function renderResource(initialRoute: { path: string; query?: Record<strin
 }
 
 function fabButton(label: string): HTMLElement {
-  const button = document.querySelector<HTMLElement>(`.v-fab[aria-label="${label}"] button`)
-  if (!button) throw new Error(`未找到浮动按钮：${label}`)
+  const button = document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)
+  if (!button) throw new Error(`未找到页面操作按钮：${label}`)
   return button
 }
 

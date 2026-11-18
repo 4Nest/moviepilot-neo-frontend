@@ -57,6 +57,10 @@ const directories = ref<TransferDirectoryConf[]>([])
 
 // 是否正在加载
 const loading = ref(false)
+// 表单引用
+const subtitleFormRef = ref()
+const optionalNumberValidator = (val: unknown) =>
+  val === undefined || val === null || val === '' || numberValidator(val)
 
 // 是否显示高级选项
 const showAdvancedOptions = ref(false)
@@ -104,6 +108,13 @@ const targetDirectories = computed(() => buildDownloadDirectoryOptions(directori
 
 // 下载字幕
 async function addSubtitleDownload() {
+  if (loading.value) return
+  const { valid } = (await subtitleFormRef.value?.validate()) || { valid: true }
+  if (!valid) {
+    showAdvancedOptions.value = true
+    return
+  }
+
   startNProgress()
   loading.value = true
   try {
@@ -145,9 +156,10 @@ async function addSubtitleDownload() {
   } catch (error) {
     console.error(error)
     emit('error', String(error))
+  } finally {
+    loading.value = false
+    doneNProgress()
   }
-  loading.value = false
-  doneNProgress()
 }
 
 onMounted(() => {
@@ -156,118 +168,185 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog max-width="35rem" scrollable>
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog max-width="38rem" scrollable>
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-subtitles-outline" class="me-2" />
+          <VIcon icon="mdi-subtitles-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('dialog.addSubtitleDownload.confirmDownload') }}</VCardTitle>
         <VCardSubtitle>{{ subtitle?.site_name }} - {{ title }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VList lines="one">
-          <VListItem>
-            <template #prepend>
-              <VIcon icon="mdi-web"></VIcon>
+      <VCardText class="mp-dialog-body">
+        <div class="subtitle-info-card">
+          <div class="subtitle-info-card__title">{{ subtitle?.title }}</div>
+          <div v-if="subtitle?.description" class="subtitle-info-card__desc">
+            {{ subtitle.description }}
+          </div>
+          <div class="subtitle-info-card__meta">
+            <span v-if="subtitle?.language || subtitle?.uploader" class="subtitle-info-card__chip">
+              <VIcon icon="mdi-translate" size="13" />
+              {{ subtitle?.language || t('common.unknown') }}
+              <span v-if="subtitle?.uploader" class="subtitle-info-card__uploader">· {{ subtitle.uploader }}</span>
+            </span>
+            <span v-if="subtitle?.size" class="subtitle-info-card__chip">
+              <VIcon icon="mdi-database" size="13" />
+              {{ formatFileSize(subtitle?.size || 0) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <VCombobox
+            v-model="directoryModel"
+            :items="targetDirectories"
+            item-title="title"
+            item-value="value"
+            :custom-filter="filterDownloadDirectoryOption"
+            :label="t('dialog.addSubtitleDownload.saveDirectory')"
+            :placeholder="t('dialog.addSubtitleDownload.autoPlaceholder')"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            prepend-inner-icon="mdi-folder"
+          >
+            <template #item="{ props: itemProps, item }">
+              <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
             </template>
-            <VListItemTitle>
-              <span class="whitespace-break-spaces me-2">{{ subtitle?.title }}</span>
-            </VListItemTitle>
-          </VListItem>
-          <VListItem v-if="subtitle?.description">
-            <template #prepend>
-              <VIcon icon="mdi-text-box-outline"></VIcon>
-            </template>
-            <VListItemTitle>
-              <span class="text-body-2 whitespace-break-spaces">{{ subtitle?.description }}</span>
-            </VListItemTitle>
-          </VListItem>
-          <VListItem v-if="subtitle?.language || subtitle?.uploader">
-            <template #prepend>
-              <VIcon icon="mdi-translate"></VIcon>
-            </template>
-            <VListItemTitle>
-              <span class="text-body-2">
-                {{ subtitle?.language || t('common.unknown') }}
-                <span v-if="subtitle?.uploader" class="text-medium-emphasis ms-2">{{ subtitle.uploader }}</span>
-              </span>
-            </VListItemTitle>
-          </VListItem>
-          <VListItem v-if="subtitle?.size">
-            <template #prepend>
-              <VIcon icon="mdi-database"></VIcon>
-            </template>
-            <VListItemTitle>
-              <VChip variant="tonal" label>
-                {{ formatFileSize(subtitle?.size || 0) }}
-              </VChip>
-            </VListItemTitle>
-          </VListItem>
-        </VList>
-        <VRow class="px-5">
-          <VCol cols="12">
-            <VCombobox
-              v-model="directoryModel"
-              :items="targetDirectories"
-              item-title="title"
-              item-value="value"
-              :custom-filter="filterDownloadDirectoryOption"
-              :label="t('dialog.addSubtitleDownload.saveDirectory')"
-              :placeholder="t('dialog.addSubtitleDownload.autoPlaceholder')"
-              variant="underlined"
-              density="comfortable"
-              prepend-inner-icon="mdi-folder"
-            >
-              <template #item="{ props: itemProps, item }">
-                <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
-              </template>
-            </VCombobox>
-          </VCol>
-        </VRow>
-        <VRow class="px-5 mt-2">
-          <VCol cols="12">
-            <VBtn
-              variant="text"
-              :prepend-icon="showAdvancedOptions ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-              @click="showAdvancedOptions = !showAdvancedOptions"
-            >
-              {{
-                showAdvancedOptions
-                  ? t('dialog.addDownload.hideAdvancedOptions')
-                  : t('dialog.addDownload.showAdvancedOptions')
-              }}
-            </VBtn>
-          </VCol>
-        </VRow>
-        <VRow v-show="showAdvancedOptions" class="px-5">
-          <VCol cols="12">
+          </VCombobox>
+        </div>
+
+        <VBtn
+          variant="text"
+          size="small"
+          color="primary"
+          class="subtitle-advanced-toggle"
+          :prepend-icon="showAdvancedOptions ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+          @click="showAdvancedOptions = !showAdvancedOptions"
+        >
+          {{
+            showAdvancedOptions
+              ? t('dialog.addDownload.hideAdvancedOptions')
+              : t('dialog.addDownload.showAdvancedOptions')
+          }}
+        </VBtn>
+
+        <VForm ref="subtitleFormRef" @submit.prevent="() => {}">
+          <div v-show="showAdvancedOptions" class="mt-2">
             <VTextField
               v-model="mediaId"
               :label="mediaIdLabel"
               :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
-              :rules="[numberValidator]"
+              :rules="[optionalNumberValidator]"
               append-inner-icon="mdi-magnify"
               :hint="t('dialog.reorganize.mediaIdHint')"
               persistent-hint
               prepend-inner-icon="mdi-identifier"
-              variant="underlined"
+              variant="outlined"
               density="comfortable"
               @click:append-inner="mediaSelectorDialog = true"
             />
-          </VCol>
-        </VRow>
+          </div>
+        </VForm>
       </VCardText>
-      <VCardText class="text-center">
-        <VBtn variant="elevated" :disabled="loading" @click="addSubtitleDownload" :prepend-icon="icon" class="px-5">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="loading" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          :loading="loading"
+          :disabled="loading"
+          :prepend-icon="icon"
+          class="px-4"
+          @click="addSubtitleDownload"
+        >
           {{ buttonText }}
         </VBtn>
-      </VCardText>
+      </VCardActions>
     </VCard>
     <VDialog v-model="mediaSelectorDialog" width="40rem" scrollable max-height="85vh">
       <MediaIdSelector v-model="mediaId" @close="mediaSelectorDialog = false" :type="mediaSource" />
     </VDialog>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.subtitle-info-card {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  padding: 12px 14px;
+}
+
+.subtitle-info-card__title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: break-spaces;
+}
+
+.subtitle-info-card__desc {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin-block-start: 0.35rem;
+  white-space: break-spaces;
+}
+
+.subtitle-info-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-block-start: 0.6rem;
+}
+
+.subtitle-info-card__chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 0.75rem;
+  font-weight: 500;
+  gap: 0.25rem;
+  line-height: 1;
+  padding: 0.28rem 0.6rem;
+}
+
+.subtitle-info-card__uploader {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+}
+
+.subtitle-advanced-toggle {
+  margin-block-start: 8px;
+  margin-inline-start: -0.5rem;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

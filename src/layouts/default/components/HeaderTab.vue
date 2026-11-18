@@ -28,7 +28,6 @@ const currentValue = ref(pwaTabState?.activeTab.value || props.modelValue)
 // 监听currentValue变化，同时更新PWA状态和父组件
 watch(currentValue, newVal => {
   emit('update:modelValue', newVal)
-  // 如果启用了PWA状态恢复，同步更新PWA状态
   if (pwaTabState && newVal) {
     pwaTabState.activeTab.value = newVal
   }
@@ -39,7 +38,6 @@ watch(
   () => props.modelValue,
   value => {
     currentValue.value = value
-    // 同步到PWA状态
     if (pwaTabState && value) {
       pwaTabState.activeTab.value = value
     }
@@ -58,9 +56,7 @@ if (pwaTabState) {
 
 // Ref for the tabs container
 const tabsContainerRef = ref<HTMLElement | null>(null)
-// State for showing the scroll indicator
 const showTabsScrollIndicator = ref(false)
-// State for showing the scroll buttons
 const showLeftButton = ref(false)
 const showRightButton = ref(false)
 
@@ -68,12 +64,12 @@ const isTouchDevice = () => {
   return window.matchMedia('(hover: none) and (pointer: coarse)').matches || navigator.maxTouchPoints > 0
 }
 
-// Function to scroll the tabs
+let scrollIndicatorTimeout: ReturnType<typeof setTimeout> | null = null
+
 const scrollTabs = (direction: 'left' | 'right') => {
   const el = tabsContainerRef.value
   if (!el) return
 
-  // 可以根据需要调整滚动量
   const scrollAmount = 200
   const scrollPosition = direction === 'left' ? el.scrollLeft - scrollAmount : el.scrollLeft + scrollAmount
 
@@ -82,21 +78,20 @@ const scrollTabs = (direction: 'left' | 'right') => {
     behavior: 'smooth',
   })
 
-  // 滚动完成后更新指示器状态
-  setTimeout(() => {
+  if (scrollIndicatorTimeout) clearTimeout(scrollIndicatorTimeout)
+  scrollIndicatorTimeout = setTimeout(() => {
+    scrollIndicatorTimeout = null
     updateTabsIndicator()
-  }, 300) // 等待滚动动画完成
+  }, 300)
 }
 
-// Function to check and update the indicator state
 const updateTabsIndicator = () => {
   const el = tabsContainerRef.value
   if (!el) return
 
-  // 仅在触摸设备上隐藏按钮，非触摸小屏设备仍需支持横向切换
   const shouldHideScrollControls = isTouchDevice()
 
-  const tolerance = 1 // Allow 1px tolerance
+  const tolerance = 1
   const hasOverflow = el.scrollWidth > el.clientWidth + tolerance
   const isScrolledToEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - tolerance
   const isScrolledToStart = el.scrollLeft <= tolerance
@@ -106,7 +101,6 @@ const updateTabsIndicator = () => {
   showRightButton.value = hasOverflow && !isScrolledToEnd && !shouldHideScrollControls
 }
 
-// Debounce resize handler
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null
 const handleResize = () => {
   if (resizeTimeout) clearTimeout(resizeTimeout)
@@ -116,19 +110,22 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  // Add resize listener for tabs indicator
   window.addEventListener('resize', handleResize)
-  // Add scroll listener for tabs container
   tabsContainerRef.value?.addEventListener('scroll', updateTabsIndicator)
-  // Initial check for tabs indicator after DOM update
-  await nextTick() // Ensure element is rendered
+  await nextTick()
   updateTabsIndicator()
 })
 
 onUnmounted(() => {
-  // Remove resize listener
+  if (resizeTimeout) {
+    clearTimeout(resizeTimeout)
+    resizeTimeout = null
+  }
+  if (scrollIndicatorTimeout) {
+    clearTimeout(scrollIndicatorTimeout)
+    scrollIndicatorTimeout = null
+  }
   window.removeEventListener('resize', handleResize)
-  // Remove tabs scroll listener
   tabsContainerRef.value?.removeEventListener('scroll', updateTabsIndicator)
 })
 </script>
@@ -143,10 +140,10 @@ onUnmounted(() => {
         v-for="(item, index) in items"
         :key="index"
         class="header-tab"
-        :class="{ 'active': currentValue === item.tab }"
+        :class="{ active: currentValue === item.tab }"
         @click="currentValue = item.tab"
       >
-        <VIcon v-if="item.icon" :icon="item.icon" size="small" class="header-tab-icon" />
+        <VIcon v-if="item.icon" :icon="item.icon" size="16" class="header-tab-icon" />
         <span>{{ item.title }}</span>
       </div>
     </div>
@@ -155,146 +152,148 @@ onUnmounted(() => {
       <VIcon icon="tabler-chevron-right" size="small" color="secondary" />
     </VBtn>
 
-    <slot name="append" />
+    <div class="tab-header-append">
+      <slot name="append" />
+    </div>
   </div>
 </template>
 <style scoped lang="scss">
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
 .tab-header {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  transition: all 0.3s ease;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.tab-header-append {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+
+  :deep(.v-btn) {
+    border-radius: 8px !important;
+    block-size: 32px !important;
+    color: rgba(var(--v-theme-on-surface), 0.72);
+    margin-inline-start: 0 !important;
+    min-block-size: 32px !important;
+
+    &.v-btn--icon {
+      inline-size: 32px !important;
+      min-inline-size: 32px !important;
+    }
+
+    &:hover {
+      background-color: rgba(var(--v-theme-on-surface), 0.06);
+      color: rgba(var(--v-theme-on-surface), 0.94);
+      opacity: 1;
+    }
+
+    .v-icon {
+      block-size: 17px !important;
+      font-size: 17px !important;
+      inline-size: 17px !important;
+    }
+  }
 }
 
 .scroll-button {
   z-index: 2;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   block-size: 28px;
   cursor: pointer;
   inline-size: 28px;
   outline: none;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.16s ease;
 
   &.left-button {
-    margin-inline-end: 6px;
+    margin-inline-end: 2px;
   }
 
   &.right-button {
-    margin-inline-start: 6px;
+    margin-inline-start: 2px;
   }
 
-  // 触摸设备支持手势横向滚动，无需额外按钮
   @media (hover: none) and (pointer: coarse) {
     display: none !important;
   }
 }
 
 .header-tabs {
-  position: relative; // Needed for pseudo-element positioning
-  display: flex;
-  flex-grow: 1;
-  gap: 12px;
-
-  // Clip content that overflows, useful with padding
-  mask-image: linear-gradient(to right, black 95%, transparent 100%);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: var(--mp-tab-groove-bg);
+  gap: 2px;
+  max-inline-size: 100%;
   min-inline-size: 0;
   overflow-x: auto;
-  padding-block: 4px;
-  padding-inline: 0;
-
-  // Add padding-right to make space for the indicator visually
-  padding-inline-end: 20px;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
   }
-
-  // Gradient indicator pseudo-element
-  &::after {
-    position: absolute;
-    z-index: 1; // Ensure it's above the tabs but below other header elements if needed
-    background: linear-gradient(to left, rgba(var(--v-theme-background), 10.3) 30%, transparent);
-    content: '';
-    inline-size: 40px; // Width of the fade effect
-    inset-block: 0;
-    inset-inline-end: 0;
-    opacity: 0; // Hidden by default
-    pointer-events: none; // Allow interaction with content behind it
-    transition: opacity 0.2s ease-in-out;
-  }
-
-  // Show indicator when class is applied
-  &.show-indicator::after {
-    opacity: 1;
-  }
-
-  // 触摸设备支持手势横向滚动，无需额外指示器
-  @media (hover: none) and (pointer: coarse) {
-    &::after {
-      display: none !important;
-    }
-  }
 }
 
 .header-tab-icon {
-  color: rgba(var(--v-theme-on-background), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.56);
   margin-inline-end: 6px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 10%);
-  transition: color 0.2s ease;
+  transition: color 0.15s ease;
 }
 
 .header-tab {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  border-radius: 20px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background-color: transparent;
-  color: rgba(var(--v-theme-on-background), 0.7);
+  block-size: 30px;
+  color: rgba(var(--v-theme-on-surface), 0.66);
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding-block: 6px;
-  padding-inline: 14px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 10%);
-  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  padding-block: 0;
+  padding-inline: 11px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
   white-space: nowrap;
 
-  &::after {
-    position: absolute;
-    border-radius: 3px;
-    background-color: rgb(var(--v-theme-primary));
-    block-size: 3px;
-    content: '';
-    inline-size: 70%;
-    inset-block-end: -4px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%) scaleX(0);
-    transition: transform 0.2s ease;
-  }
-
   &.active {
-    color: rgb(var(--v-theme-primary));
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 15%);
-
-    &::after {
-      transform: translateX(-50%) scaleX(1);
-    }
+    border-color: var(--mp-tab-active-border);
+    background-color: var(--mp-tab-active-bg);
+    box-shadow: var(--mp-tab-active-shadow);
+    color: rgba(var(--v-theme-on-surface), 0.96);
+    font-weight: 600;
 
     .header-tab-icon {
-      color: rgb(var(--v-theme-primary));
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 15%);
+      color: rgba(var(--v-theme-on-surface), 0.92);
     }
   }
 
   &:hover:not(.active) {
-    background-color: rgba(var(--v-theme-primary), 0.05);
-    color: rgba(var(--v-theme-on-background), 1);
+    background-color: rgba(var(--v-theme-on-surface), 0.04);
+    color: rgba(var(--v-theme-on-surface), 0.88);
+
+    .header-tab-icon {
+      color: rgba(var(--v-theme-on-surface), 0.8);
+    }
   }
 }
 </style>

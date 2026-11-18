@@ -86,6 +86,7 @@ function selectPreset(presetKey: string) {
   if (selectedPreset.value === presetKey) {
     // 如果再次点击同一个预设，则取消选择
     selectedPreset.value = ''
+    updateWizardData()
     return
   }
 
@@ -141,145 +142,187 @@ onMounted(() => {
 </script>
 
 <template>
-  <VCard variant="outlined">
-    <VCardText>
-      <div class="text-center mb-6">
-        <h3 class="text-h4 mb-2">{{ t('setupWizard.preferences.title') }}</h3>
-        <p class="text-body-1 text-medium-emphasis">{{ t('setupWizard.preferences.description') }}</p>
+  <div class="setup-step">
+    <div class="setup-step-head">
+      <h3 class="setup-step-title">{{ t('setupWizard.preferences.title') }}</h3>
+      <p class="setup-step-desc">{{ t('setupWizard.preferences.description') }}</p>
+    </div>
+
+    <!-- 快速预设 -->
+    <div class="setup-step-panel mb-3">
+      <div class="setup-panel-head">
+        <div class="setup-panel-title">
+          <VIcon icon="mdi-flash-outline" size="16" class="me-1" />
+          <span>{{ t('setupWizard.preferences.quickPresets') }}</span>
+        </div>
+        <p class="setup-panel-desc">{{ t('setupWizard.preferences.quickPresetsDesc') }}</p>
       </div>
 
-      <!-- 快速预设 -->
-      <VCard class="mb-6">
-        <VCardTitle class="text-h6 d-flex align-center">
-          <VIcon icon="mdi-flash" class="me-2" />
-          {{ t('setupWizard.preferences.quickPresets') }}
-        </VCardTitle>
-        <VCardText>
-          <p class="text-body-2 text-medium-emphasis mb-4">{{ t('setupWizard.preferences.quickPresetsDesc') }}</p>
-          <VRow>
-            <!-- Hover 命中区域保持静止，避免预设卡片上浮后底边反复触发 mouseleave。 -->
-            <VCol
-              v-for="(preset, key) in presetConfigs"
-              :key="key"
-              class="preset-card-hover-area"
-              cols="12"
-              sm="6"
-              md="3"
-            >
-              <VCard
-                :color="selectedPreset === key ? preset.color : 'default'"
-                :variant="selectedPreset === key ? 'tonal' : 'outlined'"
-                class="app-hover-lift-card cursor-pointer preset-card"
-                @click="selectPreset(key)"
-              >
-                <VCardText class="text-center pa-4">
-                  <VIcon :icon="preset.icon" size="40" class="mb-3" />
-                  <div class="text-h6 mb-2">{{ preset.name }}</div>
-                  <div class="text-body-2 text-medium-emphasis">{{ preset.description }}</div>
-                </VCardText>
-              </VCard>
-            </VCol>
-          </VRow>
-        </VCardText>
-      </VCard>
+      <div class="setup-preset-grid">
+        <button
+          v-for="(preset, key) in presetConfigs"
+          :key="key"
+          type="button"
+          class="setup-preset-card"
+          :class="{ 'is-selected': selectedPreset === key }"
+          @click="selectPreset(key)"
+        >
+          <span class="setup-preset-card__icon">
+            <VIcon :icon="preset.icon" size="22" :color="selectedPreset === key ? preset.color : undefined" />
+          </span>
+          <span class="setup-preset-card__title">{{ preset.name }}</span>
+          <span class="setup-preset-card__desc">{{ preset.description }}</span>
+        </button>
+      </div>
+    </div>
 
-      <!-- 个性化选项 -->
-      <VCard class="mb-6">
-        <VCardTitle class="text-h6 d-flex align-center">
-          <VIcon icon="mdi-cog" class="me-2" />
-          {{ t('setupWizard.preferences.personalizationOptions') }}
-        </VCardTitle>
-        <VCardText>
-          <p class="text-body-2 text-medium-emphasis mb-4">
-            {{ t('setupWizard.preferences.personalizationOptionsDesc') }}
-          </p>
-          <VRow>
-            <VCol cols="12" md="6">
+    <!-- 个性化选项 -->
+    <div class="setup-step-panel">
+      <div class="setup-panel-head">
+        <div class="setup-panel-title">
+          <VIcon icon="mdi-tune-variant" size="16" class="me-1" />
+          <span>{{ t('setupWizard.preferences.personalizationOptions') }}</span>
+        </div>
+        <p class="setup-panel-desc">{{ t('setupWizard.preferences.personalizationOptionsDesc') }}</p>
+      </div>
+
+      <VForm @submit.prevent="() => {}">
+        <VRow>
+          <VCol cols="12" md="6">
+            <div class="mp-switch-card" :title="t('setupWizard.preferences.excludeDolbyVisionHint')">
               <VSwitch
                 v-model="personalizationOptions.excludeDolbyVision"
                 :label="t('setupWizard.preferences.excludeDolbyVision')"
+                :hint="t('setupWizard.preferences.excludeDolbyVisionHint')"
                 color="primary"
-                hide-details
-                @change="updateWizardData"
+                density="compact"
+                inset
+                persistent-hint
+                @update:model-value="updateWizardData"
               />
-              <p class="text-caption text-medium-emphasis mt-1">
-                {{ t('setupWizard.preferences.excludeDolbyVisionHint') }}
-              </p>
-            </VCol>
-            <VCol cols="12" md="6">
+            </div>
+          </VCol>
+          <VCol cols="12" md="6">
+            <div class="mp-switch-card" :title="t('setupWizard.preferences.excludeBlurayHint')">
               <VSwitch
                 v-model="personalizationOptions.excludeBluray"
                 :label="t('setupWizard.preferences.excludeBluray')"
+                :hint="t('setupWizard.preferences.excludeBlurayHint')"
                 color="primary"
-                hide-details
-                @change="updateWizardData"
+                density="compact"
+                inset
+                persistent-hint
+                @update:model-value="updateWizardData"
               />
-              <p class="text-caption text-medium-emphasis mt-1">{{ t('setupWizard.preferences.excludeBlurayHint') }}</p>
-            </VCol>
-          </VRow>
-        </VCardText>
-      </VCard>
-    </VCardText>
-  </VCard>
+            </div>
+          </VCol>
+        </VRow>
+      </VForm>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.cursor-pointer {
+.setup-step-head {
+  margin-block-end: 16px;
+}
+
+.setup-step-title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-desc {
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-panel {
+  padding: 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
+}
+
+.setup-panel-head {
+  margin-block-end: 13px;
+}
+
+.setup-panel-title {
+  display: flex;
+  align-items: center;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-panel-desc {
+  margin: 3px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.setup-preset-grid {
+  display: grid;
+  gap: 13px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.setup-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 13px 12px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
+  gap: 6px;
+  text-align: center;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.preset-card-hover-area:hover .preset-card {
-  transform: translate3d(0, -0.25rem, 0);
+.setup-preset-card:hover {
+  border-color: var(--mp-border-hover);
+  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.preset-card:active {
-  transform: translateY(-2px);
+.setup-preset-card.is-selected {
+  border-color: rgba(var(--v-theme-primary), 0.65);
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
-/* 预设卡片选中状态的样式 */
-.v-card--variant-tonal.v-theme--light {
-  border: 2px solid rgb(var(--v-theme-primary));
-  background-color: rgb(var(--v-theme-primary), 0.12);
-}
-
-.v-card--variant-tonal.v-theme--dark {
-  border: 2px solid rgb(var(--v-theme-primary));
-  background-color: rgb(var(--v-theme-primary), 0.2);
-}
-
-/* 规则代码样式 */
-.v-code {
-  padding: 12px;
+.setup-preset-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
   border-radius: 8px;
-  background-color: rgba(var(--v-theme-surface-variant), 0.3);
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
+  background: rgba(var(--v-theme-on-surface), 0.045);
+  block-size: 36px;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  inline-size: 36px;
 }
 
-/* 展开面板样式 */
-.v-expansion-panel-title {
-  font-weight: 500;
+.setup-preset-card__title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
-.v-expansion-panel-text {
-  padding-block-start: 16px;
-}
-
-/* 开关组件样式优化 */
-.v-switch {
-  margin-block-end: 8px;
-}
-
-/* 芯片组样式 */
-.v-chip-group {
-  gap: 8px;
-}
-
-.v-chip {
-  margin-block: 4px;
-  margin-inline: 0;
+.setup-preset-card__desc {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

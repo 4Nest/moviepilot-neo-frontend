@@ -6,13 +6,13 @@
     overflow: hidden;
     --safe-area-inset-bottom: env(safe-area-inset-bottom);
     --safe-area-inset-top: env(safe-area-inset-top);
-    --initial-loader-bg: #0e1116;
-    --initial-loader-color: #8d51f9;
+    --initial-loader-bg: #16171d;
+    --initial-loader-color: #8b7cf6;
     --initial-loader-height: 100svh;
     --initial-loader-width: 100vw;
     --initial-color-scheme: dark;
-    background: var(--initial-loader-bg, #0e1116);
-    background-color: var(--initial-loader-bg, #0e1116);
+    background: var(--initial-loader-bg, #16171d);
+    background-color: var(--initial-loader-bg, #16171d);
     color-scheme: dark;
   "
 >
@@ -263,15 +263,15 @@
     <meta name="mobile-web-app-title" content="MoviePilot" />
 
     <!-- Microsoft Windows PWA -->
-    <meta name="msapplication-TileColor" content="#0E1116" />
+    <meta name="msapplication-TileColor" content="#16171D" />
     <meta name="msapplication-TileImage" content="/android-chrome-192x192.png" />
     <meta name="msapplication-config" content="none" />
     <meta name="msapplication-tap-highlight" content="no" />
-    <meta name="msapplication-navbutton-color" content="#0E1116" />
+    <meta name="msapplication-navbutton-color" content="#16171D" />
 
     <!-- 主题色彩 - 适配深色和浅色模式 -->
-    <meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#F4F5FA" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16171D" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F1F2F6" media="(prefers-color-scheme: light)" />
     <meta name="color-scheme" content="dark light" />
 
     <!-- 不锁定屏幕方向，平板和桌面 PWA 需要支持横屏布局。 -->
@@ -304,16 +304,16 @@
     <style>
       html,
       body {
-        background: var(--initial-loader-bg, #0e1116);
-        background-color: var(--initial-loader-bg, #0e1116);
+        background: var(--initial-loader-bg, #16171d);
+        background-color: var(--initial-loader-bg, #16171d);
         color-scheme: var(--initial-color-scheme, dark);
       }
 
       /* Keep a theme-colored surface behind Vuetify while its CSS variables
          are being restored after iOS suspends and resumes the WebView. */
       #app {
-        background: var(--initial-loader-bg, #0e1116);
-        background-color: var(--initial-loader-bg, #0e1116);
+        background: var(--initial-loader-bg, #16171d);
+        background-color: var(--initial-loader-bg, #16171d);
       }
 
       html[data-launch-loading='true'],
@@ -327,8 +327,8 @@
 
       html[data-launch-loading='true'] #app {
         min-block-size: var(--initial-loader-height, 100svh);
-        background: var(--initial-loader-bg, #0e1116);
-        background-color: var(--initial-loader-bg, #0e1116);
+        background: var(--initial-loader-bg, #16171d);
+        background-color: var(--initial-loader-bg, #16171d);
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
       }
@@ -345,8 +345,8 @@
         z-index: 99999;
         display: block;
         overflow: hidden;
-        background: var(--initial-loader-bg, #0e1116);
-        background-color: var(--initial-loader-bg, #0e1116);
+        background: var(--initial-loader-bg, #16171d);
+        background-color: var(--initial-loader-bg, #16171d);
       }
 
       .loading-shell {
@@ -493,26 +493,25 @@
         inset-block-end: calc(env(safe-area-inset-bottom, 0px) + 24px);
         inset-inline-start: 50%;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.8);
-        color: #fff;
+        background: #242731;
+        color: #ecedf2;
         padding: 12px 24px;
         border-radius: 12px;
         font-size: 14px;
         font-family: sans-serif;
         text-align: center;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
         max-inline-size: calc(100% - 32px);
         white-space: normal;
-        backdrop-filter: blur(4px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.14);
       }
 
       #timeout-btn {
-        color: var(--initial-loader-color, #8d51f9);
+        color: var(--initial-loader-color, #8b7cf6);
         text-decoration: none;
         font-weight: bold;
         margin-inline-start: 8px;
-        border-bottom: 1px solid var(--initial-loader-color, #8d51f9);
+        border-bottom: 1px solid var(--initial-loader-color, #8b7cf6);
       }
     </style>
 
@@ -538,26 +537,17 @@
       // 根据当前主题提前确定启动屏色彩，避免 iOS PWA 从原生启动图切到网页时露出默认白底。
       const launchThemePalettes = {
         light: {
-          background: '#F4F5FA',
-          primary: '#8D51F9',
+          background: '#F1F2F6',
+          primary: '#6E5DCF',
         },
         dark: {
-          background: '#0E1116',
-          primary: '#6E66ED',
-        },
-        purple: {
-          background: '#28243D',
-          primary: '#8D51F9',
-        },
-        transparent: {
-          background: '#1C1C1C',
-          primary: '#A370F7',
-        },
-        glass: {
-          background: '#0B1322',
-          primary: '#8D51F9',
+          background: '#16171D',
+          primary: '#8B7CF6',
         },
       }
+
+      const legacyDarkLaunchThemes = new Set(['glass', 'purple', 'transparent'])
+      const legacyLoaderBackgrounds = new Set(['#0E1116', '#0B1322', '#28243D', '#1C1C1C', '#F4F5FA'])
 
       // iOS 从后台恢复或重新创建 WebView 时，媒体查询可能先返回浅色，
       // 下一帧才恢复真实的系统深色。自动主题优先沿用最近一次已确认的明暗结果，
@@ -569,12 +559,15 @@
 
       function getCachedLaunchBackground() {
         const cachedBackground = getLocalStorageValue('materio-initial-loader-bg')
-        return /^#[0-9a-f]{6}$/i.test(cachedBackground || '') ? cachedBackground : null
+        if (!/^#[0-9a-f]{6}$/i.test(cachedBackground || '')) return null
+        if (legacyLoaderBackgrounds.has((cachedBackground || '').toUpperCase())) return null
+        return cachedBackground
       }
 
       // 读取已保存的主题偏好，缺省时跟随系统。
       function getSavedThemePreference() {
-        return getLocalStorageValue('theme') || 'auto'
+        const raw = getLocalStorageValue('theme') || 'auto'
+        return legacyDarkLaunchThemes.has(raw) ? 'dark' : raw === 'default' ? 'light' : raw
       }
 
       // 将启动阶段的主题偏好解析为实际主题。
@@ -587,12 +580,16 @@
           return 'light'
         }
 
+        if (themePreference === 'dark' || legacyDarkLaunchThemes.has(themePreference)) {
+          return 'dark'
+        }
+
         return launchThemePalettes[themePreference] ? themePreference : 'light'
       }
 
       // 返回启动阶段浏览器原生控件应使用的明暗配色。
       function getLaunchColorScheme(themeName) {
-        return ['dark', 'glass', 'purple', 'transparent'].includes(themeName) ? 'dark' : 'light'
+        return themeName === 'dark' || legacyDarkLaunchThemes.has(themeName) ? 'dark' : 'light'
       }
 
       // 批量同步匹配选择器的 meta 内容。
@@ -621,7 +618,7 @@
       }
 
       let logoSvgSourcePromise
-      let pendingFaviconColor = '#8D51F9'
+      let pendingFaviconColor = '#8B7CF6'
       const themeLogoCacheKey = 'moviepilot-themed-logo-cache'
 
       const sourceLogoPalette = {

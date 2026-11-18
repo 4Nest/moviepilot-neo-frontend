@@ -4,6 +4,7 @@ import type { TransferHistory } from '@/api/types'
 import noImage from '@images/no-image.jpeg'
 import { formatDateDifference, formatFileSize } from '@/@core/utils/formatters'
 import { useI18n } from '@/composables/useChineseText'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 const { t } = useI18n()
 
@@ -39,7 +40,7 @@ function getImportMeta(item: TransferHistory) {
 }
 
 onMounted(loadRecentImports)
-onActivated(loadRecentImports)
+useKeepAliveRefresh(loadRecentImports)
 </script>
 
 <template>
@@ -64,7 +65,11 @@ onActivated(loadRecentImports)
           </div>
           <div class="recent-import-time">
             {{ item.date ? formatDateDifference(item.date) : '' }}
-            <VIcon icon="mdi-check-circle" color="success" size="16" />
+            <VIcon
+              :icon="item.status === false ? 'mdi-alert-circle' : 'mdi-check-circle'"
+              :color="item.status === false ? 'error' : 'success'"
+              size="16"
+            />
           </div>
         </div>
       </div>
@@ -78,6 +83,8 @@ onActivated(loadRecentImports)
 </template>
 
 <style scoped>
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
 .dashboard-list-card {
   display: flex;
   flex-direction: column;
@@ -86,7 +93,13 @@ onActivated(loadRecentImports)
 }
 
 .dashboard-card-heading {
-  padding-block: 0.9rem 0.55rem;
+  padding: 16px 18px 10px !important;
+}
+
+.dashboard-card-heading :deep(.v-card-title) {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .recent-import-list {
@@ -94,26 +107,27 @@ onActivated(loadRecentImports)
   flex: 1 1 auto;
   flex-direction: column;
   min-block-size: 0;
-  padding-block-start: 0.25rem;
+  padding: 2px 18px 16px !important;
 }
 
 .recent-import-item {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.75rem;
-  min-block-size: 62px;
-  padding-block: 0.4rem;
+  gap: 13px;
+  min-block-size: 64px;
+  padding-block: 7px;
 }
 
 .recent-import-item + .recent-import-item {
-  border-block-start: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7));
+  border-block-start: 1px solid var(--mp-border-subtle);
 }
 
 .recent-import-poster {
-  border-radius: 6px;
-  block-size: 54px;
-  inline-size: 40px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  block-size: 58px;
+  inline-size: 42px;
 }
 
 .recent-import-copy {
@@ -123,8 +137,9 @@ onActivated(loadRecentImports)
 .recent-import-title {
   overflow: hidden;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 0.875rem;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -132,12 +147,14 @@ onActivated(loadRecentImports)
 .recent-import-meta,
 .recent-import-time {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .recent-import-meta {
   overflow: hidden;
-  margin-block-start: 0.2rem;
+  margin-block-start: 4px;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -145,7 +162,7 @@ onActivated(loadRecentImports)
 .recent-import-time {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 5px;
   white-space: nowrap;
 }
 
@@ -155,6 +172,7 @@ onActivated(loadRecentImports)
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
+  font-size: 13px;
 }
 </style>

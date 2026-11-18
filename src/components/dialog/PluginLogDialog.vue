@@ -82,7 +82,7 @@ function downloadLogger() {
       </VCardItem>
       <VDivider />
       <VCardText class="logging-dialog-content pa-0">
-        <LoggingView :logfile="`plugins/${props.plugin?.id?.toLowerCase()}.log`" />
+        <LoggingView :key="props.plugin?.id" :logfile="`plugins/${props.plugin?.id?.toLowerCase()}.log`" />
       </VCardText>
     </VCard>
   </VDialog>

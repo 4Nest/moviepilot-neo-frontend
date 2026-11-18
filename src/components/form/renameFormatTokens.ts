@@ -9,6 +9,18 @@ export interface RenameToken {
   cond?: string
 }
 
+/** 推入文本片段：顶层（无条件）文本中的 `/` 独立拆分为目录分隔符 token，保证多级目录准确分层 */
+function pushTextTokens(tokens: RenameToken[], text: string, cond?: string) {
+  if (!text) return
+  if (cond || !text.includes('/')) {
+    tokens.push({ type: 'text', value: text, cond })
+    return
+  }
+  for (const part of text.split(/(\/)/)) {
+    if (part) tokens.push({ type: 'text', value: part })
+  }
+}
+
 /** 解析不含 if 的片段为 token（可选块内部用），支持 {{...}} 任意表达式 */
 function parseInnerTokens(fragment: string, cond?: string): RenameToken[] {
   const tokens: RenameToken[] = []
@@ -16,7 +28,7 @@ function parseInnerTokens(fragment: string, cond?: string): RenameToken[] {
   let last = 0
   let match: RegExpExecArray | null
   while ((match = re.exec(fragment))) {
-    if (match.index > last) tokens.push({ type: 'text', value: fragment.slice(last, match.index), cond })
+    if (match.index > last) pushTextTokens(tokens, fragment.slice(last, match.index), cond)
     const raw = match[0]
     const body = match[1].trim()
     // 简单变量名：常规字段 token
@@ -29,7 +41,7 @@ function parseInnerTokens(fragment: string, cond?: string): RenameToken[] {
     }
     last = re.lastIndex
   }
-  if (last < fragment.length) tokens.push({ type: 'text', value: fragment.slice(last), cond })
+  if (last < fragment.length) pushTextTokens(tokens, fragment.slice(last), cond)
   return tokens
 }
 

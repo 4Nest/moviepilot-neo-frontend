@@ -23,6 +23,7 @@ const apiUrls = {
 
 const mocks = vi.hoisted(() => ({
   appMode: false,
+  confirm: vi.fn(),
   keepAliveHandler: undefined as undefined | ((context?: Record<string, unknown>) => Promise<void>),
   infiniteDone: vi.fn(),
   openSharedDialog: vi.fn(),
@@ -31,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastWarning: vi.fn(),
   useDynamicButton: vi.fn(),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -69,6 +74,7 @@ type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 interface HeaderButton {
   action?: () => void | Promise<void>
   dataAttr?: string
+  disabled?: MaybeRef<boolean>
   icon: string
 }
 
@@ -146,6 +152,7 @@ const PluginMixedSortCardStub = defineComponent({
     'open-folder',
     'rating',
     'refresh-data',
+    'remove',
     'rename-folder',
     'remove-from-folder',
     'update-folder-config',
@@ -160,6 +167,7 @@ const PluginMixedSortCardStub = defineComponent({
             average_rating?: number
             config?: { color?: string }
             has_update?: boolean
+            page_open?: boolean
             plugin_name?: string
             repo_url?: string
           }
@@ -168,7 +176,7 @@ const PluginMixedSortCardStub = defineComponent({
       const dropTarget = document.createElement('div')
       dropTarget.classList.add('drag-over')
 
-      return h('article', { 'data-testid': `${type}-${id}` }, [
+      return h('article', { 'data-testid': `${type}-${id}`, 'data-page-open': String(Boolean(data?.page_open)) }, [
         h('span', `${type}:${name}`),
         h('output', { 'aria-label': `sortable-${id}` }, String(props.sortable)),
         type === 'plugin'
@@ -218,6 +226,9 @@ const PluginMixedSortCardStub = defineComponent({
           : null,
         type === 'plugin'
           ? h('button', { onClick: () => emit('remove-from-folder', id), type: 'button' }, `remove-plugin-${id}`)
+          : null,
+        type === 'plugin'
+          ? h('button', { onClick: () => emit('remove', id), type: 'button' }, `uninstall-plugin-${id}`)
           : null,
         type === 'plugin'
           ? h(
@@ -706,6 +717,34 @@ describe('PluginCardListView loading and request ownership', () => {
     await waitForRequestsToFinish()
   })
 
+  it('removes an uninstalled plugin optimistically before background refresh completes', async () => {
+    const delayedRefresh = createDeferred<Plugin[]>()
+    let installedRequest = 0
+    await renderList({
+      installed: () => {
+        installedRequest += 1
+        return installedRequest === 1
+          ? [
+              createPlugin({ id: 'Alpha', installed: true, plugin_name: '甲插件' }),
+              createPlugin({ id: 'Beta', installed: true, plugin_name: '乙插件' }),
+            ]
+          : delayedRefresh.promise
+      },
+    })
+
+    expect(await screen.findByText('plugin:甲插件')).toBeInTheDocument()
+    expect(screen.getByText('plugin:乙插件')).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'uninstall-plugin-Alpha' }))
+
+    // 在后台 refreshData 完成前，甲插件立即从网格剔除
+    expect(screen.queryByText('plugin:甲插件')).not.toBeInTheDocument()
+    expect(screen.getByText('plugin:乙插件')).toBeInTheDocument()
+
+    delayedRefresh.resolve([createPlugin({ id: 'Beta', installed: true, plugin_name: '乙插件' })])
+    await waitForRequestsToFinish()
+  })
+
   it('keeps an initial installed failure retryable instead of presenting a successful empty list', async () => {
     await renderList({ installedStatus: 500 })
 
@@ -1079,9 +1118,92 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
 describe('PluginCardListView search installation', () => {
   beforeEach(() => {
     mocks.appMode = false
+    mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.keepAliveHandler = undefined
     mocks.openSharedDialog.mockImplementation(() => ({ close: vi.fn(), id: 1, updateProps: vi.fn() }))
     vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('asks for confirmation before installing an uninstalled plugin from search and aborts when cancelled', async () => {
+    let installRequests = 0
+    await renderList({
+      market: () => [createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' })],
+    })
+    await waitForRequestsToFinish()
+    server.use(
+      http.get(apiUrls.install('ConfirmTarget'), () => {
+        installRequests += 1
+        return HttpResponse.json({ data: null, success: true })
+      }),
+    )
+
+    mocks.confirm.mockResolvedValueOnce(false)
+    getDynamicButtonConfig().onClick()
+    await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(installRequests).toBe(0)
+
+    mocks.confirm.mockResolvedValueOnce(true)
+    getDynamicButtonConfig().onClick()
+    await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
+    await waitFor(() => expect(installRequests).toBe(1))
+    await waitForRequestsToFinish()
+  })
+
+  it('disables drag sort when installed filters are active, combines AND filters, and opens plugin on route.query.id changes', async () => {
+    const { router } = await renderList({
+      folders: () => ({
+        Tools: ['FolderMatch', 'FolderMismatch'],
+      }),
+      installed: () => [
+        createPlugin({ id: 'MainMatch', installed: true, plugin_name: 'Alpha Sync', state: true }),
+        createPlugin({ id: 'MainMismatch', installed: true, plugin_name: 'Beta Idle', state: true }),
+        createPlugin({ id: 'FolderMatch', installed: true, plugin_name: 'Alpha Folder', state: true }),
+        createPlugin({ id: 'FolderMismatch', installed: true, plugin_name: 'Gamma Folder', state: true }),
+      ],
+    })
+    await waitForRequestsToFinish()
+
+    const sortButton = getHeaderButton('mdi-sort-variant')
+    sortButton.action?.()
+    await nextTick()
+    expect(screen.getByLabelText('sortable-MainMatch')).toHaveTextContent('true')
+    expect(unref(sortButton.disabled)).toBe(false)
+
+    // 激活「运行中」+ 名称关键字「alpha」组合过滤（逻辑 AND）
+    const filterButton = getHeaderConfig().appendButtons.find(btn => btn.dataAttr === 'installed-filter-btn')!
+    filterButton.action?.()
+    await nextTick()
+    await fireEvent.click(screen.getByText('运行中'))
+    await waitFor(() => expect(unref(sortButton.disabled)).toBe(true))
+    expect(screen.getByLabelText('sortable-MainMatch')).toHaveTextContent('false')
+
+    filterButton.action?.()
+    await nextTick()
+    const nameInput = screen.getByRole('textbox', { name: '名称' })
+    await fireEvent.update(nameInput, 'alpha')
+    await fireEvent.keyUp(nameInput, { key: 'Enter' })
+
+    // AND 过滤：仅保留同时满足 state=true 且名称含 alpha 的主列表插件与文件夹内插件
+    expect(screen.getByText('plugin:Alpha Sync')).toBeInTheDocument()
+    expect(screen.queryByText('plugin:Beta Idle')).not.toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: 'open-folder-Tools' }))
+    expect(await screen.findByText('plugin:Alpha Folder')).toBeInTheDocument()
+    expect(screen.queryByText('plugin:Gamma Folder')).not.toBeInTheDocument()
+
+    // 返回主列表并清空筛选，模拟 KeepAlive 下二次携带 ?id=MainMismatch 路由跳转
+    getHeaderButton('mdi-arrow-left').action?.()
+    filterButton.action?.()
+    await nextTick()
+    await fireEvent.click(screen.getByText('运行中'))
+    filterButton.action?.()
+    await nextTick()
+    await fireEvent.update(screen.getByRole('textbox', { name: '名称' }), '')
+    await nextTick()
+
+    await router.push('/plugins?id=MainMismatch')
+    await waitFor(() => expect(screen.getByTestId('plugin-MainMismatch')).toHaveAttribute('data-page-open', 'true'))
+    await waitForRequestsToFinish()
   })
 
   it('blocks incompatible plugins and reports business and HTTP failures without success', async () => {

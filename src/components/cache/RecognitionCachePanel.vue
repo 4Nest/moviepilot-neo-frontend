@@ -77,6 +77,13 @@ const filteredData = computed(() => {
 const mobileVisibleData = computed(() => filteredData.value.slice(0, mobileVisibleCount.value))
 const mobileHasMore = computed(() => mobileVisibleData.value.length < filteredData.value.length)
 
+/** 同步清理不在当前过滤结果中的已选识别缓存项，防止残留不可见选择。 */
+function syncSelectedItems() {
+  if (selectedItems.value.length === 0) return
+  const visibleKeys = new Set(filteredData.value.map(item => item.key))
+  selectedItems.value = selectedItems.value.filter(key => visibleKeys.has(key))
+}
+
 /** 重置移动端分页，让筛选或刷新后的识别缓存从第一页开始展示。 */
 function resetMobilePagination() {
   mobileVisibleCount.value = MOBILE_CACHE_PAGE_SIZE
@@ -120,7 +127,7 @@ async function loadCacheData(showSuccess = false) {
       shared_recognize_enabled: responseData.shared_recognize_enabled ?? false,
       data: responseData.data.map(item => ({ ...item, recognition_id: getRecognitionId(item) })),
     }
-    selectedItems.value = selectedItems.value.filter(key => cacheData.value.data.some(item => item.key === key))
+    syncSelectedItems()
     resetMobilePagination()
     if (showSuccess) $toast.success(t('setting.cache.listRefreshSuccess'))
   } catch (error) {
@@ -161,7 +168,7 @@ async function deleteCacheItem(key: string) {
   const response = (await api.delete(
     `${RECOGNITION_CACHE_ENDPOINT}/${encodeURIComponent(key)}`,
   )) as unknown as ApiResponse
-  if (!response.success) throw new Error(response.message)
+  if (!response?.success) throw new Error(response?.message)
 }
 
 /** 删除桌面端表格中选中的识别缓存。 */
@@ -172,12 +179,33 @@ async function deleteSelectedItems() {
   }
 
   const deleteCount = selectedItems.value.length
+  const isConfirmed = await createConfirm({
+    type: 'warn',
+    title: t('common.confirm'),
+    content: `确认删除选中的 ${deleteCount} 个缓存项？`,
+  })
+  if (!isConfirmed) return
+
   try {
     loading.value = true
-    await Promise.all(selectedItems.value.map(deleteCacheItem))
-    $toast.success(t('setting.cache.deleteSelectedSuccess', { count: deleteCount }))
+    const targets = [...selectedItems.value]
+    const results = await Promise.all(
+      targets.map(async key => {
+        const res = (await api.delete(
+          `${RECOGNITION_CACHE_ENDPOINT}/${encodeURIComponent(key)}`,
+        )) as unknown as ApiResponse
+        return { key, success: Boolean(res?.success) }
+      }),
+    )
+    const failedKeys = results.filter(r => !r.success).map(r => r.key)
+    const successCount = results.length - failedKeys.length
+    if (failedKeys.length > 0) {
+      $toast.error(t('setting.cache.deleteSelectedFailed'))
+    } else {
+      $toast.success(t('setting.cache.deleteSelectedSuccess', { count: successCount }))
+    }
     await loadCacheData()
-    selectedItems.value = []
+    selectedItems.value = failedKeys.filter(key => filteredData.value.some(item => item.key === key))
   } catch (error) {
     console.error(error)
     $toast.error(t('setting.cache.deleteSelectedFailed'))
@@ -250,94 +278,103 @@ onMounted(() => {
 })
 
 watch([searchFilter, statusFilter], () => {
+  syncSelectedItems()
   resetMobilePagination()
 })
 </script>
 
 <template>
   <section class="recognition-cache-panel">
-    <div class="cache-panel-toolbar">
-      <div class="cache-panel-stats">
-        <div class="cache-panel-stat cache-panel-stat--primary">
-          <VIcon icon="mdi-database-outline" :size="isMobile ? 32 : 22" />
-          <div>
-            <strong>{{ cacheData.count }}</strong>
-            <span>{{ t('setting.cache.totalCount') }}</span>
-          </div>
-        </div>
-        <div class="cache-panel-stat cache-panel-stat--success">
-          <VIcon icon="mdi-check-decagram-outline" :size="isMobile ? 32 : 22" />
-          <div>
-            <strong>{{ cacheData.recognized }}</strong>
-            <span>{{ t('setting.cache.recognized') }}</span>
-          </div>
-        </div>
-        <div v-if="!isMobile || cacheData.shared_recognize_enabled" class="cache-panel-stat cache-panel-stat--warning">
-          <VIcon icon="mdi-help-circle-outline" size="22" />
-          <div>
-            <strong>{{ cacheData.unrecognized }}</strong>
-            <span>{{ t('setting.cache.unrecognized') }}</span>
-          </div>
-        </div>
-        <div v-if="cacheData.shared_recognize_enabled" class="cache-panel-stat cache-panel-stat--info">
-          <VIcon icon="mdi-cloud-check-outline" :size="isMobile ? 32 : 22" />
-          <div>
-            <strong>{{ cacheData.shared_recognized }}</strong>
-            <span>{{ t('setting.cache.sharedRecognized') }}</span>
-          </div>
+    <div class="cache-panel-stats">
+      <div class="cache-panel-stat">
+        <span class="cache-panel-stat__icon cache-panel-stat__icon--primary" aria-hidden="true">
+          <VIcon icon="mdi-database-outline" size="18" />
+        </span>
+        <div class="cache-panel-stat__copy">
+          <strong>{{ cacheData.count }}</strong>
+          <span>{{ t('setting.cache.totalCount') }}</span>
         </div>
       </div>
-
-      <div v-if="!isMobile" class="cache-panel-actions">
-        <VBtn icon variant="text" color="primary" :loading="loading" @click="loadCacheData(true)">
-          <VIcon icon="mdi-refresh" />
-          <VTooltip activator="parent" location="bottom">{{ t('setting.cache.refreshList') }}</VTooltip>
-        </VBtn>
-        <VBtn
-          icon
-          variant="text"
-          color="warning"
-          :disabled="selectedItems.length === 0"
-          :loading="loading"
-          @click="deleteSelectedItems"
-        >
-          <VIcon icon="mdi-delete-sweep-outline" />
-          <VTooltip activator="parent" location="bottom">
-            {{ t('setting.cache.deleteSelected') }} ({{ selectedItems.length }})
-          </VTooltip>
-        </VBtn>
-        <VBtn icon variant="text" color="error" :loading="loading" @click="clearAllCache">
-          <VIcon icon="mdi-delete-variant" />
-          <VTooltip activator="parent" location="bottom">{{ t('setting.cache.clearAll') }}</VTooltip>
-        </VBtn>
+      <div class="cache-panel-stat">
+        <span class="cache-panel-stat__icon cache-panel-stat__icon--success" aria-hidden="true">
+          <VIcon icon="mdi-check-decagram-outline" size="18" />
+        </span>
+        <div class="cache-panel-stat__copy">
+          <strong>{{ cacheData.recognized }}</strong>
+          <span>{{ t('setting.cache.recognized') }}</span>
+        </div>
+      </div>
+      <div v-if="!isMobile || cacheData.shared_recognize_enabled" class="cache-panel-stat">
+        <span class="cache-panel-stat__icon cache-panel-stat__icon--warning" aria-hidden="true">
+          <VIcon icon="mdi-help-circle-outline" size="18" />
+        </span>
+        <div class="cache-panel-stat__copy">
+          <strong>{{ cacheData.unrecognized }}</strong>
+          <span>{{ t('setting.cache.unrecognized') }}</span>
+        </div>
+      </div>
+      <div v-if="cacheData.shared_recognize_enabled" class="cache-panel-stat">
+        <span class="cache-panel-stat__icon cache-panel-stat__icon--info" aria-hidden="true">
+          <VIcon icon="mdi-cloud-check-outline" size="18" />
+        </span>
+        <div class="cache-panel-stat__copy">
+          <strong>{{ cacheData.shared_recognized }}</strong>
+          <span>{{ t('setting.cache.sharedRecognized') }}</span>
+        </div>
       </div>
     </div>
 
-    <div class="cache-panel-filters">
+    <div class="cache-panel-filter-bar">
       <VTextField
         v-model="searchFilter"
         class="cache-panel-filter"
-        :label="isMobile ? undefined : recognitionFilterPlaceholder"
-        :placeholder="isMobile ? recognitionFilterPlaceholder : undefined"
+        :placeholder="recognitionFilterPlaceholder"
+        :aria-label="recognitionFilterPlaceholder"
         prepend-inner-icon="mdi-magnify"
         variant="outlined"
-        :density="isMobile ? 'comfortable' : 'compact'"
-        :single-line="isMobile"
+        density="compact"
+        single-line
         clearable
         hide-details
       />
       <VSelect
         v-model="statusFilter"
-        class="cache-panel-filter"
-        :label="isMobile ? undefined : t('setting.cache.recognitionStatus')"
-        :placeholder="isMobile ? t('setting.cache.recognitionStatus') : undefined"
+        class="cache-panel-filter cache-panel-filter--status"
+        :placeholder="t('setting.cache.recognitionStatus')"
+        :aria-label="t('setting.cache.recognitionStatus')"
         :items="statusOptions"
         prepend-inner-icon="mdi-list-status"
         variant="outlined"
-        :density="isMobile ? 'comfortable' : 'compact'"
-        :single-line="isMobile"
+        density="compact"
+        single-line
         hide-details
       />
+
+      <div v-if="!isMobile" class="cache-panel-actions">
+        <VBtn
+          variant="tonal"
+          color="primary"
+          :loading="loading"
+          prepend-icon="mdi-refresh"
+          @click="loadCacheData(true)"
+        >
+          {{ t('setting.cache.refreshList') }}
+        </VBtn>
+        <VBtn
+          variant="outlined"
+          color="warning"
+          :disabled="selectedItems.length === 0"
+          :loading="loading"
+          prepend-icon="mdi-delete-sweep-outline"
+          @click="deleteSelectedItems"
+        >
+          {{ t('setting.cache.deleteSelected') }}
+          <span v-if="selectedItems.length > 0" class="ms-1">({{ selectedItems.length }})</span>
+        </VBtn>
+        <VBtn variant="tonal" color="error" :loading="loading" prepend-icon="mdi-delete-variant" @click="clearAllCache">
+          {{ t('setting.cache.clearAll') }}
+        </VBtn>
+      </div>
     </div>
 
     <div v-if="isMobile" class="cache-panel-mobile-actions">
@@ -361,7 +398,7 @@ watch([searchFilter, statusFilter], () => {
       >
         <template #loading>
           <div class="cache-panel-load-state">
-            <VProgressCircular indeterminate color="primary" size="22" width="3" />
+            <VProgressCircular indeterminate color="primary" size="20" width="2" />
             <span>{{ t('setting.cache.loadingMore') }}</span>
           </div>
         </template>
@@ -373,15 +410,15 @@ watch([searchFilter, statusFilter], () => {
           :items="mobileVisibleData"
           :columns="1"
           :gap="10"
-          :estimated-item-height="152"
+          :estimated-item-height="136"
           :overscan-rows="5"
           :get-item-key="getRecognitionCacheItemKey"
         >
           <template #default="{ item }">
             <article class="recognition-cache-mobile-item">
-              <div class="recognition-cache-poster rounded-md">
+              <div class="recognition-cache-poster">
                 <VImg v-if="getPosterUrl(item)" :src="getPosterUrl(item)" :alt="item.title || item.key" cover />
-                <VIcon v-else icon="mdi-image-off-outline" size="28" />
+                <VIcon v-else icon="mdi-image-off-outline" size="24" />
               </div>
 
               <div class="recognition-cache-mobile-item__content">
@@ -389,11 +426,18 @@ watch([searchFilter, statusFilter], () => {
                   {{ item.title || t('setting.cache.unrecognized') }}
                 </div>
                 <div class="recognition-cache-mobile-item__meta">
-                  <VChip size="x-small" variant="tonal" :color="getMediaTypeColor(item.media_type)">
+                  <VChip
+                    size="x-small"
+                    variant="tonal"
+                    class="recognition-type-chip"
+                    :color="getMediaTypeColor(item.media_type)"
+                  >
                     {{ getMediaTypeLabel(item.media_type) }}
                   </VChip>
                   <span v-if="item.year">{{ item.year }}</span>
-                  <span v-if="isRecognized(item)">{{ recognitionIdLabel }} #{{ getRecognitionId(item) }}</span>
+                  <span v-if="isRecognized(item)" class="recognition-tabular">
+                    {{ recognitionIdLabel }} #{{ getRecognitionId(item) }}
+                  </span>
                 </div>
                 <div class="recognition-cache-mobile-item__key">{{ getRecognitionQueryText(item.key) }}</div>
               </div>
@@ -403,10 +447,11 @@ watch([searchFilter, statusFilter], () => {
                 size="small"
                 variant="text"
                 color="error"
+                class="recognition-icon-trigger"
                 :aria-label="t('common.delete')"
                 @click="deleteSingleItem(item)"
               >
-                <VIcon icon="mdi-delete-outline" size="20" />
+                <VIcon icon="mdi-delete-outline" size="16" />
               </VBtn>
             </article>
           </template>
@@ -414,7 +459,7 @@ watch([searchFilter, statusFilter], () => {
       </VInfiniteScroll>
 
       <div v-else class="cache-panel-empty">
-        <VIcon icon="mdi-database-search-outline" size="42" />
+        <VIcon icon="mdi-database-search-outline" size="34" />
         <strong>{{ t('setting.cache.noRecognitionCache', { source: recognitionSourceName }) }}</strong>
         <span>{{ t('setting.cache.noRecognitionCacheHint') }}</span>
       </div>
@@ -435,9 +480,9 @@ watch([searchFilter, statusFilter], () => {
       :loading-text="t('common.loadingText')"
     >
       <template #item.poster="{ item }">
-        <div class="recognition-cache-table__poster rounded-md">
+        <div class="recognition-cache-table__poster">
           <VImg v-if="getPosterUrl(item)" :src="getPosterUrl(item)" :alt="item.title || item.key" cover />
-          <VIcon v-else icon="mdi-image-off-outline" />
+          <VIcon v-else icon="mdi-image-off-outline" size="20" />
         </div>
       </template>
 
@@ -449,19 +494,31 @@ watch([searchFilter, statusFilter], () => {
         <div class="recognition-cache-result">
           <strong>{{ item.title || t('setting.cache.unrecognized') }}</strong>
           <span v-if="item.year">{{ item.year }}</span>
-          <VChip size="x-small" variant="tonal" :color="getMediaTypeColor(item.media_type)">
+          <VChip
+            size="x-small"
+            variant="tonal"
+            class="recognition-type-chip"
+            :color="getMediaTypeColor(item.media_type)"
+          >
             {{ getMediaTypeLabel(item.media_type) }}
           </VChip>
         </div>
       </template>
 
       <template #item.recognition_id="{ item }">
-        <span v-if="isRecognized(item)" class="font-weight-medium">#{{ getRecognitionId(item) }}</span>
+        <span v-if="isRecognized(item)" class="recognition-tabular font-weight-medium">
+          #{{ getRecognitionId(item) }}
+        </span>
         <span v-else class="text-medium-emphasis">-</span>
       </template>
 
       <template #item.status="{ item }">
-        <VChip size="small" variant="tonal" :color="isRecognized(item) ? 'success' : 'warning'">
+        <VChip
+          size="small"
+          variant="tonal"
+          class="recognition-status-chip"
+          :color="isRecognized(item) ? 'success' : 'warning'"
+        >
           {{ getRecognitionStatusLabel(item) }}
         </VChip>
       </template>
@@ -472,17 +529,18 @@ watch([searchFilter, statusFilter], () => {
           size="small"
           variant="text"
           color="error"
+          class="recognition-icon-trigger"
           :aria-label="t('common.delete')"
           @click="deleteSingleItem(item)"
         >
-          <VIcon icon="mdi-delete-outline" size="18" />
+          <VIcon icon="mdi-delete-outline" size="16" />
           <VTooltip activator="parent" location="start">{{ t('common.delete') }}</VTooltip>
         </VBtn>
       </template>
 
       <template #no-data>
         <div class="cache-panel-empty">
-          <VIcon icon="mdi-database-search-outline" size="42" />
+          <VIcon icon="mdi-database-search-outline" size="34" />
           <strong>{{ t('setting.cache.noRecognitionCache', { source: recognitionSourceName }) }}</strong>
           <span>{{ t('setting.cache.noRecognitionCacheHint') }}</span>
         </div>
@@ -498,17 +556,10 @@ watch([searchFilter, statusFilter], () => {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 20px;
-  gap: 16px;
+  padding: 16px 18px;
+  gap: 13px;
   min-block-size: 0;
   overflow-y: auto;
-}
-
-.cache-panel-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
 }
 
 .cache-panel-stats {
@@ -520,82 +571,116 @@ watch([searchFilter, statusFilter], () => {
 .cache-panel-stat {
   display: flex;
   align-items: center;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  background: var(--app-grouped-list-background);
-  box-shadow: var(--app-surface-shadow);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
   gap: 10px;
-  min-block-size: 58px;
-  min-inline-size: 126px;
-  padding-block: 10px;
-  padding-inline: 14px;
+  min-inline-size: 132px;
+  padding: 8px 13px;
 }
 
-.cache-panel-stat strong,
-.cache-panel-stat span {
-  display: block;
+.cache-panel-stat__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  block-size: 34px;
+  inline-size: 34px;
 }
 
-.cache-panel-stat strong {
-  color: rgba(var(--v-theme-on-surface), 0.9);
-  font-size: 18px;
-  line-height: 1.15;
-}
-
-.cache-panel-stat span {
-  color: rgba(var(--v-theme-on-surface), 0.58);
-  font-size: 12px;
-  margin-block-start: 3px;
-}
-
-.cache-panel-stat--primary {
+.cache-panel-stat__icon--primary {
+  background-color: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
 }
 
-.cache-panel-stat--success {
+.cache-panel-stat__icon--success {
+  background-color: rgba(var(--v-theme-success), 0.1);
   color: rgb(var(--v-theme-success));
 }
 
-.cache-panel-stat--warning {
+.cache-panel-stat__icon--warning {
+  background-color: rgba(var(--v-theme-warning), 0.1);
   color: rgb(var(--v-theme-warning));
 }
 
-.cache-panel-stat--info {
+.cache-panel-stat__icon--info {
+  background-color: rgba(var(--v-theme-info), 0.1);
   color: rgb(var(--v-theme-info));
+}
+
+.cache-panel-stat__copy strong,
+.cache-panel-stat__copy span {
+  display: block;
+}
+
+.cache-panel-stat__copy strong {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+.cache-panel-stat__copy span {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  margin-block-start: 2px;
+}
+
+.cache-panel-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cache-panel-filter {
+  flex: 1 1 240px;
+}
+
+.cache-panel-filter--status {
+  flex: 0 1 190px;
+}
+
+.cache-panel-filter-bar :deep(.v-field) {
+  border-radius: 8px;
+  background: var(--mp-field-bg);
+  min-block-size: 32px;
+}
+
+.cache-panel-filter-bar :deep(.v-field__input) {
+  min-block-size: 32px;
+  padding-block: 0;
+  font-size: 13px;
+}
+
+.cache-panel-filter-bar :deep(.v-field__prepend-inner),
+.cache-panel-filter-bar :deep(.v-field__append-inner),
+.cache-panel-filter-bar :deep(.v-field__clearable) {
+  padding-block: 0;
+  align-items: center;
 }
 
 .cache-panel-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 2px;
-}
-
-.cache-panel-filters {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.35fr);
-}
-
-.cache-panel-filters :deep(.v-field) {
-  border-radius: var(--app-field-radius);
-  background: var(--app-grouped-list-background);
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
 }
 
 .cache-panel-mobile-actions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.cache-panel-mobile-actions :deep(.v-btn) {
-  min-block-size: 44px;
 }
 
 .recognition-cache-table {
   overflow: hidden;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  box-shadow: var(--app-surface-shadow);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
 }
 
 .recognition-cache-table__poster,
@@ -604,13 +689,15 @@ watch([searchFilter, statusFilter], () => {
   overflow: hidden;
   align-items: center;
   justify-content: center;
-  background: rgba(var(--v-theme-on-surface), 0.06);
+  border: 1px solid var(--mp-border-subtle);
+  background: var(--mp-item-bg);
   color: rgba(var(--v-theme-on-surface), 0.36);
 }
 
 .recognition-cache-table__poster {
-  block-size: 62px;
-  inline-size: 44px;
+  border-radius: 6px;
+  block-size: 54px;
+  inline-size: 38px;
   margin-block: 4px;
 }
 
@@ -621,9 +708,10 @@ watch([searchFilter, statusFilter], () => {
 }
 
 .recognition-cache-table__key {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-family: monospace;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   font-size: 12px;
+  line-height: 1.45;
   max-inline-size: 36rem;
   overflow-wrap: anywhere;
 }
@@ -632,17 +720,42 @@ watch([searchFilter, statusFilter], () => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .recognition-cache-result strong {
-  color: rgba(var(--v-theme-on-surface), 0.88);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 600;
   inline-size: 100%;
+  line-height: 1.3;
 }
 
 .recognition-cache-result span {
-  color: rgba(var(--v-theme-on-surface), 0.56);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recognition-type-chip {
+  block-size: 20px;
+  font-size: 11px;
+}
+
+.recognition-status-chip {
+  block-size: 21px;
+  font-size: 11.5px;
+}
+
+.recognition-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.recognition-icon-trigger {
+  border-radius: 7px !important;
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
 }
 
 .cache-panel-empty {
@@ -652,79 +765,57 @@ watch([searchFilter, statusFilter], () => {
   justify-content: center;
   padding: 24px;
   color: rgba(var(--v-theme-on-surface), 0.48);
-  gap: 8px;
+  gap: 6px;
   min-block-size: 14rem;
   text-align: center;
 }
 
 .cache-panel-empty strong {
   color: rgba(var(--v-theme-on-surface), 0.78);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .cache-panel-empty span {
-  font-size: 13px;
+  font-size: 12px;
   max-inline-size: 30rem;
 }
 
 @media (width <= 959.98px) {
   .recognition-cache-panel {
     block-size: 100%;
-    padding-block: 14px calc(18px + env(safe-area-inset-bottom));
-    padding-inline: 16px;
-  }
-
-  .cache-panel-toolbar {
-    align-items: flex-start;
+    padding-block: 13px calc(16px + env(safe-area-inset-bottom));
+    padding-inline: 14px;
   }
 
   .cache-panel-stats {
     display: grid;
-    flex: 1 1 auto;
-    gap: 12px;
+    gap: 10px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .cache-panel-stat {
-    flex-direction: row;
-    align-items: center;
-    padding: 18px;
-    gap: 14px;
-    min-block-size: 92px;
     min-inline-size: 0;
+    padding: 10px 12px;
   }
 
-  .cache-panel-stat strong {
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1.05;
-    white-space: nowrap;
+  .cache-panel-stat__copy strong {
+    font-size: 20px;
   }
 
-  .cache-panel-stat span {
-    font-size: 14px;
-    font-weight: 600;
-    margin-block-start: 8px;
+  .cache-panel-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .cache-panel-filters {
-    gap: 10px;
-    grid-template-columns: 1fr;
-  }
-
-  .cache-panel-filter :deep(.v-field__outline) {
-    color: rgba(var(--v-theme-on-surface), 0.18);
-  }
-
-  .cache-panel-filter :deep(.v-field__input) {
-    color: rgba(var(--v-theme-on-surface), 0.72);
-    font-size: 16px;
-    min-block-size: 54px;
+  .cache-panel-filter,
+  .cache-panel-filter--status {
+    flex: 1 1 auto;
   }
 
   .recognition-cache-mobile-scroll {
     overflow: visible !important;
-    min-block-size: 20rem;
+    min-block-size: 18rem;
   }
 
   .recognition-cache-mobile-scroll :deep(.v-infinite-scroll__container),
@@ -734,7 +825,7 @@ watch([searchFilter, statusFilter], () => {
   }
 
   .recognition-cache-mobile-scroll :deep(.v-infinite-scroll__side) {
-    padding-block: 14px 2px;
+    padding-block: 12px 2px;
   }
 
   .cache-panel-load-state {
@@ -743,28 +834,27 @@ watch([searchFilter, statusFilter], () => {
     align-items: center;
     justify-content: center;
     color: rgba(var(--v-theme-on-surface), 0.58);
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 600;
     gap: 8px;
-    min-block-size: 70px;
+    min-block-size: 60px;
   }
 
   .recognition-cache-mobile-item {
     display: grid;
     align-items: start;
     padding: 12px;
-    border: var(--app-surface-border);
-    border-radius: var(--app-surface-radius);
-    backdrop-filter: var(--app-grouped-list-backdrop-filter);
-    background: var(--app-grouped-list-background);
-    box-shadow: var(--app-surface-shadow);
+    border: 1px solid var(--mp-border-card);
+    border-radius: 10px;
+    background: rgb(var(--v-theme-surface));
     gap: 12px;
-    grid-template-columns: 54px minmax(0, 1fr) 36px;
+    grid-template-columns: 50px minmax(0, 1fr) 28px;
   }
 
   .recognition-cache-poster {
-    block-size: 78px;
-    inline-size: 54px;
+    border-radius: 8px;
+    block-size: 72px;
+    inline-size: 50px;
   }
 
   .recognition-cache-mobile-item__content {
@@ -772,9 +862,10 @@ watch([searchFilter, statusFilter], () => {
   }
 
   .recognition-cache-mobile-item__title {
-    color: rgba(var(--v-theme-on-surface), 0.9);
-    font-size: 15px;
-    font-weight: 700;
+    color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.32;
     overflow-wrap: anywhere;
   }
 
@@ -782,30 +873,19 @@ watch([searchFilter, statusFilter], () => {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    color: rgba(var(--v-theme-on-surface), 0.58);
+    color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
     font-size: 12px;
-    gap: 7px;
-    margin-block-start: 7px;
+    gap: 6px;
+    margin-block-start: 5px;
   }
 
   .recognition-cache-mobile-item__key {
-    color: rgba(var(--v-theme-on-surface), 0.48);
-    font-family: monospace;
-    font-size: 11px;
-    line-height: 1.35;
-    margin-block-start: 8px;
+    color: rgba(var(--v-theme-on-surface), 0.52);
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 11.5px;
+    line-height: 1.4;
+    margin-block-start: 6px;
     overflow-wrap: anywhere;
-  }
-}
-
-@media (width <= 374.98px) {
-  .recognition-cache-panel {
-    padding-inline: 12px;
-  }
-
-  .cache-panel-stat {
-    padding: 12px;
-    gap: 10px;
   }
 }
 </style>

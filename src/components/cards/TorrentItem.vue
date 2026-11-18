@@ -128,7 +128,7 @@ watch(
       :value="props.torrent?.torrent_info?.enclosure"
       class="app-hover-lift-card torrent-item overflow-hidden"
       :class="{
-        'border-start border-success border-3 opacity-85': isDownloaded && !props.selected,
+        'torrent-item--downloaded': isDownloaded && !props.selected,
         'border-primary border-2 torrent-item--selected': props.batchMode && props.selected,
       }"
       @click="handleItemClick"
@@ -137,22 +137,29 @@ watch(
         <div class="torrent-item__prepend d-flex align-center">
           <VIcon
             v-if="props.batchMode"
-            class="mr-3 flex-shrink-0"
+            class="mr-2.5 flex-shrink-0"
             :icon="props.selected ? 'mdi-checkbox-marked-circle' : 'mdi-checkbox-blank-circle-outline'"
             :color="props.selected ? 'primary' : 'medium-emphasis'"
-            size="24"
+            size="21"
           />
           <div class="torrent-item__site-badge" :title="torrent?.site_name">
             <VImg
               v-if="siteIcon"
               :src="siteIcon"
               :alt="torrent?.site_name"
-              class="rounded site-icon flex-shrink-0"
-              width="32"
-              height="32"
+              class="site-icon site-icon--img"
+              width="28"
+              height="28"
+              max-width="28"
+              max-height="28"
+              contain
               @error="siteIcon = ''"
             />
-            <VAvatar v-else size="32" class="text-caption bg-primary-lighten-4 text-primary font-weight-bold site-icon">
+            <VAvatar
+              v-else
+              size="28"
+              class="text-caption bg-surface-variant text-medium-emphasis font-weight-semibold site-icon"
+            >
               {{ torrent?.site_name?.substring(0, 1) }}
             </VAvatar>
             <span v-if="torrent?.site_name" class="torrent-item__site-name">
@@ -163,29 +170,38 @@ watch(
       </template>
 
       <VListItemTitle class="whitespace-normal">
-        <div class="torrent-item__header d-flex align-center flex-wrap gap-2">
+        <div class="torrent-item__header d-flex align-center flex-wrap gap-1.5">
           <span class="torrent-item__media-title">
             {{ media?.title ?? meta?.name }}
           </span>
           <VChip
             v-if="meta?.season_episode"
             color="primary"
-            variant="flat"
-            size="small"
-            class="torrent-item__season font-weight-bold"
+            variant="tonal"
+            size="x-small"
+            class="torrent-item__season torrent-chip font-weight-semibold"
           >
             {{ meta?.season_episode }}
+          </VChip>
+          <VChip
+            v-if="isDownloaded"
+            color="success"
+            variant="tonal"
+            size="x-small"
+            class="torrent-chip font-weight-medium"
+          >
+            已下载
           </VChip>
           <!-- 优惠标签整合进标题行 -->
           <span
             v-if="promotionKind"
-            class="discount-banner text-white font-weight-bold"
+            class="discount-banner font-weight-semibold"
             :class="getPromotionClass(promotionKind)"
           >
             {{ torrent?.volume_factor }}
           </span>
           <span v-if="torrent?.pubdate" class="torrent-item__time d-inline-flex align-center">
-            <VIcon size="13" icon="mdi-clock-outline" class="me-1" />
+            <VIcon size="12" icon="mdi-clock-outline" class="me-1" />
             {{ formatDateDifference(torrent.pubdate) }}
           </span>
         </div>
@@ -194,31 +210,40 @@ watch(
           {{ torrent?.title }}
         </div>
 
-        <div class="torrent-item__description">
-          {{ meta?.subtitle || torrent?.description || '暂无描述' }}
+        <div v-if="meta?.subtitle || torrent?.description" class="torrent-item__description">
+          {{ meta?.subtitle || torrent?.description }}
         </div>
 
-        <div class="torrent-item__tags d-flex flex-wrap gap-1">
-          <VChip v-if="meta?.web_source" color="primary" size="x-small" variant="flat">
+        <div class="torrent-item__tags d-flex flex-wrap">
+          <VChip v-if="meta?.web_source" color="primary" size="x-small" variant="tonal" class="torrent-chip">
             {{ meta?.web_source }}
           </VChip>
-          <VChip v-if="meta?.edition" color="primary" size="x-small" variant="flat">
+          <VChip v-if="meta?.edition" color="primary" size="x-small" variant="tonal" class="torrent-chip">
             {{ meta?.edition }}
           </VChip>
-          <VChip v-if="meta?.resource_pix" color="primary" size="x-small" variant="flat">
+          <VChip v-if="meta?.resource_pix" color="primary" size="x-small" variant="tonal" class="torrent-chip">
             {{ meta?.resource_pix }}
           </VChip>
-          <VChip v-if="meta?.video_encode" color="primary" size="x-small" variant="flat">
+          <VChip v-if="meta?.video_encode" color="primary" size="x-small" variant="tonal" class="torrent-chip">
             {{ meta?.video_encode }}
           </VChip>
-          <VChip v-if="meta?.resource_team" color="primary" size="x-small" variant="flat">
+          <VChip v-if="meta?.resource_team" color="primary" size="x-small" variant="tonal" class="torrent-chip">
             {{ meta?.resource_team }}
           </VChip>
-          <VChip v-for="(label, index) in torrent?.labels" :key="index" color="primary" size="x-small" variant="flat">
+          <VChip
+            v-for="(label, index) in torrent?.labels"
+            :key="index"
+            color="secondary"
+            size="x-small"
+            variant="tonal"
+            class="torrent-chip"
+          >
             {{ label }}
           </VChip>
-          <VChip v-if="torrent?.hit_and_run" size="x-small" variant="flat" class="text-white bg-black">H&R</VChip>
-          <VChip v-if="torrent?.freedate_diff" color="secondary" size="x-small" variant="flat">
+          <VChip v-if="torrent?.hit_and_run" color="error" size="x-small" variant="tonal" class="torrent-chip">
+            H&R
+          </VChip>
+          <VChip v-if="torrent?.freedate_diff" color="secondary" size="x-small" variant="tonal" class="torrent-chip">
             {{ torrent?.freedate_diff }}
           </VChip>
         </div>
@@ -229,21 +254,29 @@ watch(
           <div class="torrent-item__stats d-flex flex-column align-end gap-1">
             <div class="d-flex align-center gap-1">
               <span class="torrent-stat torrent-stat--seeders">
-                <VIcon icon="mdi-arrow-up-bold" size="13" />
+                <VIcon icon="mdi-arrow-up-bold" size="12" />
                 {{ torrent?.seeders ?? '-' }}
               </span>
               <span class="torrent-stat torrent-stat--peers">
-                <VIcon icon="mdi-arrow-down-bold" size="13" />
+                <VIcon icon="mdi-arrow-down-bold" size="12" />
                 {{ torrent?.peers ?? '-' }}
               </span>
             </div>
             <span v-if="torrent?.size" class="torrent-stat torrent-stat--size">
-              <VIcon icon="mdi-harddisk" size="13" />
+              <VIcon icon="mdi-harddisk" size="12" />
               {{ formatFileSize(torrent.size) }}
             </span>
           </div>
-          <VBtn icon size="small" density="comfortable" variant="text" color="primary" @click.stop="openTorrentDetail">
-            <VIcon icon="mdi-information-outline" size="20"></VIcon>
+          <VBtn
+            icon
+            size="x-small"
+            density="comfortable"
+            variant="text"
+            color="primary"
+            class="torrent-item__detail-btn"
+            @click.stop="openTorrentDetail"
+          >
+            <VIcon icon="mdi-information-outline" size="17"></VIcon>
           </VBtn>
         </div>
       </template>
@@ -257,8 +290,8 @@ watch(
 }
 
 .torrent-item {
-  padding: 14px 16px !important;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  padding: 12px 15px !important;
+  border: 1px solid var(--mp-border-card);
   border-radius: 12px !important;
   background: rgb(var(--v-theme-surface));
   transition:
@@ -272,13 +305,13 @@ watch(
 }
 
 .torrent-item-hover-area:hover .torrent-item {
-  border-color: rgba(var(--v-theme-primary), 0.32);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  border-color: var(--mp-border-hover);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
   transform: translate3d(0, -2px, 0);
 }
 
 .torrent-item__prepend {
-  margin-inline-end: 14px;
+  margin-inline-end: 13px;
 }
 
 .torrent-item__site-badge {
@@ -286,100 +319,123 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 4px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.06);
-  border-radius: 10px;
+  padding: 5px 4px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
   background: rgba(var(--v-theme-on-surface), 0.025);
-  gap: 4px;
-  inline-size: 56px;
+  gap: 3px;
+  inline-size: 46px;
 }
 
 .torrent-item__site-name {
   display: block;
   overflow: hidden;
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.68rem;
+  font-size: 10.5px;
   font-weight: 600;
   line-height: 1.15;
-  max-inline-size: 48px;
+  max-inline-size: 40px;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .torrent-item__header {
-  margin-block-end: 4px;
+  margin-block-end: 3px;
 }
 
 .torrent-item__media-title {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 1.02rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.3;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 
 .torrent-item__season {
   display: inline-flex;
 }
 
+.torrent-chip {
+  border-radius: 5px !important;
+  block-size: 20px !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+  padding-inline: 6px !important;
+}
+
 .discount-banner {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background-color: rgba(var(--v-theme-primary), 0.85);
-  font-size: 0.7rem;
-  line-height: 1.2;
+  block-size: 20px;
+  padding-inline: 6px;
+  border-radius: 5px;
+  background-color: rgba(var(--v-theme-primary), 0.12) !important;
+  color: rgb(var(--v-theme-primary)) !important;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .torrent-item__time {
-  color: rgba(var(--v-theme-on-surface), 0.5);
-  font-size: 0.74rem;
+  color: rgba(var(--v-theme-on-surface), 0.54);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
 .torrent-item__torrent-title {
-  color: rgba(var(--v-theme-on-surface), 0.84);
-  font-size: 0.84rem;
-  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.45;
   margin-block-end: 2px;
   word-break: break-all;
 }
 
 .torrent-item__description {
-  color: rgba(var(--v-theme-on-surface), 0.54);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 12px;
   line-height: 1.4;
-  margin-block-end: 8px;
+  margin-block-end: 6px;
   word-break: break-all;
 }
 
 .torrent-item__tags {
+  gap: 4px;
   margin-block-start: 2px;
 }
 
 .torrent-item__append {
-  padding-inline-start: 14px;
-  border-inline-start: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+  padding-inline-start: 13px;
+  border-inline-start: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
   margin-inline-start: 12px;
+}
+
+.torrent-item__detail-btn {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
 }
 
 .torrent-stat {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: 6px;
   background: rgba(var(--v-theme-on-surface), 0.06);
+  block-size: 21px;
   color: rgba(var(--v-theme-on-surface), 0.78);
-  font-size: 0.72rem;
-  font-weight: 650;
-  gap: 0.22rem;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  gap: 3px;
   line-height: 1;
-  padding: 0.26rem 0.55rem;
+  padding-inline: 6px;
   white-space: nowrap;
 }
 
@@ -393,38 +449,57 @@ watch(
   color: rgb(var(--v-theme-warning));
 }
 
-/* 优惠标签样式 */
-.bg-success {
-  background-color: #4caf50;
+/* 优惠标签样式（柔和 tonal 胶囊） */
+.discount-banner.bg-success {
+  background-color: rgba(var(--v-theme-success), 0.14) !important;
+  color: rgb(var(--v-theme-success)) !important;
 }
 
-.bg-orange {
-  background-color: #ff5722;
+.discount-banner.bg-orange {
+  background-color: rgba(var(--v-theme-warning), 0.16) !important;
+  color: rgb(var(--v-theme-warning)) !important;
 }
 
-.bg-purple {
-  background-color: #9c27b0;
+.discount-banner.bg-purple {
+  background-color: rgba(var(--v-theme-info), 0.14) !important;
+  color: rgb(var(--v-theme-info)) !important;
 }
 
 .site-icon {
+  flex: 0 0 28px !important;
+  border-radius: 7px !important;
+  block-size: 28px;
+  inline-size: 28px;
+  max-block-size: 28px;
+  max-inline-size: 28px;
   transition: transform 0.2s ease;
 }
 
 .site-icon:hover {
-  transform: scale(1.06);
+  transform: scale(1.05);
+}
+
+.site-icon--img {
+  border: 1px solid var(--mp-border-subtle);
+  background: rgba(255, 255, 255, 0.14);
+  padding: 2px;
+}
+
+.site-icon--img :deep(.v-img__img) {
+  object-fit: contain !important;
 }
 
 @media (width <= 600px) {
   .torrent-item {
-    padding: 12px !important;
+    padding: 10px 12px !important;
   }
 
   .torrent-item__prepend {
-    margin-inline-end: 10px;
+    margin-inline-end: 9px;
   }
 
   .torrent-item__site-badge {
-    inline-size: 46px;
+    inline-size: 42px;
   }
 
   .torrent-item__append {

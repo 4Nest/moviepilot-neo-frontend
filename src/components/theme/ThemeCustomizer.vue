@@ -1,44 +1,24 @@
 <script setup lang="ts">
 import {
-  getDefaultGlassCustomizerSettings,
   themeCustomizerPrimaryColors,
-  themeCustomizerShadowLevels,
   useThemeCustomizer,
   type ThemeCustomizerLayout,
-  type ThemeCustomizerRadius,
-  type ThemeCustomizerShadow,
-  type ThemeCustomizerSkin,
   type ThemeCustomizerTheme,
 } from '@/composables/useThemeCustomizer'
 import { nativeChromeActive } from '@/native/layout'
 import { usePWA } from '@/composables/usePWA'
 import { useI18n } from '@/composables/useChineseText'
-import { useTheme } from 'vuetify'
+
 const emit = defineEmits<{
   'close': []
 }>()
 
 const customColorInput = ref<HTMLInputElement | null>(null)
 
-const {
-  isCustomized,
-  resetSettings,
-  setGlassAppearance,
-  setGlassQuality,
-  setLayout,
-  setPrimaryColor,
-  setRadius,
-  setSemiDarkMenu,
-  setShadow,
-  setSkin,
-  setTheme,
-  settings,
-} = useThemeCustomizer()
+const { isCustomized, resetSettings, setLayout, setPrimaryColor, setTheme, settings } = useThemeCustomizer()
 const { appMode } = usePWA()
 const { t } = useI18n()
-const { global: globalTheme } = useTheme()
 const defaultPrimaryColor = themeCustomizerPrimaryColors[0].value
-const defaultAppModeGlassSettings = getDefaultGlassCustomizerSettings('css')
 
 // 将主题定制器打开状态同步到根节点，供全局悬浮按钮避让右侧面板。
 function syncThemeCustomizerOpenState(isOpen: boolean) {
@@ -62,12 +42,10 @@ function clearThemeCustomizerOpenState() {
 
 // 处理固定面板的全局 Esc 关闭快捷键。
 function handleGlobalKeydown(event: KeyboardEvent) {
-  // 固定侧栏不再依赖 Vuetify overlay，手动补上常见的 Esc 关闭行为。
   if (event.key === 'Escape') emit('close')
 }
 
 onMounted(() => {
-  // 面板一挂载就代表已打开，及时同步根节点状态让全局 FAB 预留右侧空间。
   syncThemeCustomizerOpenState(true)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
@@ -79,107 +57,40 @@ onScopeDispose(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
 })
 
-const themeOptions = computed<Array<{ icon: string; title: string; value: ThemeCustomizerTheme }>>(() => {
-  const baseOptions: Array<{ icon: string; title: string; value: ThemeCustomizerTheme }> = [
-    { title: t('theme.light'), value: 'light', icon: 'mdi-white-balance-sunny' },
-    { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
-    { title: t('theme.auto'), value: 'auto', icon: 'mdi-monitor' },
-  ]
-
-  if (nativeChromeActive.value) return baseOptions
-
-  return [
-    ...baseOptions,
-    { title: t('theme.purple'), value: 'purple', icon: 'mdi-theme-light-dark' },
-    { title: t('theme.transparent'), value: 'transparent', icon: 'mdi-blur' },
-    { title: t('theme.glass'), value: 'glass', icon: 'mdi-blur-radial' },
-  ]
-})
-
-const skinOptions = computed<Array<{ title: string; value: ThemeCustomizerSkin }>>(() => [
-  { title: t('theme.customizer.skinDefault'), value: 'default' },
-  { title: t('theme.customizer.skinBordered'), value: 'bordered' },
+const themeOptions = computed<Array<{ icon: string; title: string; value: ThemeCustomizerTheme }>>(() => [
+  { title: t('theme.light'), value: 'light', icon: 'mdi-weather-sunny' },
+  { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
+  { title: t('theme.auto'), value: 'auto', icon: 'mdi-monitor' },
 ])
 
-// 当前阴影滑杆数值，界面使用 number，主题设置继续存储 Vuetify elevation 字符串档位。
-const shadowSliderValue = computed(() => Number(settings.value.shadow))
-
-const radiusOptions = computed<
-  Array<{
-    title: string
-    value: ThemeCustomizerRadius
-  }>
->(() => [
-  {
-    title: t('theme.customizer.radiusNone'),
-    value: 'none',
-  },
-  {
-    title: t('theme.customizer.radiusSmall'),
-    value: 'small',
-  },
-  {
-    title: t('theme.customizer.radiusDefault'),
-    value: 'default',
-  },
-  {
-    title: t('theme.customizer.radiusLarge'),
-    value: 'large',
-  },
-  {
-    title: t('theme.customizer.radiusExtra'),
-    value: 'extra',
-  },
-])
-
-const layoutOptions = computed<Array<{ icon: string; title: string; value: ThemeCustomizerLayout }>>(() => [
-  { title: t('theme.customizer.layoutVertical'), value: 'vertical', icon: 'mdi-dock-left' },
-  { title: t('theme.customizer.layoutCollapsed'), value: 'collapsed', icon: 'mdi-dock-window' },
-  { title: t('theme.customizer.layoutHorizontal'), value: 'horizontal', icon: 'mdi-dock-top' },
+const layoutOptions = computed<Array<{ title: string; value: ThemeCustomizerLayout }>>(() => [
+  { title: t('theme.customizer.layoutVertical'), value: 'vertical' },
+  { title: t('theme.customizer.layoutCollapsed'), value: 'collapsed' },
+  { title: t('theme.customizer.layoutHorizontal'), value: 'horizontal' },
 ])
 
 const showLayoutSection = computed(() => !nativeChromeActive.value && !appMode.value)
-
-// 玻璃表面依赖固定的高光描边维持轮廓，不提供与材质冲突的通用皮肤切换。
-const showSkinSection = computed(() => !nativeChromeActive.value && globalTheme.name.value !== 'glass')
-
-// 玻璃主题使用成套的外阴影与内高光，不提供不完整的 Vuetify elevation 调整。
-const showShadowSection = computed(() => !nativeChromeActive.value && globalTheme.name.value !== 'glass')
-const hasAppModeCustomization = computed(() => {
-  return (
-    settings.value.primaryColor !== defaultPrimaryColor ||
-    settings.value.glassAppearance !== defaultAppModeGlassSettings.glassAppearance ||
-    settings.value.glassDeformationStrength !== defaultAppModeGlassSettings.glassDeformationStrength ||
-    settings.value.glassDynamicsMode !== defaultAppModeGlassSettings.glassDynamicsMode ||
-    settings.value.glassFlowStrength !== defaultAppModeGlassSettings.glassFlowStrength ||
-    settings.value.glassQuality !== defaultAppModeGlassSettings.glassQuality ||
-    settings.value.glassReflectionStrength !== defaultAppModeGlassSettings.glassReflectionStrength ||
-    settings.value.glassTransmissionStrength !== defaultAppModeGlassSettings.glassTransmissionStrength ||
-    settings.value.glassTranslationStrength !== defaultAppModeGlassSettings.glassTranslationStrength ||
-    settings.value.glassTransparencyStrength !== defaultAppModeGlassSettings.glassTransparencyStrength ||
-    settings.value.radius !== 'default' ||
-    settings.value.shadow !== '0' ||
-    settings.value.skin !== 'default' ||
-    settings.value.theme !== 'auto'
-  )
-})
-
-const showResetBadge = computed(() =>
-  nativeChromeActive.value
-    ? settings.value.primaryColor !== defaultPrimaryColor || settings.value.theme !== 'auto'
-    : appMode.value
-      ? hasAppModeCustomization.value
-      : isCustomized.value,
+const isCustomPrimaryColor = computed(
+  () => !themeCustomizerPrimaryColors.some(color => color.value === settings.value.primaryColor),
 )
 
-const showSemiDarkMenuOption = computed(() => {
-  return (
-    !nativeChromeActive.value &&
-    !appMode.value &&
-    !globalTheme.current.value.dark &&
-    (settings.value.layout === 'vertical' || settings.value.layout === 'collapsed')
-  )
-})
+const showResetBadge = computed(() =>
+  nativeChromeActive.value || appMode.value
+    ? settings.value.primaryColor !== defaultPrimaryColor || settings.value.theme !== 'auto'
+    : isCustomized.value,
+)
+
+/** 根据背景色亮度返回高对比对勾颜色。 */
+function getCheckContrastColor(hexColor: string) {
+  const hex = hexColor.replace('#', '')
+  if (hex.length !== 6) return '#FFFFFF'
+  const r = Number.parseInt(hex.slice(0, 2), 16)
+  const g = Number.parseInt(hex.slice(2, 4), 16)
+  const b = Number.parseInt(hex.slice(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+  return luminance > 0.68 ? '#181A22' : '#FFFFFF'
+}
 
 // 打开原生颜色选择器。
 function openColorPicker() {
@@ -195,47 +106,21 @@ function handleCustomColorInput(event: Event) {
 
 // 切换布局类型，App 模式下保留移动端固定布局。
 function handleLayoutChange(layout: ThemeCustomizerLayout) {
-  // App 模式固定使用移动端导航，避免切换桌面布局后破坏底部导航体验。
   if (appMode.value) return
 
   setLayout(layout)
 }
 
-// 将 Vuetify 滑杆的数字步进写回字符串型 elevation 档位。
-function handleShadowSliderChange(value: unknown) {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  const numericValue = Number(rawValue)
-
-  if (!Number.isFinite(numericValue)) return
-
-  const clampedValue = Math.min(24, Math.max(0, Math.round(numericValue)))
-  const shadow = String(clampedValue) as ThemeCustomizerShadow
-
-  if (themeCustomizerShadowLevels.includes(shadow)) setShadow(shadow)
-}
-
 // 重置主题定制设置，App 模式只恢复可调整的外观项。
 async function handleResetSettings() {
-  if (nativeChromeActive.value) {
+  if (nativeChromeActive.value || appMode.value) {
     await setPrimaryColor(defaultPrimaryColor)
     await setTheme('auto')
 
     return
   }
 
-  if (!appMode.value) {
-    await resetSettings()
-
-    return
-  }
-  // App 模式共享定制器，但保留桌面导航相关偏好，只重置 App 侧可调整的外观设置。
-  await setPrimaryColor(defaultPrimaryColor)
-  await setGlassAppearance('clear')
-  await setGlassQuality('css')
-  await setRadius('default')
-  await setShadow('0')
-  await setSkin('default')
-  await setTheme('auto')
+  await resetSettings()
 }
 </script>
 
@@ -246,50 +131,121 @@ async function handleResetSettings() {
     :data-native-sheet-size="nativeChromeActive ? 'medium' : undefined"
     :aria-label="t('theme.customizer.title')"
   >
-    <div class="theme-customizer-panel" :class="{ 'theme-customizer-panel--dialog': appMode, 'app-surface': appMode }">
-      <div class="theme-customizer-header py-5 px-4">
-        <div>
+    <div class="theme-customizer-panel" :class="{ 'theme-customizer-panel--dialog': appMode }">
+      <!-- 顶部栏 52px -->
+      <header class="theme-customizer-header">
+        <div class="theme-customizer-header__brand">
+          <VIcon class="theme-customizer-header__icon" icon="mdi-tune-variant" size="18" />
           <h2 class="theme-customizer-title">{{ t('theme.customizer.title') }}</h2>
         </div>
-        <div class="theme-customizer-header-actions">
-          <VBadge color="error" dot :model-value="showResetBadge" location="top end" offset-x="2" offset-y="2">
-            <IconBtn :aria-label="t('theme.customizer.reset')" @click="handleResetSettings">
-              <VIcon class="text-high-emphasis" icon="mdi-refresh" />
-            </IconBtn>
-          </VBadge>
-          <IconBtn data-native-dialog-close :aria-label="t('common.close')" @click="emit('close')">
-            <VIcon class="text-high-emphasis" icon="mdi-close" />
+        <div class="theme-customizer-header__actions">
+          <VTooltip :text="t('theme.customizer.reset')" location="bottom">
+            <template #activator="{ props: tooltipProps }">
+              <IconBtn
+                v-bind="tooltipProps"
+                data-testid="theme-customizer-reset"
+                class="theme-customizer-action-btn"
+                :aria-label="t('theme.customizer.reset')"
+                @click="handleResetSettings"
+              >
+                <span v-if="showResetBadge" class="theme-customizer-reset-dot" aria-hidden="true" />
+                <VIcon icon="mdi-refresh" size="17" />
+              </IconBtn>
+            </template>
+          </VTooltip>
+          <IconBtn
+            data-native-dialog-close
+            class="theme-customizer-action-btn"
+            :aria-label="t('common.close')"
+            @click="emit('close')"
+          >
+            <VIcon icon="mdi-close" size="17" />
           </IconBtn>
         </div>
-      </div>
-
-      <VDivider />
+      </header>
 
       <div class="theme-customizer-body">
-        <section class="theme-customizer-section">
-          <h3 class="theme-customizer-section-title">{{ t('theme.customizer.primaryColor') }}</h3>
+        <!-- 分组 1：色彩模式 -->
+        <section class="theme-customizer-group">
+          <div class="theme-customizer-group__header">
+            <h3 class="theme-customizer-group__title">{{ t('theme.customizer.colorMode') }}</h3>
+          </div>
+          <div class="theme-customizer-mode-grid">
+            <button
+              v-for="theme in themeOptions"
+              :key="theme.value"
+              type="button"
+              data-testid="theme-mode-option"
+              :data-value="theme.value"
+              class="theme-customizer-mode-card"
+              :class="{ 'is-active': settings.theme === theme.value }"
+              @click="setTheme(theme.value)"
+            >
+              <span class="mini-theme-preview" :class="`mini-theme-preview--${theme.value}`" aria-hidden="true">
+                <span class="mini-theme-preview__sidebar">
+                  <i />
+                  <i />
+                </span>
+                <span class="mini-theme-preview__workspace">
+                  <span class="mini-theme-preview__topbar" />
+                  <span class="mini-theme-preview__canvas">
+                    <i />
+                    <i />
+                  </span>
+                </span>
+              </span>
+              <span class="theme-customizer-mode-card__label">
+                <VIcon :icon="theme.icon" size="14" />
+                <span>{{ theme.title }}</span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 分组 2：强调色 -->
+        <section class="theme-customizer-group">
+          <div class="theme-customizer-group__header">
+            <h3 class="theme-customizer-group__title">{{ t('theme.customizer.primaryColor') }}</h3>
+            <span class="theme-customizer-hex-pill">
+              <span class="theme-customizer-hex-pill__dot" :style="{ backgroundColor: settings.primaryColor }" />
+              <span data-testid="primary-color-hex">{{ settings.primaryColor.toUpperCase() }}</span>
+            </span>
+          </div>
           <div class="theme-customizer-color-grid">
-            <div
+            <button
               v-for="color in themeCustomizerPrimaryColors"
               :key="color.value"
-              class="theme-customizer-color-option"
+              type="button"
+              data-testid="color-swatch"
+              :data-color="color.value"
+              class="theme-customizer-color-swatch"
               :class="{ 'is-active': settings.primaryColor === color.value }"
+              :style="{ backgroundColor: color.value }"
               :aria-label="t('theme.customizer.usePrimaryColor', { color: color.name })"
               @click="setPrimaryColor(color.value)"
             >
-              <span class="theme-customizer-color-swatch" :style="{ backgroundColor: color.value }" />
-            </div>
+              <VIcon
+                v-if="settings.primaryColor === color.value"
+                icon="mdi-check"
+                size="16"
+                :style="{ color: getCheckContrastColor(color.value) }"
+              />
+            </button>
 
-            <div
+            <button
               v-if="!appMode"
-              class="theme-customizer-color-option theme-customizer-color-option--picker"
-              :class="{
-                'is-active': !themeCustomizerPrimaryColors.some(color => color.value === settings.primaryColor),
-              }"
+              type="button"
+              class="theme-customizer-color-swatch theme-customizer-color-swatch--picker"
+              :class="{ 'is-active': isCustomPrimaryColor }"
+              :style="isCustomPrimaryColor ? { backgroundColor: settings.primaryColor } : undefined"
               :aria-label="t('theme.customizer.chooseCustomColor')"
               @click="openColorPicker"
             >
-              <VIcon class="theme-customizer-native-icon" icon="mdi-palette-outline" size="30" />
+              <VIcon
+                icon="mdi-palette-outline"
+                size="17"
+                :style="isCustomPrimaryColor ? { color: getCheckContrastColor(settings.primaryColor) } : undefined"
+              />
               <input
                 ref="customColorInput"
                 class="theme-customizer-native-color"
@@ -297,161 +253,49 @@ async function handleResetSettings() {
                 :value="settings.primaryColor"
                 @input="handleCustomColorInput"
               />
-            </div>
-          </div>
-
-          <h3 class="theme-customizer-section-title">{{ t('common.theme') }}</h3>
-          <div class="theme-customizer-option-grid theme-customizer-option-grid--theme">
-            <div
-              v-for="theme in themeOptions"
-              :key="theme.value"
-              class="theme-customizer-card-option"
-              :class="{ 'is-active': settings.theme === theme.value }"
-              @click="setTheme(theme.value)"
-            >
-              <VIcon class="theme-customizer-theme-icon" :icon="theme.icon" size="36" />
-              <span>{{ theme.title }}</span>
-            </div>
-          </div>
-
-          <template v-if="!nativeChromeActive && showSkinSection">
-            <VDivider class="mt-7" />
-
-            <h3 class="theme-customizer-section-title">{{ t('theme.customizer.skins') }}</h3>
-            <div class="theme-customizer-preview-grid theme-customizer-preview-grid--skins">
-              <div
-                v-for="skin in skinOptions"
-                :key="skin.value"
-                class="theme-customizer-preview-option"
-                :class="{ 'is-active': settings.skin === skin.value }"
-                @click="setSkin(skin.value)"
-              >
-                <span class="theme-customizer-border-scene" :class="`theme-customizer-border-scene--${skin.value}`">
-                  <span class="theme-customizer-border-scene__card">
-                    <i />
-                    <i />
-                  </span>
-                  <span class="theme-customizer-border-scene__dialog">
-                    <i />
-                  </span>
-                  <span class="theme-customizer-border-scene__menu">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </span>
-                <span>{{ skin.title }}</span>
-              </div>
-            </div>
-          </template>
-
-          <template v-if="!nativeChromeActive">
-            <VDivider class="mt-7" />
-
-            <h3 class="theme-customizer-section-title">{{ t('theme.customizer.radius') }}</h3>
-            <div class="theme-customizer-preview-grid theme-customizer-preview-grid--radius">
-              <div
-                v-for="radius in radiusOptions"
-                :key="radius.value"
-                class="theme-customizer-preview-option"
-                :class="{ 'is-active': settings.radius === radius.value }"
-                @click="setRadius(radius.value)"
-              >
-                <span class="theme-customizer-radius-scene" :class="`theme-customizer-radius-scene--${radius.value}`">
-                  <span class="theme-customizer-radius-scene__card">
-                    <span class="theme-customizer-radius-scene__badge" />
-                    <span class="theme-customizer-radius-scene__line" />
-                    <span class="theme-customizer-radius-scene__line theme-customizer-radius-scene__line--short" />
-                  </span>
-                </span>
-                <span>{{ radius.title }}</span>
-              </div>
-            </div>
-          </template>
-
-          <template v-if="!nativeChromeActive && showShadowSection">
-            <VDivider class="mt-7" />
-
-            <h3 class="theme-customizer-section-title">{{ t('theme.customizer.shadow') }}</h3>
-            <div class="theme-customizer-shadow-slider">
-              <div class="theme-customizer-shadow-slider__header">
-                <span>{{ t('theme.customizer.shadowLevel', { level: settings.shadow }) }}</span>
-                <span>0 - 24</span>
-              </div>
-              <div class="theme-customizer-shadow-slider__control">
-                <span
-                  class="theme-customizer-shadow-slider__sample"
-                  :style="{ boxShadow: `var(--app-elevation-${settings.shadow})` }"
-                >
-                  <span class="theme-customizer-shadow-slider__sample-accent" />
-                  <span class="theme-customizer-shadow-slider__sample-line" />
-                  <span
-                    class="theme-customizer-shadow-slider__sample-line theme-customizer-shadow-slider__sample-line--short"
-                  />
-                </span>
-                <VSlider
-                  :model-value="shadowSliderValue"
-                  :aria-label="t('theme.customizer.shadow')"
-                  :max="24"
-                  :min="0"
-                  :step="1"
-                  color="primary"
-                  density="comfortable"
-                  hide-details
-                  show-ticks="always"
-                  thumb-label
-                  tick-size="2"
-                  @update:model-value="handleShadowSliderChange"
-                />
-              </div>
-              <div class="theme-customizer-shadow-slider__scale" aria-hidden="true">
-                <span>0</span>
-                <span>24</span>
-              </div>
-            </div>
-          </template>
-
-          <div v-if="!nativeChromeActive && showSemiDarkMenuOption" class="theme-customizer-semi-dark">
-            <span>{{ t('theme.customizer.semiDarkMenu') }}</span>
-            <VSwitch
-              :model-value="settings.semiDarkMenu"
-              color="primary"
-              inset
-              hide-details
-              @update:model-value="setSemiDarkMenu(Boolean($event))"
-            />
+            </button>
           </div>
         </section>
 
-        <VDivider v-if="!nativeChromeActive && showLayoutSection" />
-
-        <section v-if="!nativeChromeActive && showLayoutSection" class="theme-customizer-section">
-          <h3 class="theme-customizer-section-title">{{ t('theme.customizer.layout') }}</h3>
-          <div class="theme-customizer-preview-grid">
-            <div
+        <!-- 分组 3：桌面导航布局 -->
+        <section v-if="showLayoutSection" class="theme-customizer-group">
+          <div class="theme-customizer-group__header">
+            <h3 class="theme-customizer-group__title">{{ t('theme.customizer.layout') }}</h3>
+          </div>
+          <div class="theme-customizer-layout-grid">
+            <button
               v-for="layout in layoutOptions"
               :key="layout.value"
-              class="theme-customizer-preview-option"
-              :class="{ 'is-active': settings.layout === layout.value, 'is-disabled': appMode }"
+              type="button"
+              data-testid="layout-option"
+              :data-value="layout.value"
+              class="theme-customizer-layout-card"
+              :class="{ 'is-active': settings.layout === layout.value }"
               @click="handleLayoutChange(layout.value)"
             >
-              <span class="theme-customizer-mini-layout" :class="`theme-customizer-mini-layout--${layout.value}`">
-                <span class="mini-sidebar">
-                  <i />
+              <span class="mini-ide-layout" :class="`mini-ide-layout--${layout.value}`" aria-hidden="true">
+                <span class="mini-ide-layout__nav">
+                  <i class="is-accent" />
                   <i />
                   <i />
                 </span>
-                <span class="mini-content">
-                  <i />
-                  <i />
-                  <i />
+                <span class="mini-ide-layout__main">
+                  <span class="mini-ide-layout__bar" />
+                  <span class="mini-ide-layout__cards">
+                    <i />
+                    <i />
+                  </span>
                 </span>
               </span>
-              <span>{{ layout.title }}</span>
-            </div>
+              <span class="theme-customizer-layout-card__label">{{ layout.title }}</span>
+            </button>
           </div>
         </section>
       </div>
+
+      <footer class="theme-customizer-footer">
+        <span>{{ t('theme.customizer.autoSavedHint') }}</span>
+      </footer>
     </div>
   </aside>
 </template>
@@ -466,12 +310,10 @@ async function handleResetSettings() {
   overflow: hidden;
   border-radius: 0;
   background: rgb(var(--v-theme-surface));
-
-  /* 背景层保持完整视口高度，避免 iOS 键盘触发 visual viewport resize 后露出底层页面。 */
   block-size: 100vh !important;
-  border-inline-start: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
-  box-shadow: var(--app-surface-shadow) !important;
-  inline-size: 420px !important;
+  border-inline-start: 1px solid var(--mp-border-card) !important;
+  box-shadow: var(--mp-overlay-shadow) !important;
+  inline-size: 320px !important;
   inset-block-start: 0 !important;
   inset-inline-end: 0 !important;
   max-block-size: none !important;
@@ -482,6 +324,12 @@ async function handleResetSettings() {
   .theme-customizer-panel-host {
     block-size: 100lvh !important;
     min-block-size: 100lvh !important;
+  }
+}
+
+@media (width <= 600px) {
+  .theme-customizer-panel-host {
+    inline-size: 100vw !important;
   }
 }
 
@@ -504,509 +352,484 @@ async function handleResetSettings() {
   overflow: hidden;
   block-size: 100%;
   max-block-size: 100%;
-
-  /* 独立 App 模式会贴近 viewport-fit=cover 顶部，面板内部需要避开 iOS 状态栏。 */
   padding-block-start: env(safe-area-inset-top, 0px);
-}
-
-.theme-customizer-panel--dialog .theme-customizer-body {
-  block-size: auto;
-  padding-block-end: env(safe-area-inset-bottom, 0px);
-}
-
-@media (width <= 600px) {
-  .theme-customizer-panel-host {
-    inline-size: 100vw !important;
-  }
 }
 
 .theme-customizer-header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  block-size: 52px;
+  gap: 12px;
+  padding-inline: 16px;
+}
+
+.theme-customizer-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.theme-customizer-header__icon {
+  color: rgba(var(--v-theme-on-surface), 0.68);
 }
 
 .theme-customizer-title {
   margin: 0;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 1.45rem;
+  color: rgba(var(--v-theme-on-surface), 0.95);
+  font-size: 14.5px;
   font-weight: 600;
+  letter-spacing: -0.005em;
   line-height: 1.2;
 }
 
-.theme-customizer-header-actions {
+.theme-customizer-header__actions {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.theme-customizer-body {
-  flex: 1 1 auto;
-  min-block-size: 0;
-  -webkit-overflow-scrolling: touch;
-  -ms-overflow-style: none;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
+.theme-customizer-action-btn {
+  position: relative;
+  border-radius: 8px !important;
+  block-size: 30px !important;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  inline-size: 30px !important;
+  min-inline-size: 30px !important;
 
-  &::-webkit-scrollbar {
-    display: none;
+  &:hover {
+    background-color: rgba(var(--v-theme-on-surface), 0.06);
+    color: rgba(var(--v-theme-on-surface), 0.94);
+    opacity: 1;
   }
 }
 
-.theme-customizer-section {
-  padding-block-end: 28px;
-  padding-inline: 32px;
+.theme-customizer-reset-dot {
+  position: absolute;
+  border-radius: 50%;
+  background-color: rgb(var(--v-theme-primary));
+  block-size: 6px;
+  inline-size: 6px;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
 }
 
-.theme-customizer-section-title {
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 1.1rem;
+.theme-customizer-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 20px;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: 18px;
+  padding-inline: 16px;
+  scrollbar-width: thin;
+}
+
+.theme-customizer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.theme-customizer-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.theme-customizer-group__title {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 12.5px;
   font-weight: 600;
-  line-height: 1.25;
-  margin-block: 28px 16px;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
 }
 
-.theme-customizer-section-note {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.45;
-  margin-block: -6px 16px;
+// 分组 1：色彩模式卡片
+.theme-customizer-mode-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.theme-customizer-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 8px;
+  appearance: none;
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  cursor: pointer;
+  gap: 6px;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(.is-active) {
+    border-color: var(--mp-border-hover);
+    background: rgba(var(--v-theme-on-surface), 0.04);
+    color: rgba(var(--v-theme-on-surface), 0.9);
+  }
+
+  &.is-active {
+    border: 1.5px solid rgb(var(--v-theme-primary));
+    padding: 5.5px;
+    background: rgba(var(--v-theme-primary), 0.06);
+    color: rgba(var(--v-theme-on-surface), 0.96);
+    font-weight: 600;
+  }
+}
+
+.theme-customizer-mode-card__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  gap: 4px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.mini-theme-preview {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(128, 134, 150, 0.22);
+  border-radius: 5px;
+  block-size: 40px;
+  grid-template-columns: 26% 1fr;
+  inline-size: 100%;
+}
+
+.mini-theme-preview__sidebar {
+  display: flex;
+  flex-direction: column;
+  border-inline-end: 1px solid rgba(128, 134, 150, 0.16);
+  gap: 3px;
+  padding-block: 6px;
+  padding-inline: 4px;
+
+  i {
+    display: block;
+    border-radius: 2px;
+    block-size: 3px;
+  }
+}
+
+.mini-theme-preview__workspace {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-theme-preview__topbar {
+  block-size: 8px;
+  border-block-end: 1px solid rgba(128, 134, 150, 0.16);
+}
+
+.mini-theme-preview__canvas {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px;
+
+  i {
+    display: block;
+    border-radius: 2px;
+    block-size: 6px;
+  }
+}
+
+.mini-theme-preview--light {
+  background: #fafafc;
+
+  .mini-theme-preview__sidebar {
+    background: #eef0f5;
+
+    i {
+      background: rgba(15, 23, 42, 0.2);
+    }
+  }
+
+  .mini-theme-preview__canvas i {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+  }
+}
+
+.mini-theme-preview--dark {
+  background: #1d1f27;
+
+  .mini-theme-preview__sidebar {
+    background: #15161c;
+
+    i {
+      background: rgba(255, 255, 255, 0.22);
+    }
+  }
+
+  .mini-theme-preview__canvas i {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #252834;
+  }
+}
+
+.mini-theme-preview--auto {
+  background: linear-gradient(110deg, #fafafc 0 50%, #1d1f27 50% 100%);
+
+  .mini-theme-preview__sidebar {
+    background: #eef0f5;
+
+    i {
+      background: rgba(15, 23, 42, 0.22);
+    }
+  }
+
+  .mini-theme-preview__canvas i {
+    border: 1px solid rgba(128, 134, 150, 0.2);
+    background: rgba(128, 134, 150, 0.16);
+  }
+}
+
+// 分组 2：强调色与 HEX 胶囊
+.theme-customizer-hex-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  gap: 5px;
+  line-height: 1;
+  padding-block: 3px;
+  padding-inline: 6px;
+}
+
+.theme-customizer-hex-pill__dot {
+  border-radius: 50%;
+  block-size: 8px;
+  inline-size: 8px;
 }
 
 .theme-customizer-color-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, 48px);
-}
-
-.theme-customizer-color-option {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 10px;
-  appearance: none;
-  block-size: 48px;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  cursor: pointer;
-  inline-size: 48px;
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
-
-  &.is-active {
-    border-width: 2px;
-    border-color: rgb(var(--v-theme-primary));
-    box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.12);
-  }
+  gap: 8px;
+  grid-template-columns: repeat(7, 34px);
+  justify-content: space-between;
 }
 
 .theme-customizer-color-swatch {
-  display: block;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
-  block-size: 30px;
-  inline-size: 30px;
+  appearance: none;
+  block-size: 34px;
+  cursor: pointer;
+  inline-size: 34px;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    border-color 0.14s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &.is-active {
+    box-shadow:
+      0 0 0 2px rgb(var(--v-theme-surface)),
+      0 0 0 3.5px rgba(var(--v-theme-on-surface), 0.72);
+  }
 }
 
-.theme-customizer-color-option--picker {
+.theme-customizer-color-swatch--picker {
+  border: 1px dashed var(--mp-border-hover);
   background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgba(var(--v-theme-on-surface), 0.74);
+
+  &.is-active {
+    border-style: solid;
+  }
 }
 
 .theme-customizer-native-color {
   position: absolute;
   block-size: 1px;
   inline-size: 1px;
-  inset-block: 50% auto;
-  inset-inline: 50% auto;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
   opacity: 0;
   pointer-events: none;
 }
 
-.theme-customizer-option-grid {
+// 分组 3：桌面导航布局示意图
+.theme-customizer-layout-grid {
   display: grid;
-  gap: 16px;
+  gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.theme-customizer-option-grid--theme {
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-}
-
-.theme-customizer-card-option,
-.theme-customizer-preview-option {
+.theme-customizer-layout-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 10px;
+  align-items: stretch;
+  padding: 6px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 8px;
   appearance: none;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  color: rgba(var(--v-theme-on-surface), 0.72);
   cursor: pointer;
-  font-size: 1rem;
-  gap: 10px;
+  gap: 6px;
   transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(.is-active) {
+    border-color: var(--mp-border-hover);
+    background: rgba(var(--v-theme-on-surface), 0.04);
+    color: rgba(var(--v-theme-on-surface), 0.9);
+  }
 
   &.is-active {
-    border-width: 2px;
-    border-color: rgb(var(--v-theme-primary));
-    background: rgba(var(--v-theme-primary), 0.08);
-    box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.12);
-    color: rgb(var(--v-theme-primary));
-  }
-}
-
-.theme-customizer-card-option {
-  justify-content: center;
-  padding: 16px;
-  min-block-size: 112px;
-}
-
-.theme-customizer-preview-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.theme-customizer-preview-grid--skins {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.theme-customizer-preview-grid--radius {
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-}
-
-.theme-customizer-preview-option {
-  align-items: flex-start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none !important;
-
-  &.is-active {
-    background: transparent;
-    box-shadow: none !important;
-
-    .theme-customizer-mini-layout,
-    .theme-customizer-border-scene,
-    .theme-customizer-radius-scene {
-      border-width: 2px;
-      border-color: rgb(var(--v-theme-primary));
-      background: rgba(var(--v-theme-primary), 0.04);
-    }
-  }
-
-  > span:last-child {
-    color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-    padding-inline-start: 2px;
-  }
-
-  &.is-disabled {
-    cursor: not-allowed;
-    opacity: 0.52;
-  }
-}
-
-.theme-customizer-semi-dark {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-block-start: 28px;
-  margin-inline: -32px;
-  padding-inline: 32px;
-}
-
-.theme-customizer-mini-layout {
-  display: grid;
-  overflow: hidden;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 10px;
-  block-size: 74px;
-  grid-template-columns: 34% 1fr;
-  inline-size: 100%;
-  min-inline-size: 92px;
-}
-
-.theme-customizer-mini-layout--collapsed {
-  grid-template-columns: 18% 1fr;
-}
-
-.theme-customizer-mini-layout--horizontal {
-  grid-template-columns: 1fr;
-  grid-template-rows: 24% 1fr;
-
-  .mini-sidebar {
-    flex-direction: row;
-    align-items: center;
-  }
-}
-
-.theme-customizer-border-scene {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(var(--v-theme-on-surface), 0.02), rgba(var(--v-theme-on-surface), 0.05)),
-    rgb(var(--v-theme-surface));
-  block-size: 74px;
-  inline-size: 100%;
-  min-inline-size: 92px;
-}
-
-.theme-customizer-border-scene__card,
-.theme-customizer-border-scene__dialog,
-.theme-customizer-border-scene__menu {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  border: 0 solid rgba(var(--v-theme-on-surface), 0.14);
-  border-radius: 6px;
-  background: rgba(var(--v-theme-surface), 0.92);
-  gap: 5px;
-  padding: 7px;
-  box-shadow: var(--app-elevation-0);
-}
-
-.theme-customizer-border-scene__card {
-  block-size: 36px;
-  inline-size: 46%;
-  inset-block-start: 12px;
-  inset-inline-start: 10px;
-}
-
-.theme-customizer-border-scene__dialog {
-  block-size: 42px;
-  inline-size: 38%;
-  inset-block-start: 18px;
-  inset-inline-end: 13px;
-}
-
-.theme-customizer-border-scene__menu {
-  block-size: 30px;
-  inline-size: 30%;
-  inset-block-end: 10px;
-  inset-inline-start: 34%;
-}
-
-.theme-customizer-border-scene__card i,
-.theme-customizer-border-scene__dialog i,
-.theme-customizer-border-scene__menu i {
-  display: block;
-  border-radius: 3px;
-  background: rgba(var(--v-theme-on-surface), 0.1);
-  block-size: 5px;
-}
-
-.theme-customizer-border-scene--bordered {
-  .theme-customizer-border-scene__card,
-  .theme-customizer-border-scene__dialog,
-  .theme-customizer-border-scene__menu {
-    border-width: 1px;
-  }
-}
-
-.mini-sidebar,
-.mini-content {
-  display: flex;
-  flex-direction: column;
-  padding: 10px;
-  gap: 8px;
-}
-
-.mini-sidebar {
-  background: rgba(var(--v-theme-on-surface), 0.04);
-}
-
-.mini-sidebar i,
-.mini-content i {
-  display: block;
-  border-radius: 4px;
-  background: rgba(var(--v-theme-on-surface), 0.12);
-  block-size: 6px;
-}
-
-.mini-content i {
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  block-size: 18px;
-}
-
-.theme-customizer-radius-scene {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(var(--v-theme-on-surface), 0.02), rgba(var(--v-theme-on-surface), 0.05)),
-    rgb(var(--v-theme-surface));
-  block-size: 90px;
-  inline-size: 100%;
-  min-inline-size: 0;
-
-  --theme-customizer-preview-control-radius: var(--app-vuetify-rounded);
-  --theme-customizer-preview-surface-radius: var(--app-vuetify-rounded-lg);
-}
-
-.theme-customizer-radius-scene--none {
-  --theme-customizer-preview-control-radius: var(--app-vuetify-rounded-sm);
-  --theme-customizer-preview-surface-radius: var(--app-vuetify-rounded-sm);
-}
-
-.theme-customizer-radius-scene--small {
-  --theme-customizer-preview-control-radius: var(--app-vuetify-rounded);
-  --theme-customizer-preview-surface-radius: var(--app-vuetify-rounded);
-}
-
-.theme-customizer-radius-scene--large {
-  --theme-customizer-preview-control-radius: var(--app-vuetify-rounded-lg);
-  --theme-customizer-preview-surface-radius: var(--app-vuetify-rounded-lg);
-}
-
-.theme-customizer-radius-scene--extra {
-  --theme-customizer-preview-control-radius: var(--app-vuetify-rounded-xl);
-  --theme-customizer-preview-surface-radius: var(--app-vuetify-rounded-xl);
-}
-
-.theme-customizer-radius-scene__card {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  border-radius: var(--theme-customizer-preview-surface-radius);
-  background: rgb(var(--v-theme-surface));
-  gap: 8px;
-  inset: 16px;
-  padding-block: 12px;
-  padding-inline: 14px;
-}
-
-.theme-customizer-radius-scene__badge,
-.theme-customizer-radius-scene__line {
-  display: block;
-  background: rgba(var(--v-theme-on-surface), 0.1);
-}
-
-.theme-customizer-radius-scene__badge {
-  border-radius: var(--theme-customizer-preview-control-radius);
-  block-size: 8px;
-  inline-size: 42%;
-  min-inline-size: 28px;
-}
-
-.theme-customizer-radius-scene__line {
-  border-radius: var(--theme-customizer-preview-control-radius);
-  block-size: 7px;
-}
-
-.theme-customizer-radius-scene__line--short {
-  inline-size: 66%;
-}
-
-.theme-customizer-shadow-slider {
-  padding: 16px 18px 12px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: var(--app-vuetify-rounded-lg);
-  background: rgba(var(--v-theme-surface), 0.72);
-}
-
-.theme-customizer-shadow-slider__header,
-.theme-customizer-shadow-slider__scale {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.theme-customizer-shadow-slider__header {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.3;
-  margin-block-end: 14px;
-
-  > span:first-child {
-    color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+    border: 1.5px solid rgb(var(--v-theme-primary));
+    padding: 5.5px;
+    background: rgba(var(--v-theme-primary), 0.06);
+    color: rgba(var(--v-theme-on-surface), 0.96);
     font-weight: 600;
   }
 }
 
-.theme-customizer-shadow-slider__control {
+.theme-customizer-layout-card__label {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mini-ide-layout {
   display: grid;
-  align-items: center;
-  gap: 16px;
-  grid-template-columns: 56px minmax(0, 1fr);
-}
-
-.theme-customizer-shadow-slider__sample {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border-radius: var(--app-vuetify-rounded);
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  background: rgb(var(--v-theme-surface));
-  block-size: 42px;
-  gap: 5px;
-  inline-size: 42px;
-  padding-block: 8px;
-  padding-inline: 9px;
-}
-
-.theme-customizer-shadow-slider__sample-accent,
-.theme-customizer-shadow-slider__sample-line {
-  display: block;
-  border-radius: 999px;
-}
-
-.theme-customizer-shadow-slider__sample-accent {
-  background: rgba(var(--v-theme-primary), 0.48);
-  block-size: 5px;
-  inline-size: 44%;
-}
-
-.theme-customizer-shadow-slider__sample-line {
-  background: rgba(var(--v-theme-on-surface), 0.12);
-  block-size: 4px;
+  overflow: hidden;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 5px;
+  background: var(--mp-canvas-bg);
+  block-size: 46px;
+  grid-template-columns: 30% 1fr;
   inline-size: 100%;
 }
 
-.theme-customizer-shadow-slider__sample-line--short {
-  inline-size: 68%;
+.mini-ide-layout__nav {
+  display: flex;
+  flex-direction: column;
+  border-inline-end: 1px solid var(--mp-border-subtle);
+  background: var(--mp-shell-bg);
+  gap: 3px;
+  padding-block: 6px;
+  padding-inline: 4px;
+
+  i {
+    display: block;
+    border-radius: 2px;
+    background: rgba(var(--v-theme-on-surface), 0.16);
+    block-size: 3.5px;
+
+    &.is-accent {
+      background: rgb(var(--v-theme-primary));
+    }
+  }
 }
 
-.theme-customizer-shadow-slider__scale {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1;
-  margin-block-start: 2px;
-  margin-inline-start: 72px;
+.mini-ide-layout__main {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
 }
 
-.theme-customizer-shadow-slider :deep(.v-slider.v-input) {
-  margin: 0;
+.mini-ide-layout__bar {
+  block-size: 8px;
+  border-block-end: 1px solid var(--mp-border-subtle);
 }
 
-.theme-customizer-shadow-slider :deep(.v-slider-track__tick) {
-  opacity: 0.5;
+.mini-ide-layout__cards {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+
+  i {
+    display: block;
+    border: 1px solid var(--mp-border-subtle);
+    border-radius: 2px;
+    background: rgb(var(--v-theme-surface));
+    block-size: 8px;
+  }
 }
 
-@media (width <= 600px) {
-  .theme-customizer-header,
-  .theme-customizer-section {
-    padding-inline: 22px;
+.mini-ide-layout--collapsed {
+  grid-template-columns: 16% 1fr;
+
+  .mini-ide-layout__nav {
+    align-items: center;
+    padding-inline: 2px;
+
+    i {
+      block-size: 4px;
+      inline-size: 4px;
+    }
+  }
+}
+
+.mini-ide-layout--horizontal {
+  grid-template-columns: 1fr;
+  grid-template-rows: 13px 1fr;
+
+  .mini-ide-layout__nav {
+    flex-direction: row;
+    align-items: center;
+    border-block-end: 1px solid var(--mp-border-subtle);
+    border-inline-end: 0;
+    padding-block: 0;
+    padding-inline: 5px;
+
+    i {
+      block-size: 3.5px;
+      inline-size: 12px;
+    }
   }
 
-  .theme-customizer-preview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .mini-ide-layout__bar {
+    display: none;
   }
+}
+
+.theme-customizer-footer {
+  flex-shrink: 0;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  color: rgba(var(--v-theme-on-surface), 0.44);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding-block: 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-inline: 16px;
+  text-align: center;
 }
 </style>

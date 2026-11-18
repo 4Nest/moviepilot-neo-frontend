@@ -218,7 +218,7 @@ onMounted(async () => {
             <canvas ref="canvasRef" width="640" height="360" class="w-full h-full hidden" />
             <VImg
               :src="imgUrl"
-              aspect-ratio="2/3"
+              aspect-ratio="3/2"
               class="library-card-image"
               :class="{ 'library-card-image--loaded': imageLoaded }"
               cover

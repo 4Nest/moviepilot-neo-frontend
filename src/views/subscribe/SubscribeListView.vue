@@ -28,6 +28,9 @@ const $toast = useToast()
 // 确认框
 const createConfirm = useConfirm()
 
+// 路由
+const route = useRoute()
+
 // 输入参数
 const props = defineProps({
   type: String,
@@ -62,6 +65,7 @@ interface SubscribeBatchState {
   selectedCount: number
   totalCount: number
   allSelected: boolean
+  operating?: boolean
 }
 
 // 是否刷新过
@@ -86,7 +90,15 @@ const displayList = ref<Subscribe[]>([])
 
 // 批量管理相关状态
 const isBatchMode = ref(false)
+const batchOperating = ref(false)
 const selectedSubscribes = ref<number[]>([])
+
+const activeTargetSubId = computed(() => {
+  const fromProp = props.subid?.toString().trim()
+  if (fromProp) return fromProp
+  const queryId = route.query?.id
+  return typeof queryId === 'string' ? queryId.trim() : ''
+})
 
 const normalizedKeyword = computed(() => props.keyword?.trim().toLowerCase() || '')
 const selectedSubscribesSet = computed(() => new Set(selectedSubscribes.value))
@@ -124,14 +136,25 @@ const subscribeGridMinItemWidth = computed(() => (display.xs.value ? 144 : 240))
 const subscribeGridEstimatedItemHeight = computed(() => (display.xs.value ? 190 : 300))
 const subscribeGridGap = computed(() => (display.xs.value ? 12 : 16))
 const scrollToIndex = computed(() => {
-  if (!props.subid || sortMode.value) {
+  if (!activeTargetSubId.value || sortMode.value) {
     return undefined
   }
 
-  const targetIndex = displayList.value.findIndex(item => item.id.toString() === props.subid?.toString())
+  const targetIndex = displayList.value.findIndex(item => item.id.toString() === activeTargetSubId.value)
 
   return targetIndex >= 0 ? targetIndex : undefined
 })
+
+async function openTargetSubscribe(targetId?: string) {
+  if (!targetId || !dataList.value.length) return
+  const sub = dataList.value.find(item => item.id.toString() === targetId)
+  if (!sub) return
+  if (sub.page_open) {
+    sub.page_open = false
+    await nextTick()
+  }
+  sub.page_open = true
+}
 
 // 根据订阅数据判断订阅状态
 function getSubscribeStatus(subscribe: Subscribe) {
@@ -269,10 +292,22 @@ watch(
 )
 
 watch(
-  [isBatchMode, () => selectedSubscribes.value.length, () => displayList.value.length, isAllSubscribesSelected],
+  [
+    isBatchMode,
+    batchOperating,
+    () => selectedSubscribes.value.length,
+    () => displayList.value.length,
+    isAllSubscribesSelected,
+  ],
   emitBatchStateChange,
   { immediate: true },
 )
+
+watch(activeTargetSubId, nextId => {
+  if (nextId && isRefreshed.value) {
+    void openTargetSubscribe(nextId)
+  }
+})
 
 // 加载顺序
 async function loadSubscribeOrderConfig() {
@@ -310,7 +345,10 @@ async function saveSubscribeOrder() {
 }
 
 // 获取订阅列表数据
+let fetchGeneration = 0
+
 async function fetchData(context: KeepAliveRefreshContext = {}) {
+  const generation = ++fetchGeneration
   const showLoading = !context.silent || !isRefreshed.value
   const isInitialLoad = !isRefreshed.value
 
@@ -318,15 +356,16 @@ async function fetchData(context: KeepAliveRefreshContext = {}) {
     if (showLoading) {
       loading.value = true
     }
-    dataList.value = await api.get('subscribe/')
-    if (isInitialLoad && props.subid) {
-      const sub = dataList.value.find(item => item.id.toString() === props.subid)
-      if (sub) sub.page_open = true
+    const latestList: Subscribe[] = await api.get('subscribe/')
+    if (generation !== fetchGeneration) return
+    dataList.value = latestList
+    if (isInitialLoad && activeTargetSubId.value) {
+      void openTargetSubscribe(activeTargetSubId.value)
     }
     loadError.value = false
     isRefreshed.value = true
   } catch (error) {
-    if (isCancel(error)) return
+    if (isCancel(error) || generation !== fetchGeneration) return
     console.error(error)
     loadError.value = true
     if (isInitialLoad) {
@@ -340,6 +379,16 @@ async function fetchData(context: KeepAliveRefreshContext = {}) {
       loading.value = false
     }
   }
+}
+
+// 单个订阅删除后立即本地剔除以触发 FLIP 弹性补位，后台静默同步最新列表
+function handleRemoveSubscribe(removedId?: number) {
+  if (typeof removedId === 'number' && Number.isFinite(removedId)) {
+    ++fetchGeneration
+    dataList.value = dataList.value.filter(item => item.id !== removedId)
+    selectedSubscribes.value = selectedSubscribes.value.filter(id => id !== removedId)
+  }
+  void fetchData({ silent: true })
 }
 
 // 历史记录窗口完成
@@ -365,6 +414,7 @@ function emitBatchStateChange() {
     selectedCount: selectedSubscribes.value.length,
     totalCount: displayList.value.length,
     allSelected: isAllSubscribesSelected.value,
+    operating: batchOperating.value,
   })
 }
 
@@ -410,6 +460,7 @@ function toggleSelectSubscribe(id: number) {
 
 // 批量删除已选中的订阅。
 async function batchDeleteSubscribes() {
+  if (batchOperating.value) return
   if (selectedSubscribes.value.length === 0) {
     $toast.warning(t('subscribe.noSelectedItems'))
     return
@@ -422,35 +473,45 @@ async function batchDeleteSubscribes() {
 
   if (!isConfirmed) return
 
+  batchOperating.value = true
   try {
     loading.value = true
-    const promises = selectedSubscribes.value.map(id => api.delete(`subscribe/${id}`))
+    const targetIds = [...selectedSubscribes.value]
+    const promises = targetIds.map(id => api.delete(`subscribe/${id}`))
     const results = await Promise.allSettled(promises)
 
-    const successCount = results.filter(
-      result => result.status === 'fulfilled' && (result.value as { success?: boolean } | undefined)?.success !== false,
-    ).length
+    const succeededIds = new Set<number>()
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && (result.value as { success?: boolean } | undefined)?.success !== false) {
+        succeededIds.add(targetIds[index])
+      }
+    })
+    const successCount = succeededIds.size
     const failedCount = results.length - successCount
 
     if (successCount > 0) {
+      ++fetchGeneration
+      dataList.value = dataList.value.filter(item => !succeededIds.has(item.id))
       $toast.success(t('subscribe.batchDeleteSuccess', { count: successCount }))
     }
     if (failedCount > 0) {
       $toast.error(t('subscribe.batchDeleteFailed', { count: failedCount }))
     }
 
-    await fetchData()
     exitBatchMode()
+    void fetchData({ silent: true })
   } catch (error) {
     console.error(error)
     $toast.error(t('subscribe.batchDeleteError'))
   } finally {
+    batchOperating.value = false
     loading.value = false
   }
 }
 
 // 批量启用已选中的订阅。
 async function batchEnableSubscribes() {
+  if (batchOperating.value) return
   if (selectedSubscribes.value.length === 0) {
     $toast.warning(t('subscribe.noSelectedItems'))
     return
@@ -463,6 +524,7 @@ async function batchEnableSubscribes() {
 
   if (!isConfirmed) return
 
+  batchOperating.value = true
   try {
     loading.value = true
     const promises = selectedSubscribes.value.map(
@@ -488,12 +550,14 @@ async function batchEnableSubscribes() {
     console.error(error)
     $toast.error(t('subscribe.batchEnableError'))
   } finally {
+    batchOperating.value = false
     loading.value = false
   }
 }
 
 // 批量暂停已选中的订阅。
 async function batchPauseSubscribes() {
+  if (batchOperating.value) return
   if (selectedSubscribes.value.length === 0) {
     $toast.warning(t('subscribe.noSelectedItems'))
     return
@@ -506,6 +570,7 @@ async function batchPauseSubscribes() {
 
   if (!isConfirmed) return
 
+  batchOperating.value = true
   try {
     loading.value = true
     const promises = selectedSubscribes.value.map(
@@ -531,6 +596,7 @@ async function batchPauseSubscribes() {
     console.error(error)
     $toast.error(t('subscribe.batchPauseError'))
   } finally {
+    batchOperating.value = false
     loading.value = false
   }
 }
@@ -590,10 +656,10 @@ defineExpose({
     {{ t('subscribe.requestFailed') }}
   </VAlert>
 
-  <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-4 mx-2 py-0 app-surface-static">
-    <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-5">
-      <span>{{ t('common.sortModeHint') }}</span>
-      <VBtn variant="tonal" color="error" @click="sortMode = false">
+  <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-3 mx-2 py-0 app-surface-static">
+    <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-2">
+      <span class="text-body-2">{{ t('common.sortModeHint') }}</span>
+      <VBtn size="small" rounded="lg" variant="tonal" color="error" @click="sortMode = false">
         {{ t('common.exit') }}
       </VBtn>
     </div>
@@ -605,7 +671,7 @@ defineExpose({
     @end="saveSubscribeOrder"
     item-key="id"
     tag="div"
-    :component-data="{ class: 'grid gap-4 grid-subscribe-card px-2' }"
+    :component-data="{ class: 'grid gap-4 grid-subscribe-card' }"
   >
     <template #item="{ element }">
       <SubscribeCard
@@ -614,7 +680,7 @@ defineExpose({
         :batch-mode="isBatchMode"
         :selected="selectedSubscribesSet.has(element.id)"
         :sortable="true"
-        @remove="fetchData"
+        @remove="handleRemoveSubscribe"
         @save="fetchData"
         @select="toggleSelectSubscribe(element.id)"
       />
@@ -628,7 +694,6 @@ defineExpose({
     :estimated-item-height="subscribeGridEstimatedItemHeight"
     :gap="subscribeGridGap"
     :scroll-to-index="scrollToIndex"
-    class="px-2"
   >
     <template #default="{ item }">
       <SubscribeCard
@@ -637,7 +702,7 @@ defineExpose({
         :batch-mode="isBatchMode"
         :selected="selectedSubscribesSet.has(item.id)"
         :sortable="false"
-        @remove="fetchData"
+        @remove="handleRemoveSubscribe"
         @save="fetchData"
         @select="toggleSelectSubscribe(item.id)"
       />

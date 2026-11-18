@@ -175,6 +175,7 @@ describe('PersonCardSlideView', () => {
     })
     triggerIntersection()
     await waitFor(() => expect(requested).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByLabelText('人物横向列表')).toHaveAttribute('data-loading', 'false'))
     server.use(personResponse([{ id: 303, name: '重试人物', source: 'themoviedb' }], 200, requested))
 
     await fireEvent.click(screen.getByRole('button', { name: '停用人物列表' }))

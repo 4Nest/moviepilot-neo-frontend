@@ -114,4 +114,28 @@ describe('DownloaderInfoDialog', () => {
     expect(existing.bt_default).toBe(true)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
+
+  it('收纳状态开关与路径映射进结构化分组面板', async () => {
+    const editing = createDownloader('结构化下载器', {
+      path_mapping: [['/mnt/storage', '/downloads']],
+    })
+    await renderDialog(editing, [editing])
+
+    expect(document.querySelectorAll('.mp-settings-card').length).toBeGreaterThanOrEqual(2)
+    expect(document.querySelector('.mp-subpanel')).not.toBeNull()
+  })
+
+  it('关闭启用开关时自动重置 default 与 bt_default 为 false', async () => {
+    const editing = createDownloader('主下载器', { enabled: true, default: true, bt_default: true })
+    const { change } = await renderDialog(editing, [editing])
+
+    const switches = document.querySelectorAll('.v-switch input[type="checkbox"]')
+    await fireEvent.click(switches[0])
+    await fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }))
+
+    await waitFor(() => expect(change).toHaveBeenCalledOnce())
+    expect(change.mock.calls[0][0].enabled).toBe(false)
+    expect(change.mock.calls[0][0].default).toBe(false)
+    expect(change.mock.calls[0][0].bt_default).toBe(false)
+  })
 })

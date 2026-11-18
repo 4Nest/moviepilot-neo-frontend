@@ -96,19 +96,26 @@ watch(filterParams, () => {
 </script>
 
 <template>
-  <div class="px-3">
-    <div v-for="group in filterGroups" :key="group.key" class="flex justify-start align-center">
-      <div class="mr-5">
+  <div class="discover-filter-panel">
+    <div v-for="group in filterGroups" :key="group.key" class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ group.label }}</VLabel>
       </div>
-      <VChipGroup :model-value="filterParams[group.key]" @update:model-value="updateFilter(group.key, $event)">
+      <VChipGroup
+        :model-value="filterParams[group.key]"
+        :mandatory="group.key === 'sort'"
+        class="discover-chip-group"
+        @update:model-value="updateFilter(group.key, $event)"
+      >
         <VChip
           v-for="item in group.items"
           :key="item.value"
-          :color="filterParams[group.key as keyof typeof filterParams] == item.value ? 'primary' : ''"
+          :variant="filterParams[group.key as keyof typeof filterParams] == item.value ? 'tonal' : 'text'"
+          :color="filterParams[group.key as keyof typeof filterParams] == item.value ? 'primary' : undefined"
+          rounded="lg"
           filter
-          tile
           :value="item.value"
+          class="discover-filter-chip"
         >
           {{ item.title }}
         </VChip>
@@ -118,3 +125,62 @@ watch(filterParams, () => {
 
   <MediaCardListView :key="currentKey" apipath="anilist/discover" :params="filterParams" />
 </template>
+
+<style scoped>
+.discover-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-block: 4px 6px;
+  padding-inline: 0;
+}
+
+.discover-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 28px;
+}
+
+.discover-filter-label {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  block-size: 26px;
+  min-inline-size: 44px;
+}
+
+.discover-filter-label :deep(.v-label) {
+  color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.62));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.discover-chip-group {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: 0 !important;
+}
+
+.discover-chip-group :deep(.v-slide-group__content) {
+  gap: 5px;
+  padding-block: 1px !important;
+}
+
+.discover-filter-chip {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  font-size: 12.5px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin: 0 !important;
+  padding-inline: 9px !important;
+}
+
+.discover-filter-chip.v-chip--selected {
+  font-weight: 600;
+}
+</style>

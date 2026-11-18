@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { copyToClipboard } from '@/@core/utils/navigator'
+import { innerFilterRules } from '@/api/constants'
 import { CustomRule, FilterRuleGroup } from '@/api/types'
 import FilterRuleCard from '@/components/cards/FilterRuleCard.vue'
 import { openSharedDialog } from '@/composables/useSharedDialog'
@@ -90,6 +91,16 @@ const getCategories = computed(() => {
   return default_value.concat(props.categories[groupInfo.value.media_type] || [])
 })
 
+// 切换媒体类型时，若当前选中的二级分类不属于新类型则自动清空
+watch(
+  () => groupInfo.value.media_type,
+  () => {
+    if (groupInfo.value.category && !getCategories.value.some(item => item.value === groupInfo.value.category)) {
+      groupInfo.value.category = ''
+    }
+  },
+)
+
 // 规则组规则卡片列表
 const filterRuleCards = ref<FilterCard[]>([])
 
@@ -144,20 +155,27 @@ async function importRules(ruleType: string) {
   )
 }
 
+/** 将单个导入规则 token 归一化：匹配内置规则时保留内置带空格值，否则保留原自定义规则 ID。 */
+function normalizeRuleToken(rawToken: string): string {
+  const trimmed = rawToken.trim()
+  if (!trimmed) return ''
+  const innerMatch = innerFilterRules.find(opt => opt.value.trim() === trimmed)
+  return innerMatch ? innerMatch.value : trimmed
+}
+
 /** 保存导入的规则代码并覆盖当前规则卡片。 */
 function saveCodeString(type: string, code: any) {
   try {
-    code = code.value
+    const rawCode = typeof code === 'string' ? code : code?.value
     if (type === 'priority') {
-      // 解析值
-      if (!code) return
-      // 首尾增加空格
-      if (!code.startsWith(' ')) code = ` ${code}`
-      if (!code.endsWith(' ')) code = `${code} `
-      const groups = code.split('>')
+      if (!rawCode || !String(rawCode).trim()) return
+      const groups = String(rawCode).split('>')
       filterRuleCards.value = groups.map((group: string, index: number) => ({
         pri: (index + 1).toString(),
-        rules: group.split('&').filter(rule => rule),
+        rules: group
+          .split('&')
+          .map(normalizeRuleToken)
+          .filter(rule => rule),
       }))
     }
   } catch (error) {
@@ -227,50 +245,55 @@ onMounted(() => {
     v-if="groupInfoDialog"
     v-model="groupInfoDialog"
     scrollable
-    max-width="80rem"
+    max-width="76rem"
     :fullscreen="!display.mdAndUp.value"
   >
-    <VCard :title="`${props.group.name} - ${t('filterRule.title')}`">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-filter-cog-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ t('filterRule.title') }}</VCardTitle>
+        <VCardSubtitle>{{ props.group.name }}</VCardSubtitle>
+      </VCardItem>
       <VDialogCloseBtn v-model="groupInfoDialog" />
       <VDivider />
-      <VCardItem class="pt-1">
-        <VRow class="mt-1">
-          <VCol cols="12" md="6">
-            <VTextField
-              v-model="groupInfo.name"
-              :label="t('filterRule.groupName')"
-              :placeholder="t('filterRule.nameRequired')"
-              :hint="t('filterRule.groupName')"
-              persistent-hint
-              active
-              prepend-inner-icon="mdi-label"
-            />
-          </VCol>
-          <VCol cols="6" md="3">
-            <VAutocomplete
-              v-model="groupInfo.media_type"
-              :label="t('filterRule.mediaType')"
-              :items="mediaTypeItems"
-              :hint="t('filterRule.mediaType')"
-              persistent-hint
-              active
-              prepend-inner-icon="mdi-movie-open"
-            />
-          </VCol>
-          <VCol cols="6" md="3">
-            <VAutocomplete
-              v-model="groupInfo.category"
-              :items="getCategories"
-              :label="t('filterRule.category')"
-              :hint="t('filterRule.category')"
-              persistent-hint
-              active
-              prepend-inner-icon="mdi-folder-open"
-            />
-          </VCol>
-        </VRow>
-      </VCardItem>
-      <VCardText>
+      <VCardText class="mp-dialog-body">
+        <div class="mp-subpanel mb-4">
+          <VRow class="mp-form-grid">
+            <VCol cols="12" lg="4">
+              <VTextField
+                v-model="groupInfo.name"
+                :label="t('filterRule.groupName')"
+                :placeholder="t('filterRule.nameRequired')"
+                hide-details
+                active
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12" sm="6" lg="4">
+              <VAutocomplete
+                v-model="groupInfo.media_type"
+                :label="t('filterRule.mediaType')"
+                :items="mediaTypeItems"
+                hide-details
+                active
+                prepend-inner-icon="mdi-movie-open"
+              />
+            </VCol>
+            <VCol cols="12" sm="6" lg="4">
+              <VAutocomplete
+                v-model="groupInfo.category"
+                :items="getCategories"
+                :label="t('filterRule.category')"
+                hide-details
+                active
+                prepend-inner-icon="mdi-folder-open"
+              />
+            </VCol>
+          </VRow>
+        </div>
+
         <Draggable
           v-model="filterRuleCards"
           handle=".cursor-move"
@@ -290,23 +313,80 @@ onMounted(() => {
             />
           </template>
         </Draggable>
-        <div class="text-center" v-if="filterRuleCards.length == 0">{{ t('filterRule.add') }}</div>
+        <div v-if="filterRuleCards.length == 0" class="mp-empty-hint text-center text-medium-emphasis">
+          {{ t('filterRule.add') }}
+        </div>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
-        <VBtn color="primary" variant="tonal" class="app-dialog-actions__icon-btn" @click="addFilterCard">
-          <VIcon icon="mdi-plus" />
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          class="app-dialog-actions__icon-btn"
+          @click="addFilterCard"
+        >
+          <VIcon icon="mdi-plus" size="18" />
         </VBtn>
-        <VBtn color="success" variant="tonal" class="app-dialog-actions__icon-btn" @click="importRules('priority')">
-          <VIcon icon="mdi-import" />
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          class="app-dialog-actions__icon-btn"
+          @click="importRules('priority')"
+        >
+          <VIcon icon="mdi-import" size="18" />
         </VBtn>
-        <VBtn color="info" variant="tonal" class="app-dialog-actions__icon-btn" @click="shareRules">
-          <VIcon icon="mdi-share" />
+        <VBtn color="default" variant="outlined" size="small" class="app-dialog-actions__icon-btn" @click="shareRules">
+          <VIcon icon="mdi-share" size="18" />
         </VBtn>
         <VSpacer />
-        <VBtn color="primary" variant="flat" @click="saveGroupInfo" prepend-icon="mdi-content-save" class="px-5">
+        <VBtn color="default" variant="text" size="small" @click="groupInfoDialog = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="px-4" @click="saveGroupInfo">
           {{ t('common.save') }}
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+.mp-subpanel {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  padding: 14px 16px 12px;
+}
+
+.mp-empty-hint {
+  border: 1px dashed var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.14));
+  border-radius: 10px;
+  padding: 28px 16px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

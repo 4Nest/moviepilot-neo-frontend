@@ -8,6 +8,20 @@ import { server } from '@tests/support/msw/server'
 import { defineComponent, h } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const toastMocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}))
+
+vi.mock('vue-toastification', () => ({
+  useToast: () => ({ error: toastMocks.toastError, success: toastMocks.toastSuccess }),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => toastMocks.confirm,
+}))
+
 /** 扩展卡片会消费但公共下载类型尚未声明的站点字段。 */
 interface DownloadingCardInfo extends DownloadingInfo {
   site_name?: string
@@ -52,6 +66,9 @@ function actionButtons(container: Element) {
 }
 
 beforeEach(() => {
+  toastMocks.confirm.mockReset().mockResolvedValue(true)
+  toastMocks.toastError.mockReset()
+  toastMocks.toastSuccess.mockReset()
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -323,7 +340,7 @@ describe('DownloadingCard display and pause state', () => {
 })
 
 describe('DownloadingCard deletion', () => {
-  it('hides immediately and restores the card when HTTP 200 reports business failure', async () => {
+  it('marks card deleting while pending and restores state with toast when HTTP 200 reports business failure', async () => {
     const requested = vi.fn()
     const responseGate = Promise.withResolvers<void>()
     server.use(
@@ -332,19 +349,23 @@ describe('DownloadingCard deletion', () => {
         await responseGate.promise
       }),
     )
-    const { container } = await renderCard()
+    const { container, emitted } = await renderCard()
 
     await fireEvent.click(actionButtons(container).deleteButton)
 
     await waitFor(() => expect(requested).toHaveBeenCalledOnce())
     expect(requested.mock.calls[0][0].searchParams.get('name')).toBe('qb-main')
-    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
+    expect(container.querySelector('.downloading-card')).toHaveClass('downloading-card--deleting')
 
     responseGate.resolve()
-    await waitFor(() => expect(container.querySelector('.downloading-card')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(container.querySelector('.downloading-card')).not.toHaveClass('downloading-card--deleting'),
+    )
+    expect(emitted().remove).toBeUndefined()
+    expect(toastMocks.toastError).toHaveBeenCalledWith('任务仍在运行')
   })
 
-  it('hides the card immediately and keeps it hidden after business success', async () => {
+  it('emits remove with task hash immediately after business success without leaving a blank hole', async () => {
     const requested = vi.fn()
     const responseGate = Promise.withResolvers<void>()
     server.use(
@@ -353,25 +374,38 @@ describe('DownloadingCard deletion', () => {
         await responseGate.promise
       }),
     )
-    const { container } = await renderCard()
+    const { container, emitted } = await renderCard()
 
     await fireEvent.click(actionButtons(container).deleteButton)
 
     await waitFor(() => expect(requested).toHaveBeenCalledOnce())
-    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
+    expect(container.querySelector('.downloading-card')).toHaveClass('downloading-card--deleting')
     responseGate.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(container.querySelector('.downloading-card')).not.toBeInTheDocument()
+    await waitFor(() => expect(emitted().remove).toEqual([['hash-1']]))
   })
 
-  it('keeps the card visible when deletion fails at the HTTP boundary', async () => {
+  it('keeps the card interactive and reports error when deletion fails at the HTTP boundary', async () => {
     server.use(deleteDownloadHandler('hash-1', { success: false }, 503))
-    const { container } = await renderCard()
+    const { container, emitted } = await renderCard()
 
     await fireEvent.click(actionButtons(container).deleteButton)
 
     await waitFor(() => expect(console.error).toHaveBeenCalled())
     expect(container.querySelector('.downloading-card')).toBeInTheDocument()
+    expect(container.querySelector('.downloading-card')).not.toHaveClass('downloading-card--deleting')
+    expect(emitted().remove).toBeUndefined()
+    expect(toastMocks.toastError).toHaveBeenCalledWith('删除下载任务失败')
+  })
+
+  it('aborts deletion without sending request when confirmation dialog is cancelled', async () => {
+    toastMocks.confirm.mockResolvedValueOnce(false)
+    const requested = vi.fn()
+    server.use(deleteDownloadHandler('hash-1', { success: true }, 200, requested))
+    const { container, emitted } = await renderCard()
+
+    await fireEvent.click(actionButtons(container).deleteButton)
+    expect(toastMocks.confirm).toHaveBeenCalledOnce()
+    expect(requested).not.toHaveBeenCalled()
+    expect(emitted().remove).toBeUndefined()
   })
 })

@@ -7,11 +7,12 @@ import { isNullOrEmptyObject } from '@/@core/utils'
 import type { DashboardItem } from '@/api/types'
 import DashboardElement from '@/components/misc/DashboardElement.vue'
 import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
+import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/composables/useChineseText'
 import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
-import { useDisplay, useTheme } from 'vuetify'
+import { useDisplay } from 'vuetify'
 
 const ContentToggleSettingsDialog = defineAsyncComponent(
   () => import('@/components/dialog/ContentToggleSettingsDialog.vue'),
@@ -19,11 +20,11 @@ const ContentToggleSettingsDialog = defineAsyncComponent(
 
 // 国际化
 const { t } = useI18n()
+const createConfirm = useConfirm()
 
 // PWA模式检测
 const { appMode } = usePWA()
 const display = useDisplay()
-const vuetifyTheme = useTheme()
 
 // 路由
 const route = useRoute()
@@ -388,11 +389,9 @@ function pauseDashboardGridAnimation() {
   dashboardGrid.value?.setAnimation(false)
 }
 
-// 玻璃浏览态直接提交自动布局，普通主题和显式编辑交互保留 GridStack 过渡。
-function shouldAnimateDashboardGrid(editable = isLayoutEditing.value) {
-  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-
-  return !reduceMotion && (editable || vuetifyTheme.global.name.value !== 'glass')
+// 非减少动画偏好下启用 GridStack 过渡。
+function shouldAnimateDashboardGrid() {
+  return !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
 }
 
 // 批量布局同步期间暂停几何过渡，稳定后恢复浏览与编辑状态的卡片动画。
@@ -939,8 +938,27 @@ async function exitDashboardLayoutEditing() {
   notifyDashboardContentResize()
 }
 
+// 取消仪表板布局编辑模式；还原已确认持久化的布局快照且不触发保存。
+async function cancelDashboardLayoutEditing() {
+  shouldRestoreDashboardGridProfileDefaults = true
+  dashboardGridLayout.value = cloneDashboardGridLayout(persistedDashboardGridLayout)
+  isDashboardGridLayoutResetDraft.value = false
+  isLayoutEditing.value = false
+  await nextTick()
+  await reloadDashboardGridWidgetsFromLayout()
+  syncDashboardFillContentState()
+  resizeAutoDashboardItemsToContent()
+  notifyDashboardContentResize()
+}
+
 // 清除用户布局覆盖并恢复默认占位；编辑中仅写入临时草稿并等待确认持久化。
 async function resetDashboardGridLayout() {
+  const isConfirmed = await createConfirm({
+    title: t('common.confirm'),
+    content: t('common.confirmAction', { action: t('dashboard.resetLayout') }),
+  })
+  if (!isConfirmed) return
+
   const shouldPersistImmediately = !isLayoutEditing.value
 
   dashboardGridLayout.value = {}
@@ -970,6 +988,11 @@ const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undef
   ]
 
   if (isLayoutEditing.value) {
+    items.push({
+      title: t('common.cancel'),
+      icon: 'mdi-close',
+      action: cancelDashboardLayoutEditing,
+    })
     items.push({
       title: t('dashboard.resetLayout'),
       icon: 'mdi-restore',
@@ -1204,7 +1227,7 @@ function updateDashboardGridEditableState(editable: boolean) {
   if (!dashboardGrid.value) return
 
   dashboardGrid.value.setStatic(!editable)
-  dashboardGrid.value.setAnimation(shouldAnimateDashboardGrid(editable))
+  dashboardGrid.value.setAnimation(shouldAnimateDashboardGrid())
   if (editable) {
     dashboardGrid.value.enableMove(true)
     dashboardGrid.value.enableResize(true)
@@ -1578,11 +1601,6 @@ watch(isLayoutEditing, value => {
 })
 
 watch(
-  () => vuetifyTheme.global.name.value,
-  () => updateDashboardGridEditableState(isLayoutEditing.value),
-)
-
-watch(
   dashboardGridItems,
   () => {
     syncDashboardLoadedItemIds()
@@ -1715,6 +1733,52 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <div v-if="!appMode && route.path === '/dashboard'" class="mp-page-action-bar">
+    <VBtn
+      size="small"
+      variant="outlined"
+      rounded="lg"
+      prepend-icon="mdi-tune"
+      data-testid="dashboard-settings-btn"
+      @click="openDashboardSettings"
+    >
+      {{ t('dashboard.settings') }}
+    </VBtn>
+    <VBtn
+      v-if="isLayoutEditing"
+      size="small"
+      variant="outlined"
+      rounded="lg"
+      prepend-icon="mdi-restore"
+      data-testid="dashboard-reset-layout-btn"
+      @click="resetDashboardGridLayout"
+    >
+      {{ t('dashboard.resetLayout') }}
+    </VBtn>
+    <VBtn
+      v-if="isLayoutEditing"
+      size="small"
+      variant="outlined"
+      rounded="lg"
+      prepend-icon="mdi-close"
+      data-testid="dashboard-cancel-layout-btn"
+      @click="cancelDashboardLayoutEditing"
+    >
+      {{ t('common.cancel') }}
+    </VBtn>
+    <VBtn
+      size="small"
+      :variant="isLayoutEditing ? 'flat' : 'outlined'"
+      :color="isLayoutEditing ? 'primary' : undefined"
+      rounded="lg"
+      :prepend-icon="isLayoutEditing ? 'mdi-check' : 'mdi-view-dashboard-edit'"
+      data-testid="dashboard-edit-layout-btn"
+      @click="toggleDashboardLayoutEditing"
+    >
+      {{ isLayoutEditing ? t('dashboard.exitEditMode') : t('dashboard.editLayout') }}
+    </VBtn>
+  </div>
+
   <!-- 仪表板 -->
   <div ref="dashboardGridRef" class="grid-stack dashboard-grid" :class="{ 'is-editing': isLayoutEditing }">
     <div
@@ -1748,35 +1812,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </div>
-
-  <Teleport to="body" v-if="!appMode && route.path === '/dashboard'">
-    <div class="compact-fab-stack">
-      <VFab
-        icon="mdi-tune"
-        color="info"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="openDashboardSettings"
-      />
-      <VFab
-        v-if="isLayoutEditing"
-        icon="mdi-restore"
-        color="warning"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="resetDashboardGridLayout"
-      />
-      <VFab
-        :icon="isLayoutEditing ? 'mdi-check' : 'mdi-view-dashboard-edit'"
-        color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
-        @click="toggleDashboardLayoutEditing"
-      />
-    </div>
-  </Teleport>
 </template>
 
 <style scoped>
@@ -1792,9 +1827,19 @@ onBeforeUnmount(() => {
   box-shadow: var(--app-surface-shadow);
 }
 
+.dashboard-grid :deep(.v-card-item) {
+  padding: 14px 16px 8px;
+}
+
+.dashboard-grid :deep(.v-card-text) {
+  padding: 4px 16px 14px;
+}
+
 .dashboard-grid :deep(.v-card-title) {
-  font-size: 0.92rem;
-  font-weight: 650;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 
 /* 媒体卡片上浮 4px 时保留安全区，避免被标题栏或滚动容器顶边裁切。 */

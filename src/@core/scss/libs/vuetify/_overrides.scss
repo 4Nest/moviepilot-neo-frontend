@@ -1,5 +1,5 @@
-@use "@configured-variables" as variables;
-@use "../../utils";
+@use '@configured-variables' as variables;
+@use '../../utils';
 
 // 👉 Application
 // ℹ️ We need accurate vh in mobile devices as well
@@ -38,7 +38,7 @@ h6,
 // Remove margin-bottom of v-input_details inside grid (validation error message)
 .v-row {
   .v-col,
-  [class^="v-col-*"] {
+  [class^='v-col-*'] {
     .v-input__details {
       margin-block-end: 0;
     }
@@ -212,7 +212,7 @@ h6,
 }
 
 // 👉 v-field
-.v-field:hover .v-field__outline {
+.v-field:not(.v-field--variant-outlined):hover .v-field__outline {
   --v-field-border-opacity: var(--v-medium-emphasis-opacity);
 }
 
@@ -232,14 +232,11 @@ h6,
   opacity: 1;
 }
 
-// 透明主题下全屏弹窗的overlay背景透明度调整
-html[data-theme="transparent"] .v-dialog--fullscreen .v-overlay__scrim {
-  background: rgba(var(--v-overlay-scrim-background), 0.3);
-}
-
 // 👉 VMessages
 .v-messages {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  line-height: 1.4;
   opacity: 1;
 }
 
@@ -262,14 +259,9 @@ html[data-theme="transparent"] .v-dialog--fullscreen .v-overlay__scrim {
   background-color: rgb(var(--v-theme-surface));
 }
 
-// 透明主题下全屏弹窗背景透明
-html[data-theme="transparent"] .v-dialog--fullscreen {
-  background-color: transparent !important;
-}
-
 // For dialog card title
 .v-card-item + .v-card-text {
-  padding-block-start: 0 !important;
+  padding-block-start: 4px !important;
 }
 
 // 👉 v-slide-group (List of chips)
@@ -308,4 +300,4 @@ html[data-theme="transparent"] .v-dialog--fullscreen {
 // 👉 Cursor
 .cursor-pointer {
   cursor: pointer;
-} 
+}

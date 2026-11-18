@@ -232,10 +232,21 @@ describe('WorkflowTaskCard redesign', () => {
     await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledTimes(2))
   })
 
+  it('guards handleReset with loading lock and resets loading with error toast when reset throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.apiPost.mockRejectedValueOnce(new Error('reset failed'))
+    await renderCard()
+
+    await fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    await fireEvent.click(await screen.findByText('重置任务', { exact: true }))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('错误'))
+
+    // loading 已在 finally 中释放，后续按钮可继续操作
+    expect(screen.getByRole('button', { name: '更多操作' })).not.toBeDisabled()
+  })
+
   it('derives all custom card colors and geometry from global theme tokens', () => {
     const source = readFileSync('src/components/cards/WorkflowTaskCard.vue', 'utf8')
-    const transparentTheme = readFileSync('src/styles/themes/transparent.scss', 'utf8')
-    const glassTheme = readFileSync('src/styles/themes/glass.scss', 'utf8')
 
     expect(source).toContain('var(--v-theme-primary)')
     expect(source).toContain('var(--v-theme-info)')
@@ -243,18 +254,11 @@ describe('WorkflowTaskCard redesign', () => {
     expect(source).toContain('var(--v-theme-warning)')
     expect(source).toContain('var(--v-theme-error)')
     expect(source).toContain('var(--v-theme-on-surface)')
+    expect(source).toContain('var(--v-theme-surface)')
+    expect(source).toContain('var(--mp-border-card)')
+    expect(source).toContain('var(--mp-border-subtle)')
     expect(source).toContain('var(--app-control-radius)')
-    expect(source).toContain('linear-gradient(')
-    expect(source).toContain('var(--workflow-card-header-background)')
-    expect(source).not.toContain('--workflow-card-header-border')
+    expect(source).not.toContain('linear-gradient(')
     expect(source).not.toMatch(/#[\da-f]{3,8}\b/i)
-
-    expect(transparentTheme).toContain('.workflow-task-card')
-    expect(transparentTheme).toContain('var(--transparent-opacity-heavy)')
-    expect(transparentTheme).not.toContain('--workflow-card-header-border')
-    expect(glassTheme).toContain('var(--glass-sheen)')
-    expect(glassTheme).toContain("&[data-glass-appearance='frosted'] .workflow-task-card")
-    expect(glassTheme).toContain("&[data-glass-appearance='tinted'] .workflow-task-card")
-    expect(glassTheme).not.toContain('--workflow-card-header-border')
   })
 })

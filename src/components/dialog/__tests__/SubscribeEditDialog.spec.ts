@@ -716,4 +716,58 @@ describe('SubscribeEditDialog', () => {
     // 新版本不应静默继承当前版本的字幕组，避免误匹配其它制作组资源
     expect(payload.version_rules?.[1].release_group).toBeUndefined()
   })
+
+  it('renders segmented rule tabs and grouped switch settings card', async () => {
+    const record = createSubscribe({ id: 899, name: '分组排版电影', tmdbid: 8990, type: '电影' })
+    server.use(subscribeDetailsHandler(899, record))
+    useDialogOptions()
+    await renderDialog({ subid: 899 })
+    await screen.findByText('分组排版电影')
+
+    expect(document.querySelector('.mp-segmented-tabs')).not.toBeNull()
+    expect(document.querySelector('.mp-settings-card')).not.toBeNull()
+  })
+
+  it('preserves boolean true flags in version_rules and keeps first version settings intact in addVersion mode', async () => {
+    const firstRule: SubscribeVersionRule = {
+      id: 'v-first',
+      name: '简日洗版',
+      enabled: true,
+      release_group: 'LoliHouse',
+      settings: {
+        include: 'CHS',
+        best_version: true,
+        best_version_full: true,
+        search_imdbid: true,
+        sites: [1],
+        filter_groups: [],
+      },
+    }
+    const record = createSubscribe({
+      id: 905,
+      name: '多版本布尔开关测试剧',
+      tmdbid: 9050,
+      type: '电视剧',
+      include: 'STALE_TOP_LEVEL',
+      best_version: 0,
+      search_imdbid: 0,
+      version_mode: 'all',
+      version_rules: [firstRule],
+    })
+    const updated = vi.fn()
+    server.use(subscribeDetailsHandler(record.id, record), updateSubscribeHandler({ success: true }, 200, updated))
+    useDialogOptions({ tmdbId: 9050 })
+    await renderDialog({ subid: record.id, addVersion: true })
+    await screen.findByText('新版本')
+
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    const payload = updated.mock.calls[0][0] as { version_rules?: SubscribeVersionRule[] }
+    expect(payload.version_rules?.[0].settings.include).toBe('CHS')
+    expect(payload.version_rules?.[0].settings.best_version).toBe(true)
+    expect(payload.version_rules?.[0].settings.best_version_full).toBe(true)
+    expect(payload.version_rules?.[0].settings.search_imdbid).toBe(true)
+    expect(payload.version_rules?.[1].settings.best_version).toBe(true)
+    expect(payload.version_rules?.[1].settings.search_imdbid).toBe(true)
+  })
 })

@@ -9,7 +9,8 @@ export async function getPluginRatings(pluginIds: readonly string[]): Promise<Re
   if (pluginIds.length === 0) return {}
 
   const snapshot = await api.get<Record<string, PluginRating>, Record<string, PluginRating>>('plugin/rating')
-  const ratings = new Map(Object.entries(snapshot).map(([id, rating]) => [id.toLowerCase(), rating]))
+  const safeSnapshot = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}
+  const ratings = new Map(Object.entries(safeSnapshot).map(([id, rating]) => [id.toLowerCase(), rating]))
   return Object.fromEntries(
     pluginIds.map(id => {
       const rating = ratings.get(id.toLowerCase())

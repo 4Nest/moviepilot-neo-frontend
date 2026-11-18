@@ -53,6 +53,9 @@ const importSuccesses = ref<Site[]>([])
 // 是否显示错误详情
 const showErrorDetails = ref(false)
 
+// 组件卸载时中断后台导入循环
+let aborted = false
+
 // 处理拖拽事件
 function handleDragOver(event: DragEvent) {
   event.preventDefault()
@@ -124,6 +127,7 @@ async function importSites() {
   }
 
   // 进入导入阶段
+  aborted = false
   currentStage.value = ImportStage.IMPORTING
   startNProgress()
   importProgress.value = 0
@@ -135,11 +139,13 @@ async function importSites() {
     importSuccesses.value = [] // 清空之前的成功信息
 
     for (let i = 0; i < validSites.length; i++) {
+      if (aborted) break
       const site = validSites[i]
       try {
         // 移除id字段，避免冲突
         const { id, ...siteData } = site
         const result: { success: boolean; message?: string } = await api.post('site/', siteData)
+        if (aborted) break
         if (result.success) {
           // 记录成功的站点
           successCount++
@@ -153,6 +159,7 @@ async function importSites() {
           })
         }
       } catch (error) {
+        if (aborted) break
         console.error(`Import site ${site.name} failed:`, error)
         failCount++
         // 记录错误信息
@@ -164,6 +171,8 @@ async function importSites() {
       // 更新进度
       importProgress.value = Math.round(((i + 1) / validSites.length) * 100)
     }
+
+    if (aborted) return
 
     // 进入完成阶段
     currentStage.value = ImportStage.IMPORT_COMPLETE
@@ -183,6 +192,7 @@ async function importSites() {
       showErrorDetails.value = true
     }
   } catch (error) {
+    if (aborted) return
     console.error('Import sites failed:', error)
     $toast.error(t('site.messages.importFailed'))
     // 出错时回到预览阶段
@@ -207,7 +217,8 @@ function resetToFileSelection() {
 
 // 关闭对话框
 function closeDialog(success: boolean = false) {
-  if (success) {
+  if (currentStage.value === ImportStage.IMPORTING) return
+  if (success === true) {
     emit('import-success')
   }
   emit('update:modelValue', false)
@@ -219,10 +230,20 @@ watch(selectedFile, async newFile => {
     await processFile(newFile)
   }
 })
+
+onUnmounted(() => {
+  aborted = true
+  doneNProgress()
+})
 </script>
 
 <template>
-  <VDialog scrollable max-width="50rem" :fullscreen="!display.mdAndUp.value">
+  <VDialog
+    scrollable
+    max-width="50rem"
+    :persistent="currentStage === ImportStage.IMPORTING"
+    :fullscreen="!display.mdAndUp.value"
+  >
     <VCard>
       <VCardItem class="py-2">
         <template #prepend>
@@ -231,7 +252,10 @@ watch(selectedFile, async newFile => {
         <VCardTitle>{{ t('site.actions.import') }}</VCardTitle>
         <VCardSubtitle>{{ t('site.hints.import') }}</VCardSubtitle>
       </VCardItem>
-      <VDialogCloseBtn @click="closeDialog" />
+      <VDialogCloseBtn
+        :disabled="currentStage === ImportStage.IMPORTING"
+        @click="closeDialog(importSuccesses.length > 0)"
+      />
       <VDivider />
       <VCardText>
         <!-- 阶段1：选择文件阶段 -->
@@ -276,11 +300,12 @@ watch(selectedFile, async newFile => {
               }})
             </VCardTitle>
             <VCardText>
-              <VList>
+              <VList class="pa-0 bg-transparent">
                 <VListItem
                   v-for="(site, index) in previewData"
                   :key="index"
-                  :class="{ 'border-error': !validateSiteData(site) }"
+                  class="site-preview-item"
+                  :class="validateSiteData(site) ? 'border-success' : 'border-error'"
                 >
                   <template #prepend>
                     <VIcon
@@ -302,10 +327,13 @@ watch(selectedFile, async newFile => {
 
           <!-- 操作按钮 -->
           <div class="d-flex justify-end gap-2">
-            <VBtn variant="text" @click="resetToFileSelection">
+            <VBtn color="default" variant="outlined" @click="resetToFileSelection">
               {{ t('common.reset') }}
             </VBtn>
-            <VBtn color="primary" @click="importSites" :disabled="importData.length === 0">
+            <VBtn color="default" variant="text" @click="closeDialog(false)">
+              {{ t('common.cancel') }}
+            </VBtn>
+            <VBtn color="primary" variant="flat" class="px-5" @click="importSites" :disabled="importData.length === 0">
               {{ t('site.actions.startImport') }}
             </VBtn>
           </div>
@@ -373,10 +401,10 @@ watch(selectedFile, async newFile => {
 
           <!-- 操作按钮 -->
           <div class="d-flex justify-end gap-2">
-            <VBtn variant="text" @click="resetToFileSelection">
+            <VBtn color="default" variant="outlined" @click="resetToFileSelection">
               {{ t('common.reset') }}
             </VBtn>
-            <VBtn color="primary" @click="closeDialog(false)">
+            <VBtn color="primary" variant="flat" class="px-5" @click="closeDialog(importSuccesses.length > 0)">
               {{ t('common.close') }}
             </VBtn>
           </div>
@@ -388,14 +416,18 @@ watch(selectedFile, async newFile => {
 
 <style scoped>
 .upload-area {
-  padding: 2rem;
+  padding: 1.25rem;
 }
 
 .upload-zone {
   padding: 2rem;
-  border: 2px dashed #ccc;
+  border: 1px dashed var(--mp-border-hover, rgba(var(--v-theme-on-surface), 0.24));
+  border-radius: 12px;
+  background-color: rgba(var(--v-theme-on-surface), 0.02);
   text-align: center;
-  transition: all 0.3s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .upload-zone.dragging {
@@ -412,11 +444,22 @@ watch(selectedFile, async newFile => {
   background: transparent;
 }
 
+.site-preview-item {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  margin-block-end: 8px;
+}
+
+.site-preview-item:last-child {
+  margin-block-end: 0;
+}
+
 .border-success {
-  border-inline-start: 4px solid rgb(var(--v-theme-success));
+  border-color: var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12));
 }
 
 .border-error {
-  border-inline-start: 4px solid rgb(var(--v-theme-error));
+  border-color: rgba(var(--v-theme-error), 0.42);
+  background-color: rgba(var(--v-theme-error), 0.04);
 }
 </style>

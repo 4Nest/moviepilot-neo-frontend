@@ -16,32 +16,35 @@ defineProps({
 </script>
 <template>
   <div>
-    <VCard max-width="20rem" class="note-card">
-      <VCardItem class="py-2">
-        <template v-slot:prepend>
-          <VAvatar color="warning">
-            <VIcon icon="mdi-note-text" size="x-large"></VIcon>
+    <VCard max-width="20rem" class="workflow-node-card note-card">
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="warning" class="workflow-node-avatar">
+            <VIcon icon="mdi-note-text" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.note.title') }}</VCardTitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.note.title') }}</VCardTitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VTextarea
-              v-model="data.content"
-              :label="t('workflow.note.content')"
-              :placeholder="t('workflow.note.placeholder')"
-              outlined
-              dense
-              auto-grow
-              rows="3"
-              max-rows="6"
-              clearable
-            />
-          </VCol>
-        </VRow>
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VTextarea
+                v-model="data.content"
+                :label="t('workflow.note.content')"
+                :placeholder="t('workflow.note.placeholder')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+                auto-grow
+                rows="3"
+                max-rows="6"
+                clearable
+              />
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
     </VCard>
   </div>
@@ -49,10 +52,25 @@ defineProps({
 
 <style lang="scss" scoped>
 .note-card {
-  background: linear-gradient(135deg, rgba(var(--v-theme-warning), 0.1) 0%, rgba(var(--v-theme-warning), 0.05) 100%);
+  border: 1px solid rgba(var(--v-theme-warning), 0.22);
+  background-color: rgb(var(--v-theme-surface));
 
   &:hover {
-    border-color: rgba(var(--v-theme-warning), 0.4);
+    border-color: rgba(var(--v-theme-warning), 0.38);
   }
+}
+
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
 }
 </style>

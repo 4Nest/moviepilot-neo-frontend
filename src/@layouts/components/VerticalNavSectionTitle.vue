@@ -19,8 +19,8 @@ defineProps<{
 <style lang="scss">
 .layout-vertical-nav {
   .nav-section-title {
-    padding-left: 1.375rem;
-    padding-right: 1rem;
+    margin-inline: 10px;
+    padding-inline: 10px;
   }
 }
 </style>

@@ -353,9 +353,9 @@ const model = computed(() => {
       topVisible: Boolean(route.meta.requiresAuth),
       bottomVisible: authenticated.value,
       theme: resolveChromeTheme(),
-      backgroundColor: toHexColor(colors.background, isDark ? '#0E1116' : '#F4F5FA'),
-      surfaceColor: toHexColor(colors.surface, isDark ? '#14161F' : '#FFFFFF'),
-      accentColor: toHexColor(colors.primary, '#8D51F9'),
+      backgroundColor: toHexColor(colors.background, isDark ? '#16171D' : '#F1F2F6'),
+      surfaceColor: toHexColor(colors.surface, isDark ? '#242731' : '#FFFFFF'),
+      accentColor: toHexColor(colors.primary, isDark ? '#8B7CF6' : '#6E5DCF'),
       content: route.path === '/apps' && authenticated.value ? 'menu' : 'web',
     },
   }

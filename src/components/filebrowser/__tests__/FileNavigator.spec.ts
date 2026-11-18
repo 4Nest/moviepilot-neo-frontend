@@ -97,7 +97,7 @@ describe('FileNavigator directory tree', () => {
     expect(wrapper.text()).not.toContain('readme.txt')
   })
 
-  it('emits root and directory navigation from visible rows', async () => {
+  it('emits root and directory navigation from visible rows with normalized trailing slash', async () => {
     const directory = { name: 'movies', path: '/movies', storage: 'local', type: 'dir' }
     const wrapper = mountNavigator(vi.fn(), { items: [directory] })
 
@@ -106,7 +106,7 @@ describe('FileNavigator directory tree', () => {
 
     expect(wrapper.emitted('navigate')).toEqual([
       [{ name: '/', path: '/', storage: 'local', type: 'dir' }],
-      [directory],
+      [{ name: 'movies', path: '/movies/', storage: 'local', type: 'dir' }],
     ])
   })
 
@@ -123,7 +123,7 @@ describe('FileNavigator directory tree', () => {
     await nextTick()
 
     expect(request).toHaveBeenCalledWith({
-      data: { name: 'shows', path: '/shows', storage: 'local', type: 'dir' },
+      data: { name: 'shows', path: '/shows/', storage: 'local', type: 'dir' },
       method: 'post',
       url: '/storage/list?sort=name',
     })
@@ -148,17 +148,47 @@ describe('FileNavigator directory tree', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  it('loads uncached ancestors needed by the current path', async () => {
+  it('loads uncached ancestors needed by the current path and matches trailing-slash directories', async () => {
     const requestedPaths: string[] = []
     const request = vi.fn().mockImplementation(({ data }: { data: FileItem }) => {
       requestedPaths.push(data.path)
+      if (data.path === '/') {
+        return [{ name: 'shows', path: '/shows/', storage: 'local', type: 'dir' }]
+      }
+      if (data.path === '/shows/') {
+        return [{ name: 'Season 01', path: '/shows/Season 01/', storage: 'local', type: 'dir' }]
+      }
       return []
     })
 
-    mountNavigator(request, { currentPath: '/shows/Season 01' })
+    const wrapper = mountNavigator(request, { currentPath: '/shows/Season 01/' })
+    await nextTick()
     await nextTick()
     await nextTick()
 
-    expect(requestedPaths).toEqual(['/shows', '/'])
+    expect(requestedPaths).toEqual(['/', '/shows/'])
+    expect(wrapper.text()).toContain('shows')
+    expect(wrapper.text()).toContain('Season 01')
+  })
+
+  it('clears cached tree state and reloads root directories when storage changes', async () => {
+    const request = vi.fn().mockImplementation(({ data }: { data: FileItem }) => {
+      if (data.storage === 'local') {
+        return [{ name: 'local-dir', path: '/local-dir/', storage: 'local', type: 'dir' }]
+      }
+      return [{ name: 'cloud-dir', path: '/cloud-dir/', storage: 'rclone', type: 'dir' }]
+    })
+
+    const wrapper = mountNavigator(request)
+    await nextTick()
+    await nextTick()
+    expect(wrapper.text()).toContain('local-dir')
+
+    await wrapper.setProps({ storage: 'rclone' })
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).not.toContain('local-dir')
+    expect(wrapper.text()).toContain('cloud-dir')
   })
 })

@@ -25,6 +25,8 @@ const $toast = useToast()
 // 定时服务列表
 const schedulerList = ref<ScheduleInfo[]>([])
 const failedHistory = ref<SchedulerHistory[]>([])
+const runningIds = reactive(new Set<string>())
+let refreshTimerId: ReturnType<typeof setTimeout> | null = null
 const { getScheduleProgressText, getScheduleProgressValue } = useScheduleProgress(
   schedulerList,
   'scheduler-service-progress',
@@ -97,17 +99,35 @@ function getMobileSchedulerStatusText(scheduler: ScheduleInfo) {
 
 /** 执行指定定时服务，并在短延迟后刷新列表。 */
 async function runCommand(id: string) {
+  if (!id || runningIds.has(id)) return
+  runningIds.add(id)
   try {
-    await api.get('system/runscheduler', { params: { jobid: id } })
+    const res: { success?: boolean; message?: string } = await api.get('system/runscheduler', { params: { jobid: id } })
+    if (!res?.success) {
+      $toast.error(res?.message || t('common.error'))
+      return
+    }
     $toast.success(t('setting.scheduler.executeSuccess'))
-    setTimeout(() => {
+    if (refreshTimerId) clearTimeout(refreshTimerId)
+    refreshTimerId = setTimeout(() => {
+      refreshTimerId = null
       loadSchedulerList()
       loadFailedHistory()
     }, 1000)
   } catch (e) {
-    console.log(e)
+    console.error(e)
+    $toast.error(e instanceof Error ? e.message : t('common.error'))
+  } finally {
+    runningIds.delete(id)
   }
 }
+
+onBeforeUnmount(() => {
+  if (refreshTimerId) {
+    clearTimeout(refreshTimerId)
+    refreshTimerId = null
+  }
+})
 
 // 移动端任务卡片展示模型。
 const mobileSchedulerCards = computed(() =>
@@ -138,26 +158,26 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 </script>
 
 <template>
-  <VCard class="d-none d-md-block">
-    <VTable v-if="schedulerList.length" class="text-no-wrap">
+  <VCard class="service-desktop-card d-none d-md-block">
+    <VTable v-if="schedulerList.length" class="service-table text-no-wrap">
       <thead>
         <tr>
           <th scope="col">{{ t('setting.scheduler.provider') }}</th>
           <th scope="col">{{ t('setting.scheduler.taskName') }}</th>
           <th scope="col">{{ t('setting.scheduler.taskStatus') }}</th>
           <th scope="col">{{ t('setting.scheduler.nextRunTime') }}</th>
-          <th scope="col" />
+          <th scope="col" class="text-end">{{ t('setting.cache.actions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="scheduler in schedulerList" :key="scheduler.id">
-          <td>
+          <td class="service-provider-cell">
             {{ getScheduleProvider(scheduler) }}
           </td>
           <td class="scheduler-task-cell">
-            <div>{{ getScheduleName(scheduler) }}</div>
+            <div class="service-task-name">{{ getScheduleName(scheduler) }}</div>
             <div v-if="isScheduleRunning(scheduler)" class="scheduler-progress">
-              <VProgressLinear :model-value="getScheduleProgressValue(scheduler)" color="primary" height="4" rounded />
+              <VProgressLinear :model-value="getScheduleProgressValue(scheduler)" color="primary" height="3" rounded />
               <div class="scheduler-progress-meta">
                 <span>{{ getScheduleProgressText(scheduler) || getScheduleStatusText(scheduler) }}</span>
                 <strong>{{ Math.round(getScheduleProgressValue(scheduler)) }}%</strong>
@@ -165,19 +185,27 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
             </div>
           </td>
           <td>
-            <VChip :color="getSchedulerColor(scheduler)">
+            <VChip variant="tonal" size="small" class="service-status-chip" :color="getSchedulerColor(scheduler)">
               {{ getDisplayedSchedulerStatusText(scheduler) }}
             </VChip>
           </td>
-          <td>
+          <td class="service-next-run">
             {{ getScheduleNextRunText(scheduler) }}
           </td>
-          <td>
-            <VBtn size="small" :disabled="isScheduleRunning(scheduler)" @click="runCommand(scheduler.id)">
-              <template #prepend>
-                <VIcon>mdi-play</VIcon>
-              </template>
-              {{ t('setting.scheduler.execute') }}
+          <td class="text-end">
+            <VBtn
+              icon
+              size="small"
+              variant="text"
+              color="primary"
+              class="service-icon-trigger"
+              :aria-label="t('setting.scheduler.execute')"
+              :loading="runningIds.has(scheduler.id)"
+              :disabled="isScheduleRunning(scheduler) || runningIds.has(scheduler.id)"
+              @click="runCommand(scheduler.id)"
+            >
+              <VIcon icon="mdi-play" size="16" />
+              <VTooltip activator="parent" location="top">{{ t('setting.scheduler.execute') }}</VTooltip>
             </VBtn>
           </td>
         </tr>
@@ -185,37 +213,62 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
     </VTable>
 
     <div v-else-if="!schedulerLoading" class="desktop-scheduler-empty">
-      <VIcon icon="mdi-timer-off-outline" size="48" />
+      <VIcon icon="mdi-timer-off-outline" size="36" />
       <p>{{ t('setting.scheduler.noService') }}</p>
     </div>
 
     <div v-else class="desktop-scheduler-empty">
-      <VProgressCircular indeterminate color="primary" size="22" width="2" />
+      <VProgressCircular indeterminate color="primary" size="20" width="2" />
       <p>{{ t('common.loadingText') }}</p>
     </div>
   </VCard>
 
-  <VCard v-if="failedHistory.length" class="mt-4 d-none d-md-block">
-    <VCardItem>
-      <VCardTitle class="text-subtitle-1">最近失败</VCardTitle>
+  <VCard v-if="failedHistory.length" class="service-desktop-card mt-3 d-none d-md-block">
+    <VCardItem class="service-card-header">
+      <VCardTitle class="service-card-title">最近失败</VCardTitle>
     </VCardItem>
-    <VTable class="text-no-wrap">
+    <VTable class="service-table text-no-wrap">
       <thead>
         <tr>
           <th scope="col">任务</th>
           <th scope="col">失败时间</th>
           <th scope="col">错误</th>
-          <th scope="col" />
+          <th scope="col" class="text-end">{{ t('setting.cache.actions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="history in failedHistory" :key="history.id">
-          <td>{{ history.name || history.job_id }}</td>
-          <td>{{ history.finished_at }}</td>
+          <td class="service-task-name">{{ history.name || history.job_id }}</td>
+          <td class="service-next-run">{{ history.finished_at }}</td>
           <td class="scheduler-error-cell" :title="history.error">{{ history.error || '未知错误' }}</td>
-          <td class="d-flex ga-2 align-center">
-            <VBtn size="small" variant="tonal" @click="runCommand(history.job_id)">重试</VBtn>
-            <VBtn size="small" variant="text" @click="openMainLog">查看日志</VBtn>
+          <td class="text-end">
+            <div class="service-row-actions">
+              <VBtn
+                icon
+                size="small"
+                variant="text"
+                color="primary"
+                class="service-icon-trigger"
+                aria-label="重试"
+                :loading="runningIds.has(history.job_id)"
+                :disabled="runningIds.has(history.job_id)"
+                @click="runCommand(history.job_id)"
+              >
+                <VIcon icon="mdi-refresh" size="15" />
+                <VTooltip activator="parent" location="top">重试</VTooltip>
+              </VBtn>
+              <VBtn
+                icon
+                size="small"
+                variant="text"
+                class="service-icon-trigger"
+                aria-label="查看日志"
+                @click="openMainLog"
+              >
+                <VIcon icon="mdi-text-box-search-outline" size="15" />
+                <VTooltip activator="parent" location="top">查看日志</VTooltip>
+              </VBtn>
+            </div>
           </td>
         </tr>
       </tbody>
@@ -242,7 +295,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
         }"
       >
         <div class="mobile-scheduler-icon">
-          <VIcon :icon="visual.icon" size="30" />
+          <VIcon :icon="visual.icon" size="18" />
         </div>
 
         <div class="mobile-scheduler-content">
@@ -258,17 +311,21 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
         <div class="mobile-scheduler-actions">
           <VBtn
             icon
-            class="mobile-scheduler-run-btn"
+            size="small"
+            variant="text"
+            color="primary"
+            class="service-icon-trigger"
             :aria-label="t('setting.scheduler.execute')"
-            :disabled="isRunning"
+            :loading="runningIds.has(scheduler.id)"
+            :disabled="isRunning || runningIds.has(scheduler.id)"
             @click="runCommand(scheduler.id)"
           >
-            <VIcon icon="mdi-play" size="24" />
+            <VIcon icon="mdi-play" size="16" />
           </VBtn>
         </div>
 
         <div v-if="isRunning" class="mobile-scheduler-progress">
-          <VProgressLinear :model-value="progressValue" color="primary" height="4" rounded />
+          <VProgressLinear :model-value="progressValue" color="primary" height="3" rounded />
           <div class="scheduler-progress-meta">
             <span>{{ progressText || getDisplayedSchedulerStatusText(scheduler) }}</span>
             <strong>{{ Math.round(progressValue) }}%</strong>
@@ -278,18 +335,28 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
     </div>
 
     <div v-else-if="!schedulerLoading" class="mobile-scheduler-empty">
-      <VIcon icon="mdi-timer-off-outline" size="44" />
+      <VIcon icon="mdi-timer-off-outline" size="34" />
       <p>{{ t('setting.scheduler.noService') }}</p>
     </div>
 
     <section v-if="failedHistory.length" class="mobile-failure-list">
-      <h3>最近失败</h3>
+      <h3 class="mobile-failure-heading">最近失败</h3>
       <article v-for="history in failedHistory" :key="history.id" class="mobile-failure-card">
-        <strong>{{ history.name || history.job_id }}</strong>
-        <small>{{ history.finished_at }}</small>
+        <div class="mobile-failure-head">
+          <strong>{{ history.name || history.job_id }}</strong>
+          <small>{{ history.finished_at }}</small>
+        </div>
         <p>{{ history.error || '未知错误' }}</p>
         <div class="d-flex ga-2">
-          <VBtn size="small" variant="tonal" @click="runCommand(history.job_id)">重试</VBtn>
+          <VBtn
+            size="small"
+            variant="tonal"
+            :loading="runningIds.has(history.job_id)"
+            :disabled="runningIds.has(history.job_id)"
+            @click="runCommand(history.job_id)"
+          >
+            重试
+          </VBtn>
           <VBtn size="small" variant="text" @click="openMainLog">查看日志</VBtn>
         </div>
       </article>
@@ -297,7 +364,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 
     <footer v-if="schedulerLoading" class="mobile-scheduler-footer">
       <div class="mobile-scheduler-loading">
-        <VProgressCircular indeterminate color="primary" size="18" width="2" />
+        <VProgressCircular indeterminate color="primary" size="16" width="2" />
         <span>{{ t('common.loadingText') }}</span>
       </div>
     </footer>
@@ -305,19 +372,95 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 </template>
 
 <style scoped>
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
+.service-desktop-card {
+  overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+}
+
+.service-card-header {
+  padding: 13px 16px 6px;
+}
+
+.service-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.service-table :deep(thead th) {
+  block-size: 36px !important;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding-inline: 16px !important;
+}
+
+.service-table :deep(tbody td) {
+  block-size: 44px !important;
+  font-size: 13px !important;
+  padding-inline: 16px !important;
+}
+
+.service-provider-cell {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+}
+
+.service-task-name {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.service-status-chip {
+  block-size: 21px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.service-next-run {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.service-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.service-icon-trigger {
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px !important;
+  background: var(--mp-item-bg);
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+
+.service-icon-trigger:hover:not(:disabled) {
+  border-color: rgba(var(--v-theme-primary), 0.36);
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+
 .desktop-scheduler-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: rgba(var(--v-theme-on-surface), 0.52);
-  gap: 12px;
-  min-block-size: 260px;
+  gap: 10px;
+  min-block-size: 220px;
 }
 
 .desktop-scheduler-empty p {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .scheduler-task-cell {
@@ -325,43 +468,72 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 }
 
 .scheduler-progress {
-  margin-block-start: 8px;
-  max-inline-size: 320px;
+  margin-block-start: 6px;
+  max-inline-size: 300px;
 }
 
 .scheduler-progress-meta {
   display: flex;
   justify-content: space-between;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 11px;
-  gap: 12px;
-  margin-block-start: 4px;
+  font-size: 11.5px;
+  gap: 10px;
+  margin-block-start: 3px;
 }
 
 .scheduler-error-cell {
   max-inline-size: 28rem;
   overflow: hidden;
+  color: rgb(var(--v-theme-error));
+  font-size: 12px;
   text-overflow: ellipsis;
 }
 
 .mobile-failure-list {
   display: grid;
-  gap: 12px;
-  margin-block-start: 20px;
+  gap: 10px;
+  margin-block-start: 16px;
+}
+
+.mobile-failure-heading {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 .mobile-failure-card {
   display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--v-theme-error), 0.24);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-error), 0.05);
+}
+
+.mobile-failure-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
-  padding: 16px;
-  border: 1px solid rgba(var(--v-theme-error), 0.25);
-  border-radius: 16px;
-  background: rgba(var(--v-theme-error), 0.06);
+}
+
+.mobile-failure-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-failure-head small {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .mobile-failure-card p {
   margin: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
@@ -377,46 +549,39 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 }
 
 .mobile-scheduler-view {
-  --mobile-scheduler-card-backdrop-filter: none;
-  --mobile-scheduler-card-background: rgb(var(--v-theme-surface));
-  --mobile-scheduler-card-border: 0;
-  --mobile-scheduler-card-shadow: none;
-
   background: transparent;
   min-block-size: 100%;
-  padding-block: 12px calc(22px + env(safe-area-inset-bottom));
-  padding-inline: 18px;
+  padding-block: 10px calc(18px + env(safe-area-inset-bottom));
+  padding-inline: 14px;
 }
 
 .mobile-scheduler-list {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
 }
 
 .mobile-scheduler-card {
   display: grid;
   align-items: center;
-  padding: 18px;
-  border: var(--mobile-scheduler-card-border);
-  border-radius: var(--app-surface-radius);
-  -webkit-backdrop-filter: var(--mobile-scheduler-card-backdrop-filter);
-  backdrop-filter: var(--mobile-scheduler-card-backdrop-filter);
-  background: var(--mobile-scheduler-card-background);
-  box-shadow: var(--mobile-scheduler-card-shadow);
-  column-gap: 14px;
-  grid-template-columns: 62px minmax(0, 1fr) auto;
+  padding: 12px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+  column-gap: 12px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
 }
 
 .mobile-scheduler-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: rgba(var(--scheduler-accent-rgb), 0.14);
-  block-size: 58px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: rgba(var(--scheduler-accent-rgb), 0.1);
+  block-size: 36px;
   color: var(--scheduler-accent);
-  inline-size: 58px;
+  inline-size: 36px;
 }
 
 .mobile-scheduler-content {
@@ -426,10 +591,9 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 .mobile-scheduler-content h3 {
   overflow: hidden;
   margin: 0;
-  color: rgba(var(--v-theme-on-surface), 0.92);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -438,12 +602,10 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 .mobile-scheduler-content p {
   overflow: hidden;
   min-inline-size: 0;
-  color: rgba(var(--v-theme-on-surface), 0.58);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  margin-block: 0;
-  margin-inline: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.2;
+  margin: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -453,7 +615,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-block-start: 6px;
+  margin-block-start: 4px;
   min-inline-size: 0;
 }
 
@@ -464,7 +626,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 
 .mobile-scheduler-progress {
   grid-column: 2 / -1;
-  margin-block-start: 2px;
+  margin-block-start: 6px;
   min-inline-size: 0;
 }
 
@@ -472,40 +634,29 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 12px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 6px;
+  background: var(--mp-item-bg);
+  block-size: 20px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1;
-  padding-block: 5px;
-  padding-inline: 10px;
+  padding-inline: 7px;
   white-space: nowrap;
 }
 
 .mobile-scheduler-status--running {
-  background: rgba(var(--v-theme-success), 0.14);
+  border-color: rgba(var(--v-theme-success), 0.28);
+  background: rgba(var(--v-theme-success), 0.12);
   color: rgb(var(--v-theme-success));
 }
 
 .mobile-scheduler-status--stopped {
-  background: rgba(var(--v-theme-error), 0.12);
+  border-color: rgba(var(--v-theme-error), 0.28);
+  background: rgba(var(--v-theme-error), 0.1);
   color: rgb(var(--v-theme-error));
-}
-
-.mobile-scheduler-run-btn {
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ff4f87, #e91e63) !important;
-  block-size: 46px;
-  box-shadow: 0 10px 22px rgba(233, 30, 99, 28%);
-  color: #fff !important;
-  inline-size: 46px;
-}
-
-.mobile-scheduler-run-btn.v-btn--disabled {
-  background: rgba(var(--v-theme-on-surface), 0.12) !important;
-  box-shadow: none;
-  color: rgba(var(--v-theme-on-surface), 0.42) !important;
 }
 
 .mobile-scheduler-empty {
@@ -514,13 +665,13 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   align-items: center;
   justify-content: center;
   color: rgba(var(--v-theme-on-surface), 0.52);
-  gap: 12px;
-  min-block-size: 42vh;
+  gap: 10px;
+  min-block-size: 36vh;
 }
 
 .mobile-scheduler-empty p {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .mobile-scheduler-footer {
@@ -529,59 +680,17 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   align-items: center;
   justify-content: center;
   color: rgba(var(--v-theme-on-surface), 0.55);
-  font-size: 14px;
-  gap: 8px;
-  padding-block: 28px 4px;
+  font-size: 12.5px;
+  gap: 6px;
+  padding-block: 20px 4px;
 }
 
 .mobile-scheduler-loading {
   display: inline-flex;
   align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
-  gap: 10px;
-}
-
-.v-theme--transparent .mobile-scheduler-card,
-html[data-theme='transparent'] .mobile-scheduler-card {
-  backdrop-filter: blur(var(--transparent-blur, 10px));
-  background: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.2));
-}
-
-@media (width <= 480px) {
-  .mobile-scheduler-view {
-    padding-inline: 14px;
-  }
-
-  .mobile-scheduler-card {
-    padding: 16px;
-    column-gap: 12px;
-    grid-template-columns: 54px minmax(0, 1fr) auto;
-  }
-
-  .mobile-scheduler-icon {
-    block-size: 50px;
-    inline-size: 50px;
-  }
-
-  .mobile-scheduler-content h3 {
-    font-size: 16px;
-  }
-
-  .mobile-scheduler-content p {
-    font-size: 13px;
-  }
-
-  .mobile-scheduler-status {
-    font-size: 12px;
-    padding-block: 5px;
-    padding-inline: 9px;
-  }
-
-  .mobile-scheduler-run-btn {
-    block-size: 42px;
-    inline-size: 42px;
-  }
+  gap: 8px;
 }
 </style>

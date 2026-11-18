@@ -3,9 +3,11 @@ import { isNullOrEmptyObject } from '@/@core/utils'
 import api from '@/api'
 import { useToast } from 'vue-toastification'
 import { useI18n } from '@/composables/useChineseText'
+import { useDisplay } from 'vuetify'
 
-// 多语言支持
+// 多语言支持与响应式断点
 const { t } = useI18n()
+const display = useDisplay()
 
 // 定义事件
 const emit = defineEmits(['done', 'close'])
@@ -15,6 +17,7 @@ const $toast = useToast()
 
 // 是否加载中
 const loading = ref(false)
+let doneTimer: ReturnType<typeof setTimeout> | undefined
 
 // 用户认证表单
 const authForm = ref<any>({
@@ -92,6 +95,7 @@ async function handleDone() {
 
 // 认证处理
 async function checkUser() {
+  if (loading.value) return
   if (!authForm.value.site) {
     $toast.error(t('dialog.userAuth.selectSiteRequired'))
     return
@@ -114,7 +118,7 @@ async function checkUser() {
     if (result.success) {
       $toast.success(t('dialog.userAuth.authSuccess'))
       // 1秒后刷新页面
-      setTimeout(() => {
+      doneTimer = setTimeout(() => {
         emit('done')
       }, 1000)
     } else {
@@ -122,29 +126,37 @@ async function checkUser() {
     }
   } catch (e) {
     console.error(e)
+    $toast.error(t('dialog.userAuth.authFailed', { message: e instanceof Error ? e.message : t('common.error') }))
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 onMounted(async () => {
   await loadAuthSites()
   loadLastAuthParams()
 })
+
+onUnmounted(() => {
+  if (doneTimer) clearTimeout(doneTimer)
+})
 </script>
 
 <template>
-  <VDialog width="40rem" scrollable>
-    <VCard>
-      <VCardItem>
+  <VDialog max-width="38rem" scrollable :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-user-check" size="20" class="me-2 text-primary" />
+        </template>
         <VCardTitle>
-          <VIcon icon="mdi-user-check" class="me-2" />
           {{ t('dialog.userAuth.title') }}
         </VCardTitle>
-        <VDialogCloseBtn @click="emit('close')" />
       </VCardItem>
+      <VDialogCloseBtn :disabled="loading" @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VRow>
+      <VCardText class="mp-dialog-body">
+        <VRow class="mp-form-grid">
           <VCol cols="12">
             <VSelect
               v-model="authForm.site"
@@ -152,31 +164,110 @@ onMounted(async () => {
               item-value="key"
               item-title="name"
               :label="t('dialog.userAuth.selectSite')"
-              item-props
               prepend-inner-icon="mdi-web"
             >
+              <template #selection="{ item }">
+                <div class="d-flex align-center gap-2">
+                  <span v-if="item.raw.prependAvatar" class="user-auth-site-icon">
+                    <img :src="item.raw.prependAvatar" :alt="item.raw.name" width="16" height="16" />
+                  </span>
+                  <span>{{ item.raw.name }}</span>
+                </div>
+              </template>
+              <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps" :title="item.raw.name">
+                  <template v-if="item.raw.prependAvatar" #prepend>
+                    <span class="user-auth-site-icon me-2">
+                      <img :src="item.raw.prependAvatar" :alt="item.raw.name" width="16" height="16" />
+                    </span>
+                  </template>
+                </VListItem>
+              </template>
             </VSelect>
           </VCol>
-        </VRow>
-        <VRow>
-          <VCol v-for="param in formFields" :key="param.key">
+          <VCol v-for="param in formFields" :key="param.key" cols="12" :sm="formFields.length > 1 ? 6 : 12">
             <VTextField
               v-model="authForm.params[param.site.toUpperCase() + '_' + param.key.toUpperCase()]"
               :type="param.type"
               :label="param.name"
               :placeholder="param.placeholder"
-              :hint="param.tooltip"
+              :hint="param.tooltip && param.tooltip !== param.name ? param.tooltip : undefined"
+              :persistent-hint="Boolean(param.tooltip && param.tooltip !== param.name)"
               clearable
-              persistent-hint
             />
           </VCol>
         </VRow>
       </VCardText>
-      <VCardText class="text-center">
-        <VBtn @click="handleDone" prepend-icon="mdi-check" class="px-5" size="large" :disabled="loading">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="loading" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          prepend-icon="mdi-check"
+          class="px-4"
+          :loading="loading"
+          :disabled="loading"
+          @click="handleDone"
+        >
           {{ t('dialog.userAuth.authBtn') }}
         </VBtn>
-      </VCardText>
+      </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+.user-auth-site-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 5px;
+  background-color: rgba(255, 255, 255, 0.08);
+  block-size: 22px;
+  inline-size: 22px;
+}
+
+:root[data-theme='light'] .user-auth-site-icon,
+.v-theme--light .user-auth-site-icon {
+  background-color: var(--mp-item-active-bg);
+}
+
+.user-auth-site-icon img {
+  display: block;
+  block-size: 16px;
+  inline-size: 16px;
+  object-fit: contain;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

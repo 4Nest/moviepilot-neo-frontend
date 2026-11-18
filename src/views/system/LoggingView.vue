@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { useI18n } from '@/composables/useChineseText'
-import { useTheme } from 'vuetify'
 import { useBackground } from '@/composables/useBackground'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 import { useDisplay } from 'vuetify'
@@ -44,7 +43,6 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const theme = useTheme()
 const display = useDisplay()
 const { useSSE } = useBackground()
 
@@ -84,8 +82,6 @@ const logColorMap: Record<string, string> = {
   CRITICAL: 'error',
 }
 
-const isDarkTheme = computed(() => theme.global.current.value.dark)
-const isTransparentTheme = computed(() => theme.name.value === 'transparent')
 const normalizedSearchQuery = computed(() => (searchQuery.value ?? '').trim().toLowerCase())
 const { availableHeight } = useAvailableHeight(96, 320)
 
@@ -473,7 +469,7 @@ function flushBuffer() {
     return
   }
 
-  pendingLogCount.value += incomingLogs.length
+  pendingLogCount.value += incomingLogs.filter(matchesLogFilter).length
 }
 
 /** 安排一次延迟缓冲区刷新。 */
@@ -606,39 +602,27 @@ onUnmounted(() => {
 
 <template>
   <VProgressLinear v-if="!isStreamPaused" class="logging-live-progress" indeterminate color="primary" height="1" />
-  <div
-    class="logging-view"
-    :class="{ 'is-dark-theme': isDarkTheme, 'is-transparent-theme': isTransparentTheme }"
-    :style="loggingViewStyle"
-  >
-    <div class="logging-toolbar px-3">
-      <VBtnToggle
-        v-if="display.mdAndUp.value"
-        v-model="selectedLevel"
-        mandatory
-        divided
-        density="compact"
-        variant="text"
-        selected-class="logging-level-toggle__button--active"
-        class="logging-level-toggle"
-      >
-        <VBtn
+  <div class="logging-view" :style="loggingViewStyle">
+    <div class="logging-toolbar">
+      <div v-if="display.mdAndUp.value" class="mp-segmented logging-level-segmented" role="group">
+        <button
           v-for="level in levelOptions"
           :key="level"
-          :value="level"
-          :class="[`logging-level-toggle__button--${level.toLowerCase()}`]"
-          class="logging-level-toggle__button"
+          type="button"
+          class="mp-segmented__btn logging-level-btn"
+          :class="[`logging-level-btn--${level.toLowerCase()}`, { 'is-active': selectedLevel === level }]"
+          @click="selectedLevel = level"
         >
           {{ level === 'ALL' ? t('common.all') : level }}
-        </VBtn>
-      </VBtnToggle>
+        </button>
+      </div>
 
       <VSelect
         v-else
         v-model="selectedLevel"
         :items="levelOptions"
         density="compact"
-        variant="plain"
+        variant="outlined"
         hide-details
         class="logging-level-select"
         :menu-props="{ width: 'auto' }"
@@ -651,8 +635,8 @@ onUnmounted(() => {
             {{ item.value === 'ALL' ? t('logging.allLevels') : item.value }}
           </span>
         </template>
-        <template #item="{ props, item }">
-          <VListItem v-bind="props" density="compact">
+        <template #item="{ props: itemProps, item }">
+          <VListItem v-bind="itemProps" density="compact">
             <template #title>
               <span
                 :class="item.value === 'ALL' ? 'text-primary' : `text-${logColorMap[item.value] || 'secondary'}`"
@@ -669,7 +653,8 @@ onUnmounted(() => {
         v-model="searchQuery"
         class="logging-search"
         density="compact"
-        variant="plain"
+        variant="outlined"
+        single-line
         hide-details
         clearable
         @click:clear="searchQuery = ''"
@@ -677,27 +662,33 @@ onUnmounted(() => {
         :placeholder="t('logging.searchPlaceholder')"
       />
 
-      <VBtn
-        variant="text"
-        icon
-        class="logging-stream-action"
-        :class="{ 'is-live': newestFirst }"
-        :title="newestFirst ? t('logging.oldestFirst') : t('logging.newestFirst')"
-        @click="toggleNewestFirst"
-      >
-        <VIcon :icon="newestFirst ? 'mdi-sort-descending' : 'mdi-sort-ascending'" />
-      </VBtn>
+      <div class="logging-stream-actions">
+        <VBtn
+          variant="text"
+          icon
+          size="small"
+          class="logging-stream-action"
+          :class="{ 'is-active': newestFirst }"
+          :title="newestFirst ? t('logging.oldestFirst') : t('logging.newestFirst')"
+          :aria-label="newestFirst ? t('logging.oldestFirst') : t('logging.newestFirst')"
+          @click="toggleNewestFirst"
+        >
+          <VIcon :icon="newestFirst ? 'mdi-sort-descending' : 'mdi-sort-ascending'" size="16" />
+        </VBtn>
 
-      <VBtn
-        variant="text"
-        icon
-        class="logging-stream-action"
-        :class="{ 'is-live': !isStreamPaused }"
-        :title="isStreamPaused ? t('logging.resumeStream') : t('logging.pauseStream')"
-        @click="toggleStreamState"
-      >
-        <VIcon :icon="isStreamPaused ? 'mdi-play' : 'mdi-pause'" />
-      </VBtn>
+        <VBtn
+          variant="text"
+          icon
+          size="small"
+          class="logging-stream-action"
+          :class="{ 'is-live': !isStreamPaused }"
+          :title="isStreamPaused ? t('logging.resumeStream') : t('logging.pauseStream')"
+          :aria-label="isStreamPaused ? t('logging.resumeStream') : t('logging.pauseStream')"
+          @click="toggleStreamState"
+        >
+          <VIcon :icon="isStreamPaused ? 'mdi-play' : 'mdi-pause'" size="16" />
+        </VBtn>
+      </div>
     </div>
 
     <div ref="logViewportRef" class="logging-shell is-wrap" @scroll.passive="handleScroll">
@@ -758,191 +749,121 @@ onUnmounted(() => {
 <style scoped>
 /* stylelint-disable selector-pseudo-class-no-unknown */
 .logging-view {
-  --logging-shell-backdrop-filter: none;
-  --logging-shell-background: linear-gradient(180deg, var(--logging-shell-bg), rgba(var(--v-theme-surface), 0.9));
-  --logging-shell-bg: rgba(var(--v-theme-surface), 0.96);
-  --logging-record-bg-even: rgba(var(--v-theme-surface-variant), 0.01);
-  --logging-record-bg-odd: rgba(var(--v-theme-surface-variant), 0.005);
+  --logging-shell-background: rgb(var(--v-theme-surface));
   --logging-text: rgba(var(--v-theme-on-surface), 0.88);
-  --logging-toolbar-control-size: 2rem;
   --logging-muted: rgba(var(--v-theme-on-surface), 0.56);
+  --logging-border: var(--mp-border-card);
 
   display: flex;
   flex-direction: column;
   block-size: 100%;
+  gap: 8px;
   min-block-size: 20rem;
-}
-
-.logging-view.is-dark-theme {
-  --logging-shell-bg: rgba(var(--v-theme-surface), 0.72);
-  --logging-record-bg-even: rgba(var(--v-theme-on-surface), 0.02);
-  --logging-record-bg-odd: rgba(var(--v-theme-on-surface), 0.008);
-  --logging-border: rgba(var(--v-theme-on-surface), 0.12);
-  --logging-shadow: inset 0 1px 0 rgba(255, 255, 255, 4%);
-}
-
-.logging-view.is-transparent-theme {
-  --logging-shell-bg: transparent;
-  --logging-record-bg-even: transparent;
-  --logging-record-bg-odd: transparent;
-  --logging-border: rgba(var(--v-theme-on-surface), 0.1);
-  --logging-shadow: none;
 }
 
 .logging-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
+  padding-block: 4px 0;
+  padding-inline: 2px;
 }
 
-.logging-search {
-  flex: 1 1 9rem;
-  min-inline-size: 5rem;
-}
-
-.logging-stream-action {
-  color: var(--logging-muted);
-}
-
-.logging-stream-action.is-live {
-  color: rgb(var(--v-theme-success));
-}
-
-.logging-search :deep(.v-field) {
-  border-radius: var(--app-field-radius);
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.logging-search :deep(.v-field__outline),
-.logging-search :deep(.v-field__overlay) {
-  display: none;
-}
-
-.logging-search :deep(.v-field__input) {
-  padding-inline-start: 0;
-}
-
-.logging-level-select {
-  flex: 0 0 7rem;
-  min-inline-size: 7rem;
-}
-
-.logging-level-toggle {
+.logging-level-segmented {
   flex: 0 0 auto;
-  overflow: hidden;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.14);
-  border-radius: var(--app-control-radius);
-  background: transparent;
-  block-size: var(--logging-toolbar-control-size);
-  box-shadow: none !important;
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button) {
-  border-color: rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 0;
-  block-size: 100%;
-  color: var(--logging-muted);
-  font-size: 0.75rem;
+.logging-level-btn {
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0;
-  min-inline-size: auto;
-  padding-inline: 1.125rem;
-  text-transform: none;
+  padding-inline: 11px;
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button--debug) {
+.logging-level-btn--debug:not(.is-active) {
   color: rgb(var(--v-theme-secondary));
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button--info) {
+.logging-level-btn--info:not(.is-active) {
   color: rgb(var(--v-theme-success));
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button--warning) {
+.logging-level-btn--warning:not(.is-active) {
   color: rgb(var(--v-theme-warning));
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button--error) {
+.logging-level-btn--error:not(.is-active) {
   color: rgb(var(--v-theme-error));
 }
 
-.logging-level-toggle :deep(.logging-level-toggle__button--active) {
-  background: rgba(var(--v-theme-primary), 0.16);
+.logging-level-select {
+  flex: 0 0 7.25rem;
+  min-inline-size: 7.25rem;
+}
+
+.logging-search {
+  flex: 1 1 10rem;
+  min-inline-size: 6rem;
+}
+
+.logging-level-select :deep(.v-field),
+.logging-search :deep(.v-field) {
+  border-radius: 8px;
+  background: var(--mp-field-bg);
+  min-block-size: 32px;
+}
+
+.logging-level-select :deep(.v-field__input),
+.logging-search :deep(.v-field__input) {
+  min-block-size: 32px;
+  padding-block: 0;
+  font-size: 12.5px;
+}
+
+.logging-level-select :deep(.v-field__append-inner),
+.logging-search :deep(.v-field__prepend-inner),
+.logging-search :deep(.v-field__clearable) {
+  align-items: center;
+  min-block-size: 32px;
+  padding-block: 0;
+}
+
+.logging-stream-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logging-stream-action {
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px !important;
+  background: var(--mp-item-bg);
+  block-size: 28px !important;
+  color: var(--logging-muted);
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+
+.logging-stream-action.is-active {
+  border-color: rgba(var(--v-theme-primary), 0.36);
+  background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
 }
 
-.logging-level-select :deep(.v-field) {
-  border-radius: var(--app-field-radius);
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.logging-level-select :deep(.v-field__outline),
-.logging-level-select :deep(.v-field__overlay) {
-  display: none;
-}
-
-.logging-level-select :deep(.v-field__input) {
-  padding-inline: 0;
-}
-
-@media (width >= 960px) {
-  .logging-toolbar {
-    padding-block-start: 0.25rem;
-  }
-
-  .logging-search,
-  .logging-stream-action {
-    align-self: center;
-  }
-
-  .logging-search :deep(.v-field) {
-    display: flex;
-    align-items: center;
-    block-size: var(--logging-toolbar-control-size);
-    min-block-size: var(--logging-toolbar-control-size);
-  }
-
-  .logging-search :deep(.v-field__field),
-  .logging-search :deep(.v-field__input),
-  .logging-search :deep(.v-field__prepend-inner),
-  .logging-search :deep(.v-field__clearable) {
-    align-items: center;
-    min-block-size: var(--logging-toolbar-control-size);
-  }
-
-  .logging-search :deep(.v-field__input) {
-    padding-block: 0;
-  }
-
-  .logging-search :deep(.v-field__prepend-inner),
-  .logging-search :deep(.v-field__clearable) {
-    padding-block: 0;
-  }
-
-  .logging-stream-action {
-    block-size: var(--logging-toolbar-control-size);
-    inline-size: var(--logging-toolbar-control-size);
-  }
+.logging-stream-action.is-live {
+  border-color: rgba(var(--v-theme-success), 0.32);
+  background: rgba(var(--v-theme-success), 0.08);
+  color: rgb(var(--v-theme-success));
 }
 
 .logging-shell {
   position: relative;
   overflow: auto;
   flex: 1 1 auto;
-  padding: 0.875rem;
+  padding: 10px 12px;
   border: 1px solid var(--logging-border);
-  -webkit-backdrop-filter: var(--logging-shell-backdrop-filter);
-  backdrop-filter: var(--logging-shell-backdrop-filter);
+  border-radius: 10px;
   background: var(--logging-shell-background);
-  box-shadow: var(--logging-shadow);
-}
-
-.logging-view.is-transparent-theme .logging-shell {
-  backdrop-filter: none;
-  background: transparent;
 }
 
 .logging-loading-overlay {
@@ -951,22 +872,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(2px);
-  background: linear-gradient(180deg, rgba(var(--v-theme-surface), 0.72), rgba(var(--v-theme-surface), 0.64));
+  background: rgb(var(--v-theme-surface));
   inset-block-start: 0;
-  margin-block-end: 0.75rem;
-  margin-inline: -0.875rem;
-  padding-block: 0.5rem 0.75rem;
-  padding-inline: 0.875rem;
-}
-
-.logging-view.is-dark-theme .logging-loading-overlay {
-  background: linear-gradient(180deg, rgba(var(--v-theme-surface), 0.62), rgba(var(--v-theme-surface), 0.52));
-}
-
-.logging-view.is-transparent-theme .logging-loading-overlay {
-  backdrop-filter: none;
-  background: transparent;
+  margin-block-end: 10px;
+  margin-inline: -12px;
+  padding-block: 8px 10px;
+  padding-inline: 12px;
 }
 
 .logging-loading-overlay :deep(.initial-loading-container) {
@@ -983,54 +894,52 @@ onUnmounted(() => {
   justify-content: center;
   block-size: 100%;
   color: var(--logging-muted);
-  gap: 0.5rem;
+  font-size: 13px;
+  gap: 8px;
   min-block-size: 16rem;
 }
 
 .logging-list {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 5px;
   min-inline-size: 100%;
 }
 
 .logging-record {
   display: grid;
   align-items: start;
-  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 8px;
+  grid-template-columns: 9.75rem minmax(0, 1fr);
 }
 
 .logging-record-time {
   color: rgb(var(--v-theme-primary));
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 0.8125rem;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  line-height: 1.5;
-  padding-block: 0.625rem;
+  line-height: 1.55;
+  padding-block: 6px;
   white-space: nowrap;
 }
 
 .logging-record-panel {
   display: flex;
   align-items: stretch;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.04);
-  border-radius: var(--app-surface-radius);
-  gap: 0.75rem;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  gap: 10px;
   min-inline-size: 0;
-  padding-block: 0.5rem;
-  padding-inline: 0.5rem;
+  padding: 6px 10px;
 }
 
 .logging-record-panel.is-even {
-  background: var(--logging-record-bg-even);
+  background: var(--mp-field-bg);
 }
 
 .logging-record-panel.is-odd {
-  background: var(--logging-record-bg-odd);
-}
-
-.logging-view.is-dark-theme .logging-record-panel {
-  border-color: rgba(var(--v-theme-on-surface), 0.08);
+  background: transparent;
 }
 
 .logging-record-accent {
@@ -1038,16 +947,16 @@ onUnmounted(() => {
   align-self: flex-start;
   border-radius: 999px;
   background-color: rgba(var(--v-theme-on-surface), 0.24);
-  block-size: 0.5rem;
-  inline-size: 0.5rem;
-  margin-block-start: 0.45rem;
+  block-size: 6px;
+  inline-size: 6px;
+  margin-block-start: 6px;
 }
 
 .logging-record-accent.is-burst {
   align-self: stretch;
   border-radius: 999px;
   block-size: auto;
-  inline-size: 0.5rem;
+  inline-size: 4px;
   margin-block-start: 0;
 }
 
@@ -1055,7 +964,7 @@ onUnmounted(() => {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 2px;
   min-inline-size: 0;
 }
 
@@ -1064,9 +973,9 @@ onUnmounted(() => {
   align-items: flex-start;
   color: var(--logging-text);
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 0.8125rem;
-  gap: 0.75rem;
-  line-height: 1.6;
+  font-size: 12.5px;
+  gap: 10px;
+  line-height: 1.55;
   min-inline-size: max-content;
 }
 
@@ -1075,9 +984,9 @@ onUnmounted(() => {
 }
 
 .logging-record-level {
-  flex: 0 0 4rem;
+  flex: 0 0 3.9rem;
   font-weight: 700;
-  min-inline-size: 4rem;
+  min-inline-size: 3.9rem;
 }
 
 .logging-record-body {
@@ -1090,6 +999,7 @@ onUnmounted(() => {
 .logging-record-inline-time {
   flex: 0 0 auto;
   color: var(--logging-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .logging-record-app {
@@ -1149,13 +1059,12 @@ onUnmounted(() => {
   position: sticky;
   display: flex;
   justify-content: flex-end;
-  inset-block-end: 0.75rem;
-  margin-block-start: 0.75rem;
+  inset-block-end: 10px;
+  margin-block-start: 10px;
   pointer-events: none;
 }
 
 .logging-latest-action :deep(.v-btn) {
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 16%);
   pointer-events: auto;
 }
 
@@ -1167,24 +1076,24 @@ onUnmounted(() => {
   }
 
   .logging-record {
-    gap: 0.375rem;
-    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 6px;
+    grid-template-columns: 9.25rem minmax(0, 1fr);
   }
 
   .logging-record-level {
-    flex-basis: 4.75rem;
-    min-inline-size: 4.75rem;
+    flex-basis: 4.4rem;
+    min-inline-size: 4.4rem;
   }
 }
 
 @media (width <= 640px) {
   .logging-view {
-    gap: 0.5rem;
+    gap: 8px;
     min-block-size: 0;
   }
 
   .logging-record {
-    gap: 0.25rem;
+    gap: 3px;
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1193,21 +1102,20 @@ onUnmounted(() => {
   }
 
   .logging-record-panel {
-    padding-block: 0.5rem;
-    padding-inline: 0.625rem;
+    padding: 6px 8px;
   }
 
   .logging-record-line {
-    gap: 0.5rem;
+    gap: 8px;
   }
 
   .logging-shell {
-    padding: 0.625rem;
+    padding: 8px 10px;
   }
 
   .logging-loading-overlay {
-    margin-inline: -0.625rem;
-    padding-inline: 0.625rem;
+    margin-inline: -10px;
+    padding-inline: 10px;
   }
 }
 </style>

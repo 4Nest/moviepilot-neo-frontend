@@ -1,7 +1,7 @@
 import type { Plugin } from '@/api/types'
 import PluginCard from '@/components/cards/PluginCard.vue'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
-import { normalizePluginAccentColor } from '@/utils/glassColor'
+import { normalizePluginAccentColor } from '@/composables/usePluginCardAccent'
 import { renderWithProviders } from '@tests/support/render'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { defineComponent } from 'vue'
@@ -84,7 +84,7 @@ describe('PluginCard lifecycle actions', () => {
 
   it('refreshes plugin sidebar navigation after uninstall succeeds', async () => {
     mocks.apiDelete.mockResolvedValue({ success: true })
-    const { container, pinia } = await renderWithProviders(PluginCard, { props: { plugin } })
+    const { container, emitted, pinia } = await renderWithProviders(PluginCard, { props: { plugin } })
     const sidebarStore = usePluginSidebarNavStore(pinia)
     vi.mocked(sidebarStore.ensureSidebarNav).mockResolvedValue(undefined)
 
@@ -95,6 +95,7 @@ describe('PluginCard lifecycle actions', () => {
 
     await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalledWith('plugin/DemoPlugin'))
     await waitFor(() => expect(sidebarStore.ensureSidebarNav).toHaveBeenCalledWith(true))
+    expect(emitted().remove).toEqual([['DemoPlugin']])
     expect(mocks.toastSuccess).toHaveBeenCalledWith('插件 演示插件 卸载成功！')
     expect(mocks.dialogCloses[0]).toHaveBeenCalled()
   })

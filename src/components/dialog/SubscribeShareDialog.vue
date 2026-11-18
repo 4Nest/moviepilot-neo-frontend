@@ -23,6 +23,7 @@ const emit = defineEmits(['close'])
 
 // 分享处理状态
 const shareDoing = ref(false)
+const shareFormRef = ref()
 
 // 订阅编辑表单
 const shareForm = ref<SubscribeShare>({
@@ -34,7 +35,9 @@ const shareForm = ref<SubscribeShare>({
 
 // 分享订阅
 async function doShare() {
-  if (!shareForm.value.share_title || !shareForm.value.share_comment || !shareForm.value.share_user) return
+  if (shareDoing.value) return
+  const { valid } = (await shareFormRef.value?.validate()) || { valid: true }
+  if (!valid || !shareForm.value.share_title || !shareForm.value.share_comment || !shareForm.value.share_user) return
   try {
     shareDoing.value = true
     const result: { [key: string]: any } = await api.post('subscribe/share', shareForm.value)
@@ -64,11 +67,11 @@ const $toast = useToast()
 </script>
 
 <template>
-  <VDialog scrollable max-width="30rem" :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog scrollable max-width="34rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-share-outline" class="me-2" />
+          <VIcon icon="mdi-share-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('dialog.subscribeShare.shareSubscription') }}</VCardTitle>
         <VCardSubtitle>
@@ -80,11 +83,11 @@ const $toast = useToast()
           }}
         </VCardSubtitle>
       </VCardItem>
+      <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VDialogCloseBtn @click="emit('close')" />
-        <VForm @submit.prevent="() => {}" class="pt-2">
-          <VRow>
+      <VCardText class="mp-dialog-body">
+        <VForm ref="shareFormRef" @submit.prevent="() => {}">
+          <VRow class="mp-form-grid">
             <VCol cols="12">
               <VTextField
                 v-model="shareForm.share_title"
@@ -101,6 +104,8 @@ const $toast = useToast()
                 :label="t('dialog.subscribeShare.description')"
                 :rules="[requiredValidator]"
                 :hint="t('dialog.subscribeShare.descriptionHint')"
+                rows="3"
+                auto-grow
                 persistent-hint
                 prepend-inner-icon="mdi-comment-text-outline"
               />
@@ -118,16 +123,20 @@ const $toast = useToast()
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
           :disabled="shareDoing"
-          @click="doShare"
-          prepend-icon="mdi-share"
-          class="px-5"
           :loading="shareDoing"
+          class="px-4"
+          @click="doShare"
         >
           {{ t('dialog.subscribeShare.confirmShare') }}
         </VBtn>
@@ -135,3 +144,29 @@ const $toast = useToast()
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

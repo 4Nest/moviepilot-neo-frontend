@@ -60,6 +60,9 @@ const $toast = useToast()
 // 图片是否加载完成
 const imageLoaded = ref(false)
 
+// 是否正在删除订阅，用于防重入与删除过渡禁用态
+const isDeleting = ref(false)
+
 // 当前的订阅状态
 const subscribeState = ref<string>(props.media?.state ?? 'P')
 
@@ -192,16 +195,32 @@ function getBufferPercentage() {
 
 // 删除订阅
 async function removeSubscribe() {
+  if (isDeleting.value) return
+
+  const isConfirmed = await createConfirm({
+    type: 'warn',
+    title: t('common.confirm'),
+    content: `是否确认取消订阅 ${props.media?.name || ''}？`,
+  })
+  if (!isConfirmed) return
+
+  isDeleting.value = true
   try {
     const result: { [key: string]: any } = await api.delete(`subscribe/${props.media?.id}`)
 
     if (result.success) {
-      // 通知父组件刷新
-      emit('remove')
+      // 立即通知父组件移除对应订阅 ID 并静默对齐
+      emit('remove', props.media?.id)
+    } else {
+      $toast.error(
+        result.message ? t('subscribe.cancelFailed', { message: result.message }) : t('subscribe.requestFailed'),
+      )
     }
   } catch (e) {
     $toast.error(t('subscribe.requestFailed'))
     console.log(e)
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -431,7 +450,7 @@ const dropdownItems = computed(() => [
       click: shareSubscribe,
       color: 'success',
     },
-    show: isSuperUser.value && props.media?.type === '电视剧',
+    show: isSuperUser.value,
   },
   {
     title: t('subscribe.mediaDetail'),
@@ -497,7 +516,7 @@ function onSubscribeEditSave() {
 
 // 订阅编辑取消
 function onSubscribeEditRemove() {
-  emit('remove')
+  emit('remove', props.media?.id)
 }
 
 // 处理卡片点击事件
@@ -538,6 +557,7 @@ function handleCardClick() {
                 'subscribe-card-paused': subscribeState === 'S',
                 'subscribe-card-pending-tint': subscribeState === 'P',
                 'subscribe-card-best-version-tint': display.xs.value && hasBestVersion && subscribeState === 'R',
+                'subscribe-card--deleting': isDeleting,
                 'cursor-move': props.sortable,
               }"
               min-height="150"
@@ -549,17 +569,20 @@ function handleCardClick() {
                 class="best-version-badge"
                 :class="{ 'best-version-badge-full': bestVersionBadge.full }"
               >
-                <VIcon :icon="bestVersionBadge.icon" color="white" size="16" />
+                <VIcon :icon="bestVersionBadge.icon" color="white" size="14" />
               </div>
-              <div v-if="!props.sortable && display.smAndUp.value" class="me-n3 absolute top-1 right-4">
-                <IconBtn @click.stop>
-                  <VIcon icon="mdi-dots-vertical" color="white" />
+              <div
+                v-if="!props.sortable && display.smAndUp.value"
+                class="subscribe-card-desktop-menu-wrap absolute top-1 right-4"
+              >
+                <IconBtn class="subscribe-card-desktop-menu" @click.stop>
+                  <VIcon icon="mdi-dots-vertical" color="white" size="17" />
                   <VMenu activator="parent" close-on-content-click>
-                    <VList>
+                    <VList density="compact">
                       <template v-for="(item, i) in dropdownItems" :key="i">
                         <VListItem v-if="item.show !== false" :base-color="item.props.color" @click="item.props.click">
                           <template #prepend>
-                            <VIcon :icon="item.props.prependIcon" />
+                            <VIcon :icon="item.props.prependIcon" size="18" />
                           </template>
                           <VListItemTitle v-text="item.title" />
                         </VListItem>
@@ -686,9 +709,9 @@ function handleCardClick() {
               </template>
 
               <div v-else class="flex grow flex-col">
-                <VCardText class="flex items-center pt-3 pb-2">
+                <VCardText class="subscribe-card-desktop-head flex items-center">
                   <div
-                    class="h-auto w-12 flex-shrink-0 overflow-hidden rounded-md relative"
+                    class="subscribe-card-poster flex-shrink-0 overflow-hidden relative"
                     v-if="imageLoaded"
                     :class="{ 'cursor-move': props.sortable && display.mdAndUp.value }"
                   >
@@ -700,34 +723,29 @@ function handleCardClick() {
                       </template>
                     </VImg>
                   </div>
-                  <div class="flex flex-col justify-center overflow-hidden pl-2 xl:pl-4">
-                    <div class="text-sm font-medium text-white sm:pt-1">{{ props.media?.year }}</div>
+                  <div class="flex flex-col justify-center overflow-hidden pl-3">
+                    <div class="subscribe-card-year text-white">{{ props.media?.year }}</div>
                     <div
-                      class="mr-2 min-w-0 text-lg font-bold text-white text-ellipsis overflow-hidden line-clamp-2 ..."
+                      class="subscribe-card-desktop-title mr-2 min-w-0 text-white text-ellipsis overflow-hidden line-clamp-2"
                     >
                       {{ props.media?.name }}
                       {{ formatSeasonLabel(props.media?.season, t('media.specials')) }}
                     </div>
                   </div>
                 </VCardText>
-                <VCardText class="flex min-w-0 justify-space-between align-center flex-wrap px-3 mt-auto">
+                <VCardText
+                  class="subscribe-card-desktop-foot flex min-w-0 justify-space-between align-center flex-wrap mt-auto"
+                >
                   <div class="flex min-w-0 max-w-full align-center">
                     <VIcon
-                      v-if="props.media?.total_episode && props.sortable"
+                      v-if="props.media?.total_episode"
                       icon="mdi-progress-download"
-                      size="small"
+                      size="15"
                       color="white"
-                      class="me-1"
-                    />
-                    <IconBtn
-                      v-else-if="props.media?.total_episode"
-                      size="small"
-                      v-bind="props"
-                      icon="mdi-progress-download"
-                      color="white"
+                      class="flex-shrink-0 me-1"
                     />
                     <!-- 守卫改用 total_episode：电视剧订阅可能不带 season 字段（旧数据或自定义来源），仍应展示集数进度 -->
-                    <div v-if="props.media?.total_episode" class="flex-shrink-0 text-subtitle-2 me-2 text-white">
+                    <div v-if="props.media?.total_episode" class="subscribe-card-metric flex-shrink-0 me-2 text-white">
                       {{ subscribeProgressText }}
                       <VTooltip v-if="subscribeProgressTooltip" activator="parent" location="top">
                         {{ subscribeProgressTooltip }}
@@ -735,17 +753,8 @@ function handleCardClick() {
                     </div>
                     <!-- 多版本提示套用进度项模式：图标 + 已完成版本数/总版本数 -->
                     <template v-if="hasMultipleVersions">
-                      <VIcon
-                        v-if="props.sortable"
-                        icon="mdi-layers-triple-outline"
-                        size="16"
-                        color="white"
-                        class="flex-shrink-0 me-1"
-                      />
-                      <IconBtn v-else size="small" class="flex-shrink-0" color="white">
-                        <VIcon icon="mdi-layers-triple-outline" size="16" />
-                      </IconBtn>
-                      <div class="flex-shrink-0 text-subtitle-2 me-2 text-white">
+                      <VIcon icon="mdi-layers-triple-outline" size="15" color="white" class="flex-shrink-0 me-1" />
+                      <div class="subscribe-card-metric flex-shrink-0 me-2 text-white">
                         {{ completedVersionCount }} / {{ versionCount }}
                       </div>
                     </template>
@@ -754,7 +763,7 @@ function handleCardClick() {
                       class="subscribe-card-owner"
                       data-testid="subscribe-card-owner"
                     >
-                      <VIcon icon="mdi-account-outline" size="13" class="me-1" />
+                      <VIcon icon="mdi-account-outline" size="12" class="me-1" />
                       {{ subscriberName }}
                     </span>
                     <VTooltip v-if="decisionSummaryText" activator="parent" location="top">
@@ -765,16 +774,16 @@ function handleCardClick() {
                 <!-- 右下角元数据：暂停 / 待定时替换"x 天前"为状态文案 -->
                 <VCardText
                   v-if="rightBottomStateDisplay"
-                  class="absolute right-0 bottom-0 d-flex align-center p-2 text-gray-300 text-xs"
+                  class="subscribe-card-corner-meta absolute right-0 bottom-0 d-flex align-center text-gray-300"
                 >
-                  <VIcon :icon="rightBottomStateDisplay.icon" class="me-1" />
+                  <VIcon :icon="rightBottomStateDisplay.icon" size="14" class="me-1" />
                   {{ rightBottomStateDisplay.label }}
                 </VCardText>
                 <VCardText
                   v-else-if="lastUpdateText"
-                  class="absolute right-0 bottom-0 d-flex align-center p-2 text-gray-300 text-xs"
+                  class="subscribe-card-corner-meta absolute right-0 bottom-0 d-flex align-center text-gray-300"
                 >
-                  <VIcon icon="mdi-download" class="me-1" />
+                  <VIcon icon="mdi-download" size="14" class="me-1" />
                   {{ lastUpdateText }}
                 </VCardText>
                 <div class="w-full absolute bottom-0">
@@ -821,6 +830,72 @@ function handleCardClick() {
 
 .subscribe-card {
   border: var(--app-card-light-border);
+}
+
+.subscribe-card-desktop-menu-wrap {
+  inset-block-start: 8px !important;
+  inset-inline-end: 8px !important;
+}
+
+.subscribe-card-desktop-menu {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
+}
+
+.subscribe-card-desktop-menu:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.subscribe-card-desktop-head {
+  padding: 14px 16px 8px !important;
+}
+
+.subscribe-card-poster {
+  border-radius: 7px;
+  inline-size: 42px;
+}
+
+.subscribe-card-year {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.86;
+}
+
+.subscribe-card-desktop-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.subscribe-card-desktop-foot {
+  padding: 6px 14px 10px !important;
+}
+
+.subscribe-card-inline-icon {
+  block-size: 22px !important;
+  inline-size: 22px !important;
+  min-inline-size: 22px !important;
+  padding: 0 !important;
+  margin-inline-end: 2px;
+}
+
+.subscribe-card-metric {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.subscribe-card-corner-meta {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  padding: 10px 14px !important;
 }
 
 .subscribe-card-mobile-media {
@@ -884,12 +959,12 @@ function handleCardClick() {
   position: absolute;
   z-index: 2;
   color: white;
-  font-size: 1rem;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 600;
   inset-block-end: 0;
   inset-inline: 0;
-  line-height: 1.3;
-  padding: 1rem 0.75rem 0.625rem;
+  line-height: 1.35;
+  padding: 0.875rem 0.65rem 0.5rem;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 
@@ -903,8 +978,9 @@ function handleCardClick() {
 
 .subscribe-card-mobile-season {
   margin-inline-start: 0.25rem;
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -919,7 +995,7 @@ function handleCardClick() {
 .subscribe-card-mobile-meta {
   display: flex;
   min-inline-size: 0;
-  min-block-size: 1.75rem;
+  min-block-size: 26px;
   align-items: center;
   gap: 0.25rem;
   justify-content: space-between;
@@ -930,8 +1006,9 @@ function handleCardClick() {
   min-inline-size: 0;
   align-items: center;
   flex: 1 1 auto;
-  gap: 0.35rem;
-  font-size: 0.75rem;
+  gap: 0.3rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   line-height: 1.25;
   white-space: nowrap;
@@ -947,11 +1024,13 @@ function handleCardClick() {
 }
 
 .subscribe-card-mobile-menu {
-  block-size: 1.75rem;
-  min-block-size: 1.75rem;
-  inline-size: 1.75rem;
-  min-inline-size: 1.75rem;
-  flex: 0 0 1.75rem;
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  min-block-size: 26px !important;
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  flex: 0 0 26px;
+  padding: 0 !important;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
@@ -987,6 +1066,12 @@ function handleCardClick() {
   transition: opacity 0.2s ease;
 }
 
+.subscribe-card--deleting {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
 /**
  * 待定：内发光挂在实际 VCard 上，跟随卡片圆角并被 overflow-hidden 裁剪。
  */
@@ -1015,37 +1100,39 @@ function handleCardClick() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  backdrop-filter: blur(6px);
-  background: rgba(0, 0, 0, 75%);
-  block-size: 24px;
+  border: 1px solid rgba(255, 255, 255, 14%);
+  border-radius: 6px;
+  background: rgba(22, 23, 29, 86%);
+  block-size: 22px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 50%);
-  inline-size: 24px;
-  inset-block-start: 6px;
+  inline-size: 22px;
+  inset-block-start: 8px;
   inset-inline-start: 8px;
 }
 
 .best-version-badge-full {
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 22%);
-  box-shadow: 0 2px 8px rgba(255, 255, 255, 15%);
+  border-color: rgba(255, 255, 255, 24%);
+  background: rgba(36, 39, 49, 92%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 35%);
 }
 
-// 移动端多版本标识：与洗版徽标同一材质的药丸，内联在标题旁
+// 移动端多版本标识：微圆角小胶囊，内联在标题旁
 .subscribe-card-mobile-versions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-inline-start: 0.375rem;
-  border-radius: 999px;
-  backdrop-filter: blur(6px);
-  background: rgba(0, 0, 0, 60%);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 50%);
+  margin-inline-start: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 14%);
+  border-radius: 5px;
+  background: rgba(22, 23, 29, 82%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 40%);
+  block-size: 20px;
   color: white;
-  font-size: 0.6875rem;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1;
-  padding: 3px 7px;
+  padding-inline: 6px;
   vertical-align: middle;
 }
 
@@ -1053,15 +1140,16 @@ function handleCardClick() {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  border-radius: 999px;
-  backdrop-filter: blur(6px);
-  background: rgba(0, 0, 0, 52%);
+  border: 1px solid rgba(255, 255, 255, 14%);
+  border-radius: 6px;
+  background: rgba(22, 23, 29, 78%);
+  block-size: 20px;
   color: rgba(255, 255, 255, 92%);
-  font-size: 0.75rem;
+  font-size: 11.5px;
   font-weight: 500;
   line-height: 1;
   margin-inline-end: 0.5rem;
-  padding: 4px 8px;
+  padding-inline: 7px;
 }
 
 .subscribe-card-mobile-owner {

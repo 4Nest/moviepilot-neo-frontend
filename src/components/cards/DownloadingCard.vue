@@ -3,6 +3,8 @@ import api from '@/api'
 import type { ApiResponse, DownloadingInfo } from '@/api/types'
 import { formatFileSize } from '@/@core/utils/formatters'
 import { useI18n } from '@/composables/useChineseText'
+import { useConfirm } from '@/composables/useConfirm'
+import { useToast } from 'vue-toastification'
 
 /** 卡片使用的下载任务信息，兼容接口已经返回但公共类型尚未声明的来源站点。 */
 interface DownloadingCardInfo extends DownloadingInfo {
@@ -16,11 +18,16 @@ const props = defineProps({
   downloaderName: String,
 })
 
-const { t } = useI18n()
+const emit = defineEmits<{
+  remove: [hash?: string]
+}>()
 
-// 删除时就地隐藏，失败时恢复，外层轮询最终同步任务列表。
-const cardState = ref(true)
+const { t } = useI18n()
+const createConfirm = useConfirm()
+const $toast = useToast()
+
 const pendingAction = ref<'delete' | 'toggle' | null>(null)
+const isDeleting = computed(() => pendingAction.value === 'delete')
 const imageLoadError = ref(false)
 const media = computed(() => props.info?.media ?? {})
 
@@ -127,19 +134,29 @@ async function toggleDownload() {
   }
 }
 
-/** 删除当前下载任务，立即隐藏卡片并在请求失败时恢复。 */
+/** 删除当前下载任务，成功后立即通知外层列表移除以释放网格单元并触发弹性补位。 */
 async function deleteDownload() {
   if (pendingAction.value) return
 
+  const isConfirmed = await createConfirm({
+    type: 'warn',
+    title: t('common.confirm'),
+    content: `是否确认删除下载任务「${mediaTitle.value}」？`,
+  })
+  if (!isConfirmed) return
+
   pendingAction.value = 'delete'
-  cardState.value = false
   try {
     const result: ApiResponse<unknown> = await api.delete(`download/${props.info?.hash}`, {
       params: { name: props.downloaderName },
     })
-    if (!result.success) cardState.value = true
+    if (result.success) {
+      emit('remove', props.info?.hash)
+    } else {
+      $toast.error(result.message || t('downloading.deleteFailed'))
+    }
   } catch (error) {
-    cardState.value = true
+    $toast.error(t('downloading.deleteFailed'))
     console.error(error)
   } finally {
     pendingAction.value = null
@@ -151,15 +168,18 @@ async function deleteDownload() {
   <VHover>
     <template #default="hover">
       <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
-      <div v-if="cardState" v-bind="hover.props" class="downloading-card-hover-area h-full">
+      <div v-bind="hover.props" class="downloading-card-hover-area h-full">
         <div
           class="downloading-card-shell app-hover-lift-card h-full"
-          :class="{ 'app-hover-lift-card--hovering': hover.isHovering }"
+          :class="{ 'app-hover-lift-card--hovering': hover.isHovering && !isDeleting }"
         >
           <VCard
             :key="props.info?.hash"
             class="downloading-card h-full overflow-hidden"
-            :class="{ 'downloading-card--no-image': !hasPosterImage }"
+            :class="{
+              'downloading-card--no-image': !hasPosterImage,
+              'downloading-card--deleting': isDeleting,
+            }"
           >
             <div v-if="hasPosterImage" class="downloading-card__poster">
               <VImg
@@ -235,7 +255,7 @@ async function deleteDownload() {
                   :model-value="progressValue"
                   :color="isDownloading ? 'success' : 'warning'"
                   bg-color="surface-variant"
-                  height="6"
+                  height="5"
                   rounded
                 />
               </div>
@@ -243,11 +263,11 @@ async function deleteDownload() {
               <div class="downloading-card__footer">
                 <div class="downloading-card__speeds">
                   <div class="downloading-card__speed downloading-card__speed--download">
-                    <VIcon icon="mdi-arrow-down" size="16" />
+                    <VIcon icon="mdi-arrow-down" size="14" />
                     <strong :title="downloadSpeedText">{{ downloadSpeedText }}</strong>
                   </div>
                   <div class="downloading-card__speed downloading-card__speed--upload">
-                    <VIcon icon="mdi-arrow-up" size="16" />
+                    <VIcon icon="mdi-arrow-up" size="14" />
                     <strong :title="uploadSpeedText">{{ uploadSpeedText }}</strong>
                   </div>
                 </div>
@@ -261,9 +281,10 @@ async function deleteDownload() {
                     color="primary"
                     size="small"
                     variant="tonal"
+                    class="downloading-card__action-btn"
                     @click="toggleDownload"
                   >
-                    <VIcon :icon="isDownloading ? 'mdi-pause' : 'mdi-play'" />
+                    <VIcon :icon="isDownloading ? 'mdi-pause' : 'mdi-play'" size="16" />
                     <VTooltip activator="parent" location="top">
                       {{ isDownloading ? t('common.pause') : t('common.download') }}
                     </VTooltip>
@@ -276,9 +297,10 @@ async function deleteDownload() {
                     icon
                     size="small"
                     variant="text"
+                    class="downloading-card__action-btn"
                     @click="deleteDownload"
                   >
-                    <VIcon icon="mdi-trash-can-outline" />
+                    <VIcon icon="mdi-trash-can-outline" size="16" />
                     <VTooltip activator="parent" location="top">{{ t('common.delete') }}</VTooltip>
                   </VBtn>
                 </VCardActions>
@@ -306,15 +328,18 @@ async function deleteDownload() {
 
 .downloading-card {
   display: grid;
-  min-block-size: 9rem;
+  min-block-size: 8.5rem;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
-  grid-template-columns: 8rem minmax(0, 1fr);
+  grid-template-columns: 6.5rem minmax(0, 1fr);
 }
 
 .downloading-card__poster {
   position: relative;
   overflow: hidden;
-  min-block-size: 9rem;
+  min-block-size: 8.5rem;
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
@@ -340,8 +365,8 @@ async function deleteDownload() {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.875rem !important;
+  gap: 8px;
+  padding: 13px 15px !important;
 }
 
 .downloading-card__chips {
@@ -349,13 +374,18 @@ async function deleteDownload() {
   min-inline-size: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 5px;
 }
 
 .downloading-card__chips :deep(.v-chip) {
+  border-radius: 5px !important;
+  block-size: 20px !important;
   flex: 0 1 auto;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
   min-inline-size: 0;
   max-inline-size: 100%;
+  padding-inline: 6px !important;
 }
 
 .downloading-card__chips :deep(.v-chip__content) {
@@ -371,8 +401,8 @@ async function deleteDownload() {
   border-radius: 0.25rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: help;
-  font-size: 0.7rem;
-  gap: 0.3rem;
+  font-size: 11.5px;
+  gap: 4px;
 }
 
 .downloading-card__save-path:focus-visible {
@@ -406,8 +436,8 @@ async function deleteDownload() {
   display: -webkit-box;
   overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 600;
   letter-spacing: 0;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -416,9 +446,10 @@ async function deleteDownload() {
 }
 
 .downloading-card__title-meta {
-  margin-inline-start: 0.35rem;
+  margin-inline-start: 6px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.76rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -427,9 +458,9 @@ async function deleteDownload() {
   display: -webkit-box;
   overflow: hidden;
   min-inline-size: 0;
-  margin-block-start: 0.25rem;
+  margin-block-start: 3px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
+  font-size: 12px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -465,24 +496,25 @@ async function deleteDownload() {
   min-inline-size: 0;
   align-items: center;
   justify-content: space-between;
-  margin-block-end: 0.4rem;
+  margin-block-end: 5px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.7rem;
-  gap: 0.5rem;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  gap: 8px;
 }
 
 .downloading-card__progress-copy {
   display: flex;
   min-inline-size: 0;
   flex: 1 1 5.5rem;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
   line-height: 1.3;
 }
 
 .downloading-card__progress-remaining {
-  inline-size: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -491,7 +523,8 @@ async function deleteDownload() {
   flex: 0 0 auto;
   color: rgb(var(--v-theme-on-surface));
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .downloading-card__footer {
@@ -501,7 +534,7 @@ async function deleteDownload() {
   align-items: center;
   justify-content: space-between;
   margin-block-start: auto;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .downloading-card__speeds {
@@ -510,8 +543,8 @@ async function deleteDownload() {
   flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 0.8rem;
-  row-gap: 0.15rem;
+  column-gap: 10px;
+  row-gap: 2px;
 }
 
 .downloading-card__speed {
@@ -519,15 +552,15 @@ async function deleteDownload() {
   min-inline-size: 0;
   align-items: center;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  gap: 0.25rem;
+  gap: 3px;
 }
 
 .downloading-card__speed strong {
   overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.7rem;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -543,59 +576,70 @@ async function deleteDownload() {
 .downloading-card__actions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   margin-inline-start: auto;
-  gap: 0.1rem;
+  min-block-size: 0 !important;
+  gap: 8px;
+}
+
+.downloading-card__action-btn {
+  border-radius: 8px !important;
+  block-size: 32px !important;
+  inline-size: 32px !important;
+  min-inline-size: 32px !important;
+  padding: 0 !important;
 }
 
 @container (width <= 25rem) {
   .downloading-card {
-    min-block-size: 9rem;
-    grid-template-columns: 7.333rem minmax(0, 1fr);
+    min-block-size: 8.25rem;
+    grid-template-columns: 5.75rem minmax(0, 1fr);
   }
 
   .downloading-card__poster {
-    min-block-size: 9rem;
+    min-block-size: 8.25rem;
   }
 
   .downloading-card__body {
-    gap: 0.45rem;
-    padding: 0.65rem !important;
+    gap: 6px;
+    padding: 11px 12px !important;
   }
 
   .downloading-card__chips {
-    gap: 0.3rem;
+    gap: 4px;
   }
 
   .downloading-card__title {
-    font-size: 0.92rem;
+    font-size: 14px;
   }
 
   .downloading-card__torrent-title {
-    font-size: 0.7rem;
+    font-size: 11.5px;
   }
 
   .downloading-card__speeds {
-    column-gap: 0.5rem;
+    column-gap: 8px;
   }
 
   .downloading-card__speed strong {
-    font-size: 0.66rem;
+    font-size: 11.5px;
   }
 }
 
 @container (width <= 21rem) {
   .downloading-card__body {
-    padding-inline: 0.65rem !important;
-  }
-
-  .downloading-card__actions :deep(.v-btn) {
-    block-size: 2.25rem;
-    inline-size: 2.25rem;
+    padding-inline: 10px !important;
   }
 }
 
 .downloading-card.downloading-card--no-image {
-  min-block-size: 9rem;
+  min-block-size: 8.5rem;
   grid-template-columns: minmax(0, 1fr);
+}
+
+.downloading-card--deleting {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
 </style>

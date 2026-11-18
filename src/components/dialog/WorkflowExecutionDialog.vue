@@ -206,11 +206,11 @@ onMounted(() => {
 
 <template>
   <VDialog scrollable max-width="50rem" :fullscreen="!display.mdAndUp.value">
-    <VCard class="workflow-execution-dialog">
-      <VCardItem>
+    <VCard class="workflow-execution-dialog mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VAvatar :color="currentStatus.color" variant="tonal" rounded="md" size="36" class="me-2">
-            <VIcon icon="mdi-timeline-text-outline" />
+          <VAvatar :color="currentStatus.color" variant="tonal" rounded="lg" size="32" class="me-2">
+            <VIcon icon="mdi-timeline-text-outline" size="18" />
           </VAvatar>
         </template>
         <VCardTitle> {{ t('dialog.workflowExecution.title') }} · {{ detail?.name || workflow.name }} </VCardTitle>
@@ -219,10 +219,9 @@ onMounted(() => {
             :loading="loading"
             size="small"
             :aria-label="t('dialog.workflowExecution.refresh')"
-            class="me-7"
             @click="fetchExecutionDetail"
           >
-            <VIcon icon="mdi-refresh" />
+            <VIcon icon="mdi-refresh" size="18" />
           </IconBtn>
         </template>
       </VCardItem>
@@ -387,15 +386,29 @@ onMounted(() => {
       </VCardText>
 
       <VDivider />
-      <VCardActions class="app-dialog-actions">
-        <VBtn color="primary" variant="tonal" prepend-icon="mdi-vector-polyline" @click="emit('open-flow', workflow)">
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          prepend-icon="mdi-vector-polyline"
+          @click="emit('open-flow', workflow)"
+        >
           {{ t('dialog.workflowExecution.openFlow') }}
         </VBtn>
         <VSpacer />
-        <VBtn variant="text" @click="emit('close')">
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
           {{ t('dialog.workflowExecution.close') }}
         </VBtn>
-        <VBtn color="primary" variant="flat" :loading="running" prepend-icon="mdi-replay" @click="handleRerun">
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          class="px-4"
+          :loading="running"
+          prepend-icon="mdi-replay"
+          @click="handleRerun"
+        >
           {{ t('dialog.workflowExecution.rerun') }}
         </VBtn>
       </VCardActions>
@@ -404,6 +417,16 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
 .workflow-execution-summary {
   display: grid;
   padding: 12px 14px;

@@ -80,7 +80,9 @@ async function loadData() {
   const serverLibraries = await Promise.all(enabledServers.map(server => loadLibrary(server.name)))
 
   if (loadId !== libraryLoadId) return
-  if (serverLibraries.some(libraries => libraries === undefined)) {
+  const hasServerFailure = serverLibraries.some(libraries => libraries === undefined)
+  const hasServerSuccess = enabledServers.length === 0 || serverLibraries.some(libraries => libraries !== undefined)
+  if (!hasServerSuccess) {
     loadFailed.value = true
     isLoading.value = false
     return
@@ -95,6 +97,16 @@ async function loadData() {
     })
 
   const nextLibraryList = Array.from(libraryMap.values())
+  if (hasServerFailure) {
+    if (nextLibraryList.length > 0 || !hasSnapshot.value) {
+      libraryList.value = nextLibraryList
+      hasSnapshot.value = true
+    }
+    loadFailed.value = true
+    isLoading.value = false
+    return
+  }
+
   libraryList.value = nextLibraryList
   writeSnapshot(nextLibraryList)
   hasSnapshot.value = true
@@ -136,14 +148,14 @@ onActivated(() => {
     </template>
   </DashboardMediaState>
 
-  <VCard v-else class="dashboard-media-card dashboard-grid-fill" data-glass-optical-boundary>
+  <VCard v-else class="dashboard-media-card dashboard-grid-fill">
     <VCardItem class="dashboard-media-header">
       <VCardTitle>{{ t('dashboard.library') }}</VCardTitle>
       <template v-if="loadFailed" #append>
         <DashboardRetryButton deferred :label="t('dashboard.staleData')" @retry="loadData" />
       </template>
     </VCardItem>
-    <div class="dashboard-media-content px-5 pb-3">
+    <div class="dashboard-media-content">
       <ProgressiveCardGrid
         class="dashboard-media-grid"
         :items="libraryList"
@@ -176,7 +188,13 @@ onActivated(() => {
 }
 
 .dashboard-media-header {
-  padding-block-end: 0.375rem;
+  padding: 16px 18px 10px !important;
+}
+
+.dashboard-media-header :deep(.v-card-title) {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .dashboard-media-content {
@@ -185,7 +203,13 @@ onActivated(() => {
   flex-direction: column;
   min-block-size: 0;
   overflow: auto;
+  padding: 6px 18px 16px;
   scrollbar-width: none;
+}
+
+.dashboard-media-content :deep(.v-card),
+.dashboard-media-content :deep(.library-card) {
+  border-radius: 9px;
 }
 
 @supports not (scrollbar-width: none) {

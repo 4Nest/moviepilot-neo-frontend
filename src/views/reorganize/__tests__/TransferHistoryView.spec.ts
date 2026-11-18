@@ -84,6 +84,8 @@ vi.mock('@/composables/useDynamicButton', () => ({
 let stubDisplayOrder: (items: TransferHistory[]) => TransferHistory[] = items => items
 /** 是否在替身表格中直接渲染 `#item.title` 插槽。 */
 let renderTitleSlot = false
+/** 是否在替身表格中直接渲染 `#item.src` 插槽。 */
+let renderSrcSlot = false
 
 const HistoryTableStub = defineComponent({
   name: 'VDataTableVirtual',
@@ -128,6 +130,7 @@ const HistoryTableStub = defineComponent({
             h('article', { 'data-history-id': item.id }, [
               slots['item.data-table-select']?.({ item }),
               renderTitleSlot ? slots['item.title']?.({ item }) : h('span', item.title),
+              renderSrcSlot ? slots['item.src']?.({ item }) : null,
               slots['item.actions']?.({ item }),
             ]),
           ),
@@ -368,6 +371,7 @@ describe('TransferHistoryView', () => {
   beforeEach(() => {
     stubDisplayOrder = items => items
     renderTitleSlot = false
+    renderSrcSlot = false
     mocks.appMode = true
     mocks.desktop = true
     mocks.dynamicButtonConfig = undefined
@@ -902,6 +906,30 @@ describe('TransferHistoryView', () => {
     expect(tvPrimary?.textContent?.trim()).toBe('S01E01')
   })
 
+  it('renders structured two-line desktop paths with full filenames and directory split without raw arrow strings', async () => {
+    renderSrcSlot = true
+    const longSrc =
+      '/Users/nest/Downloads/MoviePilot/Raw/电视剧/日番/[Nekomoe kissaten&LoliHouse] 20 Seiki Denki Mokuroku - 12 [WebRip 1080p HEVC-10bit AAC].mkv'
+    const longDest =
+      '/Users/nest/Downloads/MoviePilot/Link/电视剧/日番/二十世纪电气目录 (2026) {tmdbid=153217}/Season 01/二十世纪电气目录 S01E12 1080p.WebRip.HEVC.AAC-Nekomoe.mkv'
+    const histories = [createHistory(1, '路径结构测试', { src: longSrc, dest: longDest })]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory()
+    expect(await screen.findByText('路径结构测试')).toBeInTheDocument()
+    expect(container.querySelector('.transfer-history-toolbar')).not.toBeNull()
+    expect(container.querySelector('.history-paths')).not.toBeNull()
+    expect(container.textContent).not.toContain('=>')
+    expect(container.querySelector('.history-paths__src .history-paths__file')?.textContent).toBe(
+      '[Nekomoe kissaten&LoliHouse] 20 Seiki Denki Mokuroku - 12 [WebRip 1080p HEVC-10bit AAC].mkv',
+    )
+    expect(container.querySelector('.history-paths__dest .history-paths__file--dest')?.textContent).toBe(
+      '二十世纪电气目录 S01E12 1080p.WebRip.HEVC.AAC-Nekomoe.mkv',
+    )
+  })
+
   it('resets the desktop table scroll position when page or search changes, but preserves it on failure', async () => {
     const secondPage = createDeferred<ReturnType<typeof historyResponse>>()
     const failedPage = createDeferred<ReturnType<typeof historyResponse>>()
@@ -976,5 +1004,73 @@ describe('TransferHistoryView', () => {
     await nextTick()
     expect(screen.getByText('昨天 00:15')).toBeInTheDocument()
     expect(screen.getByText('昨天 23:58')).toBeInTheDocument()
+  })
+
+  it('clears desktop selection on pagination or search change, removes single-deleted item from selection, and provides toolbar deselect-all', async () => {
+    mocks.appMode = false
+    let page1List = [createHistory(1, '第一页甲'), createHistory(2, '第一页乙')]
+    const page2List = [createHistory(3, '第二页丙')]
+    mocks.apiGet.mockImplementation((path: string, config?: { params?: { page?: number; title?: string } }) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      if (config?.params?.page === 2 || config?.params?.title === '第二页') {
+        return Promise.resolve(historyResponse(page2List, 60))
+      }
+      return Promise.resolve(historyResponse(page1List, 60))
+    })
+
+    const { container, router } = await renderHistory('/history?currentPage=1')
+    expect(await screen.findByText('第一页甲')).toBeInTheDocument()
+
+    // 勾选当前页两项，验证工具栏显示已选与一键清空按钮，以及清空记录按钮为 tonal error 样式
+    await fireEvent.click(screen.getByRole('button', { name: '选择当前页' }))
+    await nextTick()
+    expect(screen.getByText('已选 2 项')).toBeInTheDocument()
+    const clearAllBtn = container.querySelector('.history-toolbar-clear-btn')
+    expect(clearAllBtn?.className).toContain('text-error')
+    expect(clearAllBtn?.className).toContain('v-btn--variant-tonal')
+
+    // 单条删除第一页甲成功后，立即从 selected 中剔除该项，仅剩 1 项
+    const deleteButtons = screen.getAllByRole('button', { name: '删除' })
+    await fireEvent.click(deleteButtons[0])
+    page1List = [createHistory(2, '第一页乙')]
+    await getDialogCall().events.delete(false, false)
+    await flushPromises()
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+
+    // 一键清空已选按钮
+    await fireEvent.click(screen.getByRole('button', { name: '取消全选' }))
+    expect(screen.queryByText(/已选 \d+ 项/)).not.toBeInTheDocument()
+
+    // 再次选中当前页后翻页，跨页勾选必须被自动清空
+    await fireEvent.click(screen.getByRole('button', { name: '选择当前页' }))
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+    await router.push('/history?currentPage=2')
+    await screen.findByText('第二页丙')
+    expect(screen.queryByText(/已选 \d+ 项/)).not.toBeInTheDocument()
+  })
+
+  it('resets redoTargetStorage when launching batch reorganize after a single-item redo', async () => {
+    mocks.appMode = false
+    const histories = [
+      createHistory(10, '单条重整项', { dest_storage: 'rclone' }),
+      createHistory(11, '批量重整项', { dest_storage: 'library' }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'system/setting/public/Storages') return Promise.resolve(storageResponse())
+      return Promise.resolve(historyResponse(histories))
+    })
+
+    await renderHistory()
+    expect(await screen.findByText('单条重整项')).toBeInTheDocument()
+
+    // 先触发单条重新整理，此时 target_storage 为 'rclone'
+    await fireEvent.click(screen.getAllByRole('button', { name: '重新整理' })[0])
+    expect(getDialogCall(0).props).toMatchObject({ logids: [10], target_storage: 'rclone' })
+
+    // 再选中多条触发批量整理，target_storage 必须显式重置为 undefined
+    await fireEvent.click(screen.getByRole('button', { name: '选择当前页' }))
+    await nextTick()
+    await fireEvent.click(screen.getByRole('button', { name: '批量重新整理' }))
+    expect(getDialogCall(1).props).toEqual({ logids: [10, 11], target_storage: undefined })
   })
 })

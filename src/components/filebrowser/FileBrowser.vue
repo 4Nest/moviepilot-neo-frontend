@@ -71,9 +71,9 @@ const fileIcons = {
   h: 'mdi-language-c',
   cs: 'mdi-language-csharp',
   sql: 'mdi-database',
-  sh: 'mdi-language-bash',
-  bat: 'mdi-language-bash',
-  ps1: 'mdi-language-powershell',
+  sh: 'mdi-bash',
+  bat: 'mdi-bash',
+  ps1: 'mdi-powershell',
   // markdown
   md: 'mdi-language-markdown-outline',
   markdown: 'mdi-language-markdown-outline',
@@ -183,7 +183,7 @@ const storagesArray = computed(() => {
 })
 
 // 方法
-function loadingChanged(isLoading: number) {
+function loadingChanged(isLoading: number | boolean) {
   if (isLoading) loading.value++
   else if (loading.value > 0) loading.value--
 }
@@ -289,7 +289,8 @@ onUnmounted(cleanupDrag)
 </script>
 
 <template>
-  <div class="mx-auto overflow-hidden" :loading="loading > 0">
+  <div class="file-browser-shell mx-auto overflow-hidden" :aria-busy="loading > 0">
+    <VProgressLinear v-if="loading > 0" indeterminate color="primary" height="2" class="file-browser-progress" />
     <div v-if="item">
       <FileToolbar
         ref="toolbarRef"
@@ -299,13 +300,14 @@ onUnmounted(cleanupDrag)
         :storages="storagesArray"
         :endpoints="endpoints"
         :axios="axios"
-        :show-new-folder-button="!showFloatingNewFolderAction"
+        :show-new-folder-button="!(appMode && showFloatingNewFolderAction)"
         @storagechanged="storageChanged"
         @pathchanged="pathChanged"
+        @loading="loadingChanged"
         @foldercreated="refreshPending = true"
         @sortchanged="sortChanged"
       />
-      <div class="flex">
+      <div class="file-browser-body flex">
         <FileNavigator
           v-if="showDirTree"
           :storage="item.storage"
@@ -330,7 +332,7 @@ onUnmounted(cleanupDrag)
           :sort="sort"
           :showTree="showDirTree"
           :active="active"
-          :style="{ flex: 1 }"
+          :style="{ flex: 1, minWidth: 0 }"
           @pathchanged="pathChanged"
           @loading="loadingChanged"
           @refreshed="refreshPending = false"
@@ -342,77 +344,74 @@ onUnmounted(cleanupDrag)
       </div>
     </div>
   </div>
-
-  <Teleport to="body" v-if="!appMode && showFloatingNewFolderAction">
-    <div class="compact-fab-stack">
-      <VFab
-        icon="mdi-folder-plus-outline"
-        color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
-        @click="openNewFolderDialog"
-      />
-    </div>
-  </Teleport>
 </template>
 
 <style scoped>
+.file-browser-shell {
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.file-browser-body {
+  display: flex;
+  min-inline-size: 0;
+}
+
 .divider {
   position: relative;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   background-color: transparent;
   cursor: col-resize;
-  inline-size: 1px;
-  transition: background-color 0.2s ease;
+  inline-size: 5px;
+  margin-inline: -2px;
+  transition: background-color 0.16s ease;
   user-select: none;
-}
-
-.divider:hover {
-  background-color: rgba(var(--v-theme-on-surface), 0.08);
-}
-
-.divider-dragging {
-  background-color: rgba(var(--v-theme-primary), 0.12) !important;
+  z-index: 2;
 }
 
 .divider-line {
-  background-color: rgba(var(--v-theme-outline), 0.3);
+  background-color: var(--mp-border-subtle);
   block-size: 100%;
   inline-size: 1px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.16s ease;
   user-select: none;
+}
+
+.divider:hover .divider-line {
+  background-color: rgba(var(--v-theme-primary), 0.65);
 }
 
 .divider-dragging .divider-line {
   background-color: rgb(var(--v-theme-primary)) !important;
 }
 
-.divider:hover .divider-line {
-  background-color: rgba(var(--v-theme-primary), 0.8);
-}
-
 .divider-icon {
   position: absolute;
   z-index: 1;
   padding: 2px;
-  border-radius: 2px;
-  background-color: rgba(var(--v-theme-surface), 0.9);
-  color: rgba(var(--v-theme-on-surface-variant), 0.6);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 4px;
+  background-color: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), 0.56);
   opacity: 0;
   pointer-events: none;
-  transition: all 0.2s ease;
-}
-
-.divider-dragging .divider-icon {
-  background-color: rgba(var(--v-theme-surface), 0.95);
-  color: rgb(var(--v-theme-primary));
-  opacity: 1;
+  transition:
+    opacity 0.16s ease,
+    color 0.16s ease;
 }
 
 .divider:hover .divider-icon {
   color: rgba(var(--v-theme-primary), 0.9);
+  opacity: 1;
+}
+
+.divider-dragging .divider-icon {
+  border-color: rgba(var(--v-theme-primary), 0.4);
+  color: rgb(var(--v-theme-primary));
   opacity: 1;
 }
 </style>

@@ -226,4 +226,29 @@ describe('SiteImportDialog', () => {
     expect(events.update).toHaveBeenCalledWith(false)
     expect(events.importSuccess).not.toHaveBeenCalled()
   })
+
+  it('does not treat MouseEvent as success on header close, and emits import-success when closing partial success', async () => {
+    const { events: idleEvents, unmount } = await renderDialog()
+    await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    expect(idleEvents.importSuccess).not.toHaveBeenCalled()
+    expect(idleEvents.update).toHaveBeenCalledWith(false)
+    unmount()
+
+    let reqIdx = 0
+    server.use(
+      http.post(siteApiUrls.list, () => {
+        reqIdx += 1
+        return HttpResponse.json(reqIdx === 1 ? { success: true } : { success: false, message: '失败' })
+      }),
+    )
+    const { events: partialEvents } = await renderDialog()
+    await chooseFile(jsonFile([createSite({ name: '成功站' }), createSite({ name: '失败站' })]))
+    await fireEvent.click(await screen.findByRole('button', { name: '开始导入' }))
+    expect(await screen.findByText('成功导入 1 个站点')).toBeInTheDocument()
+
+    const bottomClose = screen.getByText('关闭').closest('button')!
+    await fireEvent.click(bottomClose)
+    expect(partialEvents.importSuccess).toHaveBeenCalledOnce()
+    expect(partialEvents.update).toHaveBeenCalledWith(false)
+  })
 })

@@ -183,55 +183,63 @@ onMounted(() => {
   <div class="shortcut-workbench">
     <section class="shortcut-panel shortcut-input-panel">
       <VForm ref="ruleTestFormRef" validate-on="submit lazy" @submit.prevent="ruleTest">
-        <VRow class="shortcut-form">
-          <VCol cols="12" class="shortcut-form-col">
-            <VTextField
-              v-model="ruleTestForm.title"
-              :label="t('ruleTest.title')"
-              :hint="t('ruleTest.titleHint')"
-              persistent-hint
-              :rules="[requiredValidator]"
-              prepend-inner-icon="mdi-movie-open"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VSelect
-              v-model="ruleTestForm.rulegroup"
-              :items="filterRuleGroupItems"
-              :label="t('ruleTest.ruleGroup')"
-              :hint="t('ruleTest.ruleGroupHint')"
-              persistent-hint
-              :loading="filterRuleGroupLoading"
-              :rules="[requiredValidator]"
-              prepend-inner-icon="mdi-filter"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VTextarea
-              v-model="ruleTestForm.subtitle"
-              :label="t('ruleTest.subtitle')"
-              :hint="t('ruleTest.subtitleHint')"
-              persistent-hint
-              rows="2"
-              auto-grow
-              prepend-inner-icon="mdi-subtitles"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VBtn block type="submit" :disabled="ruleTestLoading" :loading="ruleTestLoading">
+        <div class="shortcut-form-stack">
+          <VTextField
+            v-model="ruleTestForm.title"
+            :label="t('ruleTest.title')"
+            :hint="t('ruleTest.titleHint')"
+            persistent-hint
+            density="compact"
+            variant="outlined"
+            :rules="[requiredValidator]"
+            prepend-inner-icon="mdi-movie-open"
+          />
+          <VSelect
+            v-model="ruleTestForm.rulegroup"
+            :items="filterRuleGroupItems"
+            :label="t('ruleTest.ruleGroup')"
+            :hint="t('ruleTest.ruleGroupHint')"
+            persistent-hint
+            density="compact"
+            variant="outlined"
+            :loading="filterRuleGroupLoading"
+            :rules="[requiredValidator]"
+            prepend-inner-icon="mdi-filter"
+          />
+          <VTextarea
+            v-model="ruleTestForm.subtitle"
+            :label="t('ruleTest.subtitle')"
+            :hint="t('ruleTest.subtitleHint')"
+            persistent-hint
+            density="compact"
+            variant="outlined"
+            rows="2"
+            auto-grow
+            prepend-inner-icon="mdi-subtitles"
+          />
+
+          <div class="shortcut-action-bar">
+            <VBtn
+              type="submit"
+              color="primary"
+              variant="flat"
+              class="shortcut-submit-btn"
+              :disabled="ruleTestLoading"
+              :loading="ruleTestLoading"
+            >
               <template #prepend>
-                <VIcon icon="mdi-filter-check-outline" />
+                <VIcon icon="mdi-filter-check-outline" size="16" />
               </template>
               {{ ruleTestText }}
             </VBtn>
-          </VCol>
-        </VRow>
+          </div>
+        </div>
       </VForm>
 
       <VAlert
         v-if="ruleTestError"
-        class="mt-4"
-        density="comfortable"
+        class="mt-3"
+        density="compact"
         icon="mdi-alert-circle-outline"
         type="error"
         variant="tonal"
@@ -247,19 +255,26 @@ onMounted(() => {
             class="priority-badge"
             :class="{ 'priority-badge--matched': isMatched, 'priority-badge--empty': !hasPriority }"
           >
-            <span class="text-caption text-medium-emphasis">{{ t('ruleTest.priorityLabel') }}</span>
+            <span class="priority-label">{{ t('ruleTest.priorityLabel') }}</span>
             <span class="priority-value">{{ priorityText }}</span>
           </div>
           <div class="min-w-0 hero-body">
             <div class="hero-heading">
-              <VIcon :icon="resultIcon" :color="resultColor" size="20" />
-              <span class="hero-title-text text-subtitle-1 font-weight-medium text-truncate">{{ resultTitle }}</span>
+              <VIcon :icon="resultIcon" :color="resultColor" size="18" />
+              <span class="hero-title-text text-truncate">{{ resultTitle }}</span>
             </div>
-            <div class="text-body-2 text-medium-emphasis mt-1">
+            <div class="hero-subtitle">
               {{ resultSubtitle }}
             </div>
-            <div v-if="resourceChips.length" class="hero-chips mt-3">
-              <VChip v-for="chip in resourceChips" :key="chip" size="small" variant="tonal" :color="resultColor">
+            <div v-if="resourceChips.length" class="hero-chips">
+              <VChip
+                v-for="chip in resourceChips"
+                :key="chip"
+                size="small"
+                variant="tonal"
+                class="hero-chip"
+                :color="resultColor"
+              >
                 {{ chip }}
               </VChip>
             </div>
@@ -269,14 +284,14 @@ onMounted(() => {
         <div class="pipeline">
           <div v-for="(step, idx) in pipelineSteps" :key="step.title" class="pipeline-step">
             <div class="pipeline-marker">
-              <VIcon :icon="step.icon" :color="step.tone || 'primary'" size="18" />
+              <VIcon :icon="step.icon" :color="step.tone || 'primary'" size="16" />
               <span v-if="idx < pipelineSteps.length - 1" class="pipeline-connector" />
             </div>
             <div class="pipeline-body">
-              <div class="text-caption text-medium-emphasis pipeline-label">
+              <div class="pipeline-label">
                 {{ step.title }}
               </div>
-              <div class="text-body-2 font-weight-medium pipeline-value">
+              <div class="pipeline-value">
                 {{ step.value }}
               </div>
             </div>
@@ -284,8 +299,10 @@ onMounted(() => {
         </div>
       </div>
       <div v-else class="empty-state">
-        <VIcon icon="mdi-filter-cog-outline" size="36" />
-        <div class="text-body-2 text-medium-emphasis">
+        <span class="empty-state__icon">
+          <VIcon icon="mdi-filter-cog-outline" size="22" />
+        </span>
+        <div class="empty-state__text">
           {{ t('ruleTest.waitingResult') }}
         </div>
       </div>
@@ -294,81 +311,100 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
 .shortcut-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 1rem;
-  padding-block-start: 0.5rem;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 13px;
+  padding-block-start: 6px;
 }
 
 .shortcut-panel {
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  background: var(--app-grouped-list-background);
-  box-shadow: var(--app-surface-shadow);
-  padding: 1rem;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+  min-inline-size: 0;
+  padding: 14px 16px;
 }
 
-.shortcut-form {
-  margin: 0;
+.shortcut-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.shortcut-form-col {
-  padding-inline: 0;
+.shortcut-form-stack :deep(.v-field) {
+  border-radius: 8px;
+  background: var(--mp-field-bg);
 }
 
-.shortcut-form-col:first-child {
-  padding-block-start: 0;
+.shortcut-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  margin-block-start: 2px;
+  padding-block-start: 10px;
 }
 
-.shortcut-form-col:last-child {
-  padding-block-end: 0;
+.shortcut-submit-btn {
+  min-inline-size: 96px;
 }
 
 .result-stack {
   display: grid;
-  gap: 1rem;
+  gap: 10px;
 }
 
 .result-hero {
   display: grid;
-  grid-template-columns: 5rem minmax(0, 1fr);
-  gap: 0.85rem;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 13px;
   align-items: center;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  background: rgba(var(--v-theme-warning), 0.08);
-  padding: 0.75rem;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  padding: 12px;
 }
 
 .result-hero--matched {
-  background: rgba(var(--v-theme-success), 0.08);
+  border-color: rgba(var(--v-theme-success), 0.3);
+  background: rgba(var(--v-theme-success), 0.06);
 }
 
 .priority-badge {
   display: grid;
-  min-block-size: 5rem;
+  min-block-size: 58px;
   place-items: center;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  background: rgba(var(--v-theme-surface-variant), 0.32);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: var(--mp-item-bg);
+  padding: 4px;
   text-align: center;
 }
 
 .priority-badge--matched {
-  border-color: rgba(var(--v-theme-success), 0.42);
-  background: rgba(var(--v-theme-success), 0.1);
+  border-color: rgba(var(--v-theme-success), 0.36);
+  background: rgba(var(--v-theme-success), 0.12);
 }
 
 .priority-badge--empty {
-  opacity: 0.7;
+  opacity: 0.72;
+}
+
+.priority-label {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .priority-value {
-  font-size: 1.65rem;
-  font-weight: 600;
-  line-height: 1;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.1;
 }
 
 .hero-body {
@@ -377,29 +413,49 @@ onMounted(() => {
 
 .hero-heading {
   display: flex;
-  gap: 0.5rem;
+  gap: 6px;
   align-items: center;
 }
 
 .hero-title-text {
   min-inline-size: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.hero-subtitle {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  margin-block-start: 4px;
 }
 
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 5px;
+  margin-block-start: 8px;
+}
+
+.hero-chip {
+  block-size: 21px;
+  font-size: 11.5px;
 }
 
 .pipeline {
   display: flex;
   flex-direction: column;
+  padding: 12px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
 }
 
 .pipeline-step {
   display: grid;
-  grid-template-columns: 1.75rem minmax(0, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
 }
 
 .pipeline-marker {
@@ -407,17 +463,18 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   min-block-size: 100%;
+  padding-block-start: 2px;
 }
 
 .pipeline-connector {
   flex: 1;
-  inline-size: 2px;
-  margin-block-start: 0.3rem;
-  background: rgba(var(--v-theme-primary), 0.25);
+  inline-size: 1px;
+  margin-block-start: 4px;
+  background: var(--mp-border-subtle);
 }
 
 .pipeline-body {
-  padding-block-end: 0.9rem;
+  padding-block-end: 10px;
   min-inline-size: 0;
 }
 
@@ -426,11 +483,17 @@ onMounted(() => {
 }
 
 .pipeline-label {
-  letter-spacing: 0.02em;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  line-height: 1.3;
 }
 
 .pipeline-value {
-  margin-block-start: 0.2rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin-block-start: 3px;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -438,11 +501,30 @@ onMounted(() => {
 .empty-state {
   display: grid;
   min-block-size: 14rem;
+  padding: 24px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
   place-items: center;
   align-content: center;
-  gap: 0.75rem;
+  gap: 10px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   text-align: center;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: rgba(var(--v-theme-primary), 0.1);
+  block-size: 36px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 36px;
+}
+
+.empty-state__text {
+  font-size: 12.5px;
 }
 
 @media (max-width: 760px) {
@@ -463,7 +545,7 @@ onMounted(() => {
 
 @media (max-width: 420px) {
   .shortcut-panel {
-    padding: 0.8rem;
+    padding: 12px;
   }
 
   .result-hero {
@@ -474,12 +556,12 @@ onMounted(() => {
     grid-auto-flow: column;
     justify-content: start;
     min-block-size: 0;
-    padding: 0.5rem 0.75rem;
-    gap: 0.5rem;
+    padding: 6px 10px;
+    gap: 8px;
   }
 
   .priority-value {
-    font-size: 1.35rem;
+    font-size: 18px;
   }
 }
 </style>

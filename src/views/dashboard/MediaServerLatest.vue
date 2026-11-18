@@ -15,7 +15,7 @@ const { t } = useI18n()
 const display = useDisplay()
 
 const LATEST_CARD_MIN_WIDTH = 144
-const MEDIA_GRID_HORIZONTAL_PADDING = 40
+const MEDIA_GRID_HORIZONTAL_PADDING = 36
 
 const { readSnapshot, writeSnapshot } = useDashboardSnapshot<{
   [key: string]: MediaServerPlayItem[]
@@ -109,15 +109,34 @@ async function loadData() {
   if (loadId !== latestLoadId) return
 
   const nextLatestList: { [key: string]: MediaServerPlayItem[] } = {}
+  let hasServerFailure = false
+  let hasServerSuccess = enabledServers.length === 0
   for (const [name, data] of entries) {
     if (data === undefined) {
-      loadFailed.value = true
-      isLoading.value = false
-      return
+      hasServerFailure = true
+      continue
     }
+    hasServerSuccess = true
     if (data.length > 0) {
       nextLatestList[name] = data.slice(0, count)
     }
+  }
+
+  if (!hasServerSuccess) {
+    loadFailed.value = true
+    isLoading.value = false
+    return
+  }
+
+  const hasPartialItems = Object.keys(nextLatestList).length > 0
+  if (hasServerFailure) {
+    if (hasPartialItems || !hasSnapshot.value) {
+      latestList.value = nextLatestList
+      hasSnapshot.value = true
+    }
+    loadFailed.value = true
+    isLoading.value = false
+    return
   }
 
   latestList.value = nextLatestList
@@ -165,12 +184,7 @@ onActivated(() => {
       </template>
     </DashboardMediaState>
 
-    <VCard
-      v-for="(data, name) in latestList"
-      :key="name"
-      class="dashboard-work-card dashboard-media-card"
-      data-glass-optical-boundary
-    >
+    <VCard v-for="(data, name) in latestList" :key="name" class="dashboard-work-card dashboard-media-card">
       <VCardItem class="dashboard-media-header">
         <VCardTitle>{{ t('dashboard.latest') }} - {{ name }}</VCardTitle>
         <template v-if="loadFailed" #append>
@@ -178,7 +192,7 @@ onActivated(() => {
         </template>
       </VCardItem>
 
-      <div class="dashboard-media-content px-5 pb-3">
+      <div class="dashboard-media-content">
         <ProgressiveCardGrid
           class="dashboard-media-grid"
           :items="data.slice(0, latestItemCount)"
@@ -220,7 +234,13 @@ onActivated(() => {
 }
 
 .dashboard-media-header {
-  padding-block-end: 0.375rem;
+  padding: 16px 18px 10px !important;
+}
+
+.dashboard-media-header :deep(.v-card-title) {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .dashboard-media-content {
@@ -229,7 +249,13 @@ onActivated(() => {
   flex-direction: column;
   min-block-size: 0;
   overflow: auto;
+  padding: 6px 18px 16px;
   scrollbar-width: none;
+}
+
+.dashboard-media-content :deep(.v-card),
+.dashboard-media-content :deep(.poster-card) {
+  border-radius: 9px;
 }
 
 @supports not (scrollbar-width: none) {

@@ -57,6 +57,44 @@ const props = defineProps({
 const emit = defineEmits(['remove', 'save', 'close'])
 
 const activeTab = ref('basic')
+const subscribeFormRef = ref()
+const saving = ref(false)
+const deleting = ref(false)
+
+const optionalNumberValidator = (val: unknown) =>
+  val === undefined || val === null || val === '' || numberValidator(val)
+
+function toBooleanFlag(val: unknown): boolean {
+  return val === 1 || val === true
+}
+
+function normalizeVersionSettingsFlags(settings?: Record<string, unknown> | null) {
+  if (!settings || typeof settings !== 'object') return
+  settings.best_version = toBooleanFlag(settings.best_version)
+  settings.best_version_full = toBooleanFlag(settings.best_version_full)
+  settings.search_imdbid = toBooleanFlag(settings.search_imdbid)
+  if ('manual_total_episode' in settings && settings.manual_total_episode !== undefined) {
+    settings.manual_total_episode = toBooleanFlag(settings.manual_total_episode)
+  }
+  if ('wash' in settings && settings.wash !== undefined) {
+    settings.wash = toBooleanFlag(settings.wash)
+  }
+}
+
+function normalizeSubscribeFlags(target?: object | null) {
+  if (!target || typeof target !== 'object') return
+  const record = target as Record<string, unknown>
+  normalizeVersionSettingsFlags(record)
+  record.skip_library_check = toBooleanFlag(record.skip_library_check)
+  if ('show_edit_dialog' in record && record.show_edit_dialog !== undefined) {
+    record.show_edit_dialog = toBooleanFlag(record.show_edit_dialog)
+  }
+  if (Array.isArray(record.version_rules)) {
+    record.version_rules.forEach((rule: SubscribeVersionRule) => {
+      normalizeVersionSettingsFlags(rule?.settings as unknown as Record<string, unknown>)
+    })
+  }
+}
 
 // 站点数据列表
 const siteList = ref<Site[]>([])
@@ -206,19 +244,23 @@ const $toast = useToast()
 const downloaderOptions = ref<{ title: string; value: string }[]>([])
 
 // 所有剧集组
-const episodeGroups = ref<{ [key: string]: any }[]>([])
+interface EpisodeGroupSummary {
+  id: number
+  name: string
+  group_count: number
+  episode_count: number
+}
+const episodeGroups = ref<EpisodeGroupSummary[]>([])
 
 // 剧集组选项
 const episodeGroupOptions = computed(() => {
-  return (episodeGroups.value as { id: number; name: string; group_count: number; episode_count: number }[]).map(
-    item => {
-      return {
-        title: item.name,
-        subtitle: `${item.group_count} 季 • ${item.episode_count} 集`,
-        value: item.id,
-      }
-    },
-  )
+  return episodeGroups.value.map(item => {
+    return {
+      title: item.name,
+      subtitle: `${item.group_count} 季 • ${item.episode_count} 集`,
+      value: item.id,
+    }
+  })
 })
 
 // 生成1到100季的下拉框选项
@@ -270,7 +312,7 @@ async function loadDownloaderSetting() {
     const downloaders: DownloaderConf[] = await api.get('download/clients')
     downloaderOptions.value = [
       { title: t('common.default'), value: '' },
-      ...downloaders.map((item: { name: any }) => ({
+      ...downloaders.map((item: DownloaderConf) => ({
         title: item.name,
         value: item.name,
       })),
@@ -283,7 +325,7 @@ async function loadDownloaderSetting() {
 // 加载规则组
 async function queryFilterRuleGroups() {
   try {
-    const result: { [key: string]: any } = await api.get('system/setting/UserFilterRuleGroups')
+    const result: { data?: { value?: FilterRuleGroup[] } } = await api.get('system/setting/UserFilterRuleGroups')
     filterRuleGroups.value = result.data?.value ?? []
   } catch (error) {
     console.log(error)
@@ -298,8 +340,27 @@ const filterRuleGroupOptions = computed(() => {
   }))
 })
 
+async function validateSubscribeForm() {
+  const { valid } = (await subscribeFormRef.value?.validate()) || { valid: true }
+  if (!valid) return false
+  if (!props.default && subscribeForm.value.type === '电视剧') {
+    if (
+      optionalNumberValidator(subscribeForm.value.total_episode) !== true ||
+      optionalNumberValidator(subscribeForm.value.start_episode) !== true
+    ) {
+      activeTab.value = 'basic'
+      await nextTick()
+      await subscribeFormRef.value?.validate()
+      return false
+    }
+  }
+  return true
+}
+
 // 调用API修改订阅
 async function updateSubscribeInfo() {
+  if (saving.value || deleting.value) return
+  if (!(await validateSubscribeForm())) return
   // 版本数据尚未从服务端加载时禁止保存，避免提交空数组清空已有版本
   if (!versionRules.value.length) {
     $toast.error(t('dialog.subscribeEdit.versionNotLoaded'))
@@ -307,6 +368,7 @@ async function updateSubscribeInfo() {
   }
   syncFormToActiveVersion()
   const displayName = getSubscribeDisplayName()
+  saving.value = true
   try {
     const payload = {
       ...subscribeForm.value,
@@ -332,17 +394,22 @@ async function updateSubscribeInfo() {
         message: getRequestErrorMessage(e, t('subscribe.requestFailed')),
       }),
     )
+  } finally {
+    saving.value = false
   }
 }
 // 设置用户设置的默认订阅规则
 async function saveDefaultSubscribeConfig() {
+  if (saving.value || deleting.value) return
+  if (!(await validateSubscribeForm())) return
   const typeName = getDefaultSubscribeTypeName()
+  saving.value = true
   try {
     let subscribe_config_url = ''
     if (props.type === '电影') subscribe_config_url = 'system/setting/DefaultMovieSubscribeConfig'
     else subscribe_config_url = 'system/setting/DefaultTvSubscribeConfig'
 
-    const result: { [key: string]: any } = await api.post(subscribe_config_url, subscribeForm.value)
+    const result: { success?: boolean; message?: string } = await api.post(subscribe_config_url, subscribeForm.value)
     if (result.success) {
       $toast.success(t('dialog.subscribeEdit.defaultSaveSuccess', { type: typeName }))
       // 通知父组件刷新
@@ -363,6 +430,8 @@ async function saveDefaultSubscribeConfig() {
         message: getRequestErrorMessage(error, t('subscribe.requestFailed')),
       }),
     )
+  } finally {
+    saving.value = false
   }
 }
 
@@ -373,9 +442,12 @@ async function queryDefaultSubscribeConfig() {
     if (props.type === '电影') subscribe_config_url = 'system/setting/public/DefaultMovieSubscribeConfig'
     else subscribe_config_url = 'system/setting/public/DefaultTvSubscribeConfig'
 
-    const result: { [key: string]: any } = await api.get(subscribe_config_url)
+    const result: { data?: { value?: Subscribe & Record<string, unknown> } } = await api.get(subscribe_config_url)
 
-    if (result.data.value) subscribeForm.value = result.data?.value ?? ''
+    if (result.data?.value) {
+      normalizeSubscribeFlags(result.data.value)
+      subscribeForm.value = result.data.value
+    }
   } catch (error) {
     console.log(error)
   }
@@ -412,21 +484,22 @@ async function getSiteList() {
 async function getSubscribeInfo() {
   try {
     const result: Subscribe = await api.get(`subscribe/${props.subid}`)
+    normalizeSubscribeFlags(result)
     subscribeForm.value = result
     const hadVersions = Boolean(result.version_rules?.length)
     ensureVersionRules(result)
     if (props.addVersion) {
+      syncActiveVersionToForm()
       appendVersion()
       // 旧订阅首次进入多版本会同时保留一份默认版本，需提示用户两个版本都要检查约束
       if (!hadVersions) $toast.info(t('dialog.subscribeEdit.legacyVersionNotice'))
     } else if (props.versionId && versionRules.value.some(rule => rule.id === props.versionId)) {
       activeVersionId.value = props.versionId
+      syncActiveVersionToForm()
+    } else {
+      syncActiveVersionToForm()
     }
-    syncActiveVersionToForm()
-    subscribeForm.value.best_version = subscribeForm.value.best_version === 1
-    subscribeForm.value.best_version_full = subscribeForm.value.best_version_full === 1
-    subscribeForm.value.search_imdbid = subscribeForm.value.search_imdbid === 1
-    subscribeForm.value.skip_library_check = subscribeForm.value.skip_library_check === 1
+    normalizeSubscribeFlags(subscribeForm.value)
     versionRulesLoaded.value = true
     // 加载剧集组
     if (subscribeForm.value.type == '电视剧') getEpisodeGroups()
@@ -437,6 +510,7 @@ async function getSubscribeInfo() {
 
 // 删除订阅
 async function removeSubscribe() {
+  if (deleting.value || saving.value) return
   const isConfirmed = await createConfirm({
     title: t('common.confirm'),
     content: t('dialog.subscribeEdit.cancelSubscribeConfirm'),
@@ -444,6 +518,7 @@ async function removeSubscribe() {
 
   if (!isConfirmed) return
   const displayName = getSubscribeDisplayName()
+  deleting.value = true
   try {
     const result: { [key: string]: unknown } = await api.delete(`subscribe/${props.subid}`)
     if (result.success) {
@@ -458,6 +533,8 @@ async function removeSubscribe() {
     $toast.error(
       `${displayName} ${t('subscribe.cancelFailed', { message: getRequestErrorMessage(e, t('subscribe.requestFailed')) })}`,
     )
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -506,12 +583,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog scrollable max-width="45rem" :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog scrollable max-width="46rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <VDialogCloseBtn @click="emit('close')" />
         <template #prepend>
-          <VIcon icon="mdi-clipboard-list-outline" class="me-2" />
+          <VIcon icon="mdi-clipboard-list-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>
           {{
@@ -535,7 +612,7 @@ onMounted(() => {
               :aria-label="t('dialog.subscribeEdit.versionName')"
               @blur="finishEditVersionName"
               @keyup.enter="finishEditVersionName"
-              @keyup.esc="cancelEditVersionName"
+              @keydown.esc.stop="cancelEditVersionName"
             /><span
               v-else
               class="text-primary version-name-label"
@@ -555,267 +632,319 @@ onMounted(() => {
           {{ props.type }}
         </VCardSubtitle>
       </VCardItem>
-      <VCardText>
-        <VForm @submit.prevent="() => {}">
-          <VTabs v-model="activeTab" show-arrows>
-            <VTab value="basic">
-              <div>{{ t('dialog.subscribeEdit.tabs.basic') }}</div>
-            </VTab>
-            <VTab value="advance">
-              <div>{{ t('dialog.subscribeEdit.tabs.advance') }}</div>
-            </VTab>
-          </VTabs>
-          <VWindow v-model="activeTab" class="mt-5 disable-tab-transition" :touch="false">
+      <VDivider />
+      <VCardText class="mp-dialog-body">
+        <VForm ref="subscribeFormRef" @submit.prevent="() => {}">
+          <div class="mp-segmented-bar mb-4">
+            <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs">
+              <VTab value="basic" :ripple="false">
+                {{ t('dialog.subscribeEdit.tabs.basic') }}
+              </VTab>
+              <VTab value="advance" :ripple="false">
+                {{ t('dialog.subscribeEdit.tabs.advance') }}
+              </VTab>
+            </VTabs>
+          </div>
+
+          <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
             <VWindowItem value="basic">
-              <div>
-                <VRow v-if="!props.default">
-                  <VCol cols="12" md="4">
-                    <VTextField
-                      v-model="subscribeForm.keyword"
-                      :label="t('dialog.subscribeEdit.searchKeyword')"
-                      :hint="t('dialog.subscribeEdit.searchKeywordHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-magnify"
-                    />
-                  </VCol>
-                  <VCol v-if="subscribeForm.type === '电视剧'" cols="12" md="4">
-                    <VTextField
-                      v-model="subscribeForm.total_episode"
-                      :label="t('dialog.subscribeEdit.totalEpisode')"
-                      :rules="[numberValidator]"
-                      :hint="t('dialog.subscribeEdit.totalEpisodeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-playlist-play"
-                    />
-                  </VCol>
-                  <VCol v-if="subscribeForm.type === '电视剧'" cols="12" md="4">
-                    <VTextField
-                      v-model="subscribeForm.start_episode"
-                      :label="t('dialog.subscribeEdit.startEpisode')"
-                      :rules="[numberValidator]"
-                      :hint="t('dialog.subscribeEdit.startEpisodeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-play-circle-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="4">
-                    <VAutocomplete
-                      v-model="subscribeForm.quality"
-                      :label="t('dialog.subscribeEdit.quality')"
-                      :items="qualityOptions"
-                      :hint="t('dialog.subscribeEdit.qualityHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-quality-high"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="4">
-                    <VAutocomplete
-                      v-model="subscribeForm.resolution"
-                      :label="t('dialog.subscribeEdit.resolution')"
-                      :items="resolutionOptions"
-                      :hint="t('dialog.subscribeEdit.resolutionHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-monitor"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="4">
-                    <VAutocomplete
-                      v-model="subscribeForm.effect"
-                      :label="t('dialog.subscribeEdit.effect')"
-                      :items="effectOptions"
-                      :hint="t('dialog.subscribeEdit.effectHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-auto-fix"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12">
-                    <VAutocomplete
-                      v-model="subscribeForm.sites"
-                      :items="selectSitesOptions"
-                      chips
-                      :label="t('dialog.subscribeEdit.subscribeSites')"
-                      multiple
-                      clearable
-                      :hint="t('dialog.subscribeEdit.subscribeSitesHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-web"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VAutocomplete
-                      v-model="subscribeForm.downloader"
-                      :items="downloaderOptions"
-                      :label="t('dialog.subscribeEdit.downloader')"
-                      :hint="t('dialog.subscribeEdit.downloaderHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-download"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VCombobox
-                      v-model="savePathModel"
-                      :items="targetDirectories"
-                      item-title="title"
-                      item-value="value"
-                      :custom-filter="filterDownloadDirectoryOption"
-                      :label="t('dialog.subscribeEdit.savePath')"
-                      :hint="t('dialog.subscribeEdit.savePathHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-folder"
+              <div class="mp-form-sections">
+                <!-- 基础匹配信息 -->
+                <section v-if="!props.default" class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12">
+                      <VTextField
+                        v-model="subscribeForm.keyword"
+                        :label="t('dialog.subscribeEdit.searchKeyword')"
+                        :hint="t('dialog.subscribeEdit.searchKeywordHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-magnify"
+                      />
+                    </VCol>
+                    <VCol v-if="subscribeForm.type === '电视剧'" cols="12" sm="6">
+                      <VTextField
+                        v-model="subscribeForm.total_episode"
+                        :label="t('dialog.subscribeEdit.totalEpisode')"
+                        :rules="[optionalNumberValidator]"
+                        :hint="t('dialog.subscribeEdit.totalEpisodeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-playlist-play"
+                      />
+                    </VCol>
+                    <VCol v-if="subscribeForm.type === '电视剧'" cols="12" sm="6">
+                      <VTextField
+                        v-model="subscribeForm.start_episode"
+                        :label="t('dialog.subscribeEdit.startEpisode')"
+                        :rules="[optionalNumberValidator]"
+                        :hint="t('dialog.subscribeEdit.startEpisodeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-play-circle-outline"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <!-- 过滤与质量规则 -->
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="4">
+                      <VAutocomplete
+                        v-model="subscribeForm.quality"
+                        :label="t('dialog.subscribeEdit.quality')"
+                        :items="qualityOptions"
+                        :hint="t('dialog.subscribeEdit.qualityHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-quality-high"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="4">
+                      <VAutocomplete
+                        v-model="subscribeForm.resolution"
+                        :label="t('dialog.subscribeEdit.resolution')"
+                        :items="resolutionOptions"
+                        :hint="t('dialog.subscribeEdit.resolutionHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-monitor"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="4">
+                      <VAutocomplete
+                        v-model="subscribeForm.effect"
+                        :label="t('dialog.subscribeEdit.effect')"
+                        :items="effectOptions"
+                        :hint="t('dialog.subscribeEdit.effectHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-auto-fix"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <!-- 站点、目录与下载器设置 -->
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12">
+                      <VAutocomplete
+                        v-model="subscribeForm.sites"
+                        :items="selectSitesOptions"
+                        chips
+                        :label="t('dialog.subscribeEdit.subscribeSites')"
+                        multiple
+                        clearable
+                        :hint="t('dialog.subscribeEdit.subscribeSitesHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-web"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="subscribeForm.downloader"
+                        :items="downloaderOptions"
+                        :label="t('dialog.subscribeEdit.downloader')"
+                        :hint="t('dialog.subscribeEdit.downloaderHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-download"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VCombobox
+                        v-model="savePathModel"
+                        :items="targetDirectories"
+                        item-title="title"
+                        item-value="value"
+                        :custom-filter="filterDownloadDirectoryOption"
+                        :label="t('dialog.subscribeEdit.savePath')"
+                        :hint="t('dialog.subscribeEdit.savePathHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-folder"
+                      >
+                        <template #item="{ props: itemProps, item }">
+                          <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
+                        </template>
+                      </VCombobox>
+                    </VCol>
+                  </VRow>
+                </section>
+
+                <!-- 洗版与检索策略紧凑开关组 -->
+                <section class="mp-form-section">
+                  <div class="mp-settings-card">
+                    <div class="mp-setting-row" :title="t('dialog.subscribeEdit.bestVersionHint')">
+                      <VSwitch
+                        v-model="subscribeForm.best_version"
+                        :label="t('dialog.subscribeEdit.bestVersion')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div
+                      v-if="isTvSubscribe && subscribeForm.best_version"
+                      class="mp-setting-row"
+                      :title="t('dialog.subscribeEdit.bestVersionFullHint')"
                     >
-                      <template #item="{ props: itemProps, item }">
-                        <VListItem v-bind="itemProps" :title="item.raw.label" role="option" />
-                      </template>
-                    </VCombobox>
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="4">
-                    <VSwitch
-                      v-model="subscribeForm.best_version"
-                      :label="t('dialog.subscribeEdit.bestVersion')"
-                      :hint="t('dialog.subscribeEdit.bestVersionHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol v-if="isTvSubscribe && subscribeForm.best_version" cols="12" md="4">
-                    <VSwitch
-                      v-model="subscribeForm.best_version_full"
-                      :label="t('dialog.subscribeEdit.bestVersionFull')"
-                      :hint="t('dialog.subscribeEdit.bestVersionFullHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol cols="12" md="4">
-                    <VSwitch
-                      v-model="subscribeForm.search_imdbid"
-                      :label="t('dialog.subscribeEdit.searchImdbid')"
-                      :hint="t('dialog.subscribeEdit.searchImdbidHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol v-if="(props.default || versionRulesLoaded) && versionRules.length <= 1" cols="12" md="4">
-                    <VSwitch
-                      v-model="subscribeForm.skip_library_check"
-                      :label="t('dialog.subscribeEdit.skipLibraryCheck')"
-                      :hint="t('dialog.subscribeEdit.skipLibraryCheckHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                  <VCol v-if="props.default" cols="12" md="4">
-                    <VSwitch
-                      v-model="subscribeForm.show_edit_dialog"
-                      :label="t('dialog.subscribeEdit.showEditDialog')"
-                      :hint="t('dialog.subscribeEdit.showEditDialogHint')"
-                      persistent-hint
-                    />
-                  </VCol>
-                </VRow>
+                      <VSwitch
+                        v-model="subscribeForm.best_version_full"
+                        :label="t('dialog.subscribeEdit.bestVersionFull')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div class="mp-setting-row" :title="t('dialog.subscribeEdit.searchImdbidHint')">
+                      <VSwitch
+                        v-model="subscribeForm.search_imdbid"
+                        :label="t('dialog.subscribeEdit.searchImdbid')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div
+                      v-if="(props.default || versionRulesLoaded) && versionRules.length <= 1"
+                      class="mp-setting-row"
+                      :title="t('dialog.subscribeEdit.skipLibraryCheckHint')"
+                    >
+                      <VSwitch
+                        v-model="subscribeForm.skip_library_check"
+                        :label="t('dialog.subscribeEdit.skipLibraryCheck')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                    <div
+                      v-if="props.default"
+                      class="mp-setting-row"
+                      :title="t('dialog.subscribeEdit.showEditDialogHint')"
+                    >
+                      <VSwitch
+                        v-model="subscribeForm.show_edit_dialog"
+                        :label="t('dialog.subscribeEdit.showEditDialog')"
+                        hide-details
+                        color="primary"
+                        inset
+                        density="compact"
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
             </VWindowItem>
+
             <VWindowItem value="advance">
-              <div>
-                <VRow v-if="!props.default && activeVersion">
-                  <VCol cols="12">
-                    <VTextField
-                      v-model="activeVersion.release_group"
-                      :label="t('dialog.subscribeEdit.releaseGroup')"
-                      :hint="t('dialog.subscribeEdit.releaseGroupHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-account-group-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="subscribeForm.include"
-                      :label="t('dialog.subscribeEdit.include')"
-                      :hint="t('dialog.subscribeEdit.includeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-plus-circle-outline"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="subscribeForm.exclude"
-                      :label="t('dialog.subscribeEdit.exclude')"
-                      :hint="t('dialog.subscribeEdit.excludeHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-minus-circle-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow>
-                  <VCol cols="12">
-                    <VAutocomplete
-                      v-model="subscribeForm.filter_groups"
-                      :items="filterRuleGroupOptions"
-                      chips
-                      multiple
-                      clearable
-                      :label="t('dialog.subscribeEdit.filterGroups')"
-                      :hint="t('dialog.subscribeEdit.filterGroupsHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-filter"
-                    />
-                  </VCol>
-                  <VCol v-if="!props.default && subscribeForm.type === '电视剧'" cols="12" md="6">
-                    <VAutocomplete
-                      v-model="subscribeForm.episode_group"
-                      :items="episodeGroupOptions"
-                      :item-props="episodeGroupItemProps"
-                      :label="t('dialog.subscribeEdit.episodeGroup')"
-                      :hint="t('dialog.subscribeEdit.episodeGroupHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-view-list"
-                    />
-                  </VCol>
-                  <VCol v-if="!props.default && subscribeForm.type === '电视剧'" cols="12" md="6">
-                    <VAutocomplete
-                      v-model="subscribeForm.season"
-                      :items="seasonItems"
-                      :label="t('dialog.subscribeEdit.season')"
-                      :hint="t('dialog.subscribeEdit.seasonHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-calendar"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow v-if="!props.default">
-                  <VCol cols="12">
-                    <VTextarea
-                      v-model="subscribeForm.custom_words"
-                      :label="t('dialog.subscribeEdit.customWords')"
-                      :hint="t('dialog.subscribeEdit.customWordsHint')"
-                      persistent-hint
-                      :placeholder="t('dialog.subscribeEdit.customWordsPlaceholder')"
-                      prepend-inner-icon="mdi-text"
-                    />
-                  </VCol>
-                </VRow>
+              <div class="mp-form-sections">
+                <section class="mp-form-section">
+                  <VRow class="mp-form-grid">
+                    <VCol v-if="!props.default && activeVersion" cols="12">
+                      <VTextField
+                        v-model="activeVersion.release_group"
+                        :label="t('dialog.subscribeEdit.releaseGroup')"
+                        :hint="t('dialog.subscribeEdit.releaseGroupHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-account-group-outline"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="subscribeForm.include"
+                        :label="t('dialog.subscribeEdit.include')"
+                        :hint="t('dialog.subscribeEdit.includeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-plus-circle-outline"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="subscribeForm.exclude"
+                        :label="t('dialog.subscribeEdit.exclude')"
+                        :hint="t('dialog.subscribeEdit.excludeHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-minus-circle-outline"
+                      />
+                    </VCol>
+                    <VCol cols="12">
+                      <VAutocomplete
+                        v-model="subscribeForm.filter_groups"
+                        :items="filterRuleGroupOptions"
+                        chips
+                        multiple
+                        clearable
+                        :label="t('dialog.subscribeEdit.filterGroups')"
+                        :hint="t('dialog.subscribeEdit.filterGroupsHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-filter"
+                      />
+                    </VCol>
+                    <VCol v-if="!props.default && subscribeForm.type === '电视剧'" cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="subscribeForm.episode_group"
+                        :items="episodeGroupOptions"
+                        :item-props="episodeGroupItemProps"
+                        :label="t('dialog.subscribeEdit.episodeGroup')"
+                        :hint="t('dialog.subscribeEdit.episodeGroupHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-view-list"
+                      />
+                    </VCol>
+                    <VCol v-if="!props.default && subscribeForm.type === '电视剧'" cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="subscribeForm.season"
+                        :items="seasonItems"
+                        :label="t('dialog.subscribeEdit.season')"
+                        :hint="t('dialog.subscribeEdit.seasonHint')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-calendar"
+                      />
+                    </VCol>
+                    <VCol v-if="!props.default" cols="12">
+                      <VTextarea
+                        v-model="subscribeForm.custom_words"
+                        :label="t('dialog.subscribeEdit.customWords')"
+                        :hint="t('dialog.subscribeEdit.customWordsHint')"
+                        rows="3"
+                        auto-grow
+                        persistent-hint
+                        :placeholder="t('dialog.subscribeEdit.customWordsPlaceholder')"
+                        prepend-inner-icon="mdi-text"
+                      />
+                    </VCol>
+                  </VRow>
+                </section>
               </div>
             </VWindowItem>
           </VWindow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
-        <VBtn v-if="!props.default" color="error" variant="tonal" @click="removeSubscribe">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          v-if="!props.default"
+          color="error"
+          variant="tonal"
+          size="small"
+          :loading="deleting"
+          :disabled="saving || deleting"
+          @click="removeSubscribe"
+        >
           {{ t('dialog.subscribeEdit.cancelSubscribe') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="saving || deleting" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
+          class="px-4"
+          :loading="saving"
+          :disabled="saving || deleting"
           @click="props.default ? saveDefaultSubscribeConfig() : updateSubscribeInfo()"
-          prepend-icon="mdi-content-save"
-          class="px-5"
         >
           {{ t('dialog.subscribeEdit.save') }}
         </VBtn>
@@ -825,6 +954,83 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+.mp-segmented-bar {
+  display: flex;
+  align-items: center;
+}
+
+.mp-segmented-tabs {
+  display: inline-flex;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  block-size: 36px !important;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-block-size: 36px !important;
+  padding: 3px;
+
+  :deep(.v-slide-group__container),
+  :deep(.v-slide-group__content) {
+    align-items: center;
+    gap: 2px;
+  }
+
+  :deep(.v-tab__slider) {
+    display: none !important;
+  }
+
+  :deep(.v-tab) {
+    border-radius: 6px !important;
+    block-size: 28px !important;
+    color: rgba(var(--v-theme-on-surface), 0.64);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    min-block-size: 28px !important;
+    min-inline-size: 84px;
+    padding-inline: 16px;
+    text-transform: none;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  :deep(.v-tab--selected) {
+    background: rgb(var(--v-theme-surface));
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+    color: rgb(var(--v-theme-on-surface)) !important;
+    font-weight: 600;
+  }
+}
+
 // 版本名称就地编辑：默认与副标题文本一致，铅笔图标提示可点击，悬停浮出底色
 .version-name-label {
   display: inline-flex;
@@ -853,5 +1059,11 @@ onMounted(() => {
   color: inherit;
   font: inherit;
   outline: none;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
 }
 </style>

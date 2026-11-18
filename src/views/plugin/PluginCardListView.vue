@@ -13,10 +13,12 @@ import { usePWA } from '@/composables/usePWA'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useConfirm } from '@/composables/useConfirm'
 import { usePluginSidebarNavStore } from '@/stores'
 
 // 国际化
 const { t } = useI18n()
+const createConfirm = useConfirm()
 
 const route = useRoute()
 const pluginSidebarNavStore = usePluginSidebarNavStore()
@@ -61,6 +63,26 @@ const { appMode } = usePWA()
 const activeTab = ref('installed')
 const sortMode = ref(false)
 
+// 插件过滤条件
+const installedFilter = ref<string | null>(null)
+
+// 有新版本过滤条件
+const hasUpdateFilter = ref(false)
+
+// 已启用过滤条件
+const enabledFilter = ref(false)
+
+// 当前是否存在激活的已安装插件筛选条件
+const hasInstalledActiveFilter = computed(() =>
+  Boolean(installedFilter.value || hasUpdateFilter.value || enabledFilter.value),
+)
+
+watch(hasInstalledActiveFilter, active => {
+  if (active && sortMode.value) {
+    sortMode.value = false
+  }
+})
+
 // 获取插件标签页
 const pluginTabs = computed(() => getPluginTabs(t))
 
@@ -78,9 +100,7 @@ registerHeaderTab({
     {
       icon: 'mdi-filter-multiple-outline',
       variant: 'text',
-      color: computed(() =>
-        installedFilter.value || hasUpdateFilter.value || enabledFilter.value ? 'primary' : 'gray',
-      ),
+      color: computed(() => (hasInstalledActiveFilter.value ? 'primary' : '')),
       class: 'settings-icon-button',
       dataAttr: 'installed-filter-btn',
 
@@ -92,10 +112,12 @@ registerHeaderTab({
     {
       icon: 'mdi-sort-variant',
       variant: 'text',
-      color: computed(() => (sortMode.value ? 'warning' : 'gray')),
+      color: computed(() => (sortMode.value ? 'primary' : '')),
+      disabled: hasInstalledActiveFilter,
       class: 'settings-icon-button',
 
       action: () => {
+        if (hasInstalledActiveFilter.value) return
         sortMode.value = !sortMode.value
       },
       show: computed(() => activeTab.value === 'installed'),
@@ -103,7 +125,7 @@ registerHeaderTab({
     {
       icon: 'mdi-filter-multiple-outline',
       variant: 'text',
-      color: computed(() => (isFilterFormEmpty.value ? 'gray' : 'primary')),
+      color: computed(() => (isFilterFormEmpty.value ? '' : 'primary')),
       class: 'settings-icon-button',
       dataAttr: 'market-filter-btn',
 
@@ -115,7 +137,7 @@ registerHeaderTab({
     {
       icon: 'mdi-refresh',
       variant: 'text',
-      color: 'gray',
+      color: undefined,
       class: 'settings-icon-button',
       loading: computed(() => isMarketRefreshing.value),
 
@@ -127,7 +149,7 @@ registerHeaderTab({
     {
       icon: 'mdi-arrow-left',
       variant: 'text',
-      color: 'gray',
+      color: undefined,
       class: 'settings-icon-button',
 
       action: () => {
@@ -273,15 +295,6 @@ function submitMarketNameFilter(event: KeyboardEvent) {
   closeMarketFilterMenu()
 }
 
-// 插件过滤条件
-const installedFilter = ref(null)
-
-// 有新版本过滤条件
-const hasUpdateFilter = ref(false)
-
-// 已启用过滤条件
-const enabledFilter = ref(false)
-
 // 已安装插件过滤窗口
 const filterInstalledPluginDialog = ref(false)
 
@@ -353,11 +366,11 @@ const folderedPluginIds = computed(() => {
   return pluginIds
 })
 
-const canDragSort = computed(() => sortMode.value && activeTab.value === 'installed')
-const shouldVirtualizeInstalledMainList = computed(() => !sortMode.value && !currentFolder.value)
-const shouldVirtualizeInstalledFolderList = computed(() => !sortMode.value && !!currentFolder.value)
+const canDragSort = computed(() => sortMode.value && activeTab.value === 'installed' && !hasInstalledActiveFilter.value)
+const shouldVirtualizeInstalledMainList = computed(() => !canDragSort.value && !currentFolder.value)
+const shouldVirtualizeInstalledFolderList = computed(() => !canDragSort.value && !!currentFolder.value)
 const installedScrollToIndex = computed(() => {
-  if (sortMode.value || currentFolder.value || !pluginId.value) {
+  if (canDragSort.value || currentFolder.value || !pluginId.value) {
     return undefined
   }
 
@@ -365,6 +378,17 @@ const installedScrollToIndex = computed(() => {
 
   return targetIndex >= 0 ? targetIndex : undefined
 })
+
+// 组合判断已安装插件是否命中全部激活筛选条件（标准逻辑 AND）
+function matchesInstalledPluginFilter(plugin: Plugin): boolean {
+  if (hasUpdateFilter.value && !plugin.has_update) return false
+  if (enabledFilter.value && !plugin.state) return false
+  if (installedFilter.value) {
+    const keywordText = String(installedFilter.value).toLowerCase()
+    if (!plugin.plugin_name?.toLowerCase().includes(keywordText)) return false
+  }
+  return true
+}
 
 // 获取文件夹内筛选后的插件
 const getFilteredFolderPlugins = (folderName: string) => {
@@ -381,24 +405,7 @@ const getFilteredFolderPlugins = (folderName: string) => {
   })
 
   // 应用筛选条件
-  return folderPlugins.filter(plugin => {
-    if (!installedFilter.value && !hasUpdateFilter.value && !enabledFilter.value) return true
-    if (hasUpdateFilter.value && enabledFilter.value) {
-      return plugin.has_update && plugin.state
-    }
-    if (hasUpdateFilter.value) return plugin.has_update
-    if (enabledFilter.value) return plugin.state
-    if (installedFilter.value) {
-      return plugin.plugin_name?.toLowerCase().includes((installedFilter.value as string).toLowerCase())
-    }
-    if (installedFilter.value) {
-      return plugin.plugin_name?.toLowerCase().includes((installedFilter.value as string).toLowerCase())
-    }
-    if (installedFilter.value) {
-      return plugin.plugin_name?.toLowerCase().includes((installedFilter.value as string).toLowerCase())
-    }
-    return true
-  })
+  return folderPlugins.filter(matchesInstalledPluginFilter)
 }
 
 // 显示的插件列表（考虑文件夹筛选）
@@ -457,7 +464,7 @@ const displayedFolders = computed(() => {
     })
     .filter(folder => {
       // 当有筛选条件时，只显示包含筛选后插件的文件夹
-      if (installedFilter.value || hasUpdateFilter.value || enabledFilter.value) {
+      if (hasInstalledActiveFilter.value) {
         return folder.pluginCount > 0
       }
       return true
@@ -634,6 +641,11 @@ function sortPluginOrder() {
 
 // 保存混合排序
 async function saveMixedSortOrder() {
+  if (hasInstalledActiveFilter.value) {
+    isDraggingSortMode.value = false
+    updateMixedSortList()
+    return
+  }
   const folderSnapshot = captureFolderState()
   const previousOrder = orderConfig.value.map(item => ({ ...item }))
   const previousFilteredData = [...filteredDataList.value]
@@ -721,7 +733,11 @@ async function saveMixedSortOrder() {
 
 // 保存文件夹内插件顺序
 async function saveFolderPluginOrder() {
-  if (!currentFolder.value) return
+  if (!currentFolder.value || hasInstalledActiveFilter.value) {
+    isDraggingSortMode.value = false
+    updateMixedSortList()
+    return
+  }
 
   const folderSnapshot = captureFolderState()
   const previousOrder = orderConfig.value.map(item => ({ ...item }))
@@ -945,16 +961,30 @@ async function installPlugin(item: Plugin) {
 }
 
 // 打开插件搜索结果
-function openPlugin(item: Plugin) {
+async function openPlugin(item: Plugin) {
+  closeSearchDialog()
   // 如果是已安装插件则打开插件详情
   if (item.installed === true) {
     // 标记插件动作
     pluginActions.value[item.id || '0'] = true
-  } else {
-    // 如果是未安装插件则安装
-    installPlugin(item)
+    return
   }
-  closeSearchDialog()
+
+  if (item?.system_version_compatible === false) {
+    $toast.error(item.system_version_message || t('plugin.incompatibleSystemVersion'))
+    return
+  }
+
+  const isConfirmed = await createConfirm({
+    title: t('common.confirm'),
+    content: t('common.confirmAction', {
+      action: `${t('plugin.installToLocal')} ${item.plugin_name || item.id || ''}`.trim(),
+    }),
+  })
+  if (!isConfirmed) return
+
+  // 如果是未安装插件则安装
+  await installPlugin(item)
 }
 
 // 关闭插件搜索窗口
@@ -1174,6 +1204,18 @@ async function refreshData(context: KeepAliveRefreshContext = {}) {
   await loadPluginFolders()
 }
 
+// 卸载插件后立即从本地已安装列表与混合视图中剔除并触发弹性补位，随后后台静默对齐数据
+function handleRemoveInstalledPlugin(removedPluginId?: string) {
+  if (removedPluginId) {
+    ++installedWriterGeneration
+    dataList.value = dataList.value.filter(plugin => plugin.id !== removedPluginId)
+    filteredDataList.value = filteredDataList.value.filter(plugin => plugin.id !== removedPluginId)
+    mixedSortList.value = mixedSortList.value.filter(item => !(item.type === 'plugin' && item.id === removedPluginId))
+    draggableFolderPlugins.value = draggableFolderPlugins.value.filter(plugin => plugin.id !== removedPluginId)
+  }
+  void refreshData({ silent: true })
+}
+
 // 对uninstalledList进行排序到sortedUninstalledList
 watch([marketList, filterForm, activeSort, PluginStatistics, PluginRatings], () => {
   // 匹配过滤函数
@@ -1302,18 +1344,7 @@ function handleRepoUrl(item: Plugin | string | undefined) {
 
 // 监测dataList变化或installedFilter、hasUpdateFilter变化时更新filteredDataList
 watch([dataList, installedFilter, hasUpdateFilter, enabledFilter], () => {
-  filteredDataList.value = dataList.value.filter(item => {
-    if (!installedFilter.value && !hasUpdateFilter.value && !enabledFilter.value) return true
-    if (hasUpdateFilter.value && enabledFilter.value) {
-      return item.has_update && item.state
-    }
-    if (hasUpdateFilter.value) return item.has_update
-    if (enabledFilter.value) return item.state
-    if (installedFilter.value) {
-      return item.plugin_name?.toLowerCase().includes((installedFilter.value as string).toLowerCase())
-    }
-    return true
-  })
+  filteredDataList.value = dataList.value.filter(matchesInstalledPluginFilter)
 })
 
 // 插件市场加载更多数据
@@ -1329,20 +1360,55 @@ function loadMarketMore({ done }: { done: (status: 'ok' | 'empty' | 'loading' | 
   done('ok')
 }
 
-// 组件挂载后
+// 按路由查询参数打开目标插件（支持首次挂载与 KeepAlive 二次携带 ?id=xxx 跳转）
+async function openTargetPluginByQuery(rawId: unknown, switchToInstalled = false) {
+  const nextId = Array.isArray(rawId) ? rawId[0] : rawId
+  pluginId.value = nextId ? String(nextId) : null
 
+  if (!pluginId.value) {
+    dataList.value.forEach(item => {
+      if (item.page_open) item.page_open = false
+    })
+    return
+  }
+
+  if (!isRefreshed.value) return
+  if (switchToInstalled && activeTab.value === 'market') {
+    activeTab.value = 'installed'
+  }
+  if (activeTab.value === 'market') return
+
+  const plugin = dataList.value.find(item => item.id === pluginId.value)
+  if (!plugin) return
+
+  const containingFolder = Object.entries(pluginFolders.value).find(([, folderData]) => {
+    const ids = Array.isArray(folderData) ? folderData : folderData?.plugins || []
+    return ids.includes(plugin.id)
+  })?.[0]
+
+  currentFolder.value = containingFolder || ''
+
+  if (plugin.page_open) {
+    plugin.page_open = false
+    await nextTick()
+  }
+  plugin.page_open = true
+}
+
+// 组件挂载后
 onMounted(async () => {
   await loadPluginOrderConfig()
   await loadPluginFolders() // 加载文件夹配置
   await refreshData()
-  if (activeTab.value != 'market' && pluginId.value) {
-    // 找到这个插件
-    const plugin = dataList.value.find(item => item.id === pluginId.value)
-    if (plugin) {
-      plugin.page_open = true
-    }
-  }
+  await openTargetPluginByQuery(route.query.id, false)
 })
+
+watch(
+  () => route.query.id,
+  nextId => {
+    void openTargetPluginByQuery(nextId, true)
+  },
+)
 
 const { refresh: refreshKeepAliveData } = useKeepAliveRefresh(refreshActiveTabData)
 
@@ -1997,11 +2063,48 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
       </VMenu>
     </Teleport>
 
-    <VWindow v-model="activeTab" class="disable-tab-transition px-2" :touch="false">
+    <div v-if="isRefreshed && !appMode && showSearchAction" class="mp-page-action-bar">
+      <VBtn
+        v-if="showMarketSettingAction"
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        prepend-icon="mdi-store-cog"
+        @click="openMarketSettingDialog"
+      >
+        {{ t('dialog.pluginMarketSetting.title') }}
+      </VBtn>
+      <VBtn
+        v-if="showNewFolderAction"
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        prepend-icon="mdi-folder-plus"
+        @click="showNewFolderDialog"
+      >
+        {{ t('plugin.newFolder') }}
+      </VBtn>
+      <VBtn
+        size="small"
+        variant="flat"
+        color="primary"
+        rounded="lg"
+        prepend-icon="mdi-magnify"
+        @click="openPluginSearchDialog"
+      >
+        {{ t('plugin.searchPlugins') }}
+      </VBtn>
+    </div>
+
+    <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
       <!-- 我的插件 -->
       <VWindowItem value="installed">
         <div>
-          <VPageContentTitle v-if="installedFilter" :title="t('plugin.filter', { name: installedFilter })" />
+          <VPageContentTitle
+            v-if="installedFilter"
+            :title="t('plugin.filter', { name: installedFilter })"
+            class="plugin-inline-page-title"
+          />
           <LoadingBanner v-if="!isRefreshed && !installedLoadError" class="mt-12" />
           <NoDataFound
             v-if="installedLoadError && !isRefreshed"
@@ -2010,15 +2113,15 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
             :error-description="t('common.troubleshooting')"
           >
             <template #button>
-              <VBtn color="primary" variant="tonal" @click="refreshData()">
+              <VBtn color="primary" variant="tonal" rounded="lg" size="small" @click="refreshData()">
                 {{ t('common.retry') }}
               </VBtn>
             </template>
           </NoDataFound>
-          <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-4 py-0 app-surface-static">
-            <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-5">
-              <span>{{ t('common.sortModeHint') }}</span>
-              <VBtn variant="tonal" color="error" @click="sortMode = false">
+          <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-3 py-0 app-surface-static">
+            <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-2">
+              <span class="text-body-2">{{ t('common.sortModeHint') }}</span>
+              <VBtn size="small" rounded="lg" variant="tonal" color="error" @click="sortMode = false">
                 {{ t('common.exit') }}
               </VBtn>
             </div>
@@ -2050,6 +2153,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                     @rename-folder="(oldName, newName) => renameFolder(oldName, newName)"
                     @update-folder-config="(folderName, config) => updateFolderConfig(folderName, config)"
                     @refresh-data="refreshData"
+                    @remove="handleRemoveInstalledPlugin"
                     @rating="applyPluginRating"
                     @action-done="
                       pluginId => {
@@ -2079,6 +2183,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                     @rename-folder="(oldName, newName) => renameFolder(oldName, newName)"
                     @update-folder-config="(folderName, config) => updateFolderConfig(folderName, config)"
                     @refresh-data="refreshData"
+                    @remove="handleRemoveInstalledPlugin"
                     @rating="applyPluginRating"
                     @action-done="
                       pluginId => {
@@ -2111,6 +2216,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                     :sortable="true"
                     :show-remove-button="true"
                     @refresh-data="refreshData"
+                    @remove="handleRemoveInstalledPlugin"
                     @rating="applyPluginRating"
                     @action-done="
                       pluginId => {
@@ -2136,6 +2242,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                     :sortable="false"
                     :show-remove-button="true"
                     @refresh-data="refreshData"
+                    @remove="handleRemoveInstalledPlugin"
                     @rating="applyPluginRating"
                     @action-done="
                       pluginId => {
@@ -2154,7 +2261,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
             error-code="404"
             :error-title="t('common.noData')"
             :error-description="
-              installedFilter || hasUpdateFilter ? t('plugin.noMatchingContent') : t('plugin.pleaseInstallFromMarket')
+              hasInstalledActiveFilter ? t('plugin.noMatchingContent') : t('plugin.pleaseInstallFromMarket')
             "
           />
         </div>
@@ -2175,7 +2282,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
             :error-description="t('common.troubleshooting')"
           >
             <template #button>
-              <VBtn color="primary" variant="tonal" @click="refreshMarket()">
+              <VBtn color="primary" variant="tonal" size="small" rounded="lg" @click="refreshMarket()">
                 {{ t('common.retry') }}
               </VBtn>
             </template>
@@ -2213,41 +2320,18 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
       </VWindowItem>
     </VWindow>
   </div>
-
-  <!-- 插件搜索图标 -->
-  <Teleport to="body" v-if="route.path === '/plugins'">
-    <div v-if="isRefreshed && !appMode && showSearchAction" class="compact-fab-stack">
-      <VFab
-        v-if="showMarketSettingAction"
-        icon="mdi-store-cog"
-        color="warning"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="openMarketSettingDialog"
-      />
-      <VFab
-        v-if="showNewFolderAction"
-        icon="mdi-folder-plus"
-        color="success"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="showNewFolderDialog"
-      />
-      <VFab
-        icon="mdi-magnify"
-        color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
-        @click="openPluginSearchDialog"
-      />
-    </div>
-  </Teleport>
 </template>
 
 <style scoped lang="scss">
 /* stylelint-disable selector-pseudo-class-no-unknown */
+
+.plugin-inline-page-title,
+.plugin-inline-page-title :deep(*) {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  margin-block: 4px 10px !important;
+}
 
 @media (width < 960px) {
   // 弹出菜单使用紧凑录入行，避免叠加全局移动表单高度与列表项纵向留白。

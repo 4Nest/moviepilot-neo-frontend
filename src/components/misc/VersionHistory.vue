@@ -82,7 +82,7 @@ function shouldRenderAction(version: string) {
 .version-history__top {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "main";
+  grid-template-areas: 'main';
   gap: 0;
   align-items: center;
   margin-block-end: 0.5rem;
@@ -90,7 +90,7 @@ function shouldRenderAction(version: string) {
 
 .version-history__top--with-action {
   grid-template-columns: minmax(0, 1fr) max-content;
-  grid-template-areas: "main action";
+  grid-template-areas: 'main action';
   gap: 1rem;
 }
 
@@ -155,7 +155,7 @@ function shouldRenderAction(version: string) {
 }
 
 .markdown-body :deep(a) {
-  color: rgb(99 102 241);
+  color: rgb(var(--v-theme-primary));
   text-decoration: none;
 }
 
@@ -167,7 +167,7 @@ function shouldRenderAction(version: string) {
   padding: 0.15rem 0.4rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
-  background-color: rgba(127, 127, 127, 0.15);
+  background-color: rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .markdown-body :deep(pre) {
@@ -175,7 +175,7 @@ function shouldRenderAction(version: string) {
   margin-block: 0.5rem;
   overflow-x: auto;
   border-radius: 0.375rem;
-  background-color: rgba(127, 127, 127, 0.15);
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
 }
 
 .markdown-body :deep(pre code) {
@@ -186,8 +186,8 @@ function shouldRenderAction(version: string) {
 .markdown-body :deep(blockquote) {
   padding-inline-start: 1rem;
   margin-block: 0.5rem;
-  border-inline-start: 3px solid rgba(127, 127, 127, 0.4);
-  color: rgba(127, 127, 127, 0.8);
+  border-inline-start: 3px solid rgba(var(--v-theme-on-surface), 0.24);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 @media (max-width: 600px) {
@@ -211,6 +211,5 @@ function shouldRenderAction(version: string) {
   .version-history__version {
     font-size: 1.125rem;
   }
-
 }
 </style>

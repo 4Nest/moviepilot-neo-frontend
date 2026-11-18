@@ -62,19 +62,19 @@ function submitReidentify() {
 </script>
 
 <template>
-  <VDialog v-if="visible" v-model="visible" scrollable max-width="35rem">
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog v-if="visible" v-model="visible" scrollable max-width="36rem">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon>mdi-text-recognition</VIcon>
+          <VIcon icon="mdi-text-recognition" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('setting.cache.reidentifyDialog.title') }}</VCardTitle>
-        <VCardSubtitle>{{ props.itemTitle }}</VCardSubtitle>
+        <VCardSubtitle v-if="props.itemTitle">{{ props.itemTitle }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn v-model="visible" />
       <VDivider />
-      <VCardText>
-        <VRow>
+      <VCardText class="mp-dialog-body">
+        <VRow class="mp-form-grid">
           <VCol cols="12">
             <VSelect
               v-model="mediaSource"
@@ -96,19 +96,22 @@ function submitReidentify() {
             />
           </VCol>
         </VRow>
-        <VAlert type="info" variant="tonal" class="mt-4">
+        <VAlert type="info" variant="tonal" density="compact" class="mt-4">
           {{ t('setting.cache.reidentifyDialog.autoHint') }}
         </VAlert>
       </VCardText>
-
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
           :loading="props.loading"
-          prepend-icon="mdi-check"
-          class="px-5"
+          class="px-4"
           @click="submitReidentify"
         >
           {{ t('setting.cache.reidentifyDialog.confirm') }}
@@ -117,3 +120,29 @@ function submitReidentify() {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

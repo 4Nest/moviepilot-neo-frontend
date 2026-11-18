@@ -391,7 +391,7 @@ describe('PluginMarketDetailDialog', () => {
       showUpdateAction: false,
     })
 
-    const closeButton = document.querySelector<HTMLButtonElement>('.absolute.right-3.top-3')
+    const closeButton = document.querySelector<HTMLButtonElement>('.app-dialog-close-btn')
     expect(closeButton).not.toBeNull()
     await fireEvent.click(closeButton!)
     expect(emitted()['update:modelValue']).toContainEqual([false])

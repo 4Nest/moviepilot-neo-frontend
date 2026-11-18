@@ -164,6 +164,11 @@ const visibleDynamicButtonMenuItems = computed(() => {
 })
 
 const hasDynamicButtonMenu = computed(() => visibleDynamicButtonMenuItems.value.length > 0)
+const dynamicButtonAriaLabel = computed(() => {
+  if (dynamicButton.value?.title) return dynamicButton.value.title
+  if (hasDynamicButtonMenu.value) return t('common.moreActions')
+  return t('common.add')
+})
 const shouldRenderFooterNav = computed(() => appMode.value && props.showNav && !nativeChromeActive.value)
 const shouldRevealFooterNav = computed(() => shouldRenderFooterNav.value && !isLaunchLoading.value)
 
@@ -267,6 +272,7 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
                 icon
                 variant="text"
                 :ripple="false"
+                :aria-label="dynamicButtonAriaLabel"
                 @click="!hasDynamicButtonMenu && handleDynamicButtonClick()"
                 rounded="pill"
                 class="footer-nav-btn"
@@ -312,6 +318,139 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
   inset-inline: 0;
   padding-block-end: calc(6px + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
+
+  .footer-nav-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    // 按钮卡片之间的间距
+    > .v-card + .v-card {
+      margin-inline-start: 2px;
+    }
+  }
+
+  .footer-nav-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--mp-border-card) !important;
+    border-radius: 9999px !important;
+    background-color: rgb(var(--v-theme-surface)) !important;
+    pointer-events: auto;
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: transform, max-inline-size, opacity;
+
+    --app-control-radius: var(--app-vuetify-rounded-pill);
+    --app-surface-radius: var(--app-vuetify-rounded-pill);
+
+    .v-btn-toggle {
+      block-size: auto;
+      min-block-size: 56px;
+    }
+  }
+
+  .footer-card-content {
+    position: relative;
+    padding-block: 4px;
+    padding-inline: 6px;
+  }
+
+  .footer-nav-card .footer-btn-group.v-btn-group {
+    position: relative;
+    display: flex;
+    justify-content: space-around;
+    border: none;
+    border-radius: 9999px !important;
+    background-color: transparent;
+    box-shadow: none !important;
+    inline-size: 100%;
+
+    &:hover {
+      box-shadow: none !important;
+    }
+  }
+
+  .footer-nav-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px !important;
+    background-color: transparent;
+    block-size: 48px;
+    box-shadow: none !important;
+
+    &:hover,
+    &.v-btn--active {
+      background-color: transparent;
+      box-shadow: none !important;
+    }
+
+    .btn-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      inline-size: 100%;
+
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transform-origin: center;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  // 动态按钮卡片样式
+  .dynamic-btn-card {
+    block-size: auto;
+    inline-size: auto;
+    max-inline-size: 60px;
+    min-block-size: 0;
+
+    .footer-card-content {
+      padding: 3px;
+    }
+
+    .footer-nav-btn {
+      padding: 0;
+      block-size: 40px;
+      inline-size: 40px;
+      min-inline-size: 40px;
+
+      .btn-content {
+        margin: 0;
+      }
+
+      .v-icon {
+        margin-block-end: 0;
+      }
+    }
+  }
+
+  // 底部导航动画
+  .footer-nav-enter-active,
+  .footer-nav-leave-active {
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .footer-nav-enter-from,
+  .footer-nav-leave-to {
+    padding: 0 !important;
+    border-width: 0 !important;
+    margin-inline-start: 0 !important;
+    max-inline-size: 0 !important;
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  .footer-nav-move {
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  }
 }
 
 // 移动端主题面板全屏展示时隐藏底部导航，避免不可见控件参与焦点和合成。
@@ -320,157 +459,6 @@ html[data-theme-customizer-open='true'] {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-  }
-}
-
-.footer-nav-group {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  // 按钮卡片之间的间距
-  > .v-card + .v-card {
-    margin-inline-start: 2px; // 减少间距
-  }
-}
-
-.footer-nav-card {
-  position: relative;
-  overflow: hidden;
-  border-radius: 9999px !important;
-  backdrop-filter: blur(24px);
-  background-color: rgba(var(--v-theme-surface), 0.6);
-  pointer-events: auto;
-  transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-  will-change: transform, max-inline-size, opacity;
-
-  --app-control-radius: var(--app-vuetify-rounded-pill);
-  --app-surface-radius: var(--app-vuetify-rounded-pill);
-
-  // 透明主题下的特殊样式
-  .v-theme--transparent & {
-    backdrop-filter: blur(var(--transparent-blur-heavy, 16px));
-    background-color: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy, 0.5));
-  }
-
-  .v-btn-toggle {
-    block-size: auto;
-    min-block-size: 56px;
-  }
-}
-
-.footer-card-content {
-  position: relative;
-  padding-block: 4px;
-  padding-inline: 6px;
-}
-
-.footer-nav-card .footer-btn-group.v-btn-group {
-  position: relative;
-  display: flex;
-  justify-content: space-around;
-  border: none;
-  border-radius: 9999px !important;
-  background-color: transparent;
-  box-shadow: none !important;
-  inline-size: 100%;
-
-  &:hover {
-    box-shadow: none !important;
-  }
-}
-
-.footer-nav-btn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px !important;
-  background-color: transparent;
-  block-size: 48px;
-  box-shadow: none !important;
-
-  &:hover,
-  &.v-btn--active {
-    background-color: transparent;
-    box-shadow: none !important;
-  }
-
-  .btn-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    inline-size: 100%;
-
-    span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transform-origin: center;
-      white-space: nowrap;
-    }
-  }
-}
-
-// 动态按钮卡片样式
-.dynamic-btn-card {
-  block-size: auto;
-  inline-size: auto;
-  max-inline-size: 60px;
-  min-block-size: 0;
-
-  .footer-card-content {
-    padding: 3px;
-  }
-
-  .footer-nav-btn {
-    padding: 0;
-    block-size: 40px;
-    inline-size: 40px;
-    min-inline-size: 40px;
-
-    .btn-content {
-      margin: 0;
-    }
-
-    .v-icon {
-      margin-block-end: 0;
-    }
-  }
-}
-
-// 底部导航动画
-.footer-nav-enter-active,
-.footer-nav-leave-active {
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.footer-nav-enter-from,
-.footer-nav-leave-to {
-  padding: 0 !important;
-  border-width: 0 !important;
-  margin-inline-start: 0 !important;
-  max-inline-size: 0 !important;
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.footer-nav-move {
-  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
   }
 }
 </style>

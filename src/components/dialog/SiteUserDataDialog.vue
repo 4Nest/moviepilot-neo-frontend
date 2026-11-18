@@ -21,8 +21,10 @@ const props = defineProps({
 // 注册事件
 const emit = defineEmits(['close'])
 
-// 进度框
+// 进度框与加载状态
 const progressDialog = ref(false)
+const loading = ref(false)
+const refreshing = ref(false)
 
 // 失败状态保留对应操作，重试时不改变已展示的站点数据。
 const failedOperation = ref<'load' | 'refresh'>()
@@ -334,6 +336,7 @@ function getDiffClass(diff: number | undefined) {
 // 查询站点用户数据
 async function fetchSiteUserData(failureOperation: 'load' | 'refresh' = 'load', generation?: number) {
   const activeGeneration = generation ?? ++operationGeneration
+  if (!generation) loading.value = true
 
   try {
     const result = await api.get<ApiResponse<SiteUserData[]>, ApiResponse<SiteUserData[]>>(
@@ -362,6 +365,10 @@ async function fetchSiteUserData(failureOperation: 'load' | 'refresh' = 'load', 
     console.error(error)
     failedOperation.value = failureOperation
     failureMessage.value = getApiErrorMessage(error)
+  } finally {
+    if (activeGeneration === operationGeneration) {
+      loading.value = false
+    }
   }
 
   return false
@@ -369,7 +376,10 @@ async function fetchSiteUserData(failureOperation: 'load' | 'refresh' = 'load', 
 
 // 刷新站点数据
 async function refreshSiteData() {
+  if (refreshing.value) return
   const generation = ++operationGeneration
+  loading.value = false
+  refreshing.value = true
   progressDialog.value = true
   try {
     const result = await api.post<ApiResponse<unknown>, ApiResponse<unknown>>(`site/userdata/${props.site?.id}`)
@@ -389,6 +399,7 @@ async function refreshSiteData() {
     failureMessage.value = getApiErrorMessage(error)
   } finally {
     if (generation === operationGeneration) {
+      refreshing.value = false
       progressDialog.value = false
     }
   }
@@ -396,6 +407,7 @@ async function refreshSiteData() {
 
 // 重试最近失败的请求，刷新失败时继续保留当前数据。
 function retryFailedOperation() {
+  if (refreshing.value || loading.value) return
   if (failedOperation.value === 'refresh') {
     refreshSiteData()
   } else {
@@ -417,7 +429,9 @@ onBeforeMount(() => {
       <VCardItem>
         <VCardTitle>
           {{ t('dialog.siteUserData.title') }} - {{ props.site?.name }}
-          <IconBtn @click.stop="refreshSiteData" color="info"><VIcon icon="mdi-refresh" /></IconBtn>
+          <IconBtn :loading="refreshing" :disabled="refreshing" @click.stop="refreshSiteData" color="info"
+            ><VIcon icon="mdi-refresh"
+          /></IconBtn>
         </VCardTitle>
         <VDialogCloseBtn @click="emit('close')" />
       </VCardItem>
@@ -435,7 +449,14 @@ onBeforeMount(() => {
               </div>
               <div v-if="failureMessage" class="text-body-2 mt-1">{{ failureMessage }}</div>
             </div>
-            <VBtn size="small" variant="tonal" prepend-icon="mdi-refresh" @click="retryFailedOperation">
+            <VBtn
+              size="small"
+              variant="tonal"
+              prepend-icon="mdi-refresh"
+              :loading="refreshing || loading"
+              :disabled="refreshing || loading"
+              @click="retryFailedOperation"
+            >
               {{ t('common.retry') }}
             </VBtn>
           </div>

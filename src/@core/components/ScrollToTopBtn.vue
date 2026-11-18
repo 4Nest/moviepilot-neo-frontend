@@ -66,11 +66,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(var(--v-theme-primary), 0.18);
+  border: 1px solid var(--mp-border-hover);
   border-radius: 50%;
-  backdrop-filter: blur(18px) saturate(1.12);
-  background-color: rgba(var(--v-theme-surface), 0.84);
-  background-image: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.14), rgba(var(--v-theme-primary), 0.06));
+  background-color: var(--mp-elevated-bg);
   block-size: 3rem;
   box-shadow: var(--app-fab-shadow);
   color: rgb(var(--v-theme-primary));
@@ -79,10 +77,12 @@ onUnmounted(() => {
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
+    border-color 0.18s ease,
     background-color 0.18s ease;
 
   &:hover {
-    background-color: rgba(var(--v-theme-surface), 0.94);
+    border-color: rgba(var(--v-theme-primary), 0.42);
+    background-color: rgb(var(--v-theme-surface));
     box-shadow: var(--app-fab-shadow-hover);
     transform: translateY(-2px);
   }

@@ -1,9 +1,12 @@
 <script lang="ts" setup>
+import { useTheme } from 'vuetify'
 import { useI18n } from '@/composables/useChineseText'
 import { useSetupWizard } from '@/composables/useSetupWizard'
 import { getLogoUrl } from '@/utils/imageUtils'
 
 const { t } = useI18n()
+const { global: globalTheme } = useTheme()
+const isDark = computed(() => Boolean(globalTheme?.current?.value?.dark))
 const { wizardData, selectNotification, validationErrors } = useSetupWizard()
 
 // 消息类型下拉字典
@@ -20,277 +23,339 @@ const notificationTypes = [
 </script>
 
 <template>
-  <VCard variant="outlined">
-    <VCardText>
-      <div class="text-center mb-6">
-        <h3 class="text-h4 mb-2">{{ t('setupWizard.notification.title') }}</h3>
-        <p class="text-body-1 text-medium-emphasis">{{ t('setupWizard.notification.description') }}</p>
+  <div class="setup-step">
+    <div class="setup-step-head">
+      <h3 class="setup-step-title">{{ t('setupWizard.notification.title') }}</h3>
+      <p class="setup-step-desc">{{ t('setupWizard.notification.description') }}</p>
+    </div>
+
+    <VAlert type="info" variant="tonal" density="compact" class="setup-step-alert mb-3">
+      <div class="setup-step-alert__title">{{ t('setupWizard.notification.info') }}</div>
+      <div class="setup-step-alert__desc">{{ t('setupWizard.notification.infoDesc') }}</div>
+    </VAlert>
+
+    <!-- 通知选择 -->
+    <div class="setup-section">
+      <div class="setup-section__label">{{ t('setupWizard.notification.type') }}</div>
+      <div class="setup-choice-grid setup-choice-grid--2">
+        <button
+          v-for="ch in [
+            { type: 'wechat', label: '企业微信' },
+            { type: 'telegram', label: 'Telegram' },
+          ] as const"
+          :key="ch.type"
+          type="button"
+          class="setup-choice-card"
+          :class="{ 'is-selected': wizardData.notification.type === ch.type }"
+          @click="selectNotification(ch.type)"
+        >
+          <span class="setup-choice-card__logo" :class="{ 'setup-choice-card__logo--dark': isDark }" aria-hidden="true">
+            <VImg
+              :src="getLogoUrl(ch.type)"
+              height="36"
+              width="36"
+              :max-width="36"
+              :max-height="36"
+              contain
+              class="mx-auto flex-grow-0 flex-shrink-0"
+            />
+          </span>
+          <span class="setup-choice-card__title">{{ ch.label }}</span>
+        </button>
       </div>
-      <VRow>
-        <VCol cols="12">
-          <VAlert type="info" variant="tonal" class="mb-4">
-            <VAlertTitle>{{ t('setupWizard.notification.info') }}</VAlertTitle>
-            {{ t('setupWizard.notification.infoDesc') }}
-          </VAlert>
-        </VCol>
+    </div>
 
-        <!-- 通知选择 -->
-        <VCol cols="12">
-          <div class="mb-4">
-            <h4 class="text-h6 mb-4">{{ t('setupWizard.notification.type') }}</h4>
-            <VRow>
-              <VCol cols="12" md="3">
-                <VCard
-                  :color="wizardData.notification.type === 'wechat' ? 'primary' : 'default'"
-                  :variant="wizardData.notification.type === 'wechat' ? 'tonal' : 'outlined'"
-                  class="cursor-pointer"
-                  @click="selectNotification('wechat')"
-                >
-                  <VCardText class="text-center">
-                    <VImg :src="getLogoUrl('wechat')" height="48" width="48" class="mx-auto mb-2" />
-                    <div class="text-h6">企业微信</div>
-                  </VCardText>
-                </VCard>
-              </VCol>
-              <VCol cols="12" md="3">
-                <VCard
-                  :color="wizardData.notification.type === 'telegram' ? 'primary' : 'default'"
-                  :variant="wizardData.notification.type === 'telegram' ? 'tonal' : 'outlined'"
-                  class="cursor-pointer"
-                  @click="selectNotification('telegram')"
-                >
-                  <VCardText class="text-center">
-                    <VImg :src="getLogoUrl('telegram')" height="48" width="48" class="mx-auto mb-2" />
-                    <div class="text-h6">Telegram</div>
-                  </VCardText>
-                </VCard>
-              </VCol>
-            </VRow>
-          </div>
-        </VCol>
-
-        <!-- 通知配置 -->
-        <VCol v-if="wizardData.notification.type" cols="12">
-          <VCard>
-            <VCardText>
-              <VForm>
-                <VRow>
-                  <VCol cols="12">
-                    <VAutocomplete
-                      v-model="wizardData.notification.switchs"
-                      :items="notificationTypes"
-                      :label="t('notification.type')"
-                      :hint="t('notification.typeHint')"
-                      multiple
-                      clearable
-                      chips
-                      persistent-hint
-                      prepend-inner-icon="mdi-bell-outline"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow v-if="wizardData.notification.type === 'wechat'">
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.name"
-                      :label="t('notification.name')"
-                      :placeholder="t('notification.name')"
-                      :hint="t('notification.nameHint')"
-                      :error="validationErrors.notification.name"
-                      :error-messages="validationErrors.notification.name ? [t('notification.nameRequired')] : []"
-                      persistent-hint
-                      prepend-inner-icon="mdi-label"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_CORPID"
-                      :label="t('notification.wechat.corpId')"
-                      :hint="t('notification.wechat.corpIdHint')"
-                      :error="validationErrors.notification.WECHAT_CORPID"
-                      :error-messages="
-                        validationErrors.notification.WECHAT_CORPID ? [t('notification.wechat.corpIdRequired')] : []
-                      "
-                      persistent-hint
-                      prepend-inner-icon="mdi-domain"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_APP_ID"
-                      :label="t('notification.wechat.appId')"
-                      :hint="t('notification.wechat.appIdHint')"
-                      :error="validationErrors.notification.WECHAT_APP_ID"
-                      :error-messages="
-                        validationErrors.notification.WECHAT_APP_ID ? [t('notification.wechat.appIdRequired')] : []
-                      "
-                      persistent-hint
-                      prepend-inner-icon="mdi-application"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_APP_SECRET"
-                      :label="t('notification.wechat.appSecret')"
-                      :hint="t('notification.wechat.appSecretHint')"
-                      :error="validationErrors.notification.WECHAT_APP_SECRET"
-                      :error-messages="
-                        validationErrors.notification.WECHAT_APP_SECRET
-                          ? [t('notification.wechat.appSecretRequired')]
-                          : []
-                      "
-                      persistent-hint
-                      prepend-inner-icon="mdi-key"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_PROXY"
-                      :label="t('notification.wechat.proxy')"
-                      :hint="t('notification.wechat.proxyHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-server-network"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_TOKEN"
-                      :label="t('notification.wechat.token')"
-                      :hint="t('notification.wechat.tokenHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-key-variant"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_ENCODING_AESKEY"
-                      :label="t('notification.wechat.encodingAesKey')"
-                      :hint="t('notification.wechat.encodingAesKeyHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-lock"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.WECHAT_ADMINS"
-                      :label="t('notification.wechat.admins')"
-                      :placeholder="t('notification.wechat.adminsPlaceholder')"
-                      :hint="t('notification.wechat.adminsHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-account-supervisor"
-                    />
-                  </VCol>
-                </VRow>
-                <VRow v-else-if="wizardData.notification.type === 'telegram'">
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.name"
-                      :label="t('notification.name')"
-                      :placeholder="t('notification.name')"
-                      :hint="t('notification.nameHint')"
-                      :error="validationErrors.notification.name"
-                      :error-messages="validationErrors.notification.name ? [t('notification.nameRequired')] : []"
-                      persistent-hint
-                      prepend-inner-icon="mdi-label"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.TELEGRAM_TOKEN"
-                      :label="t('notification.telegram.token')"
-                      :hint="t('notification.telegram.tokenHint')"
-                      :error="validationErrors.notification.TELEGRAM_TOKEN"
-                      :error-messages="
-                        validationErrors.notification.TELEGRAM_TOKEN ? [t('notification.telegram.tokenRequired')] : []
-                      "
-                      persistent-hint
-                      prepend-inner-icon="mdi-key"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.TELEGRAM_CHAT_ID"
-                      :label="t('notification.telegram.chatId')"
-                      :hint="t('notification.telegram.chatIdHint')"
-                      :error="validationErrors.notification.TELEGRAM_CHAT_ID"
-                      :error-messages="
-                        validationErrors.notification.TELEGRAM_CHAT_ID
-                          ? [t('notification.telegram.chatIdRequired')]
-                          : []
-                      "
-                      persistent-hint
-                      prepend-inner-icon="mdi-chat"
-                      required
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.TELEGRAM_USERS"
-                      :label="t('notification.telegram.users')"
-                      :placeholder="t('notification.telegram.usersPlaceholder')"
-                      :hint="t('notification.telegram.usersHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-account-group"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.TELEGRAM_ADMINS"
-                      :label="t('notification.telegram.admins')"
-                      :placeholder="t('notification.telegram.adminsPlaceholder')"
-                      :hint="t('notification.telegram.adminsHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-account-supervisor"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="wizardData.notification.config.API_URL"
-                      :label="t('notification.telegram.apiUrl')"
-                      :placeholder="t('notification.telegram.apiUrlPlaceholder')"
-                      :hint="t('notification.telegram.apiUrlHint')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-web"
-                    />
-                  </VCol>
-                </VRow>
-              </VForm>
-            </VCardText>
-          </VCard>
-        </VCol>
-      </VRow>
-    </VCardText>
-  </VCard>
+    <!-- 通知配置 -->
+    <div v-if="wizardData.notification.type" class="setup-step-panel mt-3">
+      <VForm @submit.prevent="() => {}">
+        <VRow>
+          <VCol cols="12">
+            <VAutocomplete
+              v-model="wizardData.notification.switchs"
+              :items="notificationTypes"
+              :label="t('notification.type')"
+              :hint="t('notification.typeHint')"
+              multiple
+              clearable
+              chips
+              persistent-hint
+              prepend-inner-icon="mdi-bell-outline"
+            />
+          </VCol>
+        </VRow>
+        <VRow v-if="wizardData.notification.type === 'wechat'">
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.name"
+              :label="t('notification.name')"
+              :placeholder="t('notification.name')"
+              :hint="t('notification.nameHint')"
+              :error="validationErrors.notification.name"
+              :error-messages="validationErrors.notification.name ? [t('notification.nameRequired')] : []"
+              persistent-hint
+              prepend-inner-icon="mdi-label"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_CORPID"
+              :label="t('notification.wechat.corpId')"
+              :hint="t('notification.wechat.corpIdHint')"
+              :error="validationErrors.notification.WECHAT_CORPID"
+              :error-messages="
+                validationErrors.notification.WECHAT_CORPID ? [t('notification.wechat.corpIdRequired')] : []
+              "
+              persistent-hint
+              prepend-inner-icon="mdi-domain"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_APP_ID"
+              :label="t('notification.wechat.appId')"
+              :hint="t('notification.wechat.appIdHint')"
+              :error="validationErrors.notification.WECHAT_APP_ID"
+              :error-messages="
+                validationErrors.notification.WECHAT_APP_ID ? [t('notification.wechat.appIdRequired')] : []
+              "
+              persistent-hint
+              prepend-inner-icon="mdi-application"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_APP_SECRET"
+              :label="t('notification.wechat.appSecret')"
+              :hint="t('notification.wechat.appSecretHint')"
+              :error="validationErrors.notification.WECHAT_APP_SECRET"
+              :error-messages="
+                validationErrors.notification.WECHAT_APP_SECRET ? [t('notification.wechat.appSecretRequired')] : []
+              "
+              persistent-hint
+              prepend-inner-icon="mdi-key"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_PROXY"
+              :label="t('notification.wechat.proxy')"
+              :hint="t('notification.wechat.proxyHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-server-network"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_TOKEN"
+              :label="t('notification.wechat.token')"
+              :hint="t('notification.wechat.tokenHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-key-variant"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_ENCODING_AESKEY"
+              :label="t('notification.wechat.encodingAesKey')"
+              :hint="t('notification.wechat.encodingAesKeyHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-lock"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.WECHAT_ADMINS"
+              :label="t('notification.wechat.admins')"
+              :placeholder="t('notification.wechat.adminsPlaceholder')"
+              :hint="t('notification.wechat.adminsHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-account-supervisor"
+            />
+          </VCol>
+        </VRow>
+        <VRow v-else-if="wizardData.notification.type === 'telegram'">
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.name"
+              :label="t('notification.name')"
+              :placeholder="t('notification.name')"
+              :hint="t('notification.nameHint')"
+              :error="validationErrors.notification.name"
+              :error-messages="validationErrors.notification.name ? [t('notification.nameRequired')] : []"
+              persistent-hint
+              prepend-inner-icon="mdi-label"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.TELEGRAM_TOKEN"
+              :label="t('notification.telegram.token')"
+              :hint="t('notification.telegram.tokenHint')"
+              :error="validationErrors.notification.TELEGRAM_TOKEN"
+              :error-messages="
+                validationErrors.notification.TELEGRAM_TOKEN ? [t('notification.telegram.tokenRequired')] : []
+              "
+              persistent-hint
+              prepend-inner-icon="mdi-key"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.TELEGRAM_CHAT_ID"
+              :label="t('notification.telegram.chatId')"
+              :hint="t('notification.telegram.chatIdHint')"
+              :error="validationErrors.notification.TELEGRAM_CHAT_ID"
+              :error-messages="
+                validationErrors.notification.TELEGRAM_CHAT_ID ? [t('notification.telegram.chatIdRequired')] : []
+              "
+              persistent-hint
+              prepend-inner-icon="mdi-chat"
+              required
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.TELEGRAM_USERS"
+              :label="t('notification.telegram.users')"
+              :placeholder="t('notification.telegram.usersPlaceholder')"
+              :hint="t('notification.telegram.usersHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-account-group"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.TELEGRAM_ADMINS"
+              :label="t('notification.telegram.admins')"
+              :placeholder="t('notification.telegram.adminsPlaceholder')"
+              :hint="t('notification.telegram.adminsHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-account-supervisor"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.notification.config.API_URL"
+              :label="t('notification.telegram.apiUrl')"
+              :placeholder="t('notification.telegram.apiUrlPlaceholder')"
+              :hint="t('notification.telegram.apiUrlHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-web"
+            />
+          </VCol>
+        </VRow>
+      </VForm>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.cursor-pointer {
+.setup-step-head {
+  margin-block-end: 16px;
+}
+
+.setup-step-title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-desc {
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-alert__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-alert__desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-section__label {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-block-end: 10px;
+}
+
+.setup-choice-grid {
+  display: grid;
+  gap: 13px;
+}
+
+.setup-choice-grid--2 {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 220px));
+}
+
+.setup-choice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 13px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.02);
   cursor: pointer;
-  transition: all 0.2s ease;
+  gap: 8px;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.cursor-pointer:hover {
-  transform: translateY(-2px);
+.setup-choice-card:hover {
+  border-color: var(--mp-border-hover);
+  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.cursor-pointer:active {
-  transform: translateY(0);
+.setup-choice-card.is-selected {
+  border-color: rgba(var(--v-theme-primary), 0.65);
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
-/* 选中状态的样式 */
-.v-card--variant-tonal.v-theme--light {
-  border: 2px solid rgb(var(--v-theme-primary));
-  background-color: rgb(var(--v-theme-primary), 0.12);
+.setup-choice-card__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.03);
+  block-size: 46px;
+  inline-size: 46px;
 }
 
-.v-card--variant-tonal.v-theme--dark {
-  border: 2px solid rgb(var(--v-theme-primary));
-  background-color: rgb(var(--v-theme-primary), 0.2);
+.setup-choice-card__logo--dark {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.setup-choice-card__title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-panel {
+  padding: 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
 }
 </style>

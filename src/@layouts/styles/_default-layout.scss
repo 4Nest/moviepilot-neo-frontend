@@ -1,4 +1,4 @@
-// These are styles which are both common in layout w/ vertical nav & horizontal nav
+// Common styles in layout w/ vertical nav & horizontal nav
 @use '@layouts/styles/rtl';
 @use '@layouts/styles/placeholders';
 @use '@layouts/styles/mixins';
@@ -30,41 +30,34 @@ body,
 
 .navbar-content-container {
   padding-block-start: env(safe-area-inset-top);
-  padding-inline: 0.5rem;
+  padding-inline: 0.75rem;
 }
 
 .layout-page-content {
   @include mixins.boxed-content(true);
 
+  display: flex;
+  flex-direction: column;
   flex-grow: 1;
   min-inline-size: 0;
   overflow: clip visible;
-
-  // TODO: Use grid gutter variable here;
-  padding-block: 1.5rem;
-  padding-block-start: calc(env(safe-area-inset-top) + 4.5rem);
-  padding-inline: 0.5rem;
-
-  // display: flex;display
+  padding-block: 1rem;
+  padding-block-start: calc(env(safe-area-inset-top) + 4.25rem);
+  padding-inline: 16px;
 
   .page-content-container {
-    // flex: 1;flex
     display: flex;
+    flex: 1 1 auto;
+    inline-size: 100%;
     min-inline-size: 0;
 
     & > div:first-child {
       position: relative;
-      flex: auto;
-      inline-size: calc(100vw - variables.$layout-vertical-nav-width - 1rem);
+      flex: 1 1 auto;
+      inline-size: 100%;
+      max-inline-size: 100%;
       min-inline-size: 0;
     }
-  }
-}
-
-@media screen and (width <= 1280px) {
-  .page-content-container > div:first-child {
-    inline-size: 100% !important;
-    max-inline-size: 100%;
   }
 }
 

@@ -761,13 +761,13 @@ function notificationNativePanel(): NativePanelSource {
     scrim
   >
     <template v-if="!nativeChromeActive" #activator="{ props }">
-      <VBadge v-if="hasUnreadMessageIndicator" dot color="error" :offset-x="5" :offset-y="5" v-bind="props">
+      <VBadge v-if="hasUnreadMessageIndicator" dot color="error" :offset-x="6" :offset-y="6" v-bind="props">
         <IconBtn>
-          <VIcon icon="mdi-bell-outline" size="22" />
+          <VIcon icon="mdi-bell-outline" />
         </IconBtn>
       </VBadge>
       <IconBtn v-else v-bind="props">
-        <VIcon icon="mdi-bell-outline" size="22" />
+        <VIcon icon="mdi-bell-outline" />
       </IconBtn>
     </template>
 
@@ -1022,14 +1022,11 @@ function notificationNativePanel(): NativePanelSource {
 
 .notification-icon {
   display: grid;
-  place-items: center;
-}
-
-.notification-icon {
   flex: 0 0 40px;
   border-radius: 8px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   block-size: 40px;
+  place-items: center;
 }
 
 .notification-content {

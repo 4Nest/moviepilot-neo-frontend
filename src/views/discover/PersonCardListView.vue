@@ -129,7 +129,7 @@ async function fetchData({ done }: { done: any }) {
     side="end"
     :items="dataList"
     :margin="dataList.length > 0 ? 600 : 0"
-    class="overflow-visible px-3"
+    class="overflow-visible pt-3"
     @load="fetchData"
   >
     <template #loading />
@@ -157,7 +157,7 @@ async function fetchData({ done }: { done: any }) {
       v-if="dataList.length === 0 && isRefreshed"
       error-code="404"
       :error-title="t('common.noData')"
-      :error-description="t('error.networkError')"
+      :error-description="t('common.noContent')"
     />
   </VInfiniteScroll>
 </template>

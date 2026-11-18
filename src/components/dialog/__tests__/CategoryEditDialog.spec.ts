@@ -362,4 +362,38 @@ describe('CategoryEditDialog 可视化配置加载', () => {
     expect(await screen.findByDisplayValue('欧美剧')).toBeInTheDocument()
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
+
+  it('校验空白分类名与重复分类名并阻止静默覆盖保存', async () => {
+    mocks.toastError.mockClear()
+    const saved = vi.fn()
+    server.use(
+      http.get(categoryApiUrls.config, () =>
+        HttpResponse.json({
+          success: true,
+          data: {
+            movie: { 动画电影: { genre_ids: '16' } },
+            tv: {},
+          },
+        }),
+      ),
+      http.post(categoryApiUrls.config, async ({ request }) => {
+        saved(await request.json())
+        return HttpResponse.json({ success: true })
+      }),
+    )
+
+    await renderDialog()
+    const nameInput = await screen.findByDisplayValue('动画电影')
+    await fireEvent.update(nameInput, '   ')
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(mocks.toastError).toHaveBeenCalledWith('请输入名称')
+    expect(saved).not.toHaveBeenCalled()
+
+    mocks.toastError.mockClear()
+    await fireEvent.update(nameInput, '新分类')
+    await fireEvent.click(screen.getByRole('button', { name: /添加电影分类/ }))
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(mocks.toastError).toHaveBeenCalledWith('名称【新分类】已存在')
+    expect(saved).not.toHaveBeenCalled()
+  })
 })

@@ -57,22 +57,22 @@ const menuVisible = ref(false)
 let renameDialogController: ReturnType<typeof openSharedDialog> | null = null
 
 // 默认颜色
-const defaultColor = '#2196F3'
+const defaultColor = 'primary'
 // 默认图标
 const defaultIcon = 'mdi-folder'
-// 默认渐变
-const defaultGradient =
-  'linear-gradient(rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.5) 100%), linear-gradient(135deg, rgba(33, 150, 243, 0.7) 0%, rgba(33, 150, 243, 0.8) 100%)'
 
 // 计算背景图片
 const backgroundImage = computed(() => {
   return props.folderConfig.background
 })
 
+// 是否显式配置了自定义背景图片或渐变
+const hasCustomAppearance = computed(() => Boolean(backgroundImage.value || props.folderConfig?.gradient))
+
 // 计算背景渐变
 const backgroundGradient = computed(() => {
   const config = props.folderConfig || {}
-  return config.gradient || defaultGradient
+  return config.gradient || undefined
 })
 
 // 计算图标
@@ -218,13 +218,14 @@ const dropdownItems = ref([
             :ripple="false"
             :width="props.width"
             :height="props.height"
-            min-height="8.5rem"
+            min-height="8.25rem"
             @click="handleCardClick"
             class="plugin-folder-card app-hover-lift-card h-full"
             :class="{
               'plugin-folder-card--mobile': display.mobile,
               'plugin-folder-card--hover': hover.isHovering && !props.sortable,
               'plugin-folder-card--sortable': props.sortable,
+              'plugin-folder-card--custom': hasCustomAppearance,
             }"
           >
             <template v-if="backgroundImage" #image>
@@ -234,18 +235,22 @@ const dropdownItems = ref([
             <!-- 背景遮罩（当有背景图片时） -->
             <div v-if="backgroundImage" class="plugin-folder-card__overlay" />
 
-            <!-- 背景渐变层 -->
-            <div v-else class="plugin-folder-card__bg" :style="{ background: backgroundGradient }" />
+            <!-- 背景渐变层 / 默认哑光底 -->
+            <div
+              v-else
+              class="plugin-folder-card__bg"
+              :style="backgroundGradient ? { background: backgroundGradient } : undefined"
+            />
 
             <!-- 卡片内容 -->
             <div class="plugin-folder-card__content">
               <!-- 主体内容 -->
               <div class="plugin-folder-card__body" :class="{ 'plugin-folder-card__body--no-icon': !shouldShowIcon }">
-                <!-- 文件夹图标 -->
+                <!-- 文件夹图标槽位（42x42 / 38x38 黄金比例） -->
                 <div v-if="shouldShowIcon" class="plugin-folder-card__icon-container">
                   <VIcon
                     :icon="folderIcon"
-                    :size="display.mobile ? 56 : 72"
+                    :size="display.mobile ? 20 : 22"
                     :color="iconColor"
                     :class="{ 'cursor-move': props.sortable && display.mdAndUp.value }"
                   />
@@ -268,15 +273,19 @@ const dropdownItems = ref([
                 </div>
               </div>
 
-              <!-- 更多菜单按钮 - 右下角 -->
-              <div v-if="!props.sortable" class="absolute top-0 right-0">
+              <!-- 更多菜单按钮 - 右上角 26x26 -->
+              <div v-if="!props.sortable" class="plugin-folder-card__menu-wrap">
                 <VMenu v-model="menuVisible" location="top end" :close-on-content-click="true">
                   <template #activator="{ props: menuProps }">
-                    <IconBtn v-bind="menuProps" @click.stop>
-                      <VIcon size="small" icon="mdi-dots-vertical" class="text-white" />
+                    <IconBtn v-bind="menuProps" class="plugin-folder-card__menu-btn" @click.stop>
+                      <VIcon
+                        size="16"
+                        icon="mdi-dots-vertical"
+                        :class="hasCustomAppearance ? 'text-white' : 'text-medium-emphasis'"
+                      />
                     </IconBtn>
                   </template>
-                  <VList>
+                  <VList density="compact">
                     <VListItem
                       v-for="(item, i) in dropdownItems"
                       v-show="item.show"
@@ -308,7 +317,14 @@ const dropdownItems = ref([
 .plugin-folder-card {
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
   cursor: pointer;
+
+  &:hover {
+    border-color: var(--mp-border-hover);
+  }
 
   &--sortable {
     cursor: move;
@@ -321,6 +337,7 @@ const dropdownItems = ref([
   &__bg {
     position: absolute;
     z-index: 0;
+    background: rgba(var(--v-theme-on-surface), 0.025);
     inset: 0;
     outline: none;
   }
@@ -328,7 +345,7 @@ const dropdownItems = ref([
   &__overlay {
     position: absolute;
     z-index: 1;
-    background: rgba(0, 0, 0, 60%);
+    background: rgba(0, 0, 0, 58%);
     inset: 0;
   }
 
@@ -337,13 +354,11 @@ const dropdownItems = ref([
     z-index: 2;
     display: flex;
     flex-direction: column;
-    padding: 16px;
+    padding: 14px 16px;
     block-size: 100%;
-    padding-block-end: 12px;
 
     .plugin-folder-card--mobile & {
-      padding: 12px;
-      padding-block-end: 10px;
+      padding: 12px 14px;
     }
   }
 
@@ -353,43 +368,56 @@ const dropdownItems = ref([
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    gap: 16px;
-    padding-block: 0;
-    padding-inline: 8px;
+    gap: 13px;
+    padding: 0;
 
     .plugin-folder-card--mobile & {
-      gap: 12px;
-      padding-block: 0;
-      padding-inline: 4px;
+      gap: 11px;
     }
 
     &--no-icon {
       align-items: flex-start;
-      justify-content: flex-start;
-      padding: 16px;
+      justify-content: center;
+      flex-direction: column;
+      padding: 4px 2px;
       gap: 0;
-
-      .plugin-folder-card--mobile & {
-        padding: 12px;
-        gap: 0;
-      }
     }
   }
 
   &__icon-container {
-    display: flex;
-    flex-shrink: 0;
+    display: inline-flex;
+    flex: 0 0 42px;
     align-items: center;
     justify-content: center;
+    border: 1px solid var(--mp-border-subtle);
+    border-radius: 10px;
+    background: rgba(var(--v-theme-on-surface), 0.05);
+    block-size: 42px;
+    inline-size: 42px;
+
+    .plugin-folder-card--custom & {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .plugin-folder-card--mobile & {
+      flex-basis: 38px;
+      border-radius: 9px;
+      block-size: 38px;
+      inline-size: 38px;
+    }
   }
 
   &__info {
     flex: 1;
     min-block-size: 0;
+    min-inline-size: 0;
+    padding-inline-end: 20px;
     text-align: start;
 
     &--no-icon {
       flex: none;
+      inline-size: 100%;
       text-align: start;
     }
   }
@@ -399,53 +427,64 @@ const dropdownItems = ref([
     overflow: hidden;
     margin: 0;
     -webkit-box-orient: vertical;
-    color: white;
-    font-size: 1.1rem;
+    color: rgb(var(--v-theme-on-surface));
+    font-size: 15px;
     font-weight: 600;
     -webkit-line-clamp: 1;
     line-clamp: 1;
-    line-height: 1.3;
+    line-height: 1.35;
     max-inline-size: none;
     text-overflow: ellipsis;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 50%);
+
+    .plugin-folder-card--custom & {
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 50%);
+    }
 
     .plugin-folder-card--mobile & {
-      font-size: 1rem;
+      font-size: 14px;
     }
 
     .plugin-folder-card__info--no-icon & {
-      font-size: 1.3rem;
-      font-weight: 700;
+      font-size: 16px;
+      font-weight: 600;
       -webkit-line-clamp: 2;
       line-clamp: 2;
       margin-block-end: 4px;
 
       .plugin-folder-card--mobile & {
-        font-size: 1.2rem;
+        font-size: 15px;
       }
     }
   }
 
   &__count {
-    color: white;
-    font-size: 0.85rem;
-    margin-block: 2px 0;
+    color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+    margin-block: 3px 0;
     margin-inline: 0;
-    opacity: 0.9;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 50%);
 
-    .plugin-folder-card--mobile & {
-      font-size: 0.8rem;
+    .plugin-folder-card--custom & {
+      color: white;
+      opacity: 0.88;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 50%);
     }
+  }
 
-    .plugin-folder-card__info--no-icon & {
-      font-size: 0.9rem;
-      margin-block-start: 0;
+  &__menu-wrap {
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+  }
 
-      .plugin-folder-card--mobile & {
-        font-size: 0.85rem;
-      }
-    }
+  &__menu-btn {
+    border-radius: 6px !important;
+    block-size: 26px !important;
+    inline-size: 26px !important;
+    min-inline-size: 26px !important;
+    padding: 0 !important;
   }
 }
 

@@ -22,6 +22,7 @@ const emit = defineEmits(['close'])
 
 // 分享处理状态
 const shareDoing = ref(false)
+const shareFormRef = ref()
 
 // 工作流分享表单
 const shareForm = ref<WorkflowShare>({
@@ -45,11 +46,18 @@ watch(
 
 // 分享工作流
 async function doShare() {
-  if (!shareForm.value.share_title || !shareForm.value.share_comment || !shareForm.value.share_user) return
+  if (shareDoing.value) return
+  const { valid } = (await shareFormRef.value?.validate()) || { valid: true }
+  if (
+    !valid ||
+    !shareForm.value.share_title?.trim() ||
+    !shareForm.value.share_comment?.trim() ||
+    !shareForm.value.share_user?.trim()
+  )
+    return
+  shareDoing.value = true
   try {
-    shareDoing.value = true
     const result: { [key: string]: any } = await api.post('workflow/share', shareForm.value)
-    shareDoing.value = false
     // 提示
     if (result.success) {
       $toast.success(t('dialog.workflowShare.shareSuccess', { name: props.workflow?.name }))
@@ -59,7 +67,15 @@ async function doShare() {
       $toast.error(t('dialog.workflowShare.shareFailed', { name: props.workflow?.name, message: result.message }))
     }
   } catch (e) {
-    console.log(e)
+    console.error(e)
+    $toast.error(
+      t('dialog.workflowShare.shareFailed', {
+        name: props.workflow?.name,
+        message: e instanceof Error ? e.message : t('subscribe.requestFailed'),
+      }),
+    )
+  } finally {
+    shareDoing.value = false
   }
 }
 
@@ -68,31 +84,32 @@ const $toast = useToast()
 </script>
 
 <template>
-  <VDialog scrollable max-width="30rem" :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog scrollable max-width="34rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-share-outline" class="me-2" />
+          <VIcon icon="mdi-share-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('dialog.workflowShare.shareWorkflow') }}</VCardTitle>
-        <VCardSubtitle>
-          {{ props.workflow?.name }}
+        <VCardSubtitle v-if="props.workflow?.name">
+          {{ props.workflow.name }}
         </VCardSubtitle>
       </VCardItem>
+      <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VDialogCloseBtn @click="emit('close')" />
+      <VCardText class="mp-dialog-body">
         <!-- 安全警告信息 -->
         <VAlert
           type="warning"
           variant="tonal"
+          density="compact"
           class="mb-4"
           :title="t('dialog.workflowShare.securityWarning')"
           :text="t('dialog.workflowShare.securityWarningMessage')"
           prepend-icon="mdi-alert-circle-outline"
         />
-        <VForm @submit.prevent="() => {}" class="pt-2">
-          <VRow>
+        <VForm ref="shareFormRef" @submit.prevent="() => {}">
+          <VRow class="mp-form-grid">
             <VCol cols="12">
               <VTextField
                 v-model="shareForm.share_title"
@@ -108,6 +125,8 @@ const $toast = useToast()
                 :label="t('dialog.workflowShare.description')"
                 :rules="[requiredValidator]"
                 :hint="t('dialog.workflowShare.descriptionHint')"
+                rows="3"
+                auto-grow
                 persistent-hint
                 prepend-inner-icon="mdi-comment-text-outline"
               />
@@ -125,16 +144,20 @@ const $toast = useToast()
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
           :disabled="shareDoing"
-          @click="doShare"
-          prepend-icon="mdi-share"
-          class="px-5"
           :loading="shareDoing"
+          class="px-4"
+          @click="doShare"
         >
           {{ t('dialog.workflowShare.confirmShare') }}
         </VBtn>
@@ -142,3 +165,29 @@ const $toast = useToast()
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

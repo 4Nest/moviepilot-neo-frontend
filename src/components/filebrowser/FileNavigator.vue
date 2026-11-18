@@ -53,13 +53,32 @@ const expandedFolders = ref<string[]>([])
 // 是否正在加载
 const loading = ref<{ [key: string]: boolean }>({})
 
+// 存储切换代次，防止前一个存储的慢请求写回当前树缓存
+let storageRequestSeed = 0
+
+// 规范化目录路径：根目录保持 `/`，其余目录统一以 `/` 开头并以 `/` 结尾
+function normalizeDirPath(path?: string): string {
+  if (!path || path === '/') return '/'
+  const normalized = path.replace(/\\/g, '/')
+  const withLeading = normalized.startsWith('/') ? normalized : `/${normalized}`
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+}
+
+function normalizeDirItem(item: FileItem): FileItem {
+  return {
+    ...item,
+    path: normalizeDirPath(item.path),
+  }
+}
+
 // 点击目录
 function handleFolderClick(item: FileItem) {
-  emit('navigate', item)
+  emit('navigate', normalizeDirItem(item))
 }
 
 // 切换文件夹展开状态
-async function toggleFolder(path: string) {
+async function toggleFolder(rawPath: string) {
+  const path = normalizeDirPath(rawPath)
   const index = expandedFolders.value.indexOf(path)
   if (index >= 0) {
     // 折叠文件夹
@@ -75,8 +94,8 @@ async function toggleFolder(path: string) {
 }
 
 // 判断文件夹是否展开
-function isFolderExpanded(path: string) {
-  return expandedFolders.value.includes(path)
+function isFolderExpanded(rawPath: string) {
+  return expandedFolders.value.includes(normalizeDirPath(rawPath))
 }
 
 // 渲染文件夹图标
@@ -88,10 +107,12 @@ function renderFolderIcon(isExpanded: boolean) {
 }
 
 // 加载子目录
-async function loadSubdirectories(path: string) {
+async function loadSubdirectories(rawPath: string) {
+  const path = normalizeDirPath(rawPath)
   // 如果已经在加载中或已有缓存，跳过
   if (loading.value[path] || treeCache.value[path]) return
 
+  const requestSeed = storageRequestSeed
   // 标记为加载中
   loading.value[path] = true
 
@@ -100,8 +121,8 @@ async function loadSubdirectories(path: string) {
     const fakeItem: FileItem = {
       storage: props.storage,
       type: 'dir',
-      name: path.split('/').pop() || '/',
-      path: path,
+      name: path.split('/').filter(Boolean).pop() || '/',
+      path,
     }
 
     // 调用API加载目录内容
@@ -114,9 +135,10 @@ async function loadSubdirectories(path: string) {
     }
 
     const result = await props.axios?.request(config)
+    if (requestSeed !== storageRequestSeed) return
     if (result && Array.isArray(result)) {
-      // 过滤出目录项
-      const dirs = result.filter(item => item.type === 'dir')
+      // 过滤出目录项并统一目录路径格式
+      const dirs = result.filter(item => item.type === 'dir').map(normalizeDirItem)
 
       // 缓存目录内容
       treeCache.value[path] = dirs
@@ -125,7 +147,9 @@ async function loadSubdirectories(path: string) {
     console.error('加载目录失败:', path, error)
   } finally {
     // 取消加载状态
-    loading.value[path] = false
+    if (requestSeed === storageRequestSeed) {
+      loading.value[path] = false
+    }
   }
 }
 
@@ -134,35 +158,49 @@ async function loadRootDirectories() {
   await loadSubdirectories('/')
 }
 
-// 监听当前路径变化，自动展开当前路径
+// 监听存储切换，清空缓存并重新加载新存储的根目录
+watch(
+  () => props.storage,
+  async (newStorage, oldStorage) => {
+    if (!newStorage || newStorage === oldStorage) return
+    storageRequestSeed++
+    treeCache.value = {}
+    expandedFolders.value = []
+    loading.value = {}
+    await loadRootDirectories()
+  },
+)
+
+// 监听当前路径变化，自动展开当前路径及所有父级目录
 watch(
   () => props.currentPath,
   async newPath => {
     if (!newPath) return
+    const normalizedPath = normalizeDirPath(newPath)
 
     // 如果当前路径不是根目录，自动展开父目录
-    if (newPath !== '/') {
-      const parts = newPath.split('/').filter(p => p)
-      let currentPath = ''
+    if (normalizedPath !== '/') {
+      const parts = normalizedPath.split('/').filter(Boolean)
+      let currentPath = '/'
 
-      // 展开到当前路径的每一层
-      for (const part of parts) {
-        currentPath += '/' + part
+      // 确保根目录已加载
+      if (!treeCache.value['/']) {
+        await loadSubdirectories('/')
+      }
 
-        // 如果该路径未展开，则展开它
+      // 展开并加载到当前路径的所有父级目录（统一以 `/` 结尾）
+      const ancestorParts = parts.slice(0, -1)
+      for (const part of ancestorParts) {
+        currentPath += `${part}/`
+
+        // 如果该父级路径未展开，则展开它
         if (!expandedFolders.value.includes(currentPath)) {
           expandedFolders.value.push(currentPath)
-
-          // 确保子目录已加载
-          if (!treeCache.value[currentPath]) {
-            await loadSubdirectories(currentPath)
-          }
         }
 
-        // 如果有上一级目录，确保它已加载
-        const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'
-        if (!treeCache.value[parentPath]) {
-          await loadSubdirectories(parentPath)
+        // 确保父级子目录已加载
+        if (!treeCache.value[currentPath]) {
+          await loadSubdirectories(currentPath)
         }
       }
     }
@@ -173,13 +211,14 @@ watch(
 // 监听目录变化，缓存当前目录的内容
 watch(
   () => props.items,
-  newItems => {
+  (newItems, oldItems) => {
     if (newItems) {
-      // 过滤出目录项
-      const dirs = newItems.filter(item => item.type === 'dir')
+      if (oldItems === undefined && newItems.length === 0) return
+      // 过滤出目录项并统一目录路径格式
+      const dirs = newItems.filter(item => item.type === 'dir').map(normalizeDirItem)
 
       // 缓存当前目录内容
-      treeCache.value[props.currentPath || '/'] = dirs
+      treeCache.value[normalizeDirPath(props.currentPath)] = dirs
     }
   },
   { immediate: true },
@@ -238,7 +277,7 @@ function addVisibleDirectoryRows(dir: FileItem, level: number, rows: TreeRow[]) 
 
 function getTreeRowStyle(level: number) {
   return {
-    paddingInlineStart: level > 0 ? `${16 + level * 12}px` : undefined,
+    paddingInlineStart: level > 0 ? `${8 + level * 14}px` : undefined,
   }
 }
 
@@ -256,7 +295,7 @@ onMounted(async () => {
           v-if="item.type === 'root'"
           :key="item.key"
           class="tree-item root-item"
-          :class="{ 'active': currentPath === '/' }"
+          :class="{ 'active': normalizeDirPath(currentPath) === '/' }"
           @click="
             handleFolderClick({
               storage: storage,
@@ -267,8 +306,8 @@ onMounted(async () => {
           "
         >
           <div class="folder-content">
-            <VIcon icon="mdi-home" class="me-2" color="primary" />
-            <span>{{ t('file.rootDirectory') }}</span>
+            <VIcon icon="mdi-folder-home-outline" size="17" class="tree-folder-icon tree-folder-icon--root me-2" />
+            <span class="folder-name">{{ t('file.rootDirectory') }}</span>
           </div>
         </div>
 
@@ -278,7 +317,7 @@ onMounted(async () => {
           class="tree-loading"
           :style="getTreeRowStyle(item.level)"
         >
-          <VProgressCircular indeterminate size="14" color="primary" class="ma-2" />
+          <VProgressCircular indeterminate size="13" width="2" color="primary" class="me-2" />
           <span class="text-caption">
             {{ item.path === '/' ? t('file.loadingDirectoryStructure') : t('common.loading') }}
           </span>
@@ -288,25 +327,25 @@ onMounted(async () => {
           v-else
           :key="item.key"
           class="tree-item"
-          :class="{ 'active': currentPath === item.dir.path }"
+          :class="{ 'active': normalizeDirPath(currentPath) === normalizeDirPath(item.dir.path) }"
           :style="getTreeRowStyle(item.level)"
         >
           <div class="folder-toggle" @click.stop="toggleFolder(item.dir.path || '')">
-            <VProgressCircular v-if="loading[item.dir.path || '']" indeterminate size="14" width="2" color="primary" />
+            <VProgressCircular v-if="loading[item.dir.path || '']" indeterminate size="13" width="2" color="primary" />
             <VIcon
               v-else
-              size="small"
+              size="15"
+              class="folder-toggle__icon"
               :icon="isFolderExpanded(item.dir.path || '') ? 'mdi-chevron-down' : 'mdi-chevron-right'"
             />
           </div>
           <div class="folder-content" @click.stop="handleFolderClick(item.dir)">
             <VIcon
-              size="small"
+              size="17"
               :icon="renderFolderIcon(isFolderExpanded(item.dir.path || ''))"
-              :color="currentPath === item.dir.path ? 'primary' : 'amber-darken-1'"
-              class="me-1"
+              class="tree-folder-icon me-1"
             />
-            <span class="folder-name">
+            <span class="folder-name" :title="item.dir.name">
               {{ item.dir.name }}
             </span>
           </div>
@@ -323,17 +362,11 @@ onMounted(async () => {
   flex-direction: column;
   flex-shrink: 0;
   border-radius: 0 !important;
+  background: rgba(var(--v-theme-on-surface), 0.015) !important;
   block-size: 100%;
   box-shadow: none !important;
   inline-size: 240px;
-}
-
-.navigator-header {
-  display: flex;
-  align-items: center;
-  border-block-end: 1px solid rgba(0, 0, 0, 8%);
-  padding-block: 12px;
-  padding-inline: 16px;
+  padding-block: 4px;
 }
 
 .tree-container {
@@ -341,77 +374,99 @@ onMounted(async () => {
   min-block-size: 0;
 }
 
-.tree-item-container {
-  inline-size: 100%;
-}
-
 .tree-item {
   display: flex;
   box-sizing: border-box;
   align-items: center;
+  margin-block: 1px;
+  margin-inline: 6px;
+  padding-inline: 6px 8px;
+  border-radius: 6px;
+  block-size: 30px;
+  color: rgba(var(--v-theme-on-surface), 0.78);
   cursor: pointer;
-  max-inline-size: 100%;
-  min-inline-size: 100%;
-  transition: background-color 0.2s ease;
+  font-size: 13px;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
 
   &:hover {
-    background-color: rgba(var(--v-theme-primary), 0.05);
+    background-color: rgba(var(--v-theme-on-surface), 0.05);
+    color: rgb(var(--v-theme-on-surface));
   }
 
   &.active {
-    background-color: rgba(var(--v-theme-primary), 0.08);
+    background-color: var(--mp-nav-pill-active-bg, rgba(var(--v-theme-on-surface), 0.08));
+    color: rgb(var(--v-theme-on-surface));
+    font-weight: 600;
   }
 }
 
 .folder-toggle {
-  display: flex;
+  display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  block-size: 16px;
-  inline-size: 16px;
-  margin-inline-end: 4px;
-  padding-block: 6px;
-  padding-inline: 12px 0;
+  border-radius: 4px;
+  block-size: 20px;
+  color: rgba(var(--v-theme-on-surface), 0.48);
+  inline-size: 20px;
+  margin-inline-end: 2px;
+
+  &:hover {
+    background: rgba(var(--v-theme-on-surface), 0.06);
+    color: rgb(var(--v-theme-on-surface));
+  }
 }
 
 .folder-content {
   display: flex;
   overflow: hidden;
-  flex: 1;
+  flex: 1 1 auto;
   align-items: center;
+  block-size: 100%;
+  gap: 4px;
   min-inline-size: 0;
-  padding-block: 6px;
-  padding-inline: 8px 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tree-folder-icon {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-warning), 0.82);
+}
+
+.tree-folder-icon--root {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+}
+
+.tree-item.active .tree-folder-icon {
+  color: rgb(var(--v-theme-warning));
+}
+
+.tree-item.active .tree-folder-icon--root {
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .root-item {
   font-weight: 500;
+  padding-inline-start: 10px;
 }
 
 .folder-name {
-  display: inline-block;
   overflow: hidden;
-  max-inline-size: 150px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.subdirectory-container {
-  inline-size: 100%;
 }
 
 .tree-loading {
   display: flex;
   align-items: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  padding-block: 4px;
-  padding-inline: 16px;
-}
-
-.pl-8 {
-  padding-inline-start: 20px !important;
+  block-size: 30px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  margin-inline: 6px;
+  padding-inline: 10px;
 }
 </style>

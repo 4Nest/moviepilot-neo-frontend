@@ -17,9 +17,14 @@ import { defineComponent, h } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
   routerPush: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('@/router', () => ({
@@ -61,7 +66,11 @@ function createDeferred() {
   return { promise, resolve }
 }
 
-async function renderDialog(media: SubscribeShare = createSubscribeShare(), settings: Record<string, unknown> = {}) {
+async function renderDialog(
+  media: SubscribeShare = createSubscribeShare(),
+  settings: Record<string, unknown> = {},
+  superUser = true,
+) {
   const events = {
     close: vi.fn(),
     delete: vi.fn(),
@@ -84,6 +93,9 @@ async function renderDialog(media: SubscribeShare = createSubscribeShare(), sett
           USER_UNIQUE_ID: 'current-user',
           ...settings,
         },
+      },
+      user: {
+        superUser,
       },
     },
     props: {
@@ -284,6 +296,7 @@ describe('ForkSubscribeDialog follow behavior', () => {
 describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.confirm.mockResolvedValue(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
@@ -344,24 +357,29 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
   })
 
   it.each([
-    ['the owner', 'owned-share', false, true],
-    ['a share manager', 'other-user', true, true],
-    ['another ordinary user', 'other-user', false, false],
-  ])('shows delete permission for %s', async (_case, shareUid, canManage, visible) => {
+    ['the owner superuser', 'owned-share', false, true, true],
+    ['a share manager superuser', 'other-user', true, true, true],
+    ['another ordinary superuser', 'other-user', false, true, false],
+    ['a non-superuser even when share_uid matches', 'owned-share', true, false, false],
+  ])('shows delete permission for %s', async (_case, shareUid, canManage, superUser, visible) => {
     server.use(followSubscribersSettingHandler([]))
 
-    await renderDialog(createSubscribeShare({ share_uid: shareUid }), {
-      SUBSCRIBE_SHARE_MANAGE: canManage,
-      USER_UNIQUE_ID: 'owned-share',
-    })
+    await renderDialog(
+      createSubscribeShare({ share_uid: shareUid }),
+      {
+        SUBSCRIBE_SHARE_MANAGE: canManage,
+        USER_UNIQUE_ID: 'owned-share',
+      },
+      superUser,
+    )
     await waitFor(() => expect(screen.getByRole('button', { name: '订阅' })).toBeInTheDocument())
 
     if (visible) expect(screen.getByRole('button', { name: '取消分享' })).toBeInTheDocument()
     else expect(screen.queryByRole('button', { name: '取消分享' })).not.toBeInTheDocument()
   })
 
-  it('deletes the exact share and emits success without relying on response data.id', async () => {
-    const media = createSubscribeShare({ id: 6201, share_uid: 'owned-share' })
+  it('requires confirmation and sends the target record share_uid when deleting', async () => {
+    const media = createSubscribeShare({ id: 6201, share_uid: 'author-uid-99' })
     const deferred = createDeferred()
     const deleteRequest = vi.fn((_url: URL) => deferred.promise)
     server.use(
@@ -369,13 +387,25 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
       deleteSubscribeShareHandler(6201, { success: true }, 200, deleteRequest),
     )
     const user = userEvent.setup()
-    const { events } = await renderDialog(media, { USER_UNIQUE_ID: 'owned-share' })
+    const { events } = await renderDialog(media, {
+      SUBSCRIBE_SHARE_MANAGE: true,
+      USER_UNIQUE_ID: 'admin-local-uid',
+    })
     const deleteButton = screen.getByRole('button', { name: '取消分享' })
 
+    // 取消二次确认时不发送删除请求
+    mocks.confirm.mockResolvedValueOnce(false)
+    await user.click(deleteButton)
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(deleteRequest).not.toHaveBeenCalled()
+
+    // 确认后携带被删记录自身的 share_uid 发起删除
+    mocks.confirm.mockResolvedValueOnce(true)
     await user.click(deleteButton)
     await waitFor(() => expect(deleteRequest).toHaveBeenCalledOnce())
     expect(deleteButton).toBeDisabled()
     expect(deleteRequest.mock.calls[0][0].pathname).toBe('/api/v1/subscribe/share/6201')
+    expect(deleteRequest.mock.calls[0][0].searchParams.get('share_uid')).toBe('author-uid-99')
 
     deferred.resolve()
     await waitFor(() => expect(events.delete).toHaveBeenCalledOnce())
@@ -422,12 +452,25 @@ describe('ForkSubscribeDialog fork, delete, and navigation behavior', () => {
     expect(events.close).toHaveBeenCalledOnce()
   })
 
-  it('has no media detail navigation entry', async () => {
+  it('navigates to /media and closes dialog when clicking the hero poster', async () => {
     server.use(followSubscribersSettingHandler([]))
-    await renderDialog(createSubscribeShare({ tmdbid: 6301 }))
+    const user = userEvent.setup()
+    const { events, media } = await renderDialog(
+      createSubscribeShare({ name: '黑客帝国', tmdbid: 6301, type: '电影', year: '1999' }),
+    )
 
-    // 海报与内容均不提供媒体详情跳转入口
-    expect(screen.queryByRole('button', { name: '查看媒体详情' })).not.toBeInTheDocument()
-    expect(document.querySelector('.share-hero__poster-overlay')).toBeNull()
+    const posterBtn = screen.getByRole('button', { name: '媒体详情' })
+    await user.click(posterBtn)
+
+    expect(events.close).toHaveBeenCalledOnce()
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      path: '/media',
+      query: {
+        mediaid: 'tmdb:6301',
+        title: media.name,
+        type: '电影',
+        year: '1999',
+      },
+    })
   })
 })

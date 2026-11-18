@@ -19,6 +19,15 @@ const { t } = useI18n()
 const route = useRoute()
 const { appMode } = usePWA()
 const activeTab = ref<string>((route.query.tab as string) || '')
+const isPageActive = ref(true)
+
+onActivated(() => {
+  isPageActive.value = true
+})
+
+onDeactivated(() => {
+  isPageActive.value = false
+})
 
 function openDownloadHistoryDialog() {
   openSharedDialog(DownloadHistoryDialog, {}, {}, { closeOn: ['close'] })
@@ -94,43 +103,49 @@ useKeepAliveRefresh(async () => {
 </script>
 
 <template>
-  <div v-if="downloaders.length > 0">
-    <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
-      <VWindowItem v-for="item in downloaders" :key="item.name" :value="item.name">
-        <div>
-          <DownloadingListView
-            :ref="instance => setDownloadingListRef(item.name, instance)"
-            :name="item.name"
-            :active="activeTab === item.name"
-          />
-        </div>
-      </VWindowItem>
-    </VWindow>
-  </div>
-  <NoDataFound
-    v-else
-    error-code="404"
-    :error-title="t('downloading.noDownloader')"
-    :error-description="t('downloading.configureDownloader')"
-  />
-
-  <Teleport to="body" v-if="!appMode && route.path === '/downloading'">
-    <div class="compact-fab-stack">
-      <VFab
-        icon="mdi-history"
-        color="info"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
+  <div>
+    <div v-if="!appMode && route.path === '/downloading'" class="mp-page-action-bar">
+      <VBtn
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        prepend-icon="mdi-history"
+        data-testid="downloading-history-btn"
         @click="openDownloadHistoryDialog"
-      />
-      <VFab
-        icon="mdi-plus"
+      >
+        {{ t('downloading.history') }}
+      </VBtn>
+      <VBtn
+        size="small"
+        variant="flat"
         color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
+        rounded="lg"
+        prepend-icon="mdi-plus"
+        data-testid="downloading-add-btn"
         @click="openAddDownloadDialog"
-      />
+      >
+        {{ t('downloading.addTorrent') }}
+      </VBtn>
     </div>
-  </Teleport>
+
+    <div v-if="downloaders.length > 0">
+      <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
+        <VWindowItem v-for="item in downloaders" :key="item.name" :value="item.name">
+          <div>
+            <DownloadingListView
+              :ref="instance => setDownloadingListRef(item.name, instance)"
+              :name="item.name"
+              :active="isPageActive && activeTab === item.name"
+            />
+          </div>
+        </VWindowItem>
+      </VWindow>
+    </div>
+    <NoDataFound
+      v-else
+      error-code="404"
+      :error-title="t('downloading.noDownloader')"
+      :error-description="t('downloading.configureDownloader')"
+    />
+  </div>
 </template>

@@ -76,4 +76,25 @@ describe('ScrapeDialog', () => {
 
     expect(screen.getByText('共 2 项')).toBeInTheDocument()
   })
+
+  it('clears residual mediaId when mediaType switches back to auto', async () => {
+    const user = userEvent.setup()
+    const { events } = await renderDialog()
+
+    await user.click(screen.getByLabelText('类型'))
+    await user.click(await screen.findByRole('option', { name: '电影' }))
+    await user.type(screen.getByLabelText('TheMovieDb编号'), 'abc')
+    expect(screen.getByRole('button', { name: '确认' })).toBeDisabled()
+
+    await user.click(screen.getByLabelText('类型'))
+    await user.click(await screen.findByRole('option', { name: '自动' }))
+    expect(screen.getByRole('button', { name: '确认' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: '确认' }))
+    expect(events.scrape).toHaveBeenCalledWith({
+      media_source: 'themoviedb',
+      media_id: undefined,
+      type_name: undefined,
+    })
+  })
 })

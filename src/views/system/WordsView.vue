@@ -2,6 +2,7 @@
 import { useToast } from 'vue-toastification'
 import api from '@/api'
 import { useI18n } from '@/composables/useChineseText'
+import { useConfirm } from '@/composables/useConfirm'
 import { useTheme } from 'vuetify'
 import { configureAceEditorPadding } from '@/utils/aceEditor'
 import type { Ace } from 'ace-builds'
@@ -9,6 +10,7 @@ import type { ApiResponse } from '@/api/types'
 
 const { t } = useI18n()
 const $toast = useToast()
+const createConfirm = useConfirm()
 const { global: globalTheme } = useTheme()
 
 const WORDS_LINE_NUMBERS_STORAGE_KEY = 'MP_WORDS_SHOW_LINE_NUMBERS'
@@ -65,7 +67,7 @@ function applyWordListSyntax() {
 }
 const textEditorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dark' : 'github_light_default'))
 const textEditorOptions = computed(() => ({
-  fontSize: 13.6,
+  fontSize: 13,
   highlightActiveLine: false,
   scrollPastEnd: 0,
   showFoldWidgets: false,
@@ -416,12 +418,29 @@ function addSyncSource() {
 /** 删除同步源并保存。 */
 async function removeSyncSource(index: number) {
   if (savingSyncSources.value) return
+  const target = syncSources.value[index]
+  if (!target) return
+  if (target.url.trim()) {
+    const confirmed = await createConfirm({
+      type: 'warn',
+      title: t('common.confirm'),
+      content: `确认删除远程同步源「${target.url.trim()}」及其已同步词条？`,
+    })
+    if (!confirmed) return
+  }
   const previousSources = [...syncSources.value]
   syncSources.value.splice(index, 1)
   if (await saveSyncSources(false)) {
     $toast.success(t('setting.words.syncSourceRemoved'))
   } else {
     syncSources.value = previousSources
+  }
+}
+
+/** 先保存当前远程同步源配置，成功后再触发单源立即同步。 */
+async function saveAndRunSync(source: WordsSyncSource) {
+  if (await saveSyncSources(false)) {
+    await runSync(source)
   }
 }
 
@@ -478,8 +497,8 @@ onMounted(() => {
           :aria-current="activeSection === section.key ? 'page' : undefined"
           @click="selectSection(section.key)"
         >
-          <VAvatar :color="section.color" variant="tonal" rounded="lg" size="44" class="words-section-icon">
-            <VIcon :icon="section.icon" size="24" />
+          <VAvatar :color="section.color" variant="tonal" size="34" class="words-section-icon">
+            <VIcon :icon="section.icon" size="18" />
           </VAvatar>
 
           <span class="words-sidebar-copy">
@@ -503,13 +522,13 @@ onMounted(() => {
             <VIcon
               :icon="isSectionDirty(section.key) ? 'mdi-circle-medium' : 'mdi-check'"
               :color="isSectionDirty(section.key) ? 'warning' : 'success'"
-              size="18"
+              size="15"
             />
           </span>
         </button>
 
         <div class="words-sidebar-hint">
-          <VIcon icon="mdi-information-outline" size="18" />
+          <VIcon icon="mdi-information-outline" size="15" />
           <span>{{ t('setting.words.switchHint') }}</span>
         </div>
       </nav>
@@ -525,7 +544,7 @@ onMounted(() => {
           @click="selectSection(section.key)"
         >
           <span class="words-mobile-tab-icon">
-            <VIcon :icon="section.icon" size="23" />
+            <VIcon :icon="section.icon" size="18" />
             <span v-if="isSectionDirty(section.key)" class="words-dirty-dot" />
           </span>
           <span>{{ section.shortTitle }}</span>
@@ -540,7 +559,7 @@ onMounted(() => {
           </div>
 
           <div class="words-save-state" :class="{ 'words-save-state--dirty': activeSectionDirty }">
-            <VIcon :icon="activeSectionDirty ? 'mdi-circle-medium' : 'mdi-check-circle-outline'" size="18" />
+            <VIcon :icon="activeSectionDirty ? 'mdi-circle-medium' : 'mdi-check-circle-outline'" size="14" />
             <span>{{ activeSectionDirty ? t('setting.words.unsaved') : t('setting.words.saved') }}</span>
           </div>
         </header>
@@ -550,7 +569,9 @@ onMounted(() => {
             <div class="words-field-meta">
               <strong>{{ t('setting.words.listLabel') }}</strong>
               <div class="words-field-actions">
-                <span>{{ t('setting.words.entryCount', { count: activeSectionCount }) }}</span>
+                <span class="words-entry-badge">{{
+                  t('setting.words.entryCount', { count: activeSectionCount })
+                }}</span>
                 <VSwitch
                   v-if="activeSection === 'identifiers'"
                   v-model="showLineNumbers"
@@ -598,13 +619,13 @@ onMounted(() => {
             />
 
             <div class="words-inline-hint">
-              <VIcon icon="mdi-information-outline" size="17" />
+              <VIcon icon="mdi-information-outline" size="15" />
               <span>{{ activeTextHint }}</span>
             </div>
 
             <div v-if="syncedCountFor(activeSection as TextSectionKey) > 0" class="words-remote-block">
               <div class="words-remote-header">
-                <VIcon icon="mdi-cloud-sync-outline" size="17" />
+                <VIcon icon="mdi-cloud-sync-outline" size="15" />
                 <span>
                   {{
                     t('setting.words.syncRemoteSummary', {
@@ -628,10 +649,11 @@ onMounted(() => {
           <template v-else>
             <div class="words-sync-panel">
               <div class="words-sync-toolbar">
-                <VBtn variant="outlined" prepend-icon="mdi-plus" @click="addSyncSource">
+                <VBtn size="small" variant="outlined" prepend-icon="mdi-plus" @click="addSyncSource">
                   {{ t('setting.words.syncAddSource') }}
                 </VBtn>
                 <VBtn
+                  size="small"
                   color="primary"
                   variant="flat"
                   prepend-icon="mdi-sync"
@@ -644,7 +666,7 @@ onMounted(() => {
               </div>
 
               <div v-if="syncSources.length === 0" class="words-sync-empty">
-                <VIcon icon="mdi-cloud-sync-outline" size="36" />
+                <VIcon icon="mdi-cloud-sync-outline" size="28" />
                 <span>{{ t('setting.words.syncNoSource') }}</span>
               </div>
 
@@ -653,41 +675,49 @@ onMounted(() => {
                   <VTextField
                     v-model="source.url"
                     class="words-sync-source-url"
-                    density="comfortable"
+                    density="compact"
                     variant="outlined"
                     hide-details="auto"
                     :label="t('setting.words.syncUrl')"
                     :placeholder="t('setting.words.syncUrlPlaceholder')"
                   />
-                  <IconBtn
+                  <VBtn
+                    icon
+                    size="small"
                     variant="text"
                     color="error"
+                    class="words-icon-trigger"
                     :disabled="savingSyncSources"
                     :aria-label="t('common.delete')"
                     @click.stop="removeSyncSource(index)"
                   >
-                    <VIcon icon="mdi-delete-outline" />
+                    <VIcon icon="mdi-delete-outline" size="16" />
                     <VTooltip activator="parent" location="top">{{ t('common.delete') }}</VTooltip>
-                  </IconBtn>
+                  </VBtn>
                 </div>
 
                 <div class="words-sync-source-row">
-                  <VSwitch
-                    v-model="source.enabled"
-                    class="words-sync-enabled"
-                    color="primary"
-                    density="compact"
-                    hide-details
-                    :label="t('setting.words.syncEnabled')"
-                  />
+                  <div class="mp-switch-card words-sync-switch-card">
+                    <VSwitch
+                      v-model="source.enabled"
+                      class="words-sync-enabled"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      inset
+                      :mobile-layout="false"
+                      :label="t('setting.words.syncEnabled')"
+                    />
+                  </div>
                   <VTextField
                     v-model.number="source.interval_days"
                     class="words-sync-interval"
                     type="number"
                     min="1"
-                    density="comfortable"
+                    density="compact"
                     variant="outlined"
                     hide-details
+                    :mobile-layout="false"
                     :label="t('setting.words.syncIntervalDays')"
                   />
                 </div>
@@ -727,19 +757,19 @@ onMounted(() => {
                     variant="flat"
                     prepend-icon="mdi-sync"
                     :loading="syncingUrl === source.url"
-                    :disabled="!source.url || source.tables.length === 0"
-                    @click="saveSyncSources(false).then(() => runSync(source))"
+                    :disabled="!source.url || source.tables.length === 0 || savingSyncSources"
+                    @click="saveAndRunSync(source)"
                   >
                     {{ t('setting.words.syncNow') }}
                   </VBtn>
-                  <span class="words-sync-last text-caption text-medium-emphasis">
+                  <span class="words-sync-last">
                     {{ t('setting.words.syncLastSync') }}: {{ sourceStatusText(source) }}
                   </span>
                 </div>
               </article>
 
               <div class="words-inline-hint">
-                <VIcon icon="mdi-information-outline" size="17" />
+                <VIcon icon="mdi-information-outline" size="15" />
                 <span>{{ t('setting.words.syncFileHint') }}</span>
               </div>
             </div>
@@ -755,13 +785,13 @@ onMounted(() => {
               <VExpansionPanelTitle>
                 <template #default>
                   <span class="words-help-title">
-                    <VIcon icon="mdi-information-outline" color="primary" size="21" />
+                    <VIcon icon="mdi-information-outline" color="primary" size="16" />
                     {{ activeGuideTitle }}
                   </span>
                 </template>
               </VExpansionPanelTitle>
               <VExpansionPanelText>
-                <div class="words-help-content" v-html="activeGuideContent.split('\n').join('<br>')" />
+                <div class="words-help-content">{{ activeGuideContent }}</div>
               </VExpansionPanelText>
             </VExpansionPanel>
           </VExpansionPanels>
@@ -769,12 +799,13 @@ onMounted(() => {
 
         <footer v-if="activeSection !== 'sync'" class="words-editor-footer">
           <div class="words-footer-state" :class="{ 'words-footer-state--dirty': activeSectionDirty }">
-            <VIcon :icon="activeSectionDirty ? 'mdi-circle-medium' : 'mdi-check-circle-outline'" size="18" />
+            <VIcon :icon="activeSectionDirty ? 'mdi-circle-medium' : 'mdi-check-circle-outline'" size="15" />
             <span>{{ activeSectionDirty ? t('setting.words.unsaved') : t('setting.words.saved') }}</span>
           </div>
 
           <div class="words-footer-actions">
             <VBtn
+              size="small"
               variant="text"
               :disabled="!activeSectionDirty || saving"
               prepend-icon="mdi-restore"
@@ -782,7 +813,14 @@ onMounted(() => {
             >
               {{ t('common.reset') }}
             </VBtn>
-            <VBtn color="primary" :loading="saving" prepend-icon="mdi-content-save" @click="saveActiveSection">
+            <VBtn
+              size="small"
+              color="primary"
+              variant="flat"
+              :loading="saving"
+              prepend-icon="mdi-content-save"
+              @click="saveActiveSection"
+            >
               {{ t('setting.words.saveChanges') }}
             </VBtn>
           </div>
@@ -797,10 +835,9 @@ onMounted(() => {
 
 .words-view {
   --words-surface-background: var(--app-grouped-list-background);
-  --words-surface-filter: var(--app-grouped-list-backdrop-filter);
-  --words-surface-border: var(--app-grouped-list-border);
-  --words-surface-radius: var(--app-grouped-list-radius);
-  --words-separator-color: var(--app-grouped-list-separator-color);
+  --words-surface-border: 1px solid var(--mp-border-card);
+  --words-surface-radius: 10px;
+  --words-separator-color: var(--mp-border-subtle);
   --words-hover-background: var(--app-grouped-list-hover-background);
   --words-active-background: var(--app-grouped-list-active-background);
 
@@ -812,45 +849,49 @@ onMounted(() => {
 
 .words-summary {
   align-items: center;
-  min-block-size: 3rem;
-  padding: 0.75rem 1.25rem;
+  min-block-size: 34px;
+  padding: 6px 16px;
   border-block-end: 1px solid var(--words-separator-color);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .words-workspace {
   display: grid;
   overflow: hidden;
-  min-block-size: 32rem;
+  min-block-size: 30rem;
   block-size: min(40rem, calc(100dvh - 10rem));
   border: var(--words-surface-border);
   border-radius: var(--words-surface-radius);
-  backdrop-filter: var(--words-surface-filter);
   background: var(--words-surface-background);
-  grid-template-columns: 19rem minmax(0, 1fr);
+  grid-template-columns: 16.25rem minmax(0, 1fr);
 }
 
 .words-sidebar {
+  display: flex;
   min-block-size: 0;
   border-inline-end: 1px solid var(--words-separator-color);
   flex-direction: column;
+  gap: 4px;
+  padding: 8px;
 }
 
 .words-sidebar-item {
   display: grid;
-  min-block-size: 6.25rem;
   align-items: center;
-  border: 0;
-  border-block-end: 1px solid var(--words-separator-color);
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  gap: 0.75rem;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
-  padding: 0.875rem 1rem;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr) max-content;
+  padding: 9px 10px;
   text-align: start;
-  transition: background-color 0.18s ease;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .words-sidebar-item:hover,
@@ -860,141 +901,31 @@ onMounted(() => {
 }
 
 .words-sidebar-item--active {
-  position: relative;
+  border-color: var(--mp-border-subtle);
   background: var(--words-active-background);
-  color: rgb(var(--v-theme-primary));
-}
-
-.words-sidebar-item--active::before {
-  position: absolute;
-  background: rgb(var(--v-theme-primary));
-  content: '';
-  inline-size: 3px;
-  inset-block: 0;
-  inset-inline-start: 0;
-}
-
-.words-sync-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.words-sync-empty {
-  display: flex;
-  min-block-size: 8rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--words-separator-color);
-  border-radius: var(--app-surface-radius);
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.words-sync-source {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--words-separator-color);
-  border-radius: var(--app-surface-radius);
-  gap: 0.9rem;
-  padding: 1rem;
-}
-
-.words-sync-source-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-.words-sync-source-url {
-  flex: 1 1 auto;
-}
-
-.words-sync-source-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.words-sync-source-tables {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.words-sync-tables-label {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-}
-
-.words-sync-table-chip--active {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-}
-
-.words-sync-table-chip {
-  cursor: pointer;
-}
-
-.words-remote-block {
-  display: flex;
-  flex-direction: column;
-  border: 1px dashed var(--words-separator-color);
-  border-radius: var(--app-surface-radius);
-  gap: 0.5rem;
-  margin-block-start: 0.75rem;
-  padding: 0.85rem 1rem;
-}
-
-.words-remote-header {
-  display: flex;
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-  gap: 0.35rem;
-}
-
-.words-remote-source-url {
-  overflow: hidden;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.words-remote-lines {
-  overflow: auto;
-  max-block-size: 10rem;
-  border-radius: calc(var(--app-surface-radius) - 2px);
-  background: rgba(var(--v-theme-on-surface), 0.04);
-  font-size: 0.75rem;
-  margin-block: 0.25rem 0.5rem;
-  margin-inline: 0;
-  padding: 0.5rem 0.75rem;
-  white-space: pre-wrap;
-  word-break: break-all;
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 600;
 }
 
 .words-section-icon {
   flex: 0 0 auto;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px !important;
 }
 
 .words-sidebar-copy {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 2px;
 }
 
 .words-sidebar-copy strong {
   overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.9375rem;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1003,8 +934,8 @@ onMounted(() => {
   display: -webkit-box;
   overflow: hidden;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: 11.5px;
+  line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1014,22 +945,24 @@ onMounted(() => {
   align-items: flex-end;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 3px;
 }
 
 .words-sidebar-state small {
-  font-size: 0.72rem;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .words-sidebar-hint {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
   margin-block-start: auto;
-  padding: 1rem;
+  padding: 10px 8px 4px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .words-editor {
@@ -1044,8 +977,8 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.35rem 1.5rem 1rem;
+  gap: 13px;
+  padding: 14px 18px 10px;
 }
 
 .words-editor-heading {
@@ -1055,77 +988,39 @@ onMounted(() => {
 .words-editor-heading h2 {
   margin: 0;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 1.25rem;
-  font-weight: 650;
+  font-size: 15.5px;
+  font-weight: 600;
   line-height: 1.35;
 }
 
 .words-editor-heading p {
-  margin: 0.35rem 0 0;
+  margin: 4px 0 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-  line-height: 1.55;
-}
-
-.words-sync-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  max-inline-size: 36rem;
-  padding: 0.5rem 0;
-}
-
-.words-sync-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.words-sync-enabled {
-  flex: 0 0 auto;
-}
-
-.words-sync-interval {
-  flex: 0 1 10rem;
-  min-inline-size: 8rem;
-}
-
-.words-sync-interval :deep(input[type='number']::-webkit-outer-spin-button),
-.words-sync-interval :deep(input[type='number']::-webkit-inner-spin-button) {
-  margin: 0;
-  -webkit-appearance: none;
-}
-
-.words-sync-interval :deep(input[type='number']) {
-  appearance: textfield;
-}
-
-.words-sync-actions,
-.words-sync-source-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.words-sync-last {
-  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .words-save-state,
 .words-footer-state {
-  display: flex;
+  display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 6px;
+  background-color: var(--mp-item-bg);
+  block-size: 22px;
   color: rgb(var(--v-theme-success));
-  font-size: 0.78rem;
-  gap: 0.3rem;
+  font-size: 11.5px;
+  font-weight: 600;
+  gap: 4px;
+  padding-inline: 8px;
   white-space: nowrap;
 }
 
 .words-save-state--dirty,
 .words-footer-state--dirty {
+  border-color: rgba(var(--v-theme-warning), 0.32);
+  background-color: rgba(var(--v-theme-warning), 0.08);
   color: rgb(var(--v-theme-warning));
 }
 
@@ -1133,23 +1028,41 @@ onMounted(() => {
   overflow: auto;
   min-block-size: 0;
   flex: 1 1 auto;
-  padding: 0 1.5rem 1.25rem;
+  padding: 0 18px 14px;
 }
 
 .words-field-meta {
   display: flex;
-  min-block-size: 2.5rem;
+  min-block-size: 34px;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-field-bg);
+  gap: 10px;
+  margin-block-end: 8px;
+  padding: 4px 10px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.78rem;
+  font-size: 12px;
 }
 
 .words-field-meta strong {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.85rem;
+  font-size: 12.5px;
   font-weight: 600;
+}
+
+.words-entry-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 5px;
+  background-color: var(--mp-item-bg);
+  block-size: 20px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding-inline: 7px;
 }
 
 .words-field-actions {
@@ -1158,19 +1071,18 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.8rem;
+  gap: 10px;
 }
 
 @media (width <= 599.98px) {
-  /* 窄屏下工具行允许换行，避免开关被截断 */
   .words-field-meta {
     flex-wrap: wrap;
-    gap: 0.4rem 0.8rem;
+    gap: 6px 10px;
   }
 
   .words-field-actions {
     justify-content: flex-start;
-    gap: 0.2rem 0.8rem;
+    gap: 4px 10px;
   }
 }
 
@@ -1179,17 +1091,18 @@ onMounted(() => {
 }
 
 .words-editor-switch :deep(.v-label) {
-  font-size: 0.78rem;
+  font-size: 12px;
 }
 
 .words-textarea :deep(textarea) {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.85rem;
-  line-height: 1.65;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .words-textarea :deep(.v-field) {
-  background: transparent;
+  border-radius: 10px;
+  background: var(--mp-field-bg);
 }
 
 .words-text-editor {
@@ -1208,8 +1121,8 @@ onMounted(() => {
   overflow: hidden;
   min-block-size: 12rem;
   block-size: 18.8rem;
-  border: 1px solid rgba(var(--v-theme-on-surface), var(--v-border-opacity));
-  border-radius: var(--app-surface-radius);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
   contain: paint;
   overscroll-behavior: contain;
   resize: vertical;
@@ -1301,43 +1214,218 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  gap: 0.4rem;
+  font-size: 12px;
+  gap: 6px;
   line-height: 1.5;
-  margin-block-start: 0.65rem;
+  margin-block-start: 8px;
+}
+
+.words-remote-block {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  gap: 8px;
+  margin-block-start: 10px;
+  padding: 10px 13px;
+}
+
+.words-remote-header {
+  display: flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
+}
+
+.words-remote-source-url {
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.words-remote-lines {
+  overflow: auto;
+  max-block-size: 9rem;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-item-bg);
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-block: 4px 6px;
+  margin-inline: 0;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.words-sync-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-inline-size: 38rem;
+  padding: 4px 0;
+}
+
+.words-sync-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.words-sync-empty {
+  display: flex;
+  min-block-size: 7rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  flex-direction: column;
+  font-size: 12.5px;
+  gap: 8px;
+}
+
+.words-sync-source {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  gap: 10px;
+  padding: 13px;
+}
+
+.words-sync-source-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.words-sync-source-url {
+  flex: 1 1 auto;
+}
+
+.words-icon-trigger {
+  flex-shrink: 0;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px !important;
+  background: var(--mp-item-bg);
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+
+.words-sync-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.words-sync-switch-card {
+  flex: 0 0 auto;
+  min-block-size: 32px;
+  padding-block: 3px;
+}
+
+.words-sync-enabled {
+  flex: 0 0 auto;
+}
+
+.words-sync-interval {
+  flex: 0 1 9.5rem;
+  min-inline-size: 7.5rem;
+}
+
+.words-sync-interval :deep(input[type='number']::-webkit-outer-spin-button),
+.words-sync-interval :deep(input[type='number']::-webkit-inner-spin-button) {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.words-sync-interval :deep(input[type='number']) {
+  appearance: textfield;
+}
+
+.words-sync-source-tables {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.words-sync-tables-label {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+}
+
+.words-sync-table-chip {
+  block-size: 22px;
+  cursor: pointer;
+  font-size: 11.5px;
+}
+
+.words-sync-table-chip--active {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary));
+  font-weight: 600;
+}
+
+.words-sync-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.words-sync-last {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .words-help-panels {
   min-inline-size: 0;
-  margin-block-start: 1rem;
+  margin-block-start: 10px;
 }
 
 .words-help-panels :deep(.v-expansion-panel) {
   overflow: hidden;
-  border: var(--words-surface-border);
-  border-radius: var(--app-surface-radius) !important;
-  background: var(--words-hover-background);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background: var(--mp-field-bg);
 }
 
 .words-help-panels :deep(.v-expansion-panel-title) {
-  min-block-size: 3.25rem;
+  min-block-size: 38px;
+  padding: 8px 13px;
 }
 
 .words-help-title {
   display: flex;
   align-items: center;
   color: rgb(var(--v-theme-primary));
+  font-size: 12.5px;
   font-weight: 600;
-  gap: 0.55rem;
+  gap: 6px;
 }
 
 .words-help-content {
   min-inline-size: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.78rem;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.65;
   overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: pre-line;
   word-break: break-word;
 }
 
@@ -1346,12 +1434,11 @@ onMounted(() => {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  min-block-size: 4.5rem;
+  min-block-size: 48px;
   border-block-start: 1px solid var(--words-separator-color);
-  backdrop-filter: var(--words-surface-filter);
   background: var(--words-surface-background);
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  gap: 10px;
+  padding: 8px 18px;
 }
 
 .words-footer-state {
@@ -1361,7 +1448,7 @@ onMounted(() => {
 .words-footer-actions {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 8px;
   margin-inline-start: auto;
 }
 
@@ -1398,8 +1485,8 @@ onMounted(() => {
   .words-mobile-tab {
     position: relative;
     display: flex;
-    min-inline-size: 5.2rem;
-    min-block-size: 5.4rem;
+    min-inline-size: 4.5rem;
+    min-block-size: 52px;
     align-items: center;
     justify-content: center;
     border: 0;
@@ -1408,22 +1495,25 @@ onMounted(() => {
     cursor: pointer;
     flex: 1 0 auto;
     flex-direction: column;
-    font-size: 0.78rem;
-    gap: 0.45rem;
-    padding: 0.75rem 0.6rem 0.6rem;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 4px;
+    padding: 8px 8px 6px;
   }
 
   .words-mobile-tab::after {
     position: absolute;
     background: transparent;
-    block-size: 3px;
+    block-size: 2px;
+    border-radius: 999px;
     content: '';
     inset-block-end: 0;
-    inset-inline: 0.65rem;
+    inset-inline: 10px;
   }
 
   .words-mobile-tab--active {
     color: rgb(var(--v-theme-primary));
+    font-weight: 600;
   }
 
   .words-mobile-tab--active::after {
@@ -1440,22 +1530,22 @@ onMounted(() => {
     border: 2px solid var(--words-surface-background);
     border-radius: 50%;
     background: rgb(var(--v-theme-warning));
-    block-size: 0.55rem;
-    inline-size: 0.55rem;
-    inset-block-start: -0.18rem;
-    inset-inline-end: -0.3rem;
+    block-size: 8px;
+    inline-size: 8px;
+    inset-block-start: -2px;
+    inset-inline-end: -4px;
   }
 
   .words-editor-header {
-    padding: 1.4rem 1.25rem 0.85rem;
+    padding: 13px 14px 8px;
   }
 
   .words-editor-heading h2 {
-    font-size: 1.45rem;
+    font-size: 15.5px;
   }
 
   .words-editor-heading p {
-    font-size: 0.85rem;
+    font-size: 12px;
   }
 
   .words-save-state {
@@ -1463,68 +1553,44 @@ onMounted(() => {
   }
 
   .words-editor-scroll {
-    padding: 0 1.25rem 1.25rem;
+    padding: 0 14px 14px;
   }
 
   .words-field-meta {
-    align-items: flex-start;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    min-block-size: 2.75rem;
-  }
-
-  .words-field-meta strong {
-    min-inline-size: 0;
+    gap: 6px;
   }
 
   .words-field-actions {
-    gap: 0.5rem;
+    gap: 8px;
     inline-size: 100%;
   }
 
   .words-textarea :deep(.v-field__input) {
-    min-block-size: 18rem;
+    min-block-size: 16rem;
   }
 
   .words-text-editor {
-    block-size: 18rem;
+    block-size: 16rem;
   }
 
   .words-editor-footer {
     position: relative;
-    min-block-size: calc(5.25rem + env(safe-area-inset-bottom));
-    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom));
+    min-block-size: calc(48px + env(safe-area-inset-bottom));
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
   }
 
   .words-footer-state {
-    display: flex;
-    font-size: 0.8rem;
+    display: inline-flex;
   }
 
   .words-footer-actions {
-    gap: 0.35rem;
+    gap: 6px;
   }
 
   .words-footer-actions .v-btn {
     min-inline-size: 0;
-  }
-}
-
-@media (width <= 420px) {
-  .words-mobile-tab {
-    min-inline-size: 4.85rem;
-  }
-
-  .words-editor-header {
-    padding-inline: 1rem;
-  }
-
-  .words-editor-scroll {
-    padding-inline: 1rem;
-  }
-
-  .words-editor-footer {
-    padding-inline: 1rem;
   }
 }
 </style>

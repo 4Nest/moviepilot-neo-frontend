@@ -9,11 +9,7 @@ const elementProps = defineProps({
 </script>
 
 <template>
-  <Component
-    :is="elementProps.config?.component"
-    v-if="!elementProps.config?.html"
-    v-bind="elementProps.config?.props"
-  >
+  <Component :is="elementProps.config?.component" v-if="!elementProps.config?.html" v-bind="elementProps.config?.props">
     {{ elementProps.config?.text }}
     <template v-for="(content, name) in elementProps.config?.slots || []" :key="name" v-slot:[name]="{ _props }">
       <slot :name="name" v-bind="_props">
@@ -33,3 +29,10 @@ const elementProps = defineProps({
     v-html="elementProps.config?.html"
   />
 </template>
+
+<style lang="scss" scoped>
+.d-flex > :deep(.v-img[style*='width']:not([style*='width: 100%'])),
+:deep(:is(.d-flex, .v-list-item__prepend, .v-card-item__prepend) > .v-img[style*='width']:not([style*='width: 100%'])) {
+  flex: 0 0 auto;
+}
+</style>

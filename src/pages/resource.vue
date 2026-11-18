@@ -1208,7 +1208,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div data-glass-optical-mode="static-material">
+  <div>
     <!-- 搜索加载状态 -->
     <VFadeTransition>
       <div
@@ -1223,10 +1223,10 @@ onUnmounted(() => {
                 color="primary"
                 :indeterminate="searchProgressIndeterminate"
                 :model-value="searchProgressPercent"
-                :size="56"
-                :width="5"
+                :size="40"
+                :width="3.5"
               >
-                <VIcon icon="mdi-movie-search" color="primary" size="24" />
+                <VIcon icon="mdi-movie-search" color="primary" size="19" />
               </VProgressCircular>
             </div>
             <div class="progress-copy">
@@ -1251,6 +1251,7 @@ onUnmounted(() => {
           <div class="progress-bar-container">
             <VProgressLinear
               color="primary"
+              height="5"
               rounded
               :indeterminate="searchProgressIndeterminate"
               :model-value="searchProgressPercent"
@@ -1282,16 +1283,79 @@ onUnmounted(() => {
         />
       </div>
 
-      <div class="resource-page-header__actions d-flex align-center gap-1">
+      <div class="resource-page-header__actions d-flex flex-wrap align-center gap-2">
+        <template v-if="isRefreshed && !appMode">
+          <template v-if="isBatchMode">
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              :prepend-icon="
+                isAllTorrentsSelected ? 'mdi-checkbox-multiple-marked' : 'mdi-checkbox-multiple-marked-outline'
+              "
+              :aria-label="isAllTorrentsSelected ? t('resource.clearSelection') : t('resource.selectAll')"
+              @click="toggleSelectAllTorrents"
+            >
+              {{ isAllTorrentsSelected ? t('resource.clearSelection') : t('resource.selectAll') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="flat"
+              color="primary"
+              rounded="lg"
+              prepend-icon="mdi-download"
+              :disabled="selectedTorrents.length === 0"
+              :aria-label="t('resource.batchDownloadCount', { count: selectedTorrents.length })"
+              @click="openBatchDownloadDialog"
+            >
+              {{ t('resource.batchDownloadCount', { count: selectedTorrents.length }) }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-close"
+              :aria-label="t('resource.exitBatchMode')"
+              @click="resetBatchSelection"
+            >
+              {{ t('resource.exitBatchMode') }}
+            </VBtn>
+          </template>
+          <template v-else>
+            <VBtn
+              v-if="!isSubtitleSearch && visibleTorrentItems.length > 0"
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-checkbox-multiple-marked-outline"
+              :aria-label="t('resource.batchSelect')"
+              @click="toggleBatchMode"
+            >
+              {{ t('resource.batchSelect') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              :prepend-icon="viewToggleIcon"
+              :aria-label="t('resource.switchingView')"
+              @click="toggleViewType"
+            >
+              {{ t('resource.switchingView') }}
+            </VBtn>
+          </template>
+        </template>
+
         <!-- 重新搜索按钮 -->
         <IconBtn
+          size="small"
           variant="text"
-          color="gray"
+          class="resource-refresh-btn"
           :loading="isRefreshing"
           :disabled="isRefreshing || progressActive"
           @click="refreshSearch"
         >
-          <VIcon icon="mdi-refresh" />
+          <VIcon icon="mdi-refresh" size="18" />
           <VTooltip activator="parent" location="top">
             {{ t('resource.refreshSearch') }}
           </VTooltip>
@@ -1384,34 +1448,32 @@ onUnmounted(() => {
             </template>
           </ProgressiveCardGrid>
           <!-- 无结果时显示 -->
-          <div
+          <NoDataFound
             v-if="
               !progressActive &&
               ((isSubtitleSearch && rawSubtitleDataList.length === 0) ||
                 (!isSubtitleSearch && filteredCardDataList.length === 0))
             "
-            class="no-results"
-          >
-            <VIcon icon="mdi-file-search-outline" size="64" color="grey-lighten-1" />
-            <div class="text-h6 text-grey mt-4">{{ t('torrent.noResults') }}</div>
-          </div>
+            icon="mdi-file-search-outline"
+            :error-title="t('common.noData')"
+            :error-description="t('torrent.noResults')"
+          />
         </div>
 
         <!-- 列表视图模式 -->
         <div v-else-if="viewType === 'row'" key="row">
           <VCard class="resource-list-container">
             <!-- 无结果时显示 -->
-            <div
+            <NoDataFound
               v-if="
                 !progressActive &&
                 ((isSubtitleSearch && rawSubtitleDataList.length === 0) ||
                   (!isSubtitleSearch && filteredRowDataList.length === 0))
               "
-              class="no-results"
-            >
-              <VIcon icon="mdi-file-search-outline" size="64" color="grey-lighten-1" />
-              <div class="text-h6 text-grey mt-4">{{ t('torrent.noResults') }}</div>
-            </div>
+              icon="mdi-file-search-outline"
+              :error-title="t('common.noData')"
+              :error-description="t('torrent.noResults')"
+            />
             <div
               v-else-if="isSubtitleSearch && progressActive && streamPreviewSubtitleDataList.length > 0"
               class="resource-list overflow-visible"
@@ -1476,10 +1538,13 @@ onUnmounted(() => {
       </VFadeTransition>
     </div>
 
-    <!-- 无数据显示 -->
-    <div v-else-if="isRefreshed && !progressActive" class="d-flex flex-column align-center justify-center py-8">
+    <!-- 无数据显示（主动展开已过滤资源列表时收起空状态占位，将首屏直接留给被过滤卡片） -->
+    <div
+      v-else-if="isRefreshed && !progressActive && !(showRejected && rejectedItems.length)"
+      class="d-flex flex-column align-center justify-center py-6"
+    >
       <NoDataFound :errorTitle="displayErrorTitle" :errorDescription="displayErrorDescription" />
-      <VBtn rounded="pill" class="mt-4" color="primary" prepend-icon="mdi-home" to="/">
+      <VBtn rounded="lg" size="small" color="primary" prepend-icon="mdi-home-outline" to="/">
         {{ t('resource.backToHome') }}
       </VBtn>
     </div>
@@ -1508,7 +1573,7 @@ onUnmounted(() => {
           mode="row"
         />
       </div>
-      <div v-else class="grid gap-4 grid-torrent-card items-start">
+      <div v-else class="grid grid-rejected-torrent-card items-stretch">
         <RejectedTorrentCard
           v-for="(item, index) in rejectedItems"
           :key="`${getTorrentItemKey(item.context, index)}-rejected-${index}`"
@@ -1518,63 +1583,9 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <Teleport to="body" v-if="route.path === '/resource'">
-      <div v-if="isRefreshed && !appMode" class="compact-fab-stack">
-        <template v-if="isBatchMode">
-          <VFab
-            icon="mdi-close"
-            color="info"
-            variant="tonal"
-            appear
-            class="compact-fab compact-fab--secondary"
-            :aria-label="t('resource.exitBatchMode')"
-            @click="resetBatchSelection"
-          />
-          <VFab
-            :icon="isAllTorrentsSelected ? 'mdi-checkbox-multiple-marked' : 'mdi-checkbox-multiple-marked-outline'"
-            color="info"
-            variant="tonal"
-            appear
-            class="compact-fab compact-fab--secondary"
-            :aria-label="isAllTorrentsSelected ? t('resource.clearSelection') : t('resource.selectAll')"
-            @click="toggleSelectAllTorrents"
-          />
-          <VFab
-            icon="mdi-download"
-            color="primary"
-            appear
-            class="compact-fab compact-fab--primary"
-            :disabled="selectedTorrents.length === 0"
-            :aria-label="t('resource.batchDownloadCount', { count: selectedTorrents.length })"
-            @click="openBatchDownloadDialog"
-          />
-        </template>
-        <template v-else>
-          <VFab
-            v-if="!isSubtitleSearch && visibleTorrentItems.length > 0"
-            icon="mdi-checkbox-multiple-marked-outline"
-            color="info"
-            variant="tonal"
-            appear
-            class="compact-fab compact-fab--secondary"
-            :aria-label="t('resource.batchSelect')"
-            @click="toggleBatchMode"
-          />
-          <VFab
-            :icon="viewToggleIcon"
-            color="primary"
-            appear
-            class="compact-fab compact-fab--primary"
-            :aria-label="t('resource.switchingView')"
-            @click="toggleViewType"
-          />
-        </template>
-      </div>
-    </Teleport>
-
     <!-- 滚动到顶部按钮 -->
     <Teleport to="body" v-if="route.path === '/resource'">
-      <VScrollToTopBtn :offset-fab="isRefreshed && !appMode" />
+      <VScrollToTopBtn :offset-fab="false" />
     </Teleport>
   </div>
 </template>
@@ -1591,11 +1602,10 @@ onUnmounted(() => {
 }
 
 .search-progress-card {
-  padding: 16px;
-  border: var(--app-grouped-list-border);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  background:
-    linear-gradient(135deg, rgba(var(--v-theme-primary), 0.08), transparent 42%), var(--app-grouped-list-background);
+  padding: 14px 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
   inline-size: 100%;
 }
 
@@ -1621,33 +1631,37 @@ onUnmounted(() => {
   display: block;
   overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
+  font-size: 14.5px;
   font-weight: 600;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .progress-tags {
-  gap: 6px;
-  margin-block-start: 8px;
+  gap: 5px;
+  margin-block-start: 6px;
 }
 
 .progress-tag {
+  border-radius: 6px !important;
+  block-size: 22px !important;
   max-inline-size: 100%;
 }
 
 .progress-bar-container {
   display: flex;
   align-items: center;
-  margin-block-start: 14px;
+  margin-block-start: 11px;
 }
 
 .progress-percentage {
   flex: 0 0 auto;
   color: rgb(var(--v-theme-primary));
-  font-size: 0.95rem;
-  font-weight: 700;
-  min-inline-size: 44px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-inline-size: 40px;
   text-align: end;
 }
 
@@ -1685,6 +1699,7 @@ onUnmounted(() => {
 
 .resource-page-header {
   gap: 12px;
+  min-block-size: 32px;
 }
 
 .resource-page-header__copy {
@@ -1692,7 +1707,12 @@ onUnmounted(() => {
   min-inline-size: 0;
 }
 
-.resource-page-header__title {
+.resource-page-header__title,
+.resource-page-header__title :deep(*) {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  line-height: 1.35 !important;
   max-inline-size: 100%;
 }
 
@@ -1701,9 +1721,16 @@ onUnmounted(() => {
   align-self: center;
 }
 
+.resource-refresh-btn {
+  border-radius: 7px !important;
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+
 .search-tag {
   max-inline-size: min(100%, 220px);
-  font-size: 0.75rem;
+  font-size: 12px;
 }
 
 .search-results-container {
@@ -1711,30 +1738,38 @@ onUnmounted(() => {
 }
 
 .rejected-results {
-  padding: 14px;
-  border: 1px dashed rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 12px;
-  background: rgba(var(--v-theme-on-surface), 0.02);
+  padding: 12px 14px;
+  border: 1px dashed var(--mp-border-card, rgba(var(--v-theme-on-surface), 0.12));
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .rejected-results__header {
-  color: rgba(var(--v-theme-on-surface), 0.72);
+  color: rgba(var(--v-theme-on-surface), 0.78);
 }
 
 .rejected-results__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .rejected-results__count {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  block-size: 19px;
+  padding-inline: 6px;
+  border-radius: 5px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.grid-rejected-torrent-card {
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
 }
 
 /* 卡片网格布局 */
@@ -1754,15 +1789,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-/* 无结果提示 */
-.no-results {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 300px;
 }
 
 @media (width <= 600px) {

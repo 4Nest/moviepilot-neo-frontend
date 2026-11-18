@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
+  confirm: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   aceSetMode: vi.fn(),
@@ -20,6 +21,10 @@ vi.mock('@/api', () => ({
     get: mocks.apiGet,
     post: mocks.apiPost,
   },
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -197,6 +202,7 @@ describe('WordsView remote source removal', () => {
 
   beforeEach(() => {
     savedSources = [{ url: removedUrl, enabled: true, interval_days: 7, tables: ['identifiers'] }]
+    mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.toastError.mockClear()
     mocks.toastSuccess.mockClear()
     mocks.apiGet.mockImplementation(async (endpoint: string) => {
@@ -264,5 +270,25 @@ describe('WordsView remote source removal', () => {
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
     await user.click(screen.getAllByRole('button', { name: /自定义识别词/ })[0])
     expect(screen.getByText('Old => Old Result')).toBeInTheDocument()
+  })
+
+  it('cancels removing a non-empty remote source when confirmation is declined, and skips runSync if saving fails', async () => {
+    mocks.confirm.mockResolvedValueOnce(false)
+    const user = userEvent.setup()
+    await renderWordsView()
+    await screen.findByText('Old => Old Result')
+    await user.click(screen.getAllByRole('button', { name: /远程同步/ })[0])
+    await user.click(screen.getByRole('button', { name: '删除' }))
+
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.apiPost).not.toHaveBeenCalled()
+    expect(screen.getByDisplayValue(removedUrl)).toBeInTheDocument()
+
+    // 单卡「立即同步」若保存同步源失败，不应继续调用 system/words/sync
+    mocks.apiPost.mockResolvedValueOnce({ success: false, message: '配置无效' })
+    await user.click(screen.getByRole('button', { name: '立即同步' }))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('配置无效'))
+    expect(mocks.apiPost).toHaveBeenCalledTimes(1)
+    expect(mocks.apiPost).not.toHaveBeenCalledWith('system/words/sync', null, expect.anything())
   })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '@/composables/useChineseText'
-import page404 from '@images/pages/404.svg'
 
 // 国际化
 const { t } = useI18n()
@@ -14,27 +14,30 @@ interface Props {
   icon?: string
   iconColor?: string
 }
+
+const resolvedIcon = computed(() => {
+  if (props.icon) return props.icon
+  if (props.errorCode === '500') return 'mdi-alert-circle-outline'
+  if (props.errorCode === '404') return 'mdi-compass-off-outline'
+  return 'mdi-tray-remove'
+})
 </script>
 
 <template>
   <div class="no-data-container">
-    <!-- 图标容器 -->
-    <div class="icon-wrapper">
-      <img :src="page404" alt="404" />
+    <div class="no-data-glyph" aria-hidden="true">
+      <VIcon :icon="resolvedIcon" :color="props.iconColor" size="24" />
     </div>
 
-    <!-- 标题 -->
     <div class="error-title">
       {{ props.errorTitle || t('common.noData') }}
     </div>
 
-    <!-- 描述 -->
     <div class="error-description">
       {{ props.errorDescription || t('common.noContent') }}
     </div>
 
-    <!-- 按钮插槽 -->
-    <div class="actions-container">
+    <div v-if="$slots.button" class="actions-container">
       <slot name="button" />
     </div>
   </div>
@@ -47,48 +50,42 @@ interface Props {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 2rem 1.25rem 0.875rem;
   inline-size: 100%;
-  min-block-size: 300px;
-  padding-block-start: 3rem;
+  min-block-size: 168px;
   text-align: center;
 }
 
-/* 图标样式 */
-.icon-wrapper {
-  position: relative;
-  display: flex;
+.no-data-glyph {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 15rem;
-  margin-block: 0 1rem;
-  margin-inline: auto;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px;
+  background: var(--mp-item-bg);
+  block-size: 48px;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  inline-size: 48px;
+  margin-block-end: 12px;
 }
 
-/* 文字样式 */
 .error-title {
-  position: relative;
-  color: rgba(var(--v-theme-on-surface), 0.95);
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin-block-end: 0.75rem;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 5%);
-}
-
-.error-title::after {
-  display: block;
-  border-radius: 3px;
-  background: linear-gradient(90deg, rgba(var(--v-theme-primary), 0.8), rgba(var(--v-theme-primary), 0.2));
-  block-size: 3px;
-  content: '';
-  inline-size: 60px;
-  margin-inline: auto;
+  color: rgba(var(--v-theme-on-surface), 0.9);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-block-end: 4px;
 }
 
 .error-description {
-  color: rgba(var(--v-theme-on-surface), 0.75);
-  font-size: 1rem;
-  margin-block-end: 1rem;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 13px;
+  line-height: 1.5;
   margin-inline: auto;
-  max-inline-size: 80%;
+  max-inline-size: 420px;
+}
+
+.actions-container {
+  margin-block-start: 14px;
 }
 </style>

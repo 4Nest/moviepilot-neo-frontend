@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import api from '@/api'
+import noImage from '@images/no-image.jpeg'
 import type { MediaDataSource, MediaInfo } from '@/api/types'
 import { useI18n } from '@/composables/useChineseText'
 
@@ -27,6 +28,7 @@ interface MediaSelectorItem {
 const emit = defineEmits(['update:modelValue', 'select', 'close'])
 
 const items = ref<MediaSelectorItem[]>([])
+const failedPosters = ref<Record<string, boolean>>({})
 
 // 搜索词
 const keyword = ref('')
@@ -50,6 +52,17 @@ function getW500Image(url = '') {
   return url.replace('original', 'w500')
 }
 
+function getPosterSrc(item: MediaSelectorItem) {
+  const key = `${item.type || 'media'}-${item.id}`
+  if (!item.poster || failedPosters.value[key]) return noImage
+  return item.poster
+}
+
+function handlePosterError(item: MediaSelectorItem) {
+  const key = `${item.type || 'media'}-${item.id}`
+  failedPosters.value[key] = true
+}
+
 // 搜索词条
 async function searchMedias() {
   const searchKeyword = keyword.value.trim()
@@ -69,6 +82,7 @@ async function searchMedias() {
 
     // 清空
     items.value = []
+    failedPosters.value = {}
 
     // 赋值
     for (const item of result) {
@@ -84,7 +98,7 @@ async function searchMedias() {
         poster: getW500Image(item.poster_path),
         type: item.type,
         title: item.year ? `${item.title}（${item.year}）` : item.title || '',
-        overview: `<span class="text-primary">${item.type}</span> ${item.overview}`,
+        overview: item.overview || '',
       })
     }
   } catch (e) {
@@ -122,6 +136,7 @@ onMounted(() => {
         ref="inputKeyword"
         v-model="keyword"
         :mobile-layout="false"
+        density="compact"
         single-line
         :placeholder="t('dialog.reorganize.mediaSearchPlaceholder')"
         variant="outlined"
@@ -141,10 +156,12 @@ onMounted(() => {
             <VImg
               height="75"
               width="50"
-              :src="item.poster"
+              :max-width="50"
+              :src="getPosterSrc(item)"
               aspect-ratio="2/3"
-              class="object-cover rounded ring-gray-500 me-3"
+              class="media-id-selector__poster flex-none rounded object-cover me-3"
               cover
+              @error="handlePosterError(item)"
             >
               <template #placeholder>
                 <div class="w-full h-full">
@@ -156,7 +173,10 @@ onMounted(() => {
           <VListItemTitle>
             {{ item.title }}
           </VListItemTitle>
-          <VListItemSubtitle class="mt-2" v-html="item.overview" />
+          <VListItemSubtitle class="mt-2">
+            <span v-if="item.type" class="text-primary me-1">{{ item.type }}</span
+            >{{ item.overview }}
+          </VListItemSubtitle>
         </VListItem>
       </template>
     </VList>
@@ -171,12 +191,20 @@ onMounted(() => {
 .media-id-selector__search {
   flex: 0 0 auto;
   overflow: visible !important;
-  padding-block: 0.25rem 1rem !important;
+  padding-block: 0.25rem 0.75rem !important;
 }
 
 .media-id-selector__close {
   position: relative;
   flex: 0 0 auto;
+}
+
+.media-id-selector__poster {
+  flex: 0 0 50px !important;
+  border: 1px solid var(--mp-border-subtle);
+  block-size: 75px;
+  inline-size: 50px;
+  max-inline-size: 50px;
 }
 
 .media-id-selector__results {

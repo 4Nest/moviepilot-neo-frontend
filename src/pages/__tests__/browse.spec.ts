@@ -91,11 +91,35 @@ describe('browse page', () => {
     await renderBrowse(['person', 'search'], query)
 
     expect(screen.getByRole('heading', { name: '演员: 张三' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: '人物 browse 列表' })).toHaveAttribute(
-      'data-api-path',
-      'person/search',
-    )
+    expect(screen.getByRole('region', { name: '人物 browse 列表' })).toHaveAttribute('data-api-path', 'person/search')
     expect(projectedQuery('人物 browse 查询')).toEqual(query)
     expect(screen.queryByRole('region', { name: '媒体 browse 列表' })).not.toBeInTheDocument()
+  })
+
+  it('reactively updates title/type on query change and unmounts scroll-to-top button outside /browse/', async () => {
+    const { router } = await renderWithProviders(BrowsePage, {
+      initialRoute: { path: '/browse/tmdb/recommend', query: { title: '热门电影', type: 'movie' } },
+      props: { paths: ['tmdb', 'recommend'] },
+      global: {
+        stubs: {
+          MediaCardListView: MediaCardListViewStub,
+          PersonCardListView: PersonCardListViewStub,
+          VPageContentTitle: PageContentTitleStub,
+          VScrollToTopBtn: defineComponent({
+            name: 'VScrollToTopBtn',
+            template: '<button type="button" data-testid="browse-scroll-top">top</button>',
+          }),
+        },
+      },
+    })
+
+    expect(screen.getByRole('heading', { name: '热门电影' })).toBeInTheDocument()
+    expect(document.body.querySelector('[data-testid="browse-scroll-top"]')).toBeInTheDocument()
+
+    await router.push({ path: '/browse/person/search', query: { title: '诺兰', type: 'person' } })
+    expect(await screen.findByRole('heading', { name: '演员: 诺兰' })).toBeInTheDocument()
+
+    await router.push({ path: '/dashboard' })
+    expect(document.body.querySelector('[data-testid="browse-scroll-top"]')).not.toBeInTheDocument()
   })
 })

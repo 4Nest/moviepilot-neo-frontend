@@ -410,14 +410,7 @@ onBeforeMount(() => {
     :fullscreen="!display.mdAndUp.value"
   >
     <VCard class="subscribe-files-dialog no-blur">
-      <VBtn
-        class="subscribe-files-dialog__close"
-        icon="mdi-close"
-        variant="text"
-        size="small"
-        :aria-label="t('common.close')"
-        @click="emit('close')"
-      />
+      <VDialogCloseBtn @click="emit('close')" />
 
       <LoadingBanner v-if="loading" />
 
@@ -532,16 +525,17 @@ onBeforeMount(() => {
                 <VBtnToggle
                   v-model="activeTab"
                   mandatory
-                  divided
+                  density="compact"
+                  variant="text"
                   class="subscribe-files-tab-group"
                   selected-class="subscribe-files-tab-group__button--active"
                 >
-                  <VBtn value="download" class="subscribe-files-tab-group__button">
-                    <VIcon size="20" start icon="mdi-download" />
+                  <VBtn value="download" size="small" class="subscribe-files-tab-group__button">
+                    <VIcon size="16" start icon="mdi-download" />
                     {{ t('dialog.subscribeFiles.downloadTab') }}
                   </VBtn>
-                  <VBtn value="library" class="subscribe-files-tab-group__button">
-                    <VIcon size="20" start icon="mdi-filmstrip-box-multiple" />
+                  <VBtn value="library" size="small" class="subscribe-files-tab-group__button">
+                    <VIcon size="16" start icon="mdi-filmstrip-box-multiple" />
                     {{ t('dialog.subscribeFiles.libraryTab') }}
                   </VBtn>
                 </VBtnToggle>
@@ -784,24 +778,15 @@ onBeforeMount(() => {
   overflow: hidden;
   flex: 1 1 auto;
   flex-direction: column;
-  border: 1px solid rgba(var(--v-theme-on-surface), var(--sfd-border-opacity));
-  backdrop-filter: blur(var(--sfd-blur)) saturate(1.18);
-  background:
-    linear-gradient(145deg, rgba(var(--v-theme-primary), var(--sfd-accent-opacity)), transparent 42%),
-    rgba(var(--v-theme-surface), var(--sfd-dialog-opacity));
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12));
+  border-radius: 14px;
+  background: rgb(var(--v-theme-surface));
   block-size: 100%;
   color: rgb(var(--v-theme-on-surface));
   inline-size: 100%;
   min-block-size: 0;
 
-  --sfd-accent-opacity: 0.1;
-  --sfd-blur: 18px;
-  --sfd-border-opacity: 0.14;
-  --sfd-dialog-opacity: 0.9;
-  --sfd-hero-end-opacity: 0.88;
-  --sfd-hero-mid-opacity: 0.62;
-  --sfd-hero-shade-opacity: 0.92;
-  --sfd-hero-start-opacity: 0.98;
+  --sfd-border-opacity: 0.12;
   --sfd-panel-opacity: 0.12;
   --sfd-panel-strong-opacity: 0.18;
   --sfd-code-opacity: 0.16;
@@ -811,8 +796,8 @@ onBeforeMount(() => {
 .subscribe-files-dialog__close {
   position: absolute;
   z-index: 8;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  background: rgba(var(--v-theme-surface), 0.22);
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  background: rgb(var(--v-theme-surface));
   inset-block-start: 0.75rem;
   inset-inline-end: 0.75rem;
 }
@@ -837,21 +822,15 @@ onBeforeMount(() => {
   position: relative;
   overflow: hidden;
   flex: 0 0 auto;
+  border-block-end: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   background:
-    linear-gradient(
-      90deg,
-      rgba(var(--v-theme-surface), var(--sfd-hero-start-opacity)),
-      rgba(var(--v-theme-surface), var(--sfd-hero-mid-opacity)) 48%,
-      rgba(var(--v-theme-surface), var(--sfd-hero-end-opacity))
-    ),
-    var(--subscribe-files-backdrop) center / cover;
+    var(--subscribe-files-backdrop, none) center / cover,
+    rgb(var(--v-theme-surface));
 }
 
 .subscribe-files-hero__shade {
   position: absolute;
-  background:
-    radial-gradient(circle at 24% 8%, rgba(var(--v-theme-primary), 0.24), transparent 34%),
-    linear-gradient(180deg, transparent, rgba(var(--v-theme-surface), var(--sfd-hero-shade-opacity)) 94%);
+  background: rgba(var(--v-theme-surface), 0.92);
   inset: 0;
 }
 
@@ -870,7 +849,7 @@ onBeforeMount(() => {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.14);
-  border-radius: calc(var(--app-surface-radius) + 0.25rem);
+  border-radius: 12px;
   aspect-ratio: 2 / 3;
   background: rgba(var(--v-theme-surface), var(--sfd-panel-strong-opacity));
 }
@@ -883,16 +862,15 @@ onBeforeMount(() => {
   position: absolute;
   display: flex;
   align-items: flex-end;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 72%));
+  background: rgba(15, 23, 42, 0.75);
   color: white;
   font-size: 0.85rem;
   font-weight: 700;
   inset-block-end: 0;
   inset-inline: 0;
   line-height: 1.25;
-  padding-block: 1rem 0.65rem;
+  padding-block: 0.5rem;
   padding-inline: 0.65rem;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 45%);
 }
 
 .subscribe-files-hero__meta {
@@ -912,11 +890,11 @@ onBeforeMount(() => {
 
 .subscribe-files-hero__title {
   overflow: hidden;
-  font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: 0;
-  line-height: 1.15;
-  margin-block: 0.45rem 0.4rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin-block: 0.35rem;
   text-overflow: ellipsis;
 }
 
@@ -981,9 +959,10 @@ onBeforeMount(() => {
 }
 
 .subscribe-files-stat-card__value {
-  font-size: 1.1rem;
-  font-weight: 800;
-  line-height: 1.15;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .subscribe-files-content {
@@ -1064,11 +1043,7 @@ onBeforeMount(() => {
 .subscribe-files-episode-item:hover,
 .subscribe-files-episode-item--active {
   border-color: rgba(var(--v-theme-primary), 0.38);
-  background: rgba(var(--v-theme-primary), 0.12);
-}
-
-.subscribe-files-episode-item--active {
-  transform: translateX(2px);
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
 .subscribe-files-episode-item__label {
@@ -1107,13 +1082,14 @@ onBeforeMount(() => {
 .subscribe-files-tab-group {
   display: grid;
   overflow: hidden;
-  padding: 0.25rem;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  border-radius: var(--app-control-radius);
-  background: rgba(var(--v-theme-surface), var(--sfd-panel-opacity));
-  gap: 0.35rem;
+  padding: 3px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-tab-groove-bg);
+  block-size: 34px;
+  gap: 3px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  inline-size: min(28rem, 100%);
+  inline-size: min(24rem, 100%);
 }
 
 .subscribe-files-tab-group :deep(.v-btn) {
@@ -1130,15 +1106,21 @@ onBeforeMount(() => {
 }
 
 .subscribe-files-tab-group__button {
-  border-radius: calc(var(--app-control-radius) - 0.15rem);
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-weight: 700;
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.65);
+  font-size: 0.8125rem;
+  font-weight: 500;
   letter-spacing: 0;
+  min-block-size: 26px !important;
+  text-transform: none;
 }
 
 .subscribe-files-tab-group__button--active {
-  background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.92), rgba(var(--v-theme-primary), 0.68));
-  color: rgb(var(--v-theme-on-primary));
+  background: var(--mp-tab-active-bg) !important;
+  box-shadow: var(--mp-tab-active-shadow);
+  color: rgb(var(--v-theme-primary)) !important;
+  font-weight: 600;
 }
 
 .subscribe-files-detail {

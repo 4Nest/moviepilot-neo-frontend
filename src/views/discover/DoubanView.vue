@@ -74,22 +74,21 @@ const zoneDict = {
   '丹麦': t('douban.zoneType.denmark'),
 }
 
-// 年代字典
-const yearDict: Record<string, string> = {
-  '2020年代': t('douban.yearType.2020s'),
-  '2010年代': t('douban.yearType.2010s'),
-  '2000年代': t('douban.yearType.2000s'),
-  '90年代': t('douban.yearType.1990s'),
-  '80年代': t('douban.yearType.1980s'),
-  '70年代': t('douban.yearType.1970s'),
-  '60年代': t('douban.yearType.1960s'),
-}
-
-// 往年代字典中追加当前年份及往前5年的字典
+// 年份与年代筛选项（最近6年按降序排在年代前，避免对象整数键自动升序）
 const currentYear = new Date().getFullYear()
-for (let i = 0; i < 6; i++) {
-  yearDict[`${currentYear - i}`] = `${currentYear - i}`
-}
+const yearOptions: Array<{ label: string; value: string }> = [
+  ...Array.from({ length: 6 }, (_, i) => {
+    const year = `${currentYear - i}`
+    return { label: year, value: year }
+  }),
+  { value: '2020年代', label: t('douban.yearType.2020s') },
+  { value: '2010年代', label: t('douban.yearType.2010s') },
+  { value: '2000年代', label: t('douban.yearType.2000s') },
+  { value: '90年代', label: t('douban.yearType.1990s') },
+  { value: '80年代', label: t('douban.yearType.1980s') },
+  { value: '70年代', label: t('douban.yearType.1970s') },
+  { value: '60年代', label: t('douban.yearType.1960s') },
+]
 
 // 豆瓣过滤参数
 const doubanSortDict = {
@@ -120,81 +119,107 @@ watch([type, filterParams], () => {
 </script>
 
 <template>
-  <div class="px-3">
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+  <div class="discover-filter-panel">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('douban.type') }}</VLabel>
       </div>
-      <VChipGroup v-model="type">
-        <VChip :color="type == 'movies' ? 'primary' : ''" filter tile value="movies">{{ t('mediaType.movie') }}</VChip>
-        <VChip :color="type == 'tvs' ? 'primary' : ''" filter tile value="tvs">{{ t('mediaType.tv') }}</VChip>
+      <VChipGroup v-model="type" mandatory class="discover-chip-group">
+        <VChip
+          :variant="type == 'movies' ? 'tonal' : 'text'"
+          :color="type == 'movies' ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          value="movies"
+          class="discover-filter-chip"
+        >
+          {{ t('mediaType.movie') }}
+        </VChip>
+        <VChip
+          :variant="type == 'tvs' ? 'tonal' : 'text'"
+          :color="type == 'tvs' ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          value="tvs"
+          class="discover-filter-chip"
+        >
+          {{ t('mediaType.tv') }}
+        </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('douban.sort') }}</VLabel>
       </div>
-      <VChipGroup v-model="filterParams.sort">
+      <VChipGroup v-model="filterParams.sort" mandatory class="discover-chip-group">
         <VChip
-          :color="filterParams.sort == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in doubanSortDict"
           :key="key"
+          :variant="filterParams.sort == key ? 'tonal' : 'text'"
+          :color="filterParams.sort == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('douban.genre') }}</VLabel>
       </div>
-      <VChipGroup v-model="doubanCategory">
+      <VChipGroup v-model="doubanCategory" class="discover-chip-group">
         <VChip
-          :color="doubanCategory == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in categoryDict"
           :key="key"
+          :variant="doubanCategory == key ? 'tonal' : 'text'"
+          :color="doubanCategory == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('douban.zone') }}</VLabel>
       </div>
-      <VChipGroup v-model="doubanZone">
+      <VChipGroup v-model="doubanZone" class="discover-chip-group">
         <VChip
-          :color="doubanZone == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in zoneDict"
           :key="key"
+          :variant="doubanZone == key ? 'tonal' : 'text'"
+          :color="doubanZone == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('douban.year') }}</VLabel>
       </div>
-      <VChipGroup v-model="doubanYear">
+      <VChipGroup v-model="doubanYear" class="discover-chip-group">
         <VChip
-          :color="doubanYear == key ? 'primary' : ''"
+          v-for="item in yearOptions"
+          :key="item.value"
+          :variant="doubanYear == item.value ? 'tonal' : 'text'"
+          :color="doubanYear == item.value ? 'primary' : undefined"
+          rounded="lg"
           filter
-          tile
-          :value="key"
-          v-for="(value, key) in yearDict"
-          :key="key"
+          :value="item.value"
+          class="discover-filter-chip"
         >
-          {{ value }}
+          {{ item.label }}
         </VChip>
       </VChipGroup>
     </div>
@@ -203,3 +228,62 @@ watch([type, filterParams], () => {
     <MediaCardListView :key="currentKey" :apipath="`discover/douban_${type}`" :params="filterParams" />
   </div>
 </template>
+
+<style scoped>
+.discover-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-block: 4px 6px;
+  padding-inline: 0;
+}
+
+.discover-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 28px;
+}
+
+.discover-filter-label {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  block-size: 26px;
+  min-inline-size: 44px;
+}
+
+.discover-filter-label :deep(.v-label) {
+  color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.62));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.discover-chip-group {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: 0 !important;
+}
+
+.discover-chip-group :deep(.v-slide-group__content) {
+  gap: 5px;
+  padding-block: 1px !important;
+}
+
+.discover-filter-chip {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  font-size: 12.5px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin: 0 !important;
+  padding-inline: 9px !important;
+}
+
+.discover-filter-chip.v-chip--selected {
+  font-weight: 600;
+}
+</style>

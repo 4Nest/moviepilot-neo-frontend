@@ -30,64 +30,103 @@ const formFields = computed(() => {
 </script>
 
 <template>
-  <VCard variant="outlined">
-    <VCardText>
-      <div class="text-center mb-6">
-        <h3 class="text-h4 mb-2">{{ t('setupWizard.siteAuth.title') }}</h3>
-        <p class="text-body-1 text-medium-emphasis">{{ t('setupWizard.siteAuth.description') }}</p>
-      </div>
+  <div class="setup-step">
+    <div class="setup-step-head">
+      <h3 class="setup-step-title">{{ t('setupWizard.siteAuth.title') }}</h3>
+      <p class="setup-step-desc">{{ t('setupWizard.siteAuth.description') }}</p>
+    </div>
 
-      <VRow>
-        <VCol cols="12">
-          <VAlert type="info" variant="tonal" class="mb-4">
-            <VAlertTitle>{{ t('setupWizard.siteAuth.info') }}</VAlertTitle>
-            {{ t('setupWizard.siteAuth.infoDesc') }}
-          </VAlert>
-        </VCol>
+    <VAlert type="info" variant="tonal" density="compact" class="setup-step-alert mb-3">
+      <div class="setup-step-alert__title">{{ t('setupWizard.siteAuth.info') }}</div>
+      <div class="setup-step-alert__desc">{{ t('setupWizard.siteAuth.infoDesc') }}</div>
+    </VAlert>
 
-        <VCol cols="12">
-          <VSelect
-            v-model="wizardData.siteAuth.site"
-            :items="siteItems"
-            item-value="key"
-            item-title="name"
-            item-props
-            :label="t('dialog.userAuth.selectSite')"
-            :hint="t('setupWizard.siteAuth.selectSiteHint')"
-            :error="validationErrors.siteAuth.site"
-            :error-messages="validationErrors.siteAuth.site ? [t('dialog.userAuth.selectSiteRequired')] : []"
-            persistent-hint
-            prepend-inner-icon="mdi-web"
-            clearable
-          />
-        </VCol>
-
-        <template v-if="wizardData.siteAuth.site">
+    <div class="setup-step-panel">
+      <VForm @submit.prevent="() => {}">
+        <VRow>
           <VCol cols="12">
-            <VAlert type="warning" variant="tonal">
-              {{ t('setupWizard.siteAuth.submitHint') }}
-            </VAlert>
-          </VCol>
-
-          <VCol v-for="param in formFields" :key="param.key" cols="12" md="6">
-            <VTextField
-              v-model="wizardData.siteAuth.params[param.site.toUpperCase() + '_' + param.key.toUpperCase()]"
-              :type="param.type"
-              :label="param.name"
-              :placeholder="param.placeholder"
-              :hint="param.tooltip"
-              :error="validationErrors.siteAuth[param.site.toUpperCase() + '_' + param.key.toUpperCase()]"
-              :error-messages="
-                validationErrors.siteAuth[param.site.toUpperCase() + '_' + param.key.toUpperCase()]
-                  ? [t('setupWizard.siteAuth.fieldRequired', { name: param.name })]
-                  : []
-              "
-              clearable
+            <VSelect
+              v-model="wizardData.siteAuth.site"
+              :items="siteItems"
+              item-value="key"
+              item-title="name"
+              item-props
+              :label="t('dialog.userAuth.selectSite')"
+              :hint="t('setupWizard.siteAuth.selectSiteHint')"
+              :error="validationErrors.siteAuth.site"
+              :error-messages="validationErrors.siteAuth.site ? [t('dialog.userAuth.selectSiteRequired')] : []"
               persistent-hint
+              prepend-inner-icon="mdi-web"
+              clearable
             />
           </VCol>
-        </template>
-      </VRow>
-    </VCardText>
-  </VCard>
+
+          <template v-if="wizardData.siteAuth.site">
+            <VCol cols="12">
+              <VAlert type="warning" variant="tonal" density="compact" class="setup-step-alert">
+                <div class="setup-step-alert__desc">{{ t('setupWizard.siteAuth.submitHint') }}</div>
+              </VAlert>
+            </VCol>
+
+            <VCol v-for="param in formFields" :key="param.key" cols="12" md="6">
+              <VTextField
+                v-model="wizardData.siteAuth.params[param.site.toUpperCase() + '_' + param.key.toUpperCase()]"
+                :type="param.type"
+                :label="param.name"
+                :placeholder="param.placeholder"
+                :hint="param.tooltip"
+                :error="validationErrors.siteAuth[param.site.toUpperCase() + '_' + param.key.toUpperCase()]"
+                :error-messages="
+                  validationErrors.siteAuth[param.site.toUpperCase() + '_' + param.key.toUpperCase()]
+                    ? [t('setupWizard.siteAuth.fieldRequired', { name: param.name })]
+                    : []
+                "
+                clearable
+                persistent-hint
+              />
+            </VCol>
+          </template>
+        </VRow>
+      </VForm>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.setup-step-head {
+  margin-block-end: 16px;
+}
+
+.setup-step-title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-desc {
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-alert__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-alert__desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-panel {
+  padding: 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
+}
+</style>

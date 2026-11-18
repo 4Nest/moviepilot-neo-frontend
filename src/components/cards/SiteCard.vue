@@ -95,6 +95,12 @@ async function testSite() {
     emit('refresh-stats', cardProps.site?.domain)
   } catch (error) {
     console.error(error)
+    $toast.error(
+      t('site.testFailed', {
+        name: cardProps.site?.name,
+        message: error instanceof Error ? error.message : t('common.serverConnectionFailed'),
+      }),
+    )
   } finally {
     testButtonText.value = t('site.testConnectivity')
     testButtonDisable.value = false
@@ -139,7 +145,7 @@ function handleSiteEdit() {
     { siteid: cardProps.site?.id },
     {
       save: saveSite,
-      remove: () => emit('remove'),
+      remove: () => emit('remove', cardProps.site?.id),
     },
     { closeOn: ['close', 'save', 'remove'] },
   )
@@ -177,7 +183,7 @@ async function deleteSiteInfo() {
 
   try {
     const result = (await api.delete(`site/${cardProps.site?.id}`)) as ApiResponse<unknown>
-    if (result.success) emit('remove')
+    if (result.success) emit('remove', cardProps.site?.id)
     else $toast.error(t('site.deleteFailed', { name: cardProps.site?.name, message: result.message }))
   } catch (error) {
     $toast.error(t('site.deleteFailed', { name: cardProps.site?.name, message: error }))
@@ -259,13 +265,10 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
     <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
     <div class="site-card-hover-area h-full">
       <VCard
-        class="site-card app-hover-lift-card relative h-full min-h-[168px] flex flex-col overflow-hidden group"
+        class="site-card app-hover-lift-card relative h-full flex flex-col overflow-hidden group"
         :class="[
           cardProps.site?.is_active ? '' : 'opacity-70',
           {
-            'border-error': statColor === 'error',
-            'border-warning': statColor === 'warning',
-            'border-success': statColor === 'success',
             'cursor-pointer site-card--hoverable': !cardProps.sortable,
             'cursor-move': cardProps.sortable,
             'site-card--sortable': cardProps.sortable,
@@ -277,22 +280,18 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
         :hover="!cardProps.sortable"
         @click="handleCardClick"
       >
-        <!-- 装饰性状态指示器 -->
-        <div v-if="cardProps.site?.is_active" class="site-status-indicator" :class="statColor"></div>
-
         <!-- 主体部分 -->
-        <div class="relative z-1 flex flex-1 flex-col p-3">
+        <div class="site-card__body relative z-1 flex flex-1 flex-col">
           <!-- 顶部：图标和站点名称 -->
-          <div class="mb-1 flex min-w-0 items-center gap-2">
+          <div class="flex min-w-0 items-center gap-2.5">
             <!-- 站点图标 -->
             <VAvatar
               tile
-              rounded="lg"
-              size="32"
-              class="shrink-0"
+              size="38"
+              class="site-card__avatar shrink-0"
               :class="{ 'cursor-move': cardProps.sortable && display.mdAndUp.value }"
             >
-              <VImg :src="siteIcon" class="w-full h-full" :alt="cardProps.site?.name" cover>
+              <VImg :src="siteIcon" class="w-full h-full" :alt="cardProps.site?.name" contain>
                 <template #placeholder>
                   <div class="w-full h-full">
                     <VSkeletonLoader class="object-cover aspect-square" />
@@ -301,9 +300,16 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
               </VImg>
             </VAvatar>
 
-            <!-- 站点名称和特性图标 -->
+            <!-- 站点名称、状态圆点和特性图标 -->
             <div class="flex min-w-0 flex-1 items-center gap-2">
-              <h3 class="min-w-0 flex-1 truncate text-lg font-semibold leading-tight">{{ cardProps.site?.name }}</h3>
+              <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                <h3 class="site-card__title min-w-0 truncate">{{ cardProps.site?.name }}</h3>
+                <span
+                  data-testid="site-status-dot"
+                  class="site-status-dot shrink-0"
+                  :class="`site-status-dot--${statColor}`"
+                />
+              </div>
 
               <!-- 站点特性图标 -->
               <div class="ml-auto flex shrink-0 items-center gap-2">
@@ -313,7 +319,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 >
                   <VIcon
                     icon="mdi-speedometer"
-                    size="16"
+                    size="15"
                     color="primary"
                     :class="cardProps.sortable ? 'opacity-85' : 'opacity-85 hover:opacity-100'"
                   />
@@ -324,7 +330,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 >
                   <VIcon
                     icon="mdi-network-outline"
-                    size="16"
+                    size="15"
                     color="primary"
                     :class="cardProps.sortable ? 'opacity-85' : 'opacity-85 hover:opacity-100'"
                   />
@@ -335,7 +341,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 >
                   <VIcon
                     icon="mdi-apple-safari"
-                    size="16"
+                    size="15"
                     color="primary"
                     :class="cardProps.sortable ? 'opacity-85' : 'opacity-85 hover:opacity-100'"
                   />
@@ -346,7 +352,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 >
                   <VIcon
                     icon="mdi-filter-cog-outline"
-                    size="16"
+                    size="15"
                     color="primary"
                     :class="cardProps.sortable ? 'opacity-85' : 'opacity-85 hover:opacity-100'"
                   />
@@ -356,8 +362,8 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
           </div>
 
           <!-- 站点地址 -->
-          <div class="my-3">
-            <div class="min-w-0 truncate text-sm text-medium-emphasis" @click.stop="handleSiteUrlClick">
+          <div class="site-card__url-row">
+            <div class="site-card__url min-w-0 truncate" @click.stop="handleSiteUrlClick">
               {{ cardProps.site?.url }}
             </div>
           </div>
@@ -380,15 +386,17 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
 
           <!-- 公开 BT 标签占据剩余空间并在底部对齐，避免短行卡片覆盖站点地址。 -->
           <div v-if="cardProps.site?.public" class="site-card-public-summary flex flex-1 items-end">
-            <VChip size="small" color="success" variant="tonal" prepend-icon="mdi-earth">公开 BT</VChip>
+            <VChip size="small" color="success" variant="tonal" prepend-icon="mdi-earth" class="site-card__public-chip">
+              公开 BT
+            </VChip>
           </div>
 
           <!-- PT 站点显示上传下载数据。 -->
           <div v-else class="flex-1 flex flex-col justify-end">
-            <div class="border-t mt-1.5 pt-1.5">
-              <div class="flex items-center justify-between gap-3 mb-1.5">
-                <div class="text-sm text-medium-emphasis min-w-[70px]">
-                  <VIcon icon="mdi-arrow-up" size="14" color="info" class="mr-1" />
+            <div class="site-card__metrics border-t">
+              <div class="flex items-center justify-between gap-2.5 mb-1.5">
+                <div class="site-card__metric-text">
+                  <VIcon icon="mdi-arrow-up" size="13" color="info" class="mr-1 shrink-0" />
                   <span>{{ formatFileSize(cardProps.data?.upload || 0) }}</span>
                 </div>
                 <div class="flex-grow h-1 rounded bg-on-surface/8 relative overflow-hidden">
@@ -396,9 +404,9 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 </div>
               </div>
 
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center text-[0.8rem] text-medium-emphasis min-w-[70px]">
-                  <VIcon icon="mdi-arrow-down" size="14" color="success" class="mr-1" />
+              <div class="flex items-center justify-between gap-2.5">
+                <div class="site-card__metric-text">
+                  <VIcon icon="mdi-arrow-down" size="13" color="success" class="mr-1 shrink-0" />
                   <span>{{ formatFileSize(cardProps.data?.download || 0) }}</span>
                 </div>
                 <div class="flex-grow h-1 rounded bg-on-surface/8 relative overflow-hidden">
@@ -408,57 +416,82 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
             </div>
           </div>
         </div>
-        <!-- 紧凑操作区：不再占据卡片整列宽度。 -->
-        <VSheet
-          v-if="!cardProps.sortable"
-          class="site-card-actions absolute top-2 right-2 z-20 flex items-center gap-1 rounded-lg px-1 py-0.5"
-        >
+        <!-- 紧凑操作区：26x26 微圆角按钮组 -->
+        <VSheet v-if="!cardProps.sortable" class="site-card-actions absolute top-2 right-2 z-20 flex items-center">
           <VBtn
             icon
             variant="text"
             density="comfortable"
-            class="relative flex items-center justify-center rounded-full"
+            class="site-card__action-btn relative flex items-center justify-center"
             :disabled="testButtonDisable"
+            :title="testButtonText"
+            :aria-label="testButtonText"
             @click.stop="testSite"
-            size="36"
           >
             <div class="relative flex items-center justify-center w-full h-full">
               <div
-                class="w-[20px] h-[20px] rounded-full shadow-[inset_0_0_0_2px_rgba(var(--v-theme-on-surface),0.1)] pulse-dot"
+                class="w-[14px] h-[14px] rounded-full shadow-[inset_0_0_0_1.5px_rgba(var(--v-theme-on-surface),0.12)] pulse-dot"
                 :class="statColor"
               ></div>
             </div>
             <div
               v-if="testButtonDisable"
-              class="absolute inset-0 flex flex-col items-center justify-center bg-surface/95 rounded-full shadow-md animate-fade-in"
+              class="absolute inset-0 flex flex-col items-center justify-center bg-surface/95 rounded-md shadow-sm animate-fade-in"
             >
-              <div class="relative w-6 h-6">
+              <div class="relative w-4 h-4">
                 <div class="spinner-circle"></div>
               </div>
             </div>
+            <VTooltip activator="parent" location="top">{{ testButtonText }}</VTooltip>
           </VBtn>
 
-          <VBtn v-if="!cardProps.site?.public" icon variant="text" @click.stop="handleSiteUserData" size="36">
-            <VIcon icon="mdi-chart-bell-curve" size="20" />
+          <VBtn
+            v-if="!cardProps.site?.public"
+            icon
+            variant="text"
+            class="site-card__action-btn"
+            :title="t('site.viewUserData')"
+            :aria-label="t('site.viewUserData')"
+            @click.stop="handleSiteUserData"
+          >
+            <VIcon icon="mdi-chart-bell-curve" size="16" />
+            <VTooltip activator="parent" location="top">{{ t('site.viewUserData') }}</VTooltip>
           </VBtn>
 
-          <VBtn v-if="!cardProps.site?.public" icon variant="text" @click.stop="handleSiteUpdate" size="36">
-            <VIcon icon="mdi-refresh" size="20" />
+          <VBtn
+            v-if="!cardProps.site?.public"
+            icon
+            variant="text"
+            class="site-card__action-btn"
+            :title="t('site.updateCookie')"
+            :aria-label="t('site.updateCookie')"
+            @click.stop="handleSiteUpdate"
+          >
+            <VIcon icon="mdi-refresh" size="16" />
+            <VTooltip activator="parent" location="top">{{ t('site.updateCookie') }}</VTooltip>
           </VBtn>
 
-          <VBtn icon variant="text" size="36" @click.stop>
-            <VIcon icon="mdi-dots-vertical" size="20" />
+          <VBtn
+            icon
+            variant="text"
+            class="site-card__action-btn"
+            :title="t('common.moreActions')"
+            :aria-label="t('common.moreActions')"
+            @click.stop
+          >
+            <VIcon icon="mdi-dots-vertical" size="16" />
+            <VTooltip activator="parent" location="top">{{ t('common.moreActions') }}</VTooltip>
             <VMenu :activator="'parent'" :close-on-content-click="true" :location="siteMenuLocation">
-              <VList>
+              <VList density="compact">
                 <VListItem @click="handleSiteEdit" base-color="info">
                   <template #prepend>
-                    <VIcon icon="mdi-file-edit-outline" size="20" />
+                    <VIcon icon="mdi-file-edit-outline" size="18" />
                   </template>
                   <VListItemTitle>{{ t('site.actions.edit') }}</VListItemTitle>
                 </VListItem>
                 <VListItem @click="deleteSiteInfo">
                   <template #prepend>
-                    <VIcon icon="mdi-delete-outline" size="20" color="error" />
+                    <VIcon icon="mdi-delete-outline" size="18" color="error" />
                   </template>
                   <VListItemTitle class="text-error">{{ t('site.deleteSite') }}</VListItemTitle>
                 </VListItem>
@@ -476,203 +509,138 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
   inline-size: 100%;
 }
 
+.site-card {
+  border: 1px solid var(--mp-border-card) !important;
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface));
+  min-block-size: 150px;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
 .site-card-hover-area:hover .site-card--hoverable {
+  border-color: var(--mp-border-hover) !important;
   transform: translate3d(0, -0.25rem, 0);
 }
 
-.site-status-indicator {
-  position: absolute;
-  z-index: 1;
-  block-size: 2px;
-  inset-block-start: 0;
-  inset-inline: 0;
-  opacity: 0.5;
-  transition:
-    block-size 0.3s ease,
-    opacity 0.3s ease;
+.site-card__body {
+  padding: 14px 16px;
 }
 
-.site-status-indicator.error {
-  background: linear-gradient(90deg, transparent, rgba(var(--v-theme-error), 0.7), transparent);
-  box-shadow: 0 0 8px rgba(var(--v-theme-error), 0.3);
+.site-card__avatar {
+  padding: 4px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.site-status-indicator.warning {
-  background: linear-gradient(90deg, transparent, rgba(var(--v-theme-warning), 0.7), transparent);
-  box-shadow: 0 0 8px rgba(var(--v-theme-warning), 0.3);
+.site-card__avatar :deep(.v-img__img) {
+  object-fit: contain !important;
 }
 
-.site-status-indicator.success {
-  background: linear-gradient(90deg, transparent, rgba(var(--v-theme-success), 0.7), transparent);
-  box-shadow: 0 0 8px rgba(var(--v-theme-success), 0.3);
+.site-card__title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
-.site-status-indicator.secondary {
-  background: linear-gradient(90deg, transparent, rgba(var(--v-theme-secondary), 0.7), transparent);
-  box-shadow: 0 0 8px rgba(var(--v-theme-secondary), 0.3);
+.site-card__url-row {
+  margin-block: 7px 9px;
 }
 
-/* 站点卡片悬停时状态指示器变化 */
-.site-card-hover-area:hover .site-card:not(.site-card--sortable) .site-status-indicator {
-  block-size: 2px;
-  opacity: 0.8;
+.site-card__url {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.35;
 }
 
-/* 上传下载条样式 */
-.upload-bar {
-  animation: pulse-width 2s infinite;
-  background: linear-gradient(90deg, #4d79ff, #07f);
-  box-shadow: 0 0 4px rgba(0, 119, 255, 50%);
+.site-card__metrics {
+  border-color: var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  margin-block-start: 4px;
+  padding-block-start: 8px;
 }
 
-.download-bar {
-  animation: pulse-width 2s infinite;
-  background: linear-gradient(90deg, #42d392, #00b77e);
-  box-shadow: 0 0 4px rgba(0, 183, 126, 50%);
+.site-card__metric-text {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  min-inline-size: 72px;
+  white-space: nowrap;
 }
 
-/* 测试状态点样式 */
+.site-card__public-chip {
+  border-radius: 6px !important;
+  block-size: 22px !important;
+  font-size: 11.5px !important;
+  font-weight: 500;
+  padding-inline: 8px !important;
+}
+
+.site-status-dot {
+  display: inline-block;
+  border-radius: 50%;
+  block-size: 7px;
+  inline-size: 7px;
+}
+
+.site-status-dot--success {
+  background-color: rgb(var(--v-theme-success));
+}
+
+.site-status-dot--warning {
+  background-color: rgb(var(--v-theme-warning));
+}
+
+.site-status-dot--error {
+  background-color: rgb(var(--v-theme-error));
+}
+
+.site-status-dot--secondary {
+  background-color: rgba(var(--v-theme-on-surface), 0.28);
+}
+
+/* 测试按钮状态圆点 */
 .pulse-dot::before {
   position: absolute;
   z-index: 1;
   border-radius: 50%;
-  block-size: 70%;
+  block-size: 56%;
   content: '';
-  inline-size: 70%;
-  inset-block-start: 15%;
-  inset-inline-start: 15%;
-}
-
-.pulse-dot::after {
-  position: absolute;
-  z-index: 2;
-  border-radius: 50%;
-  block-size: 100%;
-  content: '';
-  inline-size: 100%;
-  inset-block-start: 0;
-  inset-inline-start: 0;
+  inline-size: 56%;
+  inset-block-start: 22%;
+  inset-inline-start: 22%;
 }
 
 .pulse-dot.error::before {
-  background-color: rgba(var(--v-theme-error), 1);
-  box-shadow: 0 0 10px rgba(var(--v-theme-error), 0.8);
-}
-
-.pulse-dot.error::after {
-  animation: pulse-animation-error 2s infinite;
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-error), 0.3);
+  background-color: rgb(var(--v-theme-error));
 }
 
 .pulse-dot.warning::before {
-  background-color: rgba(var(--v-theme-warning), 1);
-  box-shadow: 0 0 10px rgba(var(--v-theme-warning), 0.8);
-}
-
-.pulse-dot.warning::after {
-  animation: pulse-animation-warning 2s infinite;
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-warning), 0.3);
+  background-color: rgb(var(--v-theme-warning));
 }
 
 .pulse-dot.success::before {
-  background-color: rgba(var(--v-theme-success), 1);
-  box-shadow: 0 0 10px rgba(var(--v-theme-success), 0.8);
-}
-
-.pulse-dot.success::after {
-  animation: pulse-animation-success 2s infinite;
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-success), 0.3);
+  background-color: rgb(var(--v-theme-success));
 }
 
 .pulse-dot.secondary::before {
-  background-color: rgba(var(--v-theme-secondary), 1);
-  box-shadow: 0 0 10px rgba(var(--v-theme-secondary), 0.8);
-}
-
-.pulse-dot.secondary::after {
-  animation: pulse-animation-secondary 2s infinite;
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-secondary), 0.3);
+  background-color: rgba(var(--v-theme-on-surface), 0.35);
 }
 
 /* 加载动画 */
 .spinner-circle {
   position: absolute;
-  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  border: 1.5px solid rgba(var(--v-theme-primary), 0.2);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   block-size: 100%;
-  border-block-start-color: rgba(var(--v-theme-primary), 1);
+  border-block-start-color: rgb(var(--v-theme-primary));
   inline-size: 100%;
-}
-
-/* 动画关键帧 */
-@keyframes pulse-width {
-  0%,
-  100% {
-    opacity: 0.85;
-    transform: scaleX(0.95);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scaleX(1.05);
-  }
-}
-
-@keyframes pulse-animation-error {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-error), 0.6);
-  }
-
-  70% {
-    box-shadow: 0 0 0 10px rgba(var(--v-theme-error), 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-error), 0);
-  }
-}
-
-@keyframes pulse-animation-warning {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-warning), 0.6);
-  }
-
-  70% {
-    box-shadow: 0 0 0 10px rgba(var(--v-theme-warning), 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-warning), 0);
-  }
-}
-
-@keyframes pulse-animation-success {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-success), 0.6);
-  }
-
-  70% {
-    box-shadow: 0 0 0 10px rgba(var(--v-theme-success), 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-success), 0);
-  }
-}
-
-@keyframes pulse-animation-secondary {
-  0% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-secondary), 0.6);
-  }
-
-  70% {
-    box-shadow: 0 0 0 10px rgba(var(--v-theme-secondary), 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--v-theme-secondary), 0);
-  }
 }
 
 @keyframes spin {
@@ -685,28 +653,38 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
   }
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
 .site-card-public-summary {
-  min-block-size: 2rem;
+  min-block-size: 1.75rem;
 }
 
 .site-card-actions {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  background: rgba(var(--v-theme-surface), 0.88);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  gap: 2px;
   opacity: 0;
-  transform: translateY(-0.35rem);
-  transition: all 0.2s ease;
+  padding: 2px;
+  transform: translateY(-0.2rem);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    visibility 0.16s ease;
   visibility: hidden;
+}
+
+.site-card__action-btn {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
+}
+
+.site-card__action-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .site-card-hover-area:hover .site-card-actions {

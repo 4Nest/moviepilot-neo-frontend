@@ -124,4 +124,36 @@ describe('LoggingView 倒序显示', () => {
 
     expect(listText().indexOf('新日志')).toBeLessThan(listText().indexOf('旧日志'))
   })
+
+  it('倒序按钮使用 .is-active 区分于实时流 .is-live，具备 aria-label，且 pendingLogCount 仅统计匹配过滤条件的日志', async () => {
+    const { container } = await renderWithProviders(LoggingView, { props: { logfile: 'moviepilot.log' } })
+    await vi.advanceTimersByTimeAsync(300)
+    await nextTick()
+
+    const sortBtn = screen.getByRole('button', { name: '倒序显示（最新在上）' })
+    const streamBtn = screen.getByRole('button', { name: '暂停日志流' })
+    expect(streamBtn).toHaveClass('is-live')
+    expect(sortBtn).not.toHaveClass('is-live')
+
+    await fireEvent.click(sortBtn)
+    const activeSortBtn = screen.getByRole('button', { name: '正序显示（最新在下）' })
+    expect(activeSortBtn).toHaveClass('is-active')
+    expect(activeSortBtn).not.toHaveClass('is-live')
+
+    // 切回正序并模拟用户离开最新日志位置
+    await fireEvent.click(activeSortBtn)
+    await fireEvent.click(screen.getByRole('button', { name: 'ERROR' }))
+    const shell = container.querySelector('.logging-shell') as HTMLElement
+    Object.defineProperty(shell, 'scrollHeight', { configurable: true, value: 1000 })
+    Object.defineProperty(shell, 'clientHeight', { configurable: true, value: 200 })
+    Object.defineProperty(shell, 'scrollTop', { configurable: true, value: 0 })
+
+    pushLogs(
+      'INFO: [moviepilot] 2026-09-29 10:00:01,000 alpha.py - 被过滤的普通日志',
+      'ERROR: [moviepilot] 2026-09-29 10:00:02,000 alpha.py - 命中的错误日志',
+    )
+    await flushLogs()
+
+    expect(screen.getByRole('button', { name: '查看最新 (1)' })).toBeInTheDocument()
+  })
 })

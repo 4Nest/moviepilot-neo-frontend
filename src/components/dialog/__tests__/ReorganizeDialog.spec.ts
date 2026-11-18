@@ -1092,4 +1092,11 @@ describe('ReorganizeDialog preview', () => {
     await user.click(screen.getByRole('button', { name: '预览' }))
     expect(screen.getByRole('button', { name: '预览' })).not.toHaveClass('reorganize-action-btn--active')
   })
+
+  it('groups reorganize toggle options in a structured settings card without narrow md-3 columns', async () => {
+    const { container } = await renderDialog()
+
+    expect(container.querySelector('.mp-settings-card')).not.toBeNull()
+    expect(container.querySelector('.v-col-md-3')).toBeNull()
+  })
 })

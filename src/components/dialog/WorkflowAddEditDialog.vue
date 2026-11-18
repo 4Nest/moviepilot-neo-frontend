@@ -330,6 +330,11 @@ async function addWorkflow() {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(
+      t('dialog.workflowAddEdit.addFailed', {
+        message: error instanceof Error ? error.message : t('common.error'),
+      }),
+    )
   } finally {
     saving.value = false
     doneNProgress()
@@ -338,9 +343,11 @@ async function addWorkflow() {
 
 // 调用API 编辑任务
 async function editWorkflow() {
+  if (saving.value) return
   if (!validateForm()) return
 
   normalizeBeforeSubmit()
+  saving.value = true
   startNProgress()
   try {
     const result: { [key: string]: string } = await api.put(`workflow/${workflowForm.value.id}`, workflowForm.value)
@@ -352,8 +359,15 @@ async function editWorkflow() {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(
+      t('dialog.workflowAddEdit.editFailed', {
+        message: error instanceof Error ? error.message : t('common.error'),
+      }),
+    )
+  } finally {
+    saving.value = false
+    doneNProgress()
   }
-  doneNProgress()
 }
 
 // 组件挂载时加载事件类型
@@ -363,17 +377,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog scrollable :close-on-back="false" eager max-width="38rem" :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem>
+  <VDialog scrollable :close-on-back="false" eager max-width="42rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-workflow-outline" class="me-2" />
+          <VIcon icon="mdi-workflow-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ title }}</VCardTitle>
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
+      <VCardText class="mp-dialog-body">
         <VAlert
           v-if="presetActionCount > 0"
           type="info"
@@ -391,8 +405,8 @@ onMounted(() => {
         </VAlert>
 
         <VForm @submit.prevent="() => {}">
-          <VRow>
-            <VCol cols="12">
+          <VRow class="mp-form-grid">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="workflowForm.name"
                 :label="t('dialog.workflowAddEdit.name')"
@@ -402,7 +416,7 @@ onMounted(() => {
                 prepend-inner-icon="mdi-workflow"
               />
             </VCol>
-            <VCol cols="12">
+            <VCol cols="12" sm="6">
               <VSelect
                 v-model="workflowForm.trigger_type"
                 :label="t('dialog.workflowAddEdit.triggerType')"
@@ -452,7 +466,7 @@ onMounted(() => {
                 <div class="workflow-event-conditions__header">
                   <div>
                     <div class="workflow-event-conditions__title">
-                      <VIcon icon="mdi-filter-variant" size="18" />
+                      <VIcon icon="mdi-filter-variant" size="17" class="text-primary" />
                       <span>{{ t('dialog.workflowAddEdit.eventConditionsTitle') }}</span>
                     </div>
                     <div class="workflow-event-conditions__hint">
@@ -460,8 +474,8 @@ onMounted(() => {
                     </div>
                   </div>
                   <VBtn
-                    color="primary"
-                    variant="tonal"
+                    color="default"
+                    variant="outlined"
                     size="small"
                     prepend-icon="mdi-plus"
                     @click="addEventConditionRow"
@@ -521,6 +535,9 @@ onMounted(() => {
                 v-model="workflowForm.description"
                 :label="t('dialog.workflowAddEdit.desc')"
                 :placeholder="t('dialog.workflowAddEdit.descPlaceholder')"
+                rows="2"
+                auto-grow
+                hide-details="auto"
                 prepend-inner-icon="mdi-text-box-outline"
               />
             </VCol>
@@ -530,6 +547,7 @@ onMounted(() => {
                 type="number"
                 min="1"
                 clearable
+                hide-details="auto"
                 :label="t('dialog.workflowAddEdit.maxWorkers')"
                 prepend-inner-icon="mdi-call-split"
               />
@@ -537,15 +555,21 @@ onMounted(() => {
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="saving" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           v-if="workflow"
           color="primary"
           variant="flat"
+          size="small"
+          :loading="saving"
+          :disabled="saving"
+          class="px-4"
           @click="editWorkflow"
-          prepend-icon="mdi-content-save"
-          class="px-5"
         >
           {{ t('dialog.workflowAddEdit.confirm') }}
         </VBtn>
@@ -553,10 +577,11 @@ onMounted(() => {
           v-else
           color="primary"
           variant="flat"
+          size="small"
           :loading="saving"
+          :disabled="saving"
+          class="px-4"
           @click="addWorkflow"
-          prepend-icon="mdi-plus"
-          class="px-5"
         >
           {{ t('dialog.workflowAddEdit.confirm') }}
         </VBtn>
@@ -566,13 +591,31 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
 .workflow-event-conditions {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: var(--app-control-radius);
-  background: rgba(var(--v-theme-on-surface), 0.025);
+  padding: 14px 16px;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
   gap: 12px;
 }
 

@@ -30,11 +30,12 @@ function openTmdbPage(type: string, tmdbId: number) {
         v-if="context?.meta_info?.name"
         class="d-flex justify-space-between flex-wrap flex-md-nowrap flex-column flex-md-row"
       >
-        <div v-if="context?.media_info?.poster_path" class="ma-auto">
+        <div v-if="context?.media_info?.poster_path" class="ma-auto flex-shrink-0">
           <VImg
             width="10rem"
+            max-width="10rem"
             aspect-ratio="2/3"
-            class="object-cover aspect-w-2 aspect-h-3 rounded-lg ring-1 ring-gray-500"
+            class="media-info-poster object-cover aspect-w-2 aspect-h-3 rounded-lg"
             :src="getW500Image(context?.media_info?.poster_path)"
             cover
           >
@@ -45,9 +46,9 @@ function openTmdbPage(type: string, tmdbId: number) {
             </template>
           </VImg>
         </div>
-        <div class="flex-grow">
+        <div class="flex-grow min-w-0">
           <VCardItem class="pb-1">
-            <div class="text-center text-md-left text-h6 font-weight-bold line-clamp-2 overflow-hidden text-ellipsis">
+            <div class="media-info-title text-center text-md-left line-clamp-2 overflow-hidden text-ellipsis">
               {{ context?.media_info?.title || context?.meta_info?.name }}
               <span v-if="context?.meta_info?.season_episode" class="text-sm text-medium-emphasis align-top">
                 {{ context?.meta_info?.season_episode }}
@@ -60,7 +61,7 @@ function openTmdbPage(type: string, tmdbId: number) {
 
           <VCardText
             v-if="context?.media_info?.overview"
-            class="line-clamp-4 overflow-hidden text-ellipsis text-center text-md-left ..."
+            class="line-clamp-4 overflow-hidden text-ellipsis text-center text-md-left"
           >
             {{ context?.media_info?.overview }}
           </VCardText>
@@ -69,49 +70,87 @@ function openTmdbPage(type: string, tmdbId: number) {
             <!-- 类型 -->
             <VChip
               v-if="context?.media_info?.type || context?.meta_info?.type"
-              variant="elevated"
-              class="me-1 mb-1 text-white bg-blue-500"
+              size="small"
+              variant="tonal"
+              color="primary"
+              class="me-1 mb-1 media-info-chip"
             >
               {{ context?.media_info?.type || context?.meta_info?.type }}
             </VChip>
             <!-- 二级分类 -->
-            <VChip v-if="context?.media_info?.category" variant="elevated" class="me-1 mb-1 text-white bg-blue-500">
+            <VChip
+              v-if="context?.media_info?.category"
+              size="small"
+              variant="tonal"
+              color="primary"
+              class="me-1 mb-1 media-info-chip"
+            >
               {{ context?.media_info?.category }}
             </VChip>
             <!-- TMDBID -->
             <VChip
               v-if="context?.media_info?.tmdb_id"
-              variant="elevated"
-              class="me-1 mb-1 text-white bg-green-500"
+              size="small"
+              variant="tonal"
+              color="success"
+              class="me-1 mb-1 media-info-chip"
               @click="openTmdbPage(context?.media_info?.type || '', context?.media_info?.tmdb_id)"
             >
               {{ context?.media_info?.tmdb_id }}
             </VChip>
             <!-- meta_info -->
-            <VChip v-if="context?.meta_info?.web_source" variant="elevated" class="me-1 mb-1 text-white bg-purple-500">
+            <VChip
+              v-if="context?.meta_info?.web_source"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="me-1 mb-1 media-info-chip"
+            >
               {{ context?.meta_info?.web_source }}
             </VChip>
-            <VChip v-if="context?.meta_info?.edition" variant="elevated" class="me-1 mb-1 text-white bg-red-500">
+            <VChip
+              v-if="context?.meta_info?.edition"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="me-1 mb-1 media-info-chip"
+            >
               {{ context?.meta_info?.edition }}
             </VChip>
-            <VChip v-if="context?.meta_info?.resource_pix" variant="elevated" class="me-1 mb-1 text-white bg-red-500">
+            <VChip
+              v-if="context?.meta_info?.resource_pix"
+              size="small"
+              variant="tonal"
+              color="primary"
+              class="me-1 mb-1 media-info-chip"
+            >
               {{ context?.meta_info?.resource_pix }}
             </VChip>
             <VChip
               v-if="context?.meta_info?.video_encode"
-              variant="elevated"
-              class="me-1 mb-1 text-white bg-orange-500"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="me-1 mb-1 media-info-chip"
             >
               {{ context?.meta_info?.video_encode }}
             </VChip>
             <VChip
               v-if="context?.meta_info?.audio_encode"
-              variant="elevated"
-              class="me-1 mb-1 text-white bg-orange-500"
+              size="small"
+              variant="tonal"
+              color="secondary"
+              class="me-1 mb-1 media-info-chip"
             >
               {{ context?.meta_info?.audio_encode }}
             </VChip>
-            <VChip v-if="context?.meta_info?.resource_team" variant="elevated" class="me-1 mb-1 text-white bg-cyan-500">
+            <VChip
+              v-if="context?.meta_info?.resource_team"
+              size="small"
+              variant="tonal"
+              color="info"
+              class="me-1 mb-1 media-info-chip"
+            >
               {{ context?.meta_info?.resource_team }}
             </VChip>
           </VCardItem>
@@ -119,20 +158,21 @@ function openTmdbPage(type: string, tmdbId: number) {
       </div>
       <VAlert v-if="!context?.meta_info?.name" icon="mdi-alert-circle-outline"> 识别失败，无法识别到有效信息！ </VAlert>
     </VCol>
-    <VExpansionPanels v-show="!isNullOrEmptyObject(context?.meta_info.apply_words)">
+    <VExpansionPanels v-show="!isNullOrEmptyObject(context?.meta_info?.apply_words)">
       <VExpansionPanel>
         <VExpansionPanelTitle> 识别词应用详情 </VExpansionPanelTitle>
         <VExpansionPanelText>
-          <VChip variant="elevated" class="me-1 mb-1 break-all" color="primary">
-            {{ context?.meta_info.org_string }}
+          <VChip size="small" variant="tonal" class="me-1 mb-1 break-all media-info-chip" color="primary">
+            {{ context?.meta_info?.org_string }}
           </VChip>
           <VChip
-            v-for="(val, key) in context?.meta_info.apply_words"
+            v-for="(val, key) in context?.meta_info?.apply_words"
             :key="key"
             :val="val"
+            size="small"
             variant="outlined"
-            color="info"
-            class="me-1 mb-1 break-all"
+            color="secondary"
+            class="me-1 mb-1 break-all media-info-chip"
           >
             {{ val }}
           </VChip>
@@ -141,3 +181,20 @@ function openTmdbPage(type: string, tmdbId: number) {
     </VExpansionPanels>
   </div>
 </template>
+
+<style scoped>
+.media-info-poster {
+  border: 1px solid var(--mp-border-card);
+}
+
+.media-info-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.media-info-chip {
+  border-radius: 6px !important;
+}
+</style>

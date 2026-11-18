@@ -61,6 +61,7 @@ const itemHeights = new Map<ItemKey, number>()
 const observedElements = new Map<HTMLElement, ItemKey>()
 const keyElements = new Map<ItemKey, HTMLElement>()
 const itemRefCallbacks = new Map<ItemKey, (element: Element | ComponentPublicInstance | null) => void>()
+const activeFlipAnimations = new Map<HTMLElement, Animation>()
 
 let resizeObserver: ResizeObserver | null = null
 let itemResizeObserver: ResizeObserver | null = null
@@ -74,6 +75,7 @@ let pendingRevealIndex: number | null = null
 let lastMeasuredColumnCount = 0
 let lastMeasuredColumnWidth = 0
 let documentOverlayLocked = false
+let flipGeneration = 0
 
 const safeGap = computed(() => Math.max(0, props.gap))
 const safeInitialCount = computed(() => Math.max(1, Math.floor(props.initialCount)))
@@ -120,8 +122,19 @@ const keyIndexMap = computed(() => {
   return map
 })
 
+function isSameRange(a?: VirtualRange | null, b?: VirtualRange | null) {
+  return Boolean(
+    a &&
+    b &&
+    a.startIndex === b.startIndex &&
+    a.endIndex === b.endIndex &&
+    a.startRow === b.startRow &&
+    a.endRow === b.endRow,
+  )
+}
+
 const rowMetrics = computed(() => {
-  heightVersion.value
+  void heightVersion.value
 
   const rows = Math.ceil(props.items.length / columnCount.value)
   const heights: number[] = []
@@ -165,27 +178,30 @@ const rowMetrics = computed(() => {
 
 const totalHeight = computed(() => rowMetrics.value.totalHeight)
 
-const calculatedViewportRange = computed<VirtualRange>(() => {
+const calculatedViewportRange = computed<VirtualRange>(previous => {
   if (isOverlayGrid.value) {
     const rowCount = Math.max(1, Math.ceil(props.items.length / columnCount.value))
-
-    return {
+    const overlayRange = {
       endIndex: props.items.length,
       endRow: rowCount - 1,
       startIndex: 0,
       startRow: 0,
     }
+
+    return isSameRange(previous, overlayRange) ? previous! : overlayRange
   }
 
   const { heights, offsets, rowCount } = rowMetrics.value
 
   if (!props.items.length || rowCount === 0) {
-    return {
+    const emptyRange = {
       endIndex: 0,
       endRow: 0,
       startIndex: 0,
       startRow: 0,
     }
+
+    return isSameRange(previous, emptyRange) ? previous! : emptyRange
   }
 
   const top = Math.max(0, Math.min(viewportTop.value, totalHeight.value))
@@ -193,15 +209,18 @@ const calculatedViewportRange = computed<VirtualRange>(() => {
   const firstVisibleRow = findFirstRowAtOrAfterOffset(offsets, heights, top)
   const lastVisibleRow = findLastRowAtOrBeforeOffset(offsets, rowCount, bottom)
 
-  return {
+  const nextRange = {
     endIndex: Math.min(props.items.length, (lastVisibleRow + 1) * columnCount.value),
     endRow: lastVisibleRow,
     startIndex: firstVisibleRow * columnCount.value,
     startRow: firstVisibleRow,
   }
+
+  // 行内滚动不改变挂载窗口时复用引用，避免每帧触发无意义的下游 watch。
+  return isSameRange(previous, nextRange) ? previous! : nextRange
 })
 
-const calculatedVisibleRange = computed<VirtualRange>(() => {
+const calculatedVisibleRange = computed<VirtualRange>(previous => {
   if (isOverlayGrid.value || !props.items.length) {
     return calculatedViewportRange.value
   }
@@ -211,12 +230,14 @@ const calculatedVisibleRange = computed<VirtualRange>(() => {
   const startRow = clamp(viewportRange.startRow - safeOverscanRows.value, 0, rowCount - 1)
   const endRow = clamp(viewportRange.endRow + safeOverscanRows.value, startRow, rowCount - 1)
 
-  return {
+  const nextRange = {
     endIndex: Math.min(props.items.length, (endRow + 1) * columnCount.value),
     endRow,
     startIndex: startRow * columnCount.value,
     startRow,
   }
+
+  return isSameRange(previous, nextRange) ? previous! : nextRange
 })
 
 // 弹窗只冻结滚动窗口；原筛选缩短列表时必须同步约束行列，不能向 slot 传越界条目。
@@ -241,11 +262,11 @@ const visibleRange = computed<VirtualRange>(() => {
 })
 
 // 视口首批内容同步提交，额外 overscan 分帧挂载；完整列表高度仍由 spacer 立即占位。
-const renderedVisibleRange = computed<VirtualRange>(() => {
+const renderedVisibleRange = computed<VirtualRange>(previous => {
   const range = visibleRange.value
 
   if (isOverlayGrid.value || frozenVisibleRange.value || range.endIndex <= range.startIndex) {
-    return range
+    return isSameRange(previous, range) ? previous! : range
   }
 
   const viewportRange = calculatedViewportRange.value
@@ -265,13 +286,15 @@ const renderedVisibleRange = computed<VirtualRange>(() => {
   const startRow = Math.max(range.startRow, Math.floor(stagedStartIndex / columnCount.value))
   const endRow = Math.min(range.endRow, Math.max(range.startRow, Math.ceil(stagedEndIndex / columnCount.value) - 1))
 
-  return {
+  const nextRange = {
     ...range,
     endIndex: Math.min(range.endIndex, (endRow + 1) * columnCount.value),
     endRow,
     startIndex: startRow * columnCount.value,
     startRow,
   }
+
+  return isSameRange(previous, nextRange) ? previous! : nextRange
 })
 
 const visibleCells = computed<VirtualCell[]>(() => {
@@ -918,8 +941,101 @@ function didKeysAppend(nextKeys: ItemKey[], previousKeys: ItemKey[] = []) {
   return previousKeys.every((key, index) => key === nextKeys[index])
 }
 
+/** 判断新旧列表是否共享存活条目（局部删除、插入或重排），用于区分数据集整体切换。 */
+function hasSharedKeys(nextKeys: ItemKey[], previousKeys: ItemKey[] = []) {
+  if (!nextKeys.length || !previousKeys.length) {
+    return false
+  }
+
+  const previousKeySet = new Set(previousKeys)
+  return nextKeys.some(key => previousKeySet.has(key))
+}
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+function cancelFlipAnimations() {
+  activeFlipAnimations.forEach(animation => {
+    animation.cancel()
+  })
+  activeFlipAnimations.clear()
+}
+
+function shouldAnimateKeyChange(nextKeys: ItemKey[], previousKeys?: ItemKey[]) {
+  if (!mounted || prefersReducedMotion() || !previousKeys?.length || !nextKeys.length) {
+    return false
+  }
+
+  if (didKeysAppend(nextKeys, previousKeys) || !hasSharedKeys(nextKeys, previousKeys)) {
+    return false
+  }
+
+  return nextKeys.length !== previousKeys.length || nextKeys.some((key, index) => key !== previousKeys[index])
+}
+
+function captureSurvivingRects(nextKeys: ItemKey[]) {
+  const survivingRects = new Map<ItemKey, { left: number; top: number }>()
+  const nextKeySet = new Set(nextKeys)
+
+  keyElements.forEach((element, key) => {
+    if (!nextKeySet.has(key)) return
+    const rect = element.getBoundingClientRect()
+    survivingRects.set(key, { left: rect.left, top: rect.top })
+  })
+
+  return survivingRects
+}
+
+function playFlipAnimations(prevRects: Map<ItemKey, { left: number; top: number }>, generation: number) {
+  if (!mounted || generation !== flipGeneration) {
+    return
+  }
+
+  prevRects.forEach((prevRect, key) => {
+    const element = keyElements.get(key)
+    if (!element) return
+
+    const runningAnimation = activeFlipAnimations.get(element)
+    if (runningAnimation) {
+      runningAnimation.cancel()
+      activeFlipAnimations.delete(element)
+    }
+
+    const nextRect = element.getBoundingClientRect()
+    const dx = prevRect.left - nextRect.left
+    const dy = prevRect.top - nextRect.top
+
+    if ((Math.abs(dx) <= 1 && Math.abs(dy) <= 1) || typeof element.animate !== 'function') {
+      return
+    }
+
+    const animation = element.animate(
+      [{ transform: `translate3d(${dx}px, ${dy}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
+      {
+        duration: 240,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      },
+    )
+    activeFlipAnimations.set(element, animation)
+
+    const cleanup = () => {
+      if (activeFlipAnimations.get(element) === animation) {
+        activeFlipAnimations.delete(element)
+      }
+    }
+    animation.onfinish = cleanup
+    animation.oncancel = cleanup
+  })
+}
+
 function syncMeasurementsForItems(nextKeys: ItemKey[], previousKeys: ItemKey[] = []) {
-  if (!didKeysAppend(nextKeys, previousKeys) && itemHeights.size) {
+  // 仅在完全切换数据集时清空高度缓存；局部删除或重排保留存活项实测高度，消除高度跳变。
+  if (!didKeysAppend(nextKeys, previousKeys) && !hasSharedKeys(nextKeys, previousKeys) && itemHeights.size) {
     itemHeights.clear()
     heightVersion.value += 1
   }
@@ -982,6 +1098,7 @@ onActivated(() => {
 
 onDeactivated(() => {
   mounted = false
+  cancelFlipAnimations()
   cancelProgressiveRender()
   removeScrollListener(scrollTarget)
   scrollTarget = null
@@ -989,6 +1106,7 @@ onDeactivated(() => {
 
 onUnmounted(() => {
   mounted = false
+  cancelFlipAnimations()
   removeScrollListener(scrollTarget)
   scrollTarget = null
 
@@ -1016,17 +1134,43 @@ onUnmounted(() => {
 watch(
   itemKeys,
   (nextKeys, previousKeys) => {
+    const prevRects = shouldAnimateKeyChange(nextKeys, previousKeys) ? captureSurvivingRects(nextKeys) : null
+
     if (!didKeysAppend(nextKeys, previousKeys)) {
       cancelProgressiveRender()
-      progressiveStartIndex.value = 0
-      progressiveEndIndex.value = 0
+      if (hasSharedKeys(nextKeys, previousKeys)) {
+        progressiveStartIndex.value = clamp(progressiveStartIndex.value, 0, nextKeys.length)
+        progressiveEndIndex.value = clamp(progressiveEndIndex.value, progressiveStartIndex.value, nextKeys.length)
+      } else {
+        progressiveStartIndex.value = 0
+        progressiveEndIndex.value = 0
+      }
     }
+
     syncMeasurementsForItems(nextKeys, previousKeys)
-    syncProgressiveWindow()
+
+    // 弹窗关闭退场动画期间若列表条目增删，立即刷新冻结可见窗口并触发补位，避免冻结 120~300ms 后跳变。
+    if (frozenVisibleRange.value && previousKeys && nextKeys.length !== previousKeys.length) {
+      frozenVisibleRange.value = null
+      syncProgressiveWindow()
+      if (shouldPauseVirtualSync() && nextKeys.length > 0) {
+        frozenVisibleRange.value = { ...renderedVisibleRange.value }
+      }
+    } else {
+      syncProgressiveWindow()
+    }
+
     queueLayoutSync()
     queueProgressiveRender()
+
+    if (prevRects && prevRects.size > 0) {
+      const generation = ++flipGeneration
+      void nextTick(() => {
+        playFlipAnimations(prevRects, generation)
+      })
+    }
   },
-  { immediate: true },
+  { immediate: true, flush: 'pre' },
 )
 
 watch(

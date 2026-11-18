@@ -180,12 +180,16 @@ useKeepAliveRefresh(refresh)
 
 <template>
   <VCard class="dashboard-chart-card dashboard-grid-fill">
-    <VCardItem>
-      <template #prepend><VIcon icon="mdi-cpu-64-bit" size="20" class="me-2" /></template>
+    <VCardItem class="dashboard-chart-header">
+      <template #prepend>
+        <span class="dashboard-chart-icon" aria-hidden="true">
+          <VIcon icon="mdi-cpu-64-bit" size="18" />
+        </span>
+      </template>
       <VCardTitle>{{ t('dashboard.cpuUsage') }}</VCardTitle>
-      <template #append
-        ><strong class="dashboard-chart-current">{{ animatedCurrentText }}%</strong></template
-      >
+      <template #append>
+        <strong class="dashboard-chart-current">{{ animatedCurrentText }}%</strong>
+      </template>
     </VCardItem>
     <VCardText class="dashboard-chart-content">
       <div class="dashboard-chart-plot">
@@ -193,9 +197,9 @@ useKeepAliveRefresh(refresh)
       </div>
       <div class="dashboard-chart-footer">
         <span>{{ t('dashboard.averageUsage') }}</span>
-        <span v-for="item in averageUsages" :key="item.label"
-          ><strong>{{ item.value }}</strong> {{ item.label }}</span
-        >
+        <span v-for="item in averageUsages" :key="item.label">
+          <strong>{{ item.value }}%</strong> {{ item.label }}
+        </span>
       </div>
     </VCardText>
   </VCard>
@@ -206,7 +210,23 @@ useKeepAliveRefresh(refresh)
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  min-block-size: 270px;
+  min-block-size: 256px;
+}
+
+.dashboard-chart-header {
+  padding: 14px 16px 6px;
+}
+
+.dashboard-chart-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-success), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-success));
+  inline-size: 34px;
+  margin-inline-end: 10px;
 }
 
 .dashboard-chart-content {
@@ -215,6 +235,7 @@ useKeepAliveRefresh(refresh)
   flex-direction: column;
   min-block-size: 0;
   overflow: hidden;
+  padding: 4px 16px 13px;
 }
 
 .dashboard-chart-plot {
@@ -228,16 +249,25 @@ useKeepAliveRefresh(refresh)
 }
 
 .dashboard-chart-current {
-  font-size: 0.9rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 
 .dashboard-chart-footer {
   display: flex;
   justify-content: space-between;
-  border-block-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-block-start: 1px solid var(--mp-border-subtle);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.68rem;
-  gap: 0.6rem;
-  padding-block-start: 0.55rem;
+  font-size: 11.5px;
+  gap: 8px;
+  padding-block-start: 8px;
+}
+
+.dashboard-chart-footer strong {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-weight: 600;
 }
 </style>

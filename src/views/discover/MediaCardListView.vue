@@ -152,7 +152,7 @@ async function fetchData({ done }: { done: (status: 'empty' | 'error' | 'loading
     side="end"
     :items="dataList"
     :margin="dataList.length > 0 ? 600 : 0"
-    class="overflow-visible pt-3 px-2"
+    class="overflow-visible pt-3"
     @load="fetchData"
   >
     <template #loading />

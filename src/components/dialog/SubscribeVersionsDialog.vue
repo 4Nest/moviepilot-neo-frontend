@@ -220,6 +220,7 @@ function addVersion() {
         <VCardTitle>{{ t('dialog.subscribeVersions.title') }}</VCardTitle>
         <VCardSubtitle class="text-truncate">{{ displayName }}</VCardSubtitle>
       </VCardItem>
+      <VDivider />
       <VCardText>
         <LoadingBanner v-if="!props.subscribe" />
         <div v-else-if="versions.length === 0" class="subscribe-versions-empty">
@@ -309,6 +310,7 @@ function addVersion() {
           </VListItem>
         </VList>
       </VCardText>
+      <VDivider />
       <VCardActions class="app-dialog-actions">
         <span v-if="versions.length > 0" class="text-caption text-medium-emphasis">{{ summaryText }}</span>
         <VSpacer />

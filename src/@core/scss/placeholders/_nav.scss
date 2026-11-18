@@ -1,29 +1,35 @@
-@use "vuetify/lib/styles/tools/_elevation" as mixins_elevation;
-
-// ℹ️ This is common style that needs to be applied to both navs
+// ℹ️ Common style applied to both horizontal & vertical navs
 %nav {
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), 0.68);
 
   .nav-item-title {
-    letter-spacing: 0.15px;
+    letter-spacing: 0.005em;
   }
 
   .nav-section-title {
-    letter-spacing: 0.4px;
+    letter-spacing: 0.02em;
   }
 }
 
 /*
-    Active nav link styles for horizontal & vertical nav
-
-    For horizontal nav it will be only applied to top level nav items
-    For vertical nav it will be only applied to nav links (not nav groups)
+  Active nav link styles (Antigravity IDE pure neutral matte highlight pill)
 */
 %nav-link-active {
-  background: linear-gradient(270deg, rgb(var(--v-theme-primary)) 0%, white 300%);
-  color: rgb(var(--v-theme-on-primary));
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: none !important;
+  color: rgba(var(--v-theme-on-surface), 0.96);
+  font-weight: 600;
 
-  @include mixins_elevation.elevation(3);
+  .nav-item-icon {
+    color: rgba(var(--v-theme-on-surface), 0.96);
+  }
+
+  .v-theme--light &,
+  html[data-theme='light'] & {
+    border-color: rgba(15, 23, 42, 0.05);
+    background: rgba(15, 23, 42, 0.07);
+  }
 }
 
 %nav-link {

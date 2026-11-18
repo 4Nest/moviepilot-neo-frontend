@@ -11,12 +11,16 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
 }))
 
-vi.mock('@/api', () => ({
-  default: {
-    get: (...args: unknown[]) => mocks.apiGet(...args),
-    post: (...args: unknown[]) => mocks.apiPost(...args),
-  },
-}))
+vi.mock('@/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    default: {
+      get: (...args: unknown[]) => mocks.apiGet(...args),
+      post: (...args: unknown[]) => mocks.apiPost(...args),
+    },
+  }
+})
 
 vi.mock('vue-toastification', () => ({
   useToast: () => ({ success: mocks.toastSuccess, error: mocks.toastError }),
@@ -132,5 +136,29 @@ describe('SubscribeAutoFillSetting', () => {
 
     await waitFor(() => expect(postedRules()).toEqual([]))
     expect(mocks.confirm).toHaveBeenCalled()
+  })
+
+  it('disables confirm button while rule save request is in flight', async () => {
+    mockApi()
+    let resolveSave!: (val: unknown) => void
+    mocks.apiPost.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveSave = resolve
+        }),
+    )
+
+    await renderWithProviders(SubscribeAutoFillSetting)
+    await fireEvent.click(await screen.findByTestId('category-rule'))
+
+    const confirmBtn = await screen.findByRole('button', { name: /确认/ })
+    await fireEvent.click(confirmBtn)
+    await waitFor(() => expect(confirmBtn).toBeDisabled())
+
+    resolveSave({ success: true })
+    await waitFor(() => {
+      expect(confirmBtn).not.toBeDisabled()
+      expect(document.body.querySelector('.v-dialog.v-overlay--active')).toBeNull()
+    })
   })
 })

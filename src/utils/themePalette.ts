@@ -1,7 +1,7 @@
 import { checkPrefersColorSchemeIsDark } from '@/@core/utils'
 
-export type ThemePreference = 'auto' | 'dark' | 'default' | 'glass' | 'light' | 'purple' | 'transparent'
-export type ResolvedThemeName = 'dark' | 'glass' | 'light' | 'purple' | 'transparent'
+export type ThemePreference = 'auto' | 'dark' | 'default' | 'light'
+export type ResolvedThemeName = 'dark' | 'light'
 export type ThemeColorScheme = 'light' | 'dark'
 
 interface ThemeRootPalette {
@@ -16,34 +16,26 @@ interface ApplyDocumentThemeChromeOptions {
   resolvedTheme?: string
 }
 
+const legacyDarkThemes = new Set(['glass', 'purple', 'transparent'])
+
 export const themeRootPalettes: Record<ResolvedThemeName, ThemeRootPalette> = {
   light: {
-    background: '#F4F5FA',
-    primary: '#8D51F9',
+    background: '#F1F2F6',
+    primary: '#6E5DCF',
   },
   dark: {
-    background: '#0E1116',
-    primary: '#6E66ED',
-  },
-  purple: {
-    background: '#28243D',
-    primary: '#8D51F9',
-  },
-  transparent: {
-    background: '#1C1C1C',
-    primary: '#A370F7',
-  },
-  glass: {
-    background: '#0B1322',
-    primary: '#8D51F9',
+    background: '#16171D',
+    primary: '#8B7CF6',
   },
 }
 
-const validResolvedThemes = new Set<string>(Object.keys(themeRootPalettes))
+/** 将任意主题名称收敛为应用支持的实际主题；历史玻璃/透明/紫色主题平滑迁移至暗色。 */
+export function normalizeResolvedThemeName(themeName: string | null | undefined): ResolvedThemeName {
+  if (themeName === 'dark' || legacyDarkThemes.has(themeName || '')) {
+    return 'dark'
+  }
 
-/** 将任意主题名称收敛为应用支持的实际主题。 */
-function normalizeResolvedThemeName(themeName: string | null | undefined): ResolvedThemeName {
-  return validResolvedThemes.has(themeName || '') ? (themeName as ResolvedThemeName) : 'light'
+  return 'light'
 }
 
 /** 将用户主题偏好解析为当前实际主题。 */
@@ -52,7 +44,7 @@ export function resolveThemeName(themePreference: string | null | undefined): Re
     return checkPrefersColorSchemeIsDark() ? 'dark' : 'light'
   }
 
-  if (themePreference === 'default') {
+  if (themePreference === 'default' || themePreference === 'light') {
     return 'light'
   }
 
@@ -61,7 +53,7 @@ export function resolveThemeName(themePreference: string | null | undefined): Re
 
 /** 返回浏览器原生控件应使用的明暗配色。 */
 export function getThemeColorScheme(themeName: string | null | undefined): ThemeColorScheme {
-  return ['dark', 'glass', 'purple', 'transparent'].includes(themeName || '') ? 'dark' : 'light'
+  return themeName === 'dark' || legacyDarkThemes.has(themeName || '') ? 'dark' : 'light'
 }
 
 /** 批量同步匹配选择器的 meta 内容。 */
@@ -107,13 +99,18 @@ export function applyDocumentThemeChrome(
   options: ApplyDocumentThemeChromeOptions = {},
 ) {
   const resolvedTheme = normalizeResolvedThemeName(options.resolvedTheme || resolveThemeName(themePreference))
+  const normalizedPreference = legacyDarkThemes.has(themePreference || '')
+    ? 'dark'
+    : themePreference === 'default'
+      ? 'light'
+      : themePreference || resolvedTheme
   const colorScheme = getThemeColorScheme(resolvedTheme)
   const palette = themeRootPalettes[resolvedTheme]
   const background = options.background || palette.background
   const primary = options.primary || palette.primary
 
   document.documentElement.setAttribute('data-theme', resolvedTheme)
-  document.documentElement.setAttribute('data-theme-preference', themePreference || resolvedTheme)
+  document.documentElement.setAttribute('data-theme-preference', normalizedPreference)
   document.documentElement.style.setProperty('--initial-loader-bg', background)
   document.documentElement.style.setProperty('--initial-loader-color', primary)
   document.documentElement.style.backgroundColor = background
@@ -121,7 +118,7 @@ export function applyDocumentThemeChrome(
 
   if (document.body) {
     document.body.setAttribute('data-theme', resolvedTheme)
-    document.body.setAttribute('data-theme-preference', themePreference || resolvedTheme)
+    document.body.setAttribute('data-theme-preference', normalizedPreference)
     document.body.style.backgroundColor = background
     document.body.style.colorScheme = colorScheme
   }

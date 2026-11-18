@@ -81,6 +81,9 @@ const loading = ref(true)
 // 重命名loading
 const renameLoading = ref(false)
 
+// 下载中loading
+const downloading = ref(false)
+
 // 识别进度文本
 const progressText = ref(t('common.pleaseWait'))
 
@@ -217,6 +220,16 @@ const files = computed(() => filteredItems.value.filter(item => item.type === 'f
 
 // 虚拟列表数据，保持引用稳定，避免模板内联展开数组导致虚拟列表重算。
 const displayItems = computed(() => [...dirs.value, ...files.value])
+
+// 当前可见列表项是否已全部选中
+const isAllDisplayedSelected = computed(
+  () => displayItems.value.length > 0 && displayItems.value.every(item => isSelected(item)),
+)
+
+function toggleSelectAllDisplayed() {
+  if (!displayItems.value.length) return
+  setItemsSelected(displayItems.value, !isAllDisplayedSelected.value)
+}
 
 // 文件列表按当前目录、文件及筛选后的显示顺序支持 Shift 连选。
 const rangeSelection = useRangeSelection<FileItem>({
@@ -422,22 +435,33 @@ function listItemClick(item: FileItem, event?: MouseEvent | KeyboardEvent) {
 
 // 新窗口中下载文件
 async function download(item: FileItem) {
-  const url = inProps.endpoints?.download.url
-  // 下载文件
-  const config: AxiosRequestConfig<FileItem> = {
-    url,
-    method: inProps.endpoints?.download.method || 'post',
-    data: item,
-    responseType: 'blob',
-  }
-  // 加载数据
-  const result: Blob = await inProps.axios.request<Blob, Blob>(config)
-  if (result) {
-    const downloadUrl = URL.createObjectURL(result)
-    window.open(downloadUrl, '_blank')
-    setTimeout(() => {
-      URL.revokeObjectURL(downloadUrl)
-    }, 60000)
+  if (downloading.value) return
+  downloading.value = true
+  emit('loading', true)
+  try {
+    const url = inProps.endpoints?.download.url
+    // 下载文件
+    const config: AxiosRequestConfig<FileItem> = {
+      url,
+      method: inProps.endpoints?.download.method || 'post',
+      data: item,
+      responseType: 'blob',
+    }
+    // 加载数据
+    const result: Blob = await inProps.axios.request<Blob, Blob>(config)
+    if (result) {
+      const downloadUrl = URL.createObjectURL(result)
+      window.open(downloadUrl, '_blank')
+      setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl)
+      }, 60000)
+    }
+  } catch (error) {
+    console.error(error)
+    $toast.error(error instanceof Error ? error.message : t('common.error'))
+  } finally {
+    downloading.value = false
+    emit('loading', false)
   }
 }
 
@@ -713,13 +737,15 @@ async function recognize(path: string) {
     })
     // 关闭进度条
     closeProgressDialog()
-    if (!nameTestResult.value) $toast.error(t('file.recognizeFailed', { path }))
     if (nameTestResult.value?.meta_info?.name) {
       openSharedDialog(MediaInfoDialog, { context: nameTestResult.value }, {}, { closeOn: ['close'] })
+    } else {
+      $toast.warning(t('nameTest.unrecognized'))
     }
   } catch (error) {
     closeProgressDialog()
     console.error(error)
+    $toast.error(error instanceof Error ? error.message : t('file.recognizeFailed', { path }))
   }
 }
 
@@ -830,66 +856,160 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="file-list-host">
     <VCard class="d-flex flex-column w-full h-full file-list">
-      <div v-if="!loading" class="flex">
-        <IconBtn v-if="display.mdAndUp.value">
-          <VIcon v-if="showTree" icon="mdi-file-tree" @click="switchFileTree(false)" />
-          <VIcon v-else icon="mdi-file-tree-outline" @click="switchFileTree(true)" />
-        </IconBtn>
-        <VTextField
-          v-if="!isFile"
-          v-model="filter"
-          hide-details
-          flat
-          density="compact"
-          variant="plain"
-          :placeholder="t('file.filterPlaceholder')"
-          :prepend-inner-icon="filter.includes('*') || filter.includes('?') ? 'mdi-asterisk' : 'mdi-filter-outline'"
-          class="mx-2"
-          rounded
-        />
-        <VSpacer v-if="isFile" />
-        <IconBtn v-if="!isFile && !selectMode" @click="ignoreCase = !ignoreCase">
-          <VIcon :color="ignoreCase ? 'primary' : 'error'" icon="mdi-format-letter-case" />
-        </IconBtn>
-        <IconBtn v-if="isFile" @click="recognize(inProps.item.path || '')">
-          <VIcon color="primary"> mdi-text-recognition </VIcon>
-        </IconBtn>
-        <IconBtn v-if="isFile && items.length > 0" @click="download(items[0])">
-          <VIcon color="primary"> mdi-download </VIcon>
-        </IconBtn>
-        <IconBtn v-if="!isFile && !selectMode" @click="list_files">
-          <VIcon color="primary"> mdi-refresh </VIcon>
-        </IconBtn>
-        <!-- 批量操作按钮 -->
-        <span v-if="selected.length > 0">
-          <IconBtn @click.stop="showBatchScrape">
-            <VIcon color="primary" icon="mdi-auto-fix" />
+      <!-- 清爽过滤与操作子工具栏 -->
+      <div v-if="!loading" class="file-subtoolbar">
+        <div class="file-subtoolbar__left">
+          <IconBtn
+            v-if="display.mdAndUp.value"
+            class="file-subtoolbar__icon-btn"
+            :class="{ 'is-active': showTree }"
+            :title="showTree ? '隐藏目录树' : '显示目录树'"
+            :aria-label="showTree ? '隐藏目录树' : '显示目录树'"
+            @click="switchFileTree(!showTree)"
+          >
+            <VIcon :icon="showTree ? 'mdi-file-tree' : 'mdi-file-tree-outline'" size="17" />
           </IconBtn>
-          <IconBtn @click.stop="showBatchTransfer">
-            <VIcon color="primary" icon="mdi-folder-arrow-right" />
+
+          <VTextField
+            v-if="!isFile"
+            v-model="filter"
+            hide-details
+            density="compact"
+            variant="outlined"
+            clearable
+            :placeholder="t('file.filterPlaceholder')"
+            :prepend-inner-icon="filter.includes('*') || filter.includes('?') ? 'mdi-asterisk' : 'mdi-magnify'"
+            class="file-subtoolbar__filter"
+          />
+
+          <button
+            v-if="!isFile"
+            type="button"
+            class="file-case-pill"
+            :class="{ 'is-active': !ignoreCase }"
+            :title="ignoreCase ? '忽略大小写（点击开启区分大小写）' : '已开启区分大小写'"
+            :aria-label="ignoreCase ? '开启区分大小写' : '关闭区分大小写'"
+            :aria-pressed="!ignoreCase"
+            @click="ignoreCase = !ignoreCase"
+          >
+            <VIcon icon="mdi-format-letter-case" size="16" />
+          </button>
+        </div>
+
+        <div class="file-subtoolbar__right">
+          <IconBtn
+            v-if="isFile"
+            class="file-subtoolbar__icon-btn"
+            :title="t('file.recognize')"
+            :aria-label="t('file.recognize')"
+            @click="recognize(inProps.item.path || '')"
+          >
+            <VIcon size="17">mdi-text-recognition</VIcon>
           </IconBtn>
-          <IconBtn @click.stop="batchDelete">
-            <VIcon icon="mdi-delete-outline" color="error" />
+          <IconBtn
+            v-if="isFile && items.length > 0"
+            class="file-subtoolbar__icon-btn"
+            title="下载文件"
+            aria-label="下载文件"
+            :loading="downloading"
+            :disabled="downloading"
+            @click="download(items[0])"
+          >
+            <VIcon size="17">mdi-download</VIcon>
           </IconBtn>
-        </span>
-        <IconBtn v-if="!isFile" @click="changeSelectMode">
-          <VIcon color="primary" :icon="selectMode ? 'mdi-selection-remove' : 'mdi-select'" />
-        </IconBtn>
+
+          <VBtn
+            v-if="!isFile && selectMode"
+            size="small"
+            variant="outlined"
+            color="secondary"
+            rounded="lg"
+            class="file-batch-btn"
+            :disabled="displayItems.length === 0"
+            @click.stop="toggleSelectAllDisplayed"
+          >
+            <VIcon
+              :icon="isAllDisplayedSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked-outline'"
+              size="15"
+              class="me-1"
+            />
+            {{ isAllDisplayedSelected ? t('common.deselectAll') : t('common.selectAll') }}
+          </VBtn>
+
+          <!-- 批量操作按钮组 -->
+          <template v-if="selected.length > 0">
+            <span class="file-selected-badge">已选 {{ selected.length }} 项</span>
+            <VBtn
+              size="small"
+              variant="outlined"
+              color="secondary"
+              rounded="lg"
+              class="file-batch-btn"
+              @click.stop="showBatchScrape"
+            >
+              <VIcon icon="mdi-auto-fix" size="15" class="me-1" />
+              {{ t('file.scrape') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              color="secondary"
+              rounded="lg"
+              class="file-batch-btn"
+              @click.stop="showBatchTransfer"
+            >
+              <VIcon icon="mdi-folder-arrow-right" size="15" class="me-1" />
+              {{ t('file.reorganize') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="tonal"
+              color="error"
+              rounded="lg"
+              class="file-batch-btn"
+              @click.stop="batchDelete"
+            >
+              <VIcon icon="mdi-delete-outline" size="15" class="me-1" />
+              {{ t('common.delete') }}
+            </VBtn>
+          </template>
+
+          <IconBtn
+            v-if="!isFile && !selectMode"
+            class="file-subtoolbar__icon-btn"
+            title="刷新目录"
+            aria-label="刷新目录"
+            @click="list_files"
+          >
+            <VIcon size="17">mdi-refresh</VIcon>
+          </IconBtn>
+          <IconBtn
+            v-if="!isFile"
+            class="file-subtoolbar__icon-btn"
+            :class="{ 'is-active': selectMode }"
+            :title="selectMode ? '退出多选' : '多选模式'"
+            :aria-label="selectMode ? '退出多选' : '多选模式'"
+            @click="changeSelectMode"
+          >
+            <VIcon :icon="selectMode ? 'mdi-selection-remove' : 'mdi-select'" size="17" />
+          </IconBtn>
+        </div>
       </div>
+
       <LoadingBanner v-if="loading" />
       <!-- 文件详情 -->
-      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="text-center break-all">
+      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="text-center break-all py-8">
         <div v-if="items[0]?.thumbnail" class="flex justify-center">
-          <VImg max-width="15rem" cover :src="items[0]?.thumbnail" class="rounded border">
+          <VImg max-width="15rem" cover :src="items[0]?.thumbnail" class="rounded-lg border">
             <template #placeholder>
               <VSkeletonLoader class="object-cover w-full h-full" />
             </template>
           </VImg>
         </div>
-        <div class="text-xl text-high-emphasis mt-3">{{ items[0]?.name }}</div>
-        <p class="mt-2" v-if="items[0]?.size && items[0].modify_time">
+        <div class="text-subtitle-1 font-weight-semibold text-high-emphasis mt-3">{{ items[0]?.name }}</div>
+        <p class="text-body-2 text-medium-emphasis mt-2" v-if="items[0]?.size && items[0].modify_time">
           {{ t('file.size') }}：{{ formatBytes(items[0]?.size || 0) }}<br />
           {{ t('file.modifyTime') }}：{{ formatTime(items[0]?.modify_time || 0) }}
         </p>
@@ -901,46 +1021,50 @@ onUnmounted(() => {
       <!-- 目录和文件列表 -->
       <VCardText v-else-if="dirs.length || files.length" class="p-0 flex-grow-1 overflow-hidden">
         <VList
-          class="text-high-emphasis file-list-container"
+          class="text-high-emphasis file-list-container py-1"
           :style="{ height: `${listAvailableHeight}px`, maxHeight: `${listAvailableHeight}px` }"
         >
-          <VVirtualScroll :items="displayItems" style="block-size: 100%">
+          <VVirtualScroll :items="displayItems" :item-height="42" style="block-size: 100%">
             <template #default="{ item }">
               <VHover>
                 <template #default="hover">
                   <VListItem
                     v-bind="hover.props"
-                    class="px-3 pe-1"
+                    class="file-list-row"
+                    :class="{ 'file-list-row--selected': selectMode && isSelected(item) }"
                     @click="listItemClick(item, $event)"
                     @mousedown.shift.prevent
                   >
                     <template #prepend>
-                      <VListItemAction v-if="selectMode">
+                      <VListItemAction v-if="selectMode" class="me-2">
                         <VCheckbox
+                          density="compact"
+                          hide-details
                           :model-value="isSelected(item)"
                           @update:model-value="rangeSelection.selectFromCheckbox(item, !!$event)"
                           @click.stop="rangeSelection.onCheckboxClick"
                           @input="rangeSelection.onCheckboxInput(item, $event)"
                         />
                       </VListItemAction>
-                      <template v-else>
+                      <span v-else class="file-item-icon" :class="{ 'file-item-icon--dir': item.type === 'dir' }">
                         <VIcon
                           v-if="inProps.icons && item.extension"
+                          size="19"
                           :icon="inProps.icons[item.extension.toLowerCase()] || inProps.icons?.other"
                         />
-                        <VIcon v-else-if="item.type == 'dir'" icon="mdi-folder" />
-                        <VIcon v-else icon="mdi-file-outline" />
-                      </template>
+                        <VIcon v-else-if="item.type == 'dir'" size="19" icon="mdi-folder" />
+                        <VIcon v-else size="19" icon="mdi-file-outline" />
+                      </span>
                     </template>
-                    <VListItemTitle v-text="item.name" />
-                    <VListItemSubtitle v-if="item.size">
+                    <VListItemTitle class="file-item-title" :title="item.name" v-text="item.name" />
+                    <VListItemSubtitle v-if="item.size" class="file-item-size">
                       {{ formatBytes(item.size) }}
                     </VListItemSubtitle>
                     <template #append>
-                      <IconBtn v-if="display.smAndDown.value && !selectMode">
-                        <VIcon icon="mdi-dots-vertical" />
+                      <IconBtn v-if="display.smAndDown.value && !selectMode" class="file-row-action-btn">
+                        <VIcon icon="mdi-dots-vertical" size="18" />
                         <VMenu activator="parent" close-on-content-click>
-                          <VList>
+                          <VList density="compact">
                             <template v-for="(menu, i) in dropdownItems" :key="i">
                               <VListItem
                                 v-if="menu.show"
@@ -948,7 +1072,7 @@ onUnmounted(() => {
                                 @click="menu.props.click(item)"
                               >
                                 <template #prepend>
-                                  <VIcon :icon="menu.props.prependIcon" />
+                                  <VIcon :icon="menu.props.prependIcon" size="17" />
                                 </template>
                                 <VListItemTitle v-text="menu.title" />
                               </VListItem>
@@ -956,21 +1080,33 @@ onUnmounted(() => {
                           </VList>
                         </VMenu>
                       </IconBtn>
-                      <span v-if="hover.isHovering && display.mdAndUp.value && !selectMode" class="flex">
-                        <IconBtn @click.stop="recognize(item.path)">
-                          <VIcon icon="mdi-text-recognition" />
+                      <span v-if="hover.isHovering && display.mdAndUp.value && !selectMode" class="file-row-actions">
+                        <IconBtn
+                          class="file-row-action-btn"
+                          :title="t('file.recognize')"
+                          @click.stop="recognize(item.path || '')"
+                        >
+                          <VIcon icon="mdi-text-recognition" size="16" />
                         </IconBtn>
-                        <IconBtn @click.stop="showScrape(item)">
-                          <VIcon icon="mdi-auto-fix" />
+                        <IconBtn class="file-row-action-btn" :title="t('file.scrape')" @click.stop="showScrape(item)">
+                          <VIcon icon="mdi-auto-fix" size="16" />
                         </IconBtn>
-                        <IconBtn @click.stop="showRenmae(item)">
-                          <VIcon icon="mdi-rename" />
+                        <IconBtn class="file-row-action-btn" :title="t('file.rename')" @click.stop="showRenmae(item)">
+                          <VIcon icon="mdi-rename" size="16" />
                         </IconBtn>
-                        <IconBtn @click.stop="showTransfer(item)">
-                          <VIcon icon="mdi-folder-arrow-right" />
+                        <IconBtn
+                          class="file-row-action-btn"
+                          :title="t('file.reorganize')"
+                          @click.stop="showTransfer(item)"
+                        >
+                          <VIcon icon="mdi-folder-arrow-right" size="16" />
                         </IconBtn>
-                        <IconBtn @click.stop="deleteItem(item)">
-                          <VIcon icon="mdi-delete-outline" color="error" />
+                        <IconBtn
+                          class="file-row-action-btn file-row-action-btn--danger"
+                          :title="t('common.delete')"
+                          @click.stop="deleteItem(item)"
+                        >
+                          <VIcon icon="mdi-delete-outline" size="16" />
                         </IconBtn>
                       </span>
                     </template>
@@ -981,26 +1117,265 @@ onUnmounted(() => {
           </VVirtualScroll>
         </VList>
       </VCardText>
-      <VCardText v-else-if="filter" class="grow d-flex justify-center align-center grey--text py-5">
-        {{ t('file.noFiles') }}
+      <VCardText v-else-if="filter" class="file-list-empty">
+        <VIcon icon="mdi-file-search-outline" size="32" class="file-list-empty__icon" />
+        <span>{{ t('file.noFiles') }}</span>
       </VCardText>
-      <VCardText v-else-if="!loading" class="grow d-flex justify-center align-center grey--text py-5">
-        {{ t('file.emptyDirectory') }}
+      <VCardText v-else-if="!loading" class="file-list-empty">
+        <VIcon icon="mdi-folder-open-outline" size="32" class="file-list-empty__icon" />
+        <span>{{ t('file.emptyDirectory') }}</span>
       </VCardText>
     </VCard>
   </div>
 </template>
 
 <style scoped>
+.file-list-host {
+  min-inline-size: 0;
+}
+
 .file-list {
   border-radius: 0 !important;
+  background: rgb(var(--v-theme-surface)) !important;
   box-shadow: none !important;
 }
 
+/* ===== 44px 清爽过滤与操作子工具栏 ===== */
+.file-subtoolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  gap: 8px;
+  min-block-size: 44px;
+}
+
+.file-subtoolbar__left {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.file-subtoolbar__right {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-subtoolbar__icon-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border-radius: 7px !important;
+  block-size: 30px !important;
+  color: rgba(var(--v-theme-on-surface), 0.68) !important;
+  inline-size: 30px !important;
+  min-inline-size: 30px !important;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.file-subtoolbar__icon-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.file-subtoolbar__icon-btn.is-active {
+  background: var(--mp-nav-pill-active-bg, rgba(var(--v-theme-on-surface), 0.08)) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.file-subtoolbar__filter {
+  flex: 1 1 200px;
+  max-inline-size: 280px;
+}
+
+.file-subtoolbar__filter :deep(.v-field) {
+  border-radius: 8px;
+  font-size: 13px;
+  min-block-size: 30px !important;
+  padding-inline: 8px;
+}
+
+.file-subtoolbar__filter :deep(.v-field__input) {
+  min-block-size: 30px !important;
+  padding-block: 0 !important;
+}
+
+.file-subtoolbar__filter :deep(.v-field__prepend-inner),
+.file-subtoolbar__filter :deep(.v-field__clearable) {
+  align-items: center;
+  padding-block-start: 0 !important;
+}
+
+.file-case-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: transparent;
+  block-size: 30px;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  cursor: pointer;
+  inline-size: 30px;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.file-case-pill:hover {
+  border-color: var(--mp-border-hover);
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.file-case-pill.is-active {
+  border-color: rgba(var(--v-theme-primary), 0.35);
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.file-selected-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 6px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.file-batch-btn {
+  block-size: 28px !important;
+  font-size: 12.5px !important;
+  padding-inline: 10px !important;
+}
+
+/* ===== 40px IDE 文件行 ===== */
 .file-list-container {
   overflow: hidden auto;
   border-radius: 0 !important;
+  background: transparent !important;
   block-size: 100%;
   max-block-size: 100%;
+}
+
+.file-list-row {
+  border-radius: 6px !important;
+  block-size: 40px !important;
+  margin-block: 1px !important;
+  margin-inline: 6px !important;
+  min-block-size: 40px !important;
+  padding-inline: 10px 8px !important;
+  transition: background-color 0.12s ease;
+}
+
+.file-list-row:hover {
+  background: rgba(var(--v-theme-on-surface), 0.045) !important;
+}
+
+.file-list-row--selected {
+  background: rgba(var(--v-theme-primary), 0.08) !important;
+}
+
+.file-list-row :deep(.v-list-item__content) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.file-item-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  margin-inline-end: 10px;
+}
+
+.file-item-icon--dir {
+  color: rgba(var(--v-theme-warning), 0.85);
+}
+
+.file-item-title {
+  flex: 1 1 auto;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13.5px !important;
+  font-weight: 450;
+  line-height: 1.4 !important;
+  min-inline-size: 0;
+}
+
+.file-item-size {
+  flex-shrink: 0;
+  margin: 0 !important;
+  color: rgba(var(--v-theme-on-surface), 0.5) !important;
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
+  opacity: 1 !important;
+}
+
+.file-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: 8px;
+}
+
+.file-row-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.64) !important;
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+}
+
+.file-row-action-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.08) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.file-row-action-btn--danger:hover {
+  background: rgba(var(--v-theme-error), 0.12) !important;
+  color: rgb(var(--v-theme-error)) !important;
+}
+
+/* ===== 空目录与无过滤匹配提示 ===== */
+.file-list-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px !important;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 13.5px;
+  gap: 10px;
+  min-block-size: 240px;
+}
+
+.file-list-empty__icon {
+  color: rgba(var(--v-theme-on-surface), 0.34);
 }
 </style>

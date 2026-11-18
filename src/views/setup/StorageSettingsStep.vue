@@ -27,68 +27,109 @@ const overwriteModeItems = [
 </script>
 
 <template>
-  <VCard variant="outlined">
-    <VCardText>
-      <div class="text-center mb-6">
-        <h3 class="text-h4 mb-2">{{ t('setupWizard.storage.title') }}</h3>
-        <p class="text-body-1 text-medium-emphasis">{{ t('setupWizard.storage.description') }}</p>
-      </div>
-      <VRow>
-        <VCol cols="12">
-          <VAlert type="info" variant="tonal" class="mb-4">
-            <VAlertTitle>{{ t('setupWizard.storage.info') }}</VAlertTitle>
-            {{ t('setupWizard.storage.infoDesc') }}
-          </VAlert>
-        </VCol>
-        <VCol cols="12" md="6">
-          <VPathField
-            v-model="wizardData.storage.downloadPath"
-            :label="t('setupWizard.storage.downloadPath')"
-            :hint="t('setupWizard.storage.downloadPathHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-download"
-            placeholder="/downloads"
-            :error="!wizardData.storage.downloadPath && hasErrors"
-            :error-messages="
-              !wizardData.storage.downloadPath && hasErrors ? [t('setupWizard.storage.downloadPathRequired')] : []
-            "
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VPathField
-            v-model="wizardData.storage.libraryPath"
-            :label="t('setupWizard.storage.libraryPath')"
-            :hint="t('setupWizard.storage.libraryPathHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-folder-multiple"
-            placeholder="/media"
-            :error="!wizardData.storage.libraryPath && hasErrors"
-            :error-messages="
-              !wizardData.storage.libraryPath && hasErrors ? [t('setupWizard.storage.libraryPathRequired')] : []
-            "
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VSelect
-            v-model="wizardData.storage.transferType"
-            :label="t('directory.transferType')"
-            :hint="t('directory.transferTypeHint')"
-            persistent-hint
-            :items="transferTypeItems"
-            prepend-inner-icon="mdi-swap-horizontal"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VSelect
-            v-model="wizardData.storage.overwriteMode"
-            :label="t('directory.overwriteMode')"
-            :hint="t('directory.overwriteModeHint')"
-            persistent-hint
-            :items="overwriteModeItems"
-            prepend-inner-icon="mdi-file-replace"
-          />
-        </VCol>
-      </VRow>
-    </VCardText>
-  </VCard>
+  <div class="setup-step">
+    <div class="setup-step-head">
+      <h3 class="setup-step-title">{{ t('setupWizard.storage.title') }}</h3>
+      <p class="setup-step-desc">{{ t('setupWizard.storage.description') }}</p>
+    </div>
+
+    <VAlert type="info" variant="tonal" density="compact" class="setup-step-alert mb-3">
+      <div class="setup-step-alert__title">{{ t('setupWizard.storage.info') }}</div>
+      <div class="setup-step-alert__desc">{{ t('setupWizard.storage.infoDesc') }}</div>
+    </VAlert>
+
+    <div class="setup-step-panel">
+      <VForm @submit.prevent="() => {}">
+        <VRow>
+          <VCol cols="12" md="6">
+            <VPathField
+              v-model="wizardData.storage.downloadPath"
+              :label="t('setupWizard.storage.downloadPath')"
+              :hint="t('setupWizard.storage.downloadPathHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-download"
+              placeholder="/downloads"
+              :error="!wizardData.storage.downloadPath && hasErrors"
+              :error-messages="
+                !wizardData.storage.downloadPath && hasErrors ? [t('setupWizard.storage.downloadPathRequired')] : []
+              "
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VPathField
+              v-model="wizardData.storage.libraryPath"
+              :label="t('setupWizard.storage.libraryPath')"
+              :hint="t('setupWizard.storage.libraryPathHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-folder-multiple"
+              placeholder="/media"
+              :error="!wizardData.storage.libraryPath && hasErrors"
+              :error-messages="
+                !wizardData.storage.libraryPath && hasErrors ? [t('setupWizard.storage.libraryPathRequired')] : []
+              "
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VSelect
+              v-model="wizardData.storage.transferType"
+              :label="t('directory.transferType')"
+              :hint="t('directory.transferTypeHint')"
+              persistent-hint
+              :items="transferTypeItems"
+              prepend-inner-icon="mdi-swap-horizontal"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VSelect
+              v-model="wizardData.storage.overwriteMode"
+              :label="t('directory.overwriteMode')"
+              :hint="t('directory.overwriteModeHint')"
+              persistent-hint
+              :items="overwriteModeItems"
+              prepend-inner-icon="mdi-file-replace"
+            />
+          </VCol>
+        </VRow>
+      </VForm>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.setup-step-head {
+  margin-block-end: 16px;
+}
+
+.setup-step-title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-desc {
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-alert__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-alert__desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-panel {
+  padding: 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
+}
+</style>

@@ -36,6 +36,8 @@ const otpPassword = ref('')
 
 // OTP 初始化加载状态
 const otpLoading = ref(false)
+const verifying = ref(false)
+const disabling = ref(false)
 
 // OTP 初始化失败信息
 const otpGenerateError = ref('')
@@ -102,10 +104,12 @@ async function getOtpUri() {
 
 // 启用Otp
 async function judgeOtpPassword() {
+  if (verifying.value) return
   if (!otpPassword.value) {
     $toast.error(t('profile.otpCodeRequired'))
     return
   }
+  verifying.value = true
   try {
     const result = (await api.post('mfa/otp/verify', {
       uri: otpUri.value,
@@ -122,15 +126,19 @@ async function judgeOtpPassword() {
   } catch (error) {
     console.error(error)
     $toast.error(t('profile.otpEnableFailed', { message: error instanceof Error ? error.message : String(error) }))
+  } finally {
+    verifying.value = false
   }
 }
 
 // 关闭当前用户的二次验证
 function disableOtp() {
+  if (disabling.value) return
   emit('verifyPassword', {
     title: t('profile.disableTwoFactor'),
     text: t('profile.confirmToDisableOtp'),
     callback: async (password: string) => {
+      disabling.value = true
       try {
         const result = (await api.post('mfa/otp/disable', {
           password,
@@ -145,6 +153,8 @@ function disableOtp() {
       } catch (error) {
         console.error(error)
         $toast.error(t('profile.otpDisableFailed', { message: error instanceof Error ? error.message : String(error) }))
+      } finally {
+        disabling.value = false
       }
     },
   })
@@ -161,6 +171,8 @@ watch(
       // 弹窗关闭时，清空数据
       resetOtpSetupState()
       otpLoading.value = false
+      verifying.value = false
+      disabling.value = false
       otpPassword.value = ''
     }
   },
@@ -169,57 +181,45 @@ watch(
 </script>
 
 <template>
-  <VDialog v-model="show" max-width="45rem" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem>
+  <VDialog v-model="show" max-width="34rem" scrollable :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-cellphone-key" size="20" class="me-2 text-primary" />
+        </template>
         <VCardTitle>
-          <VIcon icon="mdi-cellphone-key" class="me-2" />
           {{ props.isOtp && !qrCode ? t('profile.authenticatorManagement') : t('profile.setupAuthenticator') }}
         </VCardTitle>
-        <VDialogCloseBtn @click="show = false" />
       </VCardItem>
+      <VDialogCloseBtn :disabled="verifying || disabling" @click="show = false" />
       <VDivider />
-      <VCardText>
-        <p class="mb-6">
+      <VCardText class="mp-dialog-body otp-dialog-body">
+        <p class="otp-intro">
           {{ t('profile.authenticatorAppDescription') }}
         </p>
         <!-- 如果已启用OTP，显示清除界面 -->
         <template v-if="props.isOtp && !qrCode">
-          <VAlert type="success" variant="tonal" class="mb-4">
+          <VAlert type="success" variant="tonal" density="compact">
             {{ t('profile.authenticatorEnabled') }}
           </VAlert>
-          <p class="mb-6">
+          <p class="otp-tip">
             {{ t('profile.clearAuthenticatorTip') }}
           </p>
-          <div class="d-flex justify-end flex-wrap gap-4">
-            <VBtn variant="outlined" color="secondary" @click="show = false">
-              {{ t('common.cancel') }}
-            </VBtn>
-            <VBtn color="error" @click="disableOtp">
-              <template #prepend>
-                <VIcon icon="mdi-delete" />
-              </template>
-              {{ t('profile.clearAuthenticator') }}
-            </VBtn>
-          </div>
         </template>
 
         <!-- 设置新的OTP -->
         <template v-else>
-          <div
-            class="my-6 rounded text-center p-3 border d-flex align-center justify-center"
-            style="width: 226px; height: 226px; margin: 0 auto"
-          >
+          <div class="otp-qrcode-shell">
             <img
               v-if="qrCodeImage"
               class="mx-auto d-block otp-qrcode-image"
               :src="qrCodeImage"
               :alt="t('profile.setupAuthenticator')"
-              width="200"
-              height="200"
+              width="184"
+              height="184"
             />
             <VProgressCircular v-else-if="otpLoading" indeterminate color="primary" />
-            <div v-else class="w-100">
+            <div v-else class="w-100 text-center">
               <VAlert type="error" variant="tonal" density="compact" class="mb-3">
                 {{ otpGenerateError || t('profile.otpGenerateFailed', { message: t('common.error') }) }}
               </VAlert>
@@ -232,8 +232,8 @@ watch(
             v-if="secret"
             :title="secret"
             variant="tonal"
+            density="compact"
             type="warning"
-            class="my-4"
             :text="t('profile.secretKeyTip')"
           >
             <template #prepend />
@@ -245,31 +245,100 @@ watch(
               inputmode="numeric"
               autocomplete="one-time-code"
               :label="t('profile.enterVerificationCode')"
-              class="mb-8"
               variant="outlined"
+              density="compact"
+              hide-details
               prepend-inner-icon="mdi-shield-key"
             />
-            <div class="d-flex justify-end flex-wrap gap-4">
-              <VBtn variant="outlined" color="secondary" @click="show = false">
-                {{ t('common.cancel') }}
-              </VBtn>
-              <VBtn type="submit" :disabled="!otpUri || otpLoading">
-                <template #prepend>
-                  <VIcon icon="mdi-check" />
-                </template>
-                {{ t('common.confirm') }}
-              </VBtn>
-            </div>
           </VForm>
         </template>
       </VCardText>
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="verifying || disabling" @click="show = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn
+          v-if="props.isOtp && !qrCode"
+          color="error"
+          variant="flat"
+          size="small"
+          class="px-4"
+          :loading="disabling"
+          :disabled="disabling"
+          @click="disableOtp"
+        >
+          <template #prepend>
+            <VIcon icon="mdi-delete" />
+          </template>
+          {{ t('profile.clearAuthenticator') }}
+        </VBtn>
+        <VBtn
+          v-else
+          color="primary"
+          variant="flat"
+          size="small"
+          class="px-4"
+          :loading="verifying"
+          :disabled="!otpUri || otpLoading || verifying"
+          @click="judgeOtpPassword"
+        >
+          <template #prepend>
+            <VIcon icon="mdi-check" />
+          </template>
+          {{ t('common.confirm') }}
+        </VBtn>
+      </VCardActions>
     </VCard>
   </VDialog>
 </template>
 
 <style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.otp-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.otp-intro,
+.otp-tip {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.otp-qrcode-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: var(--mp-item-bg);
+  block-size: 206px;
+  inline-size: 206px;
+  margin-inline: auto;
+}
+
 .otp-qrcode-image {
-  inline-size: 200px;
-  block-size: 200px;
+  border-radius: 6px;
+  block-size: 184px;
+  inline-size: 184px;
 }
 </style>

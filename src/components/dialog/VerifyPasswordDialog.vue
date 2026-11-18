@@ -35,16 +35,24 @@ const visible = computed({
 
 // 提交当前输入的密码给调用方继续业务验证。
 function submitPassword() {
+  if (!password.value.trim()) return
   emit('confirm', password.value)
 }
 </script>
 
 <template>
-  <VDialog v-if="visible" v-model="visible" max-width="30rem">
-    <VCard>
-      <VCardTitle class="text-h5 text-center mt-4">{{ props.title }}</VCardTitle>
-      <VCardText>
-        <p class="mb-4">{{ props.text }}</p>
+  <VDialog v-if="visible" v-model="visible" max-width="28rem">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-lock-check-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ props.title }}</VCardTitle>
+      </VCardItem>
+      <VDialogCloseBtn v-model="visible" />
+      <VDivider />
+      <VCardText class="mp-dialog-body">
+        <p v-if="props.text" class="verify-password-text">{{ props.text }}</p>
         <VForm @submit.prevent="submitPassword">
           <VTextField
             v-model="password"
@@ -52,20 +60,54 @@ function submitPassword() {
             :label="t('user.password')"
             :append-inner-icon="passwordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
             variant="outlined"
+            density="compact"
+            hide-details
             prepend-inner-icon="mdi-lock"
             autocomplete="current-password"
             @click:append-inner="passwordVisible = !passwordVisible"
           />
-          <div class="d-flex justify-end gap-4 mt-4">
-            <VBtn variant="outlined" color="secondary" @click="visible = false">
-              {{ t('common.cancel') }}
-            </VBtn>
-            <VBtn type="submit" color="primary">
-              {{ t('common.confirm') }}
-            </VBtn>
-          </div>
         </VForm>
       </VCardText>
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          class="px-4"
+          :disabled="!password.trim()"
+          @click="submitPassword"
+        >
+          {{ t('common.confirm') }}
+        </VBtn>
+      </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.verify-password-text {
+  margin: 0 0 12px;
+  color: rgba(var(--v-theme-on-surface), 0.75);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+</style>

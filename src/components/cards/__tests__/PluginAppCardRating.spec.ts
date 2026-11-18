@@ -1,6 +1,6 @@
 import type { Plugin } from '@/api/types'
 import PluginAppCard from '@/components/cards/PluginAppCard.vue'
-import { normalizePluginAccentColor } from '@/utils/glassColor'
+import { normalizePluginAccentColor } from '@/composables/usePluginCardAccent'
 import { renderWithProviders } from '@tests/support/render'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { defineComponent } from 'vue'
@@ -271,5 +271,18 @@ describe('PluginAppCard rating badge', () => {
     await fireEvent.click(container.querySelector<HTMLButtonElement>('.v-card .v-btn')!)
     await fireEvent.click(await screen.findByText('项目主页'))
     expect(open).toHaveBeenCalledWith('https://github.com/example-author', '_blank')
+  })
+
+  it('reactively updates version-history menu item visibility when plugin.history prop changes', async () => {
+    const { container, rerender } = await renderWithProviders(PluginAppCard, {
+      props: { plugin: { ...plugin, history: {} } },
+    })
+
+    await fireEvent.click(container.querySelector<HTMLButtonElement>('.v-card .v-btn')!)
+    expect(await screen.findByText('项目主页')).toBeVisible()
+    expect(screen.getByText('版本历史').closest('.v-list-item')).not.toBeVisible()
+
+    await rerender({ plugin: { ...plugin, history: { 'v1.1.0': '新增特性' } } })
+    expect(screen.getByText('版本历史').closest('.v-list-item')).toBeVisible()
   })
 })

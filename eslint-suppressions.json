@@ -47,17 +47,6 @@
       "count": 3
     }
   },
-  "src/App.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "sonarjs/no-ignored-exceptions": {
-      "count": 1
-    }
-  },
   "src/ace-config.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 24
@@ -86,16 +75,8 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 3
     },
-    "sonarjs/super-linear-regex": {
-      "count": 1
-    },
     "vue/no-mutating-props": {
       "count": 27
-    }
-  },
-  "src/components/cards/FilterRuleCard.vue": {
-    "vue/no-mutating-props": {
-      "count": 1
     }
   },
   "src/components/cards/FilterRuleGroupCard.vue": {
@@ -105,7 +86,7 @@
   },
   "src/components/cards/MediaCard.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -141,11 +122,8 @@
     }
   },
   "src/components/dialog/AlistConfigDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "vue/no-mutating-props": {
-      "count": 4
+      "count": 1
     }
   },
   "src/components/dialog/AliyunAuthDialog.vue": {
@@ -185,11 +163,8 @@
     }
   },
   "src/components/dialog/RcloneConfigDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "vue/no-mutating-props": {
-      "count": 4
+      "count": 1
     }
   },
   "src/components/dialog/ReorganizeDialog.vue": {
@@ -229,16 +204,8 @@
     }
   },
   "src/components/dialog/SmbConfigDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "vue/no-mutating-props": {
-      "count": 5
-    }
-  },
-  "src/components/dialog/SubscribeEditDialog.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 1
     }
   },
   "src/components/dialog/SubscribeHistoryDialog.vue": {
@@ -257,9 +224,6 @@
   "src/components/dialog/U115AuthDialog.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/components/dialog/UserAuthDialog.vue": {
@@ -313,22 +277,9 @@
       "count": 3
     }
   },
-  "src/components/misc/MediaIdSelector.vue": {
-    "vue/no-v-text-v-html-on-component": {
-      "count": 1
-    }
-  },
-  "src/components/misc/OpticalLogoLab.vue": {
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
   "src/components/misc/ProgressiveCardGrid.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
-    },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
     }
   },
   "src/components/pwa/PWAInstallPrompt.vue": {
@@ -345,11 +296,8 @@
     }
   },
   "src/components/render/FormRender.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 17
-    },
     "sonarjs/code-eval": {
-      "count": 4
+      "count": 3
     }
   },
   "src/components/render/PageRender.vue": {
@@ -387,12 +335,6 @@
     }
   },
   "src/components/workflow/FilterMediasAction.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
     "vue/no-mutating-props": {
       "count": 3
     }
@@ -404,7 +346,7 @@
   },
   "src/components/workflow/InvokePluginAction.vue": {
     "vue/no-mutating-props": {
-      "count": 4
+      "count": 1
     }
   },
   "src/components/workflow/NoteAction.vue": {
@@ -486,9 +428,6 @@
     }
   },
   "src/composables/useSetupWizard.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 17
-    },
     "sonarjs/no-duplicated-branches": {
       "count": 2
     }
@@ -537,7 +476,7 @@
       "count": 4
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 5
+      "count": 2
     },
     "sonarjs/no-ignored-exceptions": {
       "count": 2
@@ -545,11 +484,6 @@
   },
   "src/pages/__tests__/subscribe.spec.ts": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/pages/credits.vue": {
-    "prefer-const": {
       "count": 1
     }
   },
@@ -572,11 +506,6 @@
     },
     "sonarjs/no-duplicated-branches": {
       "count": 3
-    }
-  },
-  "src/pages/setting.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/plugins/stateRestore.ts": {
@@ -751,16 +680,7 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 12
     },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-empty": {
-      "count": 1
-    },
     "no-prototype-builtins": {
-      "count": 1
-    },
-    "sonarjs/no-ignored-exceptions": {
       "count": 1
     }
   },
@@ -776,16 +696,7 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 12
     },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "no-empty": {
-      "count": 1
-    },
     "no-prototype-builtins": {
-      "count": 1
-    },
-    "sonarjs/no-ignored-exceptions": {
       "count": 1
     }
   },
@@ -798,9 +709,6 @@
     },
     "prefer-const": {
       "count": 1
-    },
-    "vue/valid-v-for": {
-      "count": 2
     }
   },
   "src/views/setup/MediaServerSettingsStep.vue": {
@@ -818,11 +726,6 @@
       "count": 1
     }
   },
-  "src/views/system/CacheView.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/views/system/LoggingView.vue": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -836,9 +739,6 @@
   },
   "src/views/system/ModuleTestView.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "vue/no-unused-vars": {
       "count": 1
     }
   },
@@ -854,14 +754,6 @@
   },
   "src/views/system/RuleTestView.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/views/workflow/WorkflowShareView.vue": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "prefer-const": {
       "count": 1
     }
   },

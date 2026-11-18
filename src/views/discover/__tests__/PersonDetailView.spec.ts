@@ -1,5 +1,5 @@
 import PersonDetailView from '@/views/discover/PersonDetailView.vue'
-import { screen, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { defineComponent, h } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -91,5 +91,73 @@ describe('PersonDetailView', () => {
     expect(screen.getByRole('link', { name: '官方网站' })).toHaveAttribute('href', 'https://example.com')
     expect(screen.getByRole('link', { name: '官方网站' })).toHaveAttribute('rel', 'noopener noreferrer')
     expect(container.querySelector('.person-biography script')).not.toBeInTheDocument()
+  })
+
+  it('falls back to themoviedb source, finishes loading on errors or empty id, and reacts to prop updates', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.apiGet.mockRejectedValueOnce(new Error('network error'))
+
+    const view = await renderWithProviders(PersonDetailView, {
+      props: {
+        personid: '101',
+      },
+      global: {
+        stubs: {
+          LoadingBanner: defineComponent({ template: '<div role="status">loading</div>' }),
+          MediaCardListView: MediaCardListViewStub,
+        },
+      },
+    })
+
+    await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('tmdb/person/101'))
+    expect(await screen.findByText('出错啦！')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    mocks.apiGet.mockResolvedValueOnce({
+      id: 202,
+      name: '克里斯托弗·诺兰',
+      also_known_as: ['Christopher Nolan'],
+    })
+    await view.rerender({ personid: '202', source: undefined })
+
+    expect(await screen.findByRole('heading', { name: '克里斯托弗·诺兰' })).toBeInTheDocument()
+    expect(mocks.apiGet).toHaveBeenLastCalledWith('tmdb/person/202')
+    expect(screen.getByText('别名：Christopher Nolan')).toBeInTheDocument()
+  })
+
+  it('omits empty birth separators, blank aliases, and empty biography while allowing retry on load failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.apiGet.mockRejectedValueOnce(new Error('timeout'))
+
+    const { container } = await renderWithProviders(PersonDetailView, {
+      props: {
+        personid: '303',
+        source: 'themoviedb',
+      },
+      global: {
+        stubs: {
+          MediaCardListView: MediaCardListViewStub,
+        },
+      },
+    })
+
+    expect(await screen.findByText('出错啦！')).toBeInTheDocument()
+    mocks.apiGet.mockResolvedValueOnce({
+      id: 303,
+      name: '宫崎骏',
+      birthday: '',
+      place_of_birth: '日本东京',
+      also_known_as: ['   ', ''],
+      biography: '   ',
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    expect(await screen.findByRole('heading', { name: '宫崎骏' })).toBeInTheDocument()
+    expect(screen.getByText('日本东京')).toBeInTheDocument()
+    expect(container.textContent).not.toContain('| 日本东京')
+    expect(container.textContent).not.toContain('别名：')
+    expect(container.querySelector('.person-story-block')).not.toBeInTheDocument()
+    expect(container.querySelector('[role="button"][tabindex="-1"]')).not.toBeInTheDocument()
   })
 })

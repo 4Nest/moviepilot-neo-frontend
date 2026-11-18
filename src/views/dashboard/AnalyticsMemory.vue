@@ -194,12 +194,16 @@ useKeepAliveRefresh(refresh)
 
 <template>
   <VCard class="dashboard-chart-card dashboard-grid-fill">
-    <VCardItem>
-      <template #prepend><VIcon icon="mdi-memory" size="20" class="me-2" /></template>
+    <VCardItem class="dashboard-chart-header">
+      <template #prepend>
+        <span class="dashboard-chart-icon" aria-hidden="true">
+          <VIcon icon="mdi-memory" size="18" />
+        </span>
+      </template>
       <VCardTitle>{{ t('dashboard.memoryUsage') }}</VCardTitle>
-      <template #append
-        ><strong class="dashboard-chart-current">{{ memoryUsage.toFixed(1) }}%</strong></template
-      >
+      <template #append>
+        <strong class="dashboard-chart-current">{{ memoryUsage.toFixed(1) }}%</strong>
+      </template>
     </VCardItem>
     <VCardText class="dashboard-chart-content">
       <div class="dashboard-memory-value">
@@ -210,17 +214,17 @@ useKeepAliveRefresh(refresh)
         <VApexChart type="area" :options="chartOptions" :series="series" height="100%" />
       </div>
       <div class="dashboard-chart-footer">
-        <span
-          ><i class="memory-dot memory-dot--used" />{{ t('dashboard.memoryUsed') }} {{ animatedUsedMemoryText }}</span
-        >
-        <span
-          ><i class="memory-dot memory-dot--cached" />{{ t('dashboard.memoryCached') }}
-          {{ animatedCachedMemoryText }}</span
-        >
-        <span
-          ><i class="memory-dot memory-dot--available" />{{ t('dashboard.memoryAvailable') }}
-          {{ animatedAvailableMemoryText }}</span
-        >
+        <span>
+          <i class="memory-dot memory-dot--used" />{{ t('dashboard.memoryUsed') }} {{ animatedUsedMemoryText }}
+        </span>
+        <span>
+          <i class="memory-dot memory-dot--cached" />{{ t('dashboard.memoryCached') }}
+          {{ animatedCachedMemoryText }}
+        </span>
+        <span>
+          <i class="memory-dot memory-dot--available" />{{ t('dashboard.memoryAvailable') }}
+          {{ animatedAvailableMemoryText }}
+        </span>
       </div>
     </VCardText>
   </VCard>
@@ -231,7 +235,23 @@ useKeepAliveRefresh(refresh)
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  min-block-size: 270px;
+  min-block-size: 256px;
+}
+
+.dashboard-chart-header {
+  padding: 14px 16px 6px;
+}
+
+.dashboard-chart-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 34px;
+  margin-inline-end: 10px;
 }
 
 .dashboard-chart-content {
@@ -240,6 +260,7 @@ useKeepAliveRefresh(refresh)
   flex-direction: column;
   min-block-size: 0;
   overflow: hidden;
+  padding: 2px 16px 13px;
 }
 
 .dashboard-chart-plot {
@@ -254,32 +275,39 @@ useKeepAliveRefresh(refresh)
 }
 
 .dashboard-chart-current {
-  font-size: 0.9rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 
 .dashboard-memory-value {
   display: flex;
   align-items: baseline;
-  gap: 0.3rem;
-  margin-block-end: 0.15rem;
+  gap: 5px;
+  margin-block-end: 2px;
 }
 
 .dashboard-memory-value strong {
-  font-size: 1.05rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.dashboard-memory-value span,
-.dashboard-chart-footer {
+.dashboard-memory-value span {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.68rem;
+  font-size: 12px;
 }
 
 .dashboard-chart-footer {
   display: flex;
   justify-content: space-between;
-  border-block-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  gap: 0.6rem;
-  padding-block-start: 0.55rem;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  gap: 8px;
+  padding-block-start: 8px;
 }
 
 .memory-dot {
@@ -287,7 +315,7 @@ useKeepAliveRefresh(refresh)
   border-radius: 50%;
   block-size: 6px;
   inline-size: 6px;
-  margin-inline-end: 0.3rem;
+  margin-inline-end: 4px;
 }
 
 .memory-dot--used {

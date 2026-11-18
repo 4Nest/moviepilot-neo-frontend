@@ -209,17 +209,17 @@ onMounted(() => {
 
 <template>
   <VDialog max-width="50rem" :fullscreen="display.smAndDown.value" scrollable>
-    <VCard>
+    <VCard class="mp-dialog-card">
       <!-- 标题栏 -->
-      <VCardItem>
-        <VDialogCloseBtn @click="closeDialog" />
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-chart-line" class="me-2" />
+          <VIcon icon="mdi-chart-line" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>
           {{ t('site.statistics') }}
         </VCardTitle>
       </VCardItem>
+      <VDialogCloseBtn @click="closeDialog" />
       <VDivider />
       <!-- 内容区域 -->
       <VCardText class="pa-0">
@@ -228,21 +228,21 @@ onMounted(() => {
         <div v-else class="site-statistics-content">
           <!-- 统计概览 -->
           <div class="statistics-overview pa-4">
-            <div class="d-flex flex-wrap gap-4">
+            <div class="statistics-overview-grid">
               <div class="stat-card">
                 <div class="stat-number">{{ overviewCounts.total }}</div>
                 <div class="stat-label">{{ t('site.totalSites') }}</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number success--text">{{ overviewCounts.connected }}</div>
+                <div class="stat-number text-success">{{ overviewCounts.connected }}</div>
                 <div class="stat-label">{{ t('site.normalSites') }}</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number warning--text">{{ overviewCounts.slow }}</div>
+                <div class="stat-number text-warning">{{ overviewCounts.slow }}</div>
                 <div class="stat-label">{{ t('site.slowSites') }}</div>
               </div>
               <div class="stat-card">
-                <div class="stat-number error--text">{{ overviewCounts.failed }}</div>
+                <div class="stat-number text-error">{{ overviewCounts.failed }}</div>
                 <div class="stat-label">{{ t('site.failedSites') }}</div>
               </div>
             </div>
@@ -253,7 +253,7 @@ onMounted(() => {
             <div
               v-for="item in sortedSites"
               :key="item.site.id"
-              class="site-item pa-4 border-b"
+              class="site-item px-4 py-3 border-b"
               :class="`border-${getStatusColor(item.status)}`"
             >
               <div class="d-flex align-center justify-space-between">
@@ -261,14 +261,14 @@ onMounted(() => {
                 <div class="d-flex align-center flex-1 min-w-0">
                   <!-- 状态指示器 -->
                   <div class="status-indicator me-3" :class="getStatusColor(item.status)">
-                    <VIcon :icon="getStatusIcon(item.status)" size="20" />
+                    <VIcon :icon="getStatusIcon(item.status)" size="18" />
                   </div>
 
                   <!-- 站点名称和状态 -->
                   <div class="flex-1 min-w-0">
                     <div class="d-flex align-center">
-                      <h4 class="text-h6 mb-1 truncate">{{ item.site.name }}</h4>
-                      <VChip :color="getStatusColor(item.status)" size="small" class="ml-2" variant="tonal">
+                      <h4 class="site-row-title truncate">{{ item.site.name }}</h4>
+                      <VChip :color="getStatusColor(item.status)" size="x-small" class="ms-2" variant="tonal">
                         {{ getStatusText(item.status) }}
                       </VChip>
                     </div>
@@ -297,7 +297,7 @@ onMounted(() => {
                 <div class="d-flex align-center gap-4 flex-shrink-0 ms-3">
                   <!-- 平均耗时 -->
                   <div class="text-center">
-                    <div class="text-h6 font-weight-bold" :class="`text-${getTimeColor(item.stats?.seconds)}`">
+                    <div class="site-metric-value" :class="`text-${getTimeColor(item.stats?.seconds)}`">
                       {{ item.stats?.seconds || '-' }}s
                     </div>
                     <div class="text-caption text-medium-emphasis">{{ t('site.averageTime') }}</div>
@@ -305,13 +305,13 @@ onMounted(() => {
 
                   <!-- 成功率 -->
                   <div class="text-center">
-                    <div class="text-h6 font-weight-bold">{{ getSuccessRate(item.stats) }}%</div>
+                    <div class="site-metric-value">{{ getSuccessRate(item.stats) }}%</div>
                     <div class="text-caption text-medium-emphasis">{{ t('site.successRate') }}</div>
                   </div>
 
                   <!-- 详情按钮 -->
                   <VBtn icon variant="text" size="small" @click="viewDetail(item.site)">
-                    <VIcon icon="mdi-information-outline" />
+                    <VIcon icon="mdi-information-outline" size="18" />
                   </VBtn>
                 </div>
               </div>
@@ -322,30 +322,30 @@ onMounted(() => {
     </VCard>
 
     <!-- 详情弹窗 -->
-    <VDialog v-model="detailDialog" :max-width="display.mdAndUp.value ? 600 : '95%'" scrollable>
-      <VCard v-if="selectedSite">
-        <VCardItem class="py-3">
+    <VDialog v-model="detailDialog" :max-width="display.mdAndUp.value ? 560 : '95%'" scrollable>
+      <VCard v-if="selectedSite" class="mp-dialog-card">
+        <VCardItem class="mp-dialog-header">
           <template #prepend>
-            <VIcon icon="mdi-information-outline" class="me-2" />
+            <VIcon icon="mdi-information-outline" size="20" class="me-2 text-primary" />
           </template>
           <VCardTitle> {{ selectedSite.name }} - {{ t('site.timeRecords') }} </VCardTitle>
-          <VDialogCloseBtn @click="detailDialog = false" />
         </VCardItem>
+        <VDialogCloseBtn @click="detailDialog = false" />
         <VDivider />
         <VCardText>
           <div v-if="getSiteStats(selectedSite.domain)">
             <div class="mb-4">
-              <h5 class="text-h6 mb-2">{{ t('site.statistics') }}</h5>
+              <h5 class="site-section-title mb-2">{{ t('site.statistics') }}</h5>
               <div class="d-flex flex-wrap gap-4">
                 <div class="stat-item">
                   <span class="stat-label">{{ t('site.successCount') }}:</span>
-                  <span class="stat-value success--text">
+                  <span class="stat-value text-success">
                     {{ getSiteStats(selectedSite.domain)?.success || 0 }}
                   </span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">{{ t('site.failCount') }}:</span>
-                  <span class="stat-value error--text">
+                  <span class="stat-value text-error">
                     {{ getSiteStats(selectedSite.domain)?.fail || 0 }}
                   </span>
                 </div>
@@ -365,21 +365,21 @@ onMounted(() => {
             </div>
 
             <div>
-              <h5 class="text-h6 mb-2">{{ t('site.recentTimeRecords') }}</h5>
+              <h5 class="site-section-title mb-2">{{ t('site.recentTimeRecords') }}</h5>
               <div class="time-records">
                 <div
                   v-for="(record, index) in parseTimeRecords(getSiteStats(selectedSite.domain)?.note)"
                   :key="index"
-                  class="time-record-item pa-3 border rounded mb-2"
+                  class="time-record-item px-3 py-2.5 border rounded mb-2"
                   :class="`border-${getTimeColor(record.duration)}`"
                 >
                   <div class="d-flex justify-space-between align-center">
                     <div>
-                      <div class="text-body-2 font-weight-medium">{{ record.time }}</div>
+                      <div class="text-body-2 font-weight-medium site-record-time">{{ record.time }}</div>
                       <div class="text-caption text-medium-emphasis">{{ t('site.accessTime') }}</div>
                     </div>
                     <div class="text-end">
-                      <div class="text-h6 font-weight-bold" :class="`text-${getTimeColor(record.duration)}`">
+                      <div class="site-metric-value" :class="`text-${getTimeColor(record.duration)}`">
                         {{ record.duration }}s
                       </div>
                       <div class="text-caption text-medium-emphasis">{{ t('site.responseTime') }}</div>
@@ -391,8 +391,8 @@ onMounted(() => {
                   v-if="parseTimeRecords(getSiteStats(selectedSite.domain)?.note).length === 0"
                   class="text-center pa-4"
                 >
-                  <VIcon icon="mdi-information-outline" size="48" color="secondary" class="mb-2" />
-                  <div class="text-body-1 text-medium-emphasis">{{ t('site.noTimeRecords') }}</div>
+                  <VIcon icon="mdi-information-outline" size="36" color="secondary" class="mb-2" />
+                  <div class="text-body-2 text-medium-emphasis">{{ t('site.noTimeRecords') }}</div>
                 </div>
               </div>
             </div>
@@ -404,40 +404,79 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
 .statistics-overview {
-  background: linear-gradient(135deg, var(--v-theme-surface) 0%, var(--v-theme-surface-variant) 100%);
-  border-block-end: 1px solid var(--v-border-color);
+  background: rgb(var(--v-theme-surface));
+  border-block-end: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+}
+
+.statistics-overview-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .stat-card {
-  padding: 16px;
-  background: var(--v-theme-surface);
-  min-inline-size: 100px;
+  padding: 12px 14px;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  border-radius: 8px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  min-inline-size: 0;
   text-align: center;
 }
 
 .stat-number {
-  font-size: 24px;
-  font-weight: bold;
-  line-height: 1;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
   margin-block-end: 4px;
 }
 
 .stat-label {
-  color: var(--v-theme-on-surface-variant);
+  color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 12px;
 }
 
 .sites-list {
-  background: var(--v-theme-surface);
+  background: rgb(var(--v-theme-surface));
 }
 
 .site-item {
-  transition: background-color 0.2s ease;
+  transition: background-color 0.16s ease;
 }
 
 .site-item:hover {
-  background: var(--v-theme-surface-variant);
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.03));
+}
+
+.site-row-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.site-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.site-metric-value {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.site-record-time {
+  font-variant-numeric: tabular-nums;
 }
 
 .site-last-error {
@@ -446,47 +485,50 @@ onMounted(() => {
 
 .status-indicator {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: var(--v-theme-surface-variant);
-  block-size: 40px;
-  inline-size: 40px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  block-size: 34px;
+  inline-size: 34px;
 }
 
 .status-indicator.success {
-  background: rgba(var(--v-theme-success), 0.1);
+  background: rgba(var(--v-theme-success), 0.12);
   color: rgb(var(--v-theme-success));
 }
 
 .status-indicator.warning {
-  background: rgba(var(--v-theme-warning), 0.1);
+  background: rgba(var(--v-theme-warning), 0.12);
   color: rgb(var(--v-theme-warning));
 }
 
 .status-indicator.error {
-  background: rgba(var(--v-theme-error), 0.1);
+  background: rgba(var(--v-theme-error), 0.12);
   color: rgb(var(--v-theme-error));
 }
 
 .status-indicator.secondary {
-  background: rgba(var(--v-theme-secondary), 0.1);
+  background: rgba(var(--v-theme-secondary), 0.12);
   color: rgb(var(--v-theme-secondary));
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stat-item .stat-label {
-  color: var(--v-theme-on-surface-variant);
+  color: rgba(var(--v-theme-on-surface), 0.62);
   font-weight: 500;
 }
 
 .stat-value {
-  font-weight: bold;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .time-records {
@@ -495,6 +537,13 @@ onMounted(() => {
 }
 
 .time-record-item {
-  transition: all 0.2s ease;
+  border-color: var(--mp-border-subtle) !important;
+  transition: background-color 0.16s ease;
+}
+
+@media (width <= 600px) {
+  .statistics-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

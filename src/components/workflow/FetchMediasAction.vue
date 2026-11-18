@@ -79,15 +79,8 @@ const extraRecommendSources = ref<RecommendSource[]>([])
 // 加载额外的发现数据源
 async function loadExtraRecommendSources() {
   try {
-    extraRecommendSources.value = await api.get('recommend/source')
-    if (extraRecommendSources.value.length > 0) {
-      innerList.push(
-        ...extraRecommendSources.value.map(source => ({
-          api_path: source.api_path,
-          name: source.name,
-        })),
-      )
-    }
+    const extra: RecommendSource[] = await api.get('recommend/source')
+    extraRecommendSources.value = Array.isArray(extra) ? extra : []
   } catch (error) {
     console.log(error)
   }
@@ -99,8 +92,11 @@ const sourceTypeOptions = [
   { value: 'api', title: t('workflow.fetchMedias.api') },
 ]
 
-// 计算下拉框
-const sourceOptions = computed(() => innerList.map(item => ({ value: item.api_path, title: item.name })))
+// 计算下拉框（响应式合并内置与扩展推荐源）
+const sourceOptions = computed(() => [
+  ...innerList.map(item => ({ value: item.api_path, title: item.name })),
+  ...extraRecommendSources.value.map(source => ({ value: source.api_path, title: source.name })),
+])
 
 onMounted(() => {
   loadExtraRecommendSources()
@@ -108,58 +104,81 @@ onMounted(() => {
 </script>
 <template>
   <div>
-    <VCard max-width="20rem">
+    <VCard max-width="20rem" class="workflow-node-card">
       <Handle id="edge_in" type="target" :position="Position.Left" />
-      <VCardItem>
-        <template v-slot:prepend>
-          <VAvatar>
-            <VIcon icon="mdi-movie-search" size="x-large"></VIcon>
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="primary" class="workflow-node-avatar">
+            <VIcon icon="mdi-movie-search" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.fetchMedias.title') }}</VCardTitle>
-        <VCardSubtitle>{{ t('workflow.fetchMedias.subtitle') }}</VCardSubtitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.fetchMedias.title') }}</VCardTitle>
+        <VCardSubtitle class="workflow-node-subtitle">{{ t('workflow.fetchMedias.subtitle') }}</VCardSubtitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VSelect
-              v-model="data.source_type"
-              :items="sourceTypeOptions"
-              :label="t('workflow.fetchMedias.source')"
-              outlined
-              dense
-            />
-          </VCol>
-        </VRow>
-        <VRow v-if="data.source_type === 'ranking'">
-          <VCol cols="12">
-            <VSelect
-              v-model="data.sources"
-              :items="sourceOptions"
-              :label="t('workflow.fetchMedias.selectRanking')"
-              chips
-              multiple
-              outlined
-              dense
-              clearable
-            />
-          </VCol>
-        </VRow>
-        <VRow v-else>
-          <VCol cols="12">
-            <VTextField
-              v-model="data.api_path"
-              :label="t('workflow.fetchMedias.apiPath')"
-              placeholder="/api/v1/plugin/xxx/xxxx"
-              outlined
-              dense
-              clearable
-            />
-          </VCol>
-        </VRow>
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="data.source_type"
+                :items="sourceTypeOptions"
+                :label="t('workflow.fetchMedias.source')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol v-if="data.source_type === 'ranking'" cols="12">
+              <VSelect
+                v-model="data.sources"
+                :items="sourceOptions"
+                :label="t('workflow.fetchMedias.selectRanking')"
+                chips
+                multiple
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+                clearable
+              />
+            </VCol>
+            <VCol v-else cols="12">
+              <VTextField
+                v-model="data.api_path"
+                :label="t('workflow.fetchMedias.apiPath')"
+                placeholder="/api/v1/plugin/xxx/xxxx"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+                clearable
+              />
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <Handle id="edge_out" type="source" :position="Position.Right" />
     </VCard>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-block-start: 1px;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
+}
+</style>

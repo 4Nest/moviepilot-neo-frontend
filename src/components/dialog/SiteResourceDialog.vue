@@ -2,7 +2,7 @@
 import api from '@/api'
 import type { Site, TorrentInfo, SiteCategory } from '@/api/types'
 import { formatFileSize } from '@core/utils/formatters'
-import { useDisplay, useTheme } from 'vuetify'
+import { useDisplay } from 'vuetify'
 import AddDownloadDialog from '../dialog/AddDownloadDialog.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { getTorrentPromotionKind } from '@/utils/torrent'
@@ -13,9 +13,6 @@ const { t } = useI18n()
 
 // 响应式断点
 const display = useDisplay()
-
-// 当前主题
-const theme = useTheme()
 
 // 输入参数
 const props = defineProps({
@@ -84,9 +81,6 @@ const resultSummaryText = computed(() => `共 ${resourceTotalItems.value} 条结
 // 是否小屏幕
 const isMobileLayout = computed(() => display.smAndDown.value)
 
-// 是否透明主题
-const isTransparentTheme = computed(() => theme.name.value === 'transparent')
-
 // 移动端分页数据
 const mobileResourceList = computed(() => resourceDataList.value)
 
@@ -128,10 +122,8 @@ function addDownloadSuccess() {
   addDownloadDialog.value = false
 }
 
-// 添加下载失败
-function addDownloadError() {
-  addDownloadDialog.value = false
-}
+// 添加下载失败（保留弹窗与已选下载器、目录，以便用户修改重试）
+function addDownloadError() {}
 
 // 调用API，查询站点资源
 async function getResourceList() {
@@ -234,8 +226,8 @@ onMounted(() => {
     <VCard class="site-resource-dialog">
       <header class="site-resource-header">
         <div class="site-resource-header__identity">
-          <VAvatar color="primary" variant="tonal" rounded="lg" size="40">
-            <VIcon icon="mdi-rss-box" size="22" />
+          <VAvatar color="primary" variant="tonal" rounded="lg" size="36">
+            <VIcon icon="mdi-rss-box" size="20" />
           </VAvatar>
           <div class="site-resource-header__copy">
             <div class="site-resource-header__eyebrow">{{ t('site.browseResources') }}</div>
@@ -247,9 +239,9 @@ onMounted(() => {
           <VChip v-if="resourceTotalItems > 0" color="primary" variant="tonal" size="small">
             {{ resultSummaryText }}
           </VChip>
-          <VBtn icon="mdi-close" variant="text" size="small" :aria-label="t('common.close')" @click="emit('close')" />
         </div>
       </header>
+      <VDialogCloseBtn @click="emit('close')" />
 
       <div class="site-resource-controls">
         <template v-if="!isMobileLayout">
@@ -293,7 +285,7 @@ onMounted(() => {
                   color="primary"
                   variant="flat"
                   block
-                  size="default"
+                  size="small"
                   rounded="lg"
                   prepend-icon="mdi-magnify"
                   class="site-resource-search-btn"
@@ -310,12 +302,13 @@ onMounted(() => {
           <div class="site-resource-mobile-search">
             <VBtn
               icon
+              size="small"
               variant="text"
               color="primary"
               class="site-resource-mobile-search__toggle"
               @click="toggleMobileSearch"
             >
-              <VIcon icon="mdi-magnify" />
+              <VIcon icon="mdi-magnify" size="18" />
             </VBtn>
             <div v-if="resourceTotalItems > 0" class="text-body-2 text-medium-emphasis">
               {{ resultSummaryText }}
@@ -364,14 +357,20 @@ onMounted(() => {
                     <VBtn
                       color="primary"
                       variant="flat"
-                      block
+                      size="small"
                       rounded="lg"
-                      class="site-resource-search-btn"
+                      class="site-resource-search-btn flex-grow-1"
                       @click="getResourceList"
                     >
                       {{ t('dialog.siteResource.search') }}
                     </VBtn>
-                    <VBtn variant="text" rounded="lg" @click="closeMobileSearch">
+                    <VBtn
+                      variant="text"
+                      size="small"
+                      rounded="lg"
+                      class="site-resource-cancel-btn"
+                      @click="closeMobileSearch"
+                    >
                       {{ t('common.cancel') }}
                     </VBtn>
                   </VCol>
@@ -443,7 +442,7 @@ onMounted(() => {
                 </template>
               </VTooltip>
               <div class="site-resource-title-cell__chips">
-                <VChip v-if="item.hit_and_run" variant="elevated" size="x-small" class="text-white bg-black">
+                <VChip v-if="item.hit_and_run" variant="flat" size="x-small" class="site-resource-hr-chip">
                   H&amp;R
                 </VChip>
                 <VChip v-if="item.freedate_diff" variant="tonal" color="secondary" size="x-small">
@@ -556,11 +555,7 @@ onMounted(() => {
               :get-item-key="getResourceItemKey"
             >
               <template #default="{ item }">
-                <VCard
-                  class="site-resource-card"
-                  :class="{ 'site-resource-card--transparent': isTransparentTheme }"
-                  variant="flat"
-                >
+                <VCard class="site-resource-card" variant="flat">
                   <VCardText class="pa-3">
                     <div class="site-resource-title-cell text-start">
                       <div class="site-resource-card__title text-body-1 font-weight-medium text-high-emphasis">
@@ -576,9 +571,9 @@ onMounted(() => {
                     <div class="site-resource-card__chips mt-2">
                       <VChip
                         v-if="item.hit_and_run"
-                        variant="elevated"
+                        variant="flat"
                         size="small"
-                        class="me-1 mb-1 text-white bg-black"
+                        class="me-1 mb-1 site-resource-hr-chip"
                       >
                         H&amp;R
                       </VChip>
@@ -722,9 +717,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.9));
-  background:
-    radial-gradient(circle at 5% 0%, rgba(var(--v-theme-primary), 0.08), transparent 24rem), rgb(var(--v-theme-surface));
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 14px;
+  background: rgb(var(--v-theme-surface));
 }
 
 .site-resource-initial-loading {
@@ -774,11 +769,11 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-block-size: 4.5rem;
-  padding: 0.8rem 1rem;
-  border-block-end: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.72));
-  background: rgba(var(--v-theme-surface), 0.88);
-  backdrop-filter: blur(18px);
+  min-block-size: 3.75rem;
+  padding-block: 0.65rem;
+  padding-inline: 1.125rem 3.25rem;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  background: rgb(var(--v-theme-surface));
 }
 
 .site-resource-header__identity,
@@ -843,18 +838,33 @@ onMounted(() => {
 }
 
 .site-resource-filter-input :deep(.v-field) {
-  border-radius: 10px;
-  background: rgba(var(--v-theme-on-surface), 0.05);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-field-bg);
   box-shadow: none;
+  min-block-size: 32px;
+}
+
+.site-resource-filter-input :deep(.v-field__input) {
+  min-block-size: 32px;
+  padding-block: 4px;
 }
 
 .site-resource-filter-input :deep(.v-field__prepend-inner) {
   color: rgba(var(--v-theme-primary), 0.86);
 }
 
-.site-resource-search-btn {
+.site-resource-search-btn,
+.site-resource-cancel-btn {
+  block-size: 32px !important;
   letter-spacing: 0.02em;
-  min-block-size: 40px;
+  min-block-size: 32px !important;
+}
+
+.site-resource-mobile-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .site-resource-filter-summary {
@@ -1021,6 +1031,14 @@ onMounted(() => {
   margin: 0;
 }
 
+.site-resource-hr-chip {
+  border: 1px solid rgba(var(--v-theme-error), 0.45);
+  background: rgba(var(--v-theme-error), 0.16) !important;
+  color: rgb(var(--v-theme-error)) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .site-resource-label-chip {
   border: 1px solid rgba(var(--v-theme-primary), 0.42);
   background: rgba(var(--v-theme-primary), 0.18) !important;
@@ -1154,20 +1172,13 @@ onMounted(() => {
 }
 
 .site-resource-card {
-  --site-resource-card-bg:
-    linear-gradient(145deg, rgba(var(--v-theme-primary), 0.055), transparent 44%), rgba(var(--v-theme-surface), 0.96);
+  --site-resource-card-bg: rgb(var(--v-theme-surface));
 
   overflow: hidden;
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.82));
-  border-radius: 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: var(--app-surface-radius);
   background: var(--site-resource-card-bg);
-  box-shadow: 0 8px 22px rgba(var(--v-theme-on-surface), 0.055);
-}
-
-.site-resource-card--transparent {
-  --site-resource-card-bg: rgba(var(--v-theme-surface), var(--transparent-opacity));
-
-  backdrop-filter: blur(var(--transparent-blur));
+  box-shadow: var(--app-surface-shadow);
 }
 
 .site-resource-card__summary {
@@ -1271,8 +1282,9 @@ onMounted(() => {
   }
 
   .site-resource-header {
-    min-block-size: 4rem;
-    padding: 0.65rem 0.75rem;
+    min-block-size: 3.5rem;
+    padding-block: 0.6rem;
+    padding-inline: 0.875rem 3rem;
   }
 
   .site-resource-header__meta .v-chip {

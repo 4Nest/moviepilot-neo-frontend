@@ -63,7 +63,7 @@ watch(filterParams, newParams => {
 </script>
 
 <template>
-  <div class="px-3">
+  <div class="extra-source-filters">
     <FormRender v-for="(element, index) in source.filter_ui" :key="index" :config="element" :model="filterParams" />
   </div>
   <div>
@@ -71,8 +71,46 @@ watch(filterParams, newParams => {
   </div>
 </template>
 
-<style>
-.v-chip--selected {
+<style scoped>
+.extra-source-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-block: 4px 6px;
+  padding-inline: 0;
+}
+
+.extra-source-filters :deep(.v-label) {
+  color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.62));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  min-inline-size: 44px;
+  opacity: 1;
+}
+
+.extra-source-filters :deep(.v-chip-group) {
+  padding-block: 0 !important;
+}
+
+.extra-source-filters :deep(.v-slide-group__content) {
+  gap: 5px;
+  padding-block: 1px !important;
+}
+
+.extra-source-filters :deep(.v-chip) {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  font-size: 12.5px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin: 0 !important;
+  padding-inline: 9px !important;
+}
+
+.extra-source-filters :deep(.v-chip--selected) {
+  background-color: rgba(var(--v-theme-primary), 0.14) !important;
   color: rgb(var(--v-theme-primary)) !important;
+  font-weight: 600;
 }
 </style>

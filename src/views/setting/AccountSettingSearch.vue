@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
-import api from '@/api'
+import api, { getApiErrorMessage } from '@/api'
 import type { FilterRuleGroup, Site } from '@/api/types'
 import { useI18n } from '@/composables/useChineseText'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
@@ -55,10 +55,14 @@ const mediaSourcesDict = [
 ]
 
 // 当前选中的媒体信息数据源
-const selectedMediaSource = ref([])
+const selectedMediaSource = ref<string[]>([])
 
 // 当前选中的过滤规则组
-const selectedFilterGroup = ref([])
+const selectedFilterGroup = ref<string[]>([])
+
+// 独立的保存加载锁
+const savingSearchSetting = ref(false)
+const savingSites = ref(false)
 
 // 过滤规则组选择项
 const filterRuleGroupOptions = computed(() => {
@@ -77,7 +81,7 @@ async function querySites() {
     const data: Site[] = await api.get('site/')
 
     // 过滤站点，只有启用的站点才显示
-    allSites.value = data.filter(item => item.is_active)
+    allSites.value = (Array.isArray(data) ? data : []).filter(item => item.is_active)
   } catch (error) {
     console.log(error)
   }
@@ -87,7 +91,7 @@ async function querySites() {
 async function queryFilterRuleGroups() {
   try {
     const result: { [key: string]: any } = await api.get('system/setting/UserFilterRuleGroups')
-    filterRuleGroups.value = result.data?.value ?? []
+    filterRuleGroups.value = Array.isArray(result.data?.value) ? result.data.value : []
   } catch (error) {
     console.log(error)
   }
@@ -98,7 +102,7 @@ async function querySelectedSites() {
   try {
     const result: { [key: string]: any } = await api.get('system/setting/public/IndexerSites')
 
-    selectedSites.value = result.data?.value ?? []
+    selectedSites.value = Array.isArray(result.data?.value) ? result.data.value : []
   } catch (error) {
     console.log(error)
   }
@@ -106,14 +110,19 @@ async function querySelectedSites() {
 
 // 保存用户选中的站点
 async function saveSelectedSites() {
+  if (savingSites.value) return
+  savingSites.value = true
   try {
-    // 用户名密码
-    const result: { [key: string]: any } = await api.post('system/setting/IndexerSites', selectedSites.value)
+    const sitesPayload = Array.isArray(selectedSites.value) ? selectedSites.value : []
+    const result: { [key: string]: any } = await api.post('system/setting/IndexerSites', sitesPayload)
 
     if (result.success) $toast.success('搜索站点保存成功')
-    else $toast.error('搜索站点保存失败！')
+    else $toast.error(result.message || '搜索站点保存失败！')
   } catch (error) {
     console.log(error)
+    $toast.error(getApiErrorMessage(error) || '搜索站点保存失败！')
+  } finally {
+    savingSites.value = false
   }
 }
 
@@ -121,9 +130,22 @@ async function saveSelectedSites() {
 async function loadSearchSetting() {
   try {
     const result1: { [key: string]: any } = await api.get('system/setting/SEARCH_SOURCE')
-    if (result1.success) selectedMediaSource.value = result1.data?.value?.split(',')
+    if (result1.success) {
+      const rawSource = result1.data?.value
+      selectedMediaSource.value =
+        typeof rawSource === 'string'
+          ? rawSource
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+          : Array.isArray(rawSource)
+            ? rawSource.filter(Boolean)
+            : []
+    }
     const result2: { [key: string]: any } = await api.get('system/setting/SearchFilterRuleGroups')
-    if (result2.success) selectedFilterGroup.value = result2.data?.value
+    if (result2.success) {
+      selectedFilterGroup.value = Array.isArray(result2.data?.value) ? result2.data.value : []
+    }
   } catch (error) {
     console.log(error)
   }
@@ -137,27 +159,29 @@ async function saveSystemSetting(value: { [key: string]: any }) {
     if (result.success) {
       return true
     }
-  } catch (error) {}
+  } catch (error) {
+    console.log(error)
+  }
   return false
 }
 
 // 调用API保存设置
 async function saveSearchSetting() {
+  if (savingSearchSetting.value) return
+  savingSearchSetting.value = true
   try {
-    const result1: { [key: string]: any } = await api.post(
-      'system/setting/SEARCH_SOURCE',
-      selectedMediaSource.value.join(','),
-    )
+    const mediaSourceStr = (Array.isArray(selectedMediaSource.value) ? selectedMediaSource.value : [])
+      .filter(Boolean)
+      .join(',')
+    const result1: { [key: string]: any } = await api.post('system/setting/SEARCH_SOURCE', mediaSourceStr)
 
     if (!result1 || !result1.success) {
-      $toast.error(`媒体搜索数据源保存失败：${result1?.message}！`)
+      $toast.error(`媒体搜索数据源保存失败：${result1?.message ?? ''}！`)
       return
     }
 
-    const result2: { [key: string]: any } = await api.post(
-      'system/setting/SearchFilterRuleGroups',
-      selectedFilterGroup.value,
-    )
+    const filterGroupPayload = Array.isArray(selectedFilterGroup.value) ? selectedFilterGroup.value : []
+    const result2: { [key: string]: any } = await api.post('system/setting/SearchFilterRuleGroups', filterGroupPayload)
 
     const parsedPages = Number(SystemSettings.value.Basic.SEARCH_RESOURCE_PAGES)
     SystemSettings.value.Basic.SEARCH_RESOURCE_PAGES =
@@ -172,6 +196,9 @@ async function saveSearchSetting() {
     }
   } catch (error) {
     console.log(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.search.saveFailed'))
+  } finally {
+    savingSearchSetting.value = false
   }
 }
 
@@ -206,20 +233,31 @@ onMounted(() => {
   loadPageData()
 })
 
-useSilentSettingRefresh(loadPageData, {
-  active: computed(() => props.active),
-})
+useSilentSettingRefresh(
+  async () => {
+    if (savingSearchSetting.value || savingSites.value) return
+    await loadPageData()
+  },
+  {
+    active: computed(() => props.active),
+  },
+)
 </script>
 
 <template>
-  <VRow>
-    <VCol cols="12">
-      <VCard>
-        <VCardItem>
-          <VCardTitle>{{ t('setting.search.basicSettings') }}</VCardTitle>
-          <VCardSubtitle>{{ t('setting.search.basicSettingsDesc') }}</VCardSubtitle>
-        </VCardItem>
-        <VCardText>
+  <div class="mp-setting-stack">
+    <VCard id="sec-search-basic" class="mp-setting-card">
+      <VCardItem>
+        <template #prepend>
+          <div class="mp-setting-card__icon mp-setting-card__icon--primary">
+            <VIcon icon="mdi-magnify-expand" size="18" />
+          </div>
+        </template>
+        <VCardTitle>{{ t('setting.search.basicSettings') }}</VCardTitle>
+        <VCardSubtitle>{{ t('setting.search.basicSettingsDesc') }}</VCardSubtitle>
+      </VCardItem>
+      <VCardText>
+        <VForm @submit.prevent="() => {}">
           <VRow>
             <VCol cols="12" md="6">
               <VSelect
@@ -272,66 +310,131 @@ useSilentSettingRefresh(loadPageData, {
               />
             </VCol>
             <VCol cols="12" md="6">
-              <VSwitch
-                v-model="SystemSettings.Basic.SEARCH_MULTIPLE_NAME"
-                :label="t('setting.search.multipleNameSearch')"
-                :hint="t('setting.search.multipleNameSearchHint')"
-                persistent-hint
-              />
+              <div class="mp-switch-card" :title="t('setting.search.multipleNameSearchHint')">
+                <VSwitch
+                  v-model="SystemSettings.Basic.SEARCH_MULTIPLE_NAME"
+                  :label="t('setting.search.multipleNameSearch')"
+                  :hint="t('setting.search.multipleNameSearchHint')"
+                  color="primary"
+                  density="compact"
+                  inset
+                  persistent-hint
+                />
+              </div>
             </VCol>
             <VCol cols="12" md="6">
-              <VSwitch
-                v-model="SystemSettings.Basic.DOWNLOAD_SUBTITLE"
-                :label="t('setting.search.downloadSubtitle')"
-                :hint="t('setting.search.downloadSubtitleHint')"
-                persistent-hint
-              />
+              <div class="mp-switch-card" :title="t('setting.search.downloadSubtitleHint')">
+                <VSwitch
+                  v-model="SystemSettings.Basic.DOWNLOAD_SUBTITLE"
+                  :label="t('setting.search.downloadSubtitle')"
+                  :hint="t('setting.search.downloadSubtitleHint')"
+                  color="primary"
+                  density="compact"
+                  inset
+                  persistent-hint
+                />
+              </div>
             </VCol>
           </VRow>
-        </VCardText>
-        <VCardText>
-          <VForm @submit.prevent="() => {}">
-            <div class="d-flex flex-wrap gap-4 mt-4">
-              <VBtn type="submit" @click="saveSearchSetting" prepend-icon="mdi-content-save">
-                {{ t('common.save') }}
-              </VBtn>
-            </div>
-          </VForm>
-        </VCardText>
-      </VCard>
-    </VCol>
-  </VRow>
-  <VRow>
-    <VCol cols="12">
-      <VCard>
-        <VCardItem>
-          <VCardTitle>{{ t('setting.search.downloadSite') }}</VCardTitle>
-          <VCardSubtitle>{{ t('setting.search.downloadSiteDesc') }}</VCardSubtitle>
-        </VCardItem>
-        <VCardText>
-          <VChipGroup v-model="selectedSites" column multiple>
-            <VChip
-              v-for="site in allSites"
-              :key="site.id"
-              :color="selectedSites.includes(site.id) ? 'primary' : ''"
-              filter
-              variant="outlined"
-              :value="site.id"
-            >
-              {{ site.name }}
-            </VChip>
-          </VChipGroup>
-        </VCardText>
-        <VCardText>
-          <VForm @submit.prevent="() => {}">
-            <div class="d-flex flex-wrap gap-4 mt-4">
-              <VBtn type="submit" @click="saveSelectedSites" prepend-icon="mdi-content-save">
-                {{ t('common.save') }}
-              </VBtn>
-            </div>
-          </VForm>
-        </VCardText>
-      </VCard>
-    </VCol>
-  </VRow>
+        </VForm>
+
+        <VForm class="mp-card-footer" @submit.prevent="() => {}">
+          <span class="mp-card-footer__hint">保存搜索数据源、过滤规则组与默认分页参数</span>
+          <VBtn
+            type="submit"
+            size="small"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            prepend-icon="mdi-content-save-outline"
+            :loading="savingSearchSetting"
+            :disabled="savingSearchSetting"
+            class="px-4"
+            @click="saveSearchSetting"
+          >
+            {{ t('common.save') }}
+          </VBtn>
+        </VForm>
+      </VCardText>
+    </VCard>
+
+    <VCard id="sec-search-sites" class="mp-setting-card">
+      <VCardItem>
+        <template #prepend>
+          <div class="mp-setting-card__icon mp-setting-card__icon--info">
+            <VIcon icon="mdi-radar" size="18" />
+          </div>
+        </template>
+        <VCardTitle>{{ t('setting.search.downloadSite') }}</VCardTitle>
+        <VCardSubtitle>{{ t('setting.search.downloadSiteDesc') }}</VCardSubtitle>
+        <template v-if="allSites.length > 0" #append>
+          <div class="d-flex flex-wrap align-center justify-end gap-2">
+            <span class="mp-count-pill">已选 {{ selectedSites.length }} / {{ allSites.length }}</span>
+            <button type="button" class="mp-inline-action" @click="selectedSites = allSites.map(s => s.id)">
+              全选
+            </button>
+            <button type="button" class="mp-inline-action" @click="selectedSites = []">清空</button>
+          </div>
+        </template>
+      </VCardItem>
+      <VCardText>
+        <VChipGroup v-if="allSites.length > 0" v-model="selectedSites" column multiple>
+          <VChip
+            v-for="site in allSites"
+            :key="site.id"
+            :color="selectedSites.includes(site.id) ? 'primary' : undefined"
+            :variant="selectedSites.includes(site.id) ? 'tonal' : 'outlined'"
+            rounded="lg"
+            filter
+            :value="site.id"
+          >
+            {{ site.name }}
+          </VChip>
+        </VChipGroup>
+        <div v-else class="mp-empty-hint">
+          <VIcon icon="mdi-radar" size="16" class="mp-empty-hint__icon" />
+          <span>暂无可用站点，请先在「站点管理」中添加并启用站点</span>
+        </div>
+
+        <VForm class="mp-card-footer" @submit.prevent="() => {}">
+          <span class="mp-card-footer__hint">保存手动与快速搜索时默认勾选的索引站点</span>
+          <VBtn
+            type="submit"
+            size="small"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            prepend-icon="mdi-content-save-outline"
+            :loading="savingSites"
+            :disabled="savingSites"
+            class="px-4"
+            @click="saveSelectedSites"
+          >
+            {{ t('common.save') }}
+          </VBtn>
+        </VForm>
+      </VCardText>
+    </VCard>
+  </div>
 </template>
+
+<style scoped>
+.mp-empty-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 14px;
+  border: 1px dashed var(--mp-border-card);
+  border-radius: 8px;
+  background: var(--mp-item-bg);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  gap: 5px;
+  line-height: 1.5;
+}
+
+.mp-empty-hint__icon {
+  color: rgba(var(--v-theme-on-surface), 0.45);
+}
+</style>

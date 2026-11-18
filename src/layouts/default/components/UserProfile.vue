@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { useToast } from 'vue-toastification'
 import router from '@/router'
-import avatar1 from '@images/avatars/avatar-1.png'
 import api from '@/api'
+
+// 极简现代几何线性默认头像（深灰蓝圆底 + 柔和中性色人像轮廓）
+const DEFAULT_AVATAR_DATA_URI =
+  'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20fill%3D%22%23232A38%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2252%22%20fill%3D%22%232C3547%22%20stroke%3D%22%2394A3B8%22%20stroke-opacity%3D%220.18%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2249%22%20r%3D%2215.5%22%20fill%3D%22%23CBD5E1%22%20fill-opacity%3D%220.9%22%2F%3E%3Cpath%20d%3D%22M37%20102c3.8-14.8%2014.4-23%2027-23s23.2%208.2%2027%2023%22%20fill%3D%22none%22%20stroke%3D%22%23CBD5E1%22%20stroke-opacity%3D%220.88%22%20stroke-width%3D%228%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useAuthStore, useUserStore, useGlobalSettingsStore } from '@/stores'
 import { useI18n } from '@/composables/useChineseText'
@@ -14,9 +17,8 @@ import type { ThemeSwitcherTheme } from '@layouts/types'
 import { useConfirm } from '@/composables/useConfirm'
 import { themeManager } from '@/utils/themeManager'
 import { usePWA, type UIMode } from '@/composables/usePWA'
-import { applyStoredTransparencySettings } from '@/composables/useTransparencySettings'
 import {
-  persistPartialThemeCustomizerSettings,
+  normalizeThemeCustomizerTheme,
   readThemeCustomizerSettings,
   THEME_CUSTOMIZER_CHANGE_EVENT,
   THEME_CUSTOMIZER_OPEN_EVENT,
@@ -28,11 +30,7 @@ import { nativeProfileAvatar } from '@/native/profile'
 
 const AboutDialog = defineAsyncComponent(() => import('@/components/dialog/AboutDialog.vue'))
 const CustomCssDialog = defineAsyncComponent(() => import('@/components/dialog/CustomCssDialog.vue'))
-const GlassSettingsDialog = defineAsyncComponent(() => import('@/components/dialog/GlassSettingsDialog.vue'))
 const ProgressDialog = defineAsyncComponent(() => import('@/components/dialog/ProgressDialog.vue'))
-const TransparencySettingsDialog = defineAsyncComponent(
-  () => import('@/components/dialog/TransparencySettingsDialog.vue'),
-)
 const UserAuthDialog = defineAsyncComponent(() => import('@/components/dialog/UserAuthDialog.vue'))
 
 // 认证 Store
@@ -69,29 +67,67 @@ useNativeGlobalAction({
 const showThemeMenu = ref(false)
 
 // 自定义CSS
+const CUSTOM_CSS_STYLE_ID = 'mp-user-custom-css'
 const customCSS = ref('')
 
-const isTransparentTheme = computed(() => currentThemeName.value === 'transparent')
-const isGlassTheme = computed(() => currentThemeName.value === 'glass')
-
-// 重启轮询控制标识
+// 重启轮询及延迟定时器控制标识
 const restartPollingId = ref<number | null>(null)
+let startPollTimeoutId: ReturnType<typeof setTimeout> | null = null
+let resetSessionTimeoutId: ReturnType<typeof setTimeout> | null = null
 const isRestarting = ref(false)
 let progressDialogController: ReturnType<typeof openSharedDialog> | null = null
 let siteAuthDialogController: ReturnType<typeof openSharedDialog> | null = null
 let customCssDialogController: ReturnType<typeof openSharedDialog> | null = null
+
+/** 复用单例 <style id="mp-user-custom-css"> 写入或清理用户附加样式。 */
+function applyCustomCssStyle(css: string) {
+  if (typeof document === 'undefined') return
+  const normalized = css.trim()
+  let styleEl = document.getElementById(CUSTOM_CSS_STYLE_ID) as HTMLStyleElement | null
+  if (!normalized) {
+    styleEl?.remove()
+    return
+  }
+  if (!styleEl) {
+    styleEl = document.createElement('style')
+    styleEl.id = CUSTOM_CSS_STYLE_ID
+    document.head.appendChild(styleEl)
+  }
+  styleEl.textContent = css
+}
+
+/** 移除单例用户附加样式节点。 */
+function removeCustomCssStyle() {
+  if (typeof document === 'undefined') return
+  document.getElementById(CUSTOM_CSS_STYLE_ID)?.remove()
+}
+
+/** 清理全部重启轮询与延迟定时器。 */
+function clearRestartTimers() {
+  if (restartPollingId.value) {
+    clearTimeout(restartPollingId.value)
+    restartPollingId.value = null
+  }
+  if (startPollTimeoutId) {
+    clearTimeout(startPollTimeoutId)
+    startPollTimeoutId = null
+  }
+  if (resetSessionTimeoutId) {
+    clearTimeout(resetSessionTimeoutId)
+    resetSessionTimeoutId = null
+  }
+}
 
 // 确认框
 const { createConfirm } = useConfirm()
 
 /** 清理会话及重启状态；只有用户主动退出才撤销通知绑定。 */
 function resetSession(explicitLogout = false) {
-  // 清理重启相关状态
+  // 清理重启相关状态与所有定时器
   isRestarting.value = false
-  if (restartPollingId.value) {
-    clearTimeout(restartPollingId.value)
-    restartPollingId.value = null
-  }
+  clearRestartTimers()
+  customCSS.value = ''
+  removeCustomCssStyle()
 
   // 清除登录状态信息
   if (explicitLogout) authStore.logout()
@@ -155,7 +191,9 @@ async function pollServiceStatus() {
       closeRestartProgress()
       restartPollingId.value = null
 
-      setTimeout(() => {
+      if (resetSessionTimeoutId) clearTimeout(resetSessionTimeoutId)
+      resetSessionTimeoutId = setTimeout(() => {
+        resetSessionTimeoutId = null
         resetSession()
       }, 1000)
       return
@@ -204,7 +242,9 @@ async function restart() {
   }
 
   // 重启请求成功，开始轮询检测服务状态
-  setTimeout(() => {
+  if (startPollTimeoutId) clearTimeout(startPollTimeoutId)
+  startPollTimeoutId = setTimeout(() => {
+    startPollTimeoutId = null
     pollServiceStatus()
   }, 5000)
 }
@@ -251,7 +291,7 @@ function siteAuthDone() {
 
 // 从用户 Store中获取信息
 const userName = computed(() => userStore.userName)
-const avatar = computed(() => userStore.avatar || avatar1)
+const avatar = computed(() => userStore.avatar || DEFAULT_AVATAR_DATA_URI)
 const userLevel = computed(() => userStore.level)
 const nativeAvatar = ref<string>()
 // 仅 App 接管后准备原生头像；切换账号、头像或退出时作废迟到的缩略图。
@@ -305,9 +345,9 @@ const getUIModeIcon = computed(() => {
 })
 
 // 主题相关功能
-const { name: themeName, global: globalTheme } = useTheme()
-const savedTheme = ref(localStorage.getItem('theme') ?? 'auto')
-const currentThemeName = ref(savedTheme.value)
+const { global: globalTheme } = useTheme()
+const savedTheme = ref(normalizeThemeCustomizerTheme(localStorage.getItem('theme') ?? 'auto'))
+const currentThemeName = ref<string>(savedTheme.value)
 const themeCustomizerSettings = ref(readThemeCustomizerSettings())
 
 const themes: ThemeSwitcherTheme[] = [
@@ -325,21 +365,6 @@ const themes: ThemeSwitcherTheme[] = [
     name: 'dark',
     title: t('theme.dark'),
     icon: 'mdi-weather-night',
-  },
-  {
-    name: 'purple',
-    title: t('theme.purple'),
-    icon: 'mdi-brightness-4',
-  },
-  {
-    name: 'transparent',
-    title: t('theme.transparent'),
-    icon: 'mdi-gradient-horizontal',
-  },
-  {
-    name: 'glass',
-    title: t('theme.glass'),
-    icon: 'mdi-blur-radial',
   },
 ]
 
@@ -368,43 +393,20 @@ const editorTheme = computed(() => (globalTheme.current.value.dark ? 'github_dar
 
 // 更新主题
 async function updateTheme() {
+  const normalizedTheme = normalizeThemeCustomizerTheme(currentThemeName.value)
   const autoTheme = checkPrefersColorSchemeIsDark() ? 'dark' : 'light'
-  const theme = currentThemeName.value === 'auto' ? autoTheme : currentThemeName.value
+  const theme = normalizedTheme === 'auto' ? autoTheme : normalizedTheme
 
   // 设置Vuetify主题
   globalTheme.name.value = theme
 
-  // 统一处理主题切换 - 主题管理器会自动处理CSS加载和错误
-  await themeManager.setTheme(currentThemeName.value)
+  // 统一处理主题切换
+  await themeManager.setTheme(normalizedTheme)
 
   // 保存原始主题设置，而不是计算后的值
-  savedTheme.value = currentThemeName.value
+  savedTheme.value = normalizedTheme
   // 保存主题到本地
-  saveLocalTheme(currentThemeName.value, globalTheme)
-}
-
-// 切换主题
-async function changeTheme(theme: string) {
-  currentThemeName.value = theme
-  showThemeMenu.value = false
-
-  // 立即更新主题（不再刷新页面）
-  await updateTheme()
-
-  // 如果是透明主题，应用透明度设置
-  if (theme === 'transparent') {
-    applyStoredTransparencySettings()
-  }
-
-  // 保存主题到服务端
-  try {
-    persistPartialThemeCustomizerSettings({ theme: theme as ThemeCustomizerSettings['theme'] })
-    api.post('/user/config/Layout', {
-      theme,
-    })
-  } catch (e) {
-    console.error(e)
-  }
+  saveLocalTheme(normalizedTheme, globalTheme)
 }
 
 function handleThemeCustomizerSettingsChange(event: Event) {
@@ -423,13 +425,9 @@ function handleThemeCustomizerSettingsChange(event: Event) {
 async function getCustomCSS() {
   try {
     const result: { [key: string]: any } = await api.get('system/setting/UserCustomCSS')
-    if (result && result.success && result.data?.value) {
+    if (result && result.success) {
       customCSS.value = result.data?.value ?? ''
-      if (customCSS.value) {
-        const style = document.createElement('style')
-        style.innerHTML = result.data?.value ?? ''
-        document.head.appendChild(style)
-      }
+      applyCustomCssStyle(customCSS.value)
     }
   } catch (error) {
     console.error(error)
@@ -457,16 +455,6 @@ watch(editorTheme, theme => {
   customCssDialogController?.updateProps({ editorTheme: theme })
 })
 
-/** 打开透明主题设置共享弹窗。 */
-function showTransparencySettingsDialog() {
-  openSharedDialog(TransparencySettingsDialog, {}, {}, { closeOn: ['close', 'update:modelValue'] })
-}
-
-/** 打开玻璃主题的外观与质量设置共享弹窗。 */
-function showGlassSettingsDialog() {
-  openSharedDialog(GlassSettingsDialog, {}, {}, { closeOn: ['close', 'update:modelValue'] })
-}
-
 /** 从用户菜单打开主题定制器，App 模式会在面板内部隐藏布局设置。 */
 function showThemeCustomizerDrawer() {
   showUserMenu.value = false
@@ -478,7 +466,6 @@ function showThemeCustomizerDrawer() {
 
 /** 保存自定义 CSS。 */
 async function saveCustomCSS(css: string) {
-  customCSS.value = css
   try {
     const result: { [key: string]: any } = await api.post('system/setting/UserCustomCSS', css, {
       headers: {
@@ -487,12 +474,17 @@ async function saveCustomCSS(css: string) {
     })
 
     if (result.success) {
+      customCSS.value = css
+      applyCustomCssStyle(css)
       customCssDialogController?.close()
       customCssDialogController = null
       $toast.success(t('theme.customCssSaveSuccess'))
+    } else {
+      $toast.error(t('theme.customCssSaveFailed'))
     }
   } catch (e) {
-    console.error(t('theme.customCssSaveFailed'))
+    console.error(t('theme.customCssSaveFailed'), e)
+    $toast.error(t('theme.customCssSaveFailed'))
   }
 }
 
@@ -501,19 +493,17 @@ watch(
   () => currentThemeName.value,
   async () => {
     await updateTheme()
-
-    // 如果切换到透明主题，应用透明度设置
-    if (currentThemeName.value === 'transparent') {
-      applyStoredTransparencySettings()
-    }
   },
 )
 
-// 监听系统主题变化
+// 监听系统主题变化，并在组件卸载时移除监听器
+let colorSchemeMediaQuery: MediaQueryList | null = null
+const handleSystemColorSchemeChange = async () => {
+  await updateTheme()
+}
 try {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
-    await updateTheme()
-  })
+  colorSchemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  colorSchemeMediaQuery.addEventListener('change', handleSystemColorSchemeChange)
 } catch (e) {
   console.error(t('theme.deviceNotSupport'))
 }
@@ -621,30 +611,23 @@ onMounted(() => {
     getCustomCSS()
   }
   window.addEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerSettingsChange)
-
-  // 初始化透明度设置
-  if (isTransparentTheme.value) {
-    applyStoredTransparencySettings()
-  }
 })
 
-// 组件卸载时清理轮询
+// 组件卸载时清理轮询、延迟定时器与系统主题监听器
 onUnmounted(() => {
-  // 清理重启轮询
-  if (restartPollingId.value) {
-    clearTimeout(restartPollingId.value)
-    restartPollingId.value = null
-  }
+  clearRestartTimers()
   isRestarting.value = false
   closeRestartProgress()
   siteAuthDialogController?.close()
   customCssDialogController?.close()
+  colorSchemeMediaQuery?.removeEventListener('change', handleSystemColorSchemeChange)
+  colorSchemeMediaQuery = null
   window.removeEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerSettingsChange)
 })
 </script>
 
 <template>
-  <VAvatar class="cursor-pointer ms-3 border" color="primary" variant="tonal">
+  <VAvatar size="32" class="user-profile-avatar cursor-pointer">
     <VImg :src="avatar" />
 
     <VMenu
@@ -652,21 +635,21 @@ onUnmounted(() => {
       :activator="nativeChromeActive ? '[data-menu-activator=native-profile]' : 'parent'"
       width="15rem"
       location="bottom end"
-      offset="14px"
+      offset="8"
       class="user-menu"
       :close-on-content-click="true"
       scrim
     >
       <VList class="pt-0">
         <!-- 👉 User Avatar & Name -->
-        <VListItem class="py-4" bg-color="primary" bg-opacity="0.05">
+        <VListItem class="py-3">
           <template #prepend>
-            <VAvatar size="60" color="primary" rounded="sm" class="border-2 border-opacity-10">
+            <VAvatar size="42" class="user-profile-menu-avatar me-1">
               <VImg :src="avatar" />
             </VAvatar>
           </template>
           <div>
-            <span class="text-high-emphasis text-lg font-weight-bold">
+            <span class="text-high-emphasis text-body-1 font-weight-semibold">
               {{ userName }}
             </span>
           </div>
@@ -769,40 +752,19 @@ onUnmounted(() => {
                 </template>
               </VListItem>
 
-              <VDivider class="my-2" />
+              <template v-if="userStore.superUser">
+                <VDivider class="my-2" />
 
-              <!-- 透明度调整 - 仅在透明主题下显示 -->
-              <template v-if="isTransparentTheme">
-                <VListItem @click="showTransparencySettingsDialog">
+                <VListItem @click="showCustomCssDialog">
                   <template #prepend>
-                    <VIcon icon="mdi-opacity" />
+                    <VIcon icon="mdi-palette" />
                   </template>
-                  <VListItemTitle>{{ t('theme.transparencyAdjust') }}</VListItemTitle>
+                  <VListItemTitle>{{ t('theme.custom') }}</VListItemTitle>
                   <template #append>
                     <VIcon icon="mdi-chevron-right" size="small" />
                   </template>
                 </VListItem>
               </template>
-
-              <VListItem v-else-if="isGlassTheme" @click="showGlassSettingsDialog">
-                <template #prepend>
-                  <VIcon icon="mdi-blur-radial" />
-                </template>
-                <VListItemTitle>{{ t('theme.glassSettings') }}</VListItemTitle>
-                <template #append>
-                  <VIcon icon="mdi-chevron-right" size="small" />
-                </template>
-              </VListItem>
-
-              <VListItem v-if="userStore.superUser" @click="showCustomCssDialog">
-                <template #prepend>
-                  <VIcon icon="mdi-palette" />
-                </template>
-                <VListItemTitle>{{ t('theme.custom') }}</VListItemTitle>
-                <template #append>
-                  <VIcon icon="mdi-chevron-right" size="small" />
-                </template>
-              </VListItem>
             </VList>
           </VMenu>
 
@@ -834,10 +796,10 @@ onUnmounted(() => {
           </VListItem>
         </div>
         <!-- 👉 Logout -->
-        <div class="px-2 mt-3 mb-2">
-          <VBtn color="error" block class="py-3" elevation="2" @click="logout">
+        <div class="px-2 mt-2 mb-1">
+          <VBtn color="error" variant="tonal" block @click="logout">
             <template #prepend>
-              <VIcon icon="mdi-logout" />
+              <VIcon icon="mdi-logout" size="18" />
             </template>
             {{ t('app.logout') }}
           </VBtn>
@@ -849,6 +811,25 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
+.user-profile-avatar {
+  border: 1px solid var(--mp-border-hover) !important;
+  border-radius: 50% !important;
+  background-color: rgb(var(--v-theme-surface-variant)) !important;
+  block-size: 32px !important;
+  inline-size: 32px !important;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(var(--v-theme-on-surface), 0.28) !important;
+  }
+}
+
+.user-profile-menu-avatar {
+  border: 1px solid var(--mp-border-hover);
+  border-radius: 50% !important;
+  background-color: rgb(var(--v-theme-surface-variant)) !important;
+}
+
 .v-list-item__prepend {
   min-inline-size: 24px !important;
 }

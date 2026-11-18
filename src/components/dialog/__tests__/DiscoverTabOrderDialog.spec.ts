@@ -3,8 +3,13 @@ import type { DiscoverSource } from '@/api/types'
 import { screen } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { cwd } from 'node:process'
 import { defineComponent, h, type PropType } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
+
+const dialogSource = readFileSync(resolve(cwd(), 'src/components/dialog/DiscoverTabOrderDialog.vue'), 'utf8')
 
 vi.mock('vuedraggable', async () => {
   const { defineComponent, h } = await import('vue')
@@ -133,5 +138,27 @@ describe('DiscoverTabOrderDialog', () => {
     expect(save).toHaveBeenCalledOnce()
     expect(close).not.toHaveBeenCalled()
     expect(updateModelValue).not.toHaveBeenCalled()
+  })
+
+  it('removes left accent bar, widens dialog to 44rem, and supports resetting order & cancel action', async () => {
+    expect(dialogSource).not.toContain('.setting-item::before')
+    expect(dialogSource).toContain('max-width="44rem"')
+
+    const user = userEvent.setup()
+    const { close, save, updateModelValue } = await renderDialog([
+      createSource('Bangumi每日放送', 'bgm'),
+      createSource('TMDB热门电视剧', 'tmdb_tv'),
+    ])
+
+    await user.click(screen.getByRole('button', { name: '反转顺序' }))
+    await user.click(screen.getByRole('button', { name: '重置' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    const savedTabs = save.mock.calls[0][0] as DiscoverSource[]
+    expect(savedTabs.map(item => item.mediaid_prefix)).toEqual(['bgm', 'tmdb_tv'])
+
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    expect(updateModelValue).toHaveBeenCalledWith(false)
+    expect(close).toHaveBeenCalledOnce()
   })
 })

@@ -4,6 +4,7 @@ import type { MediaStatistic } from '@/api/types'
 import { formatDashboardCount, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
 import { useDashboardSnapshot } from '@/composables/useDashboardSnapshot'
 import { useI18n } from '@/composables/useChineseText'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 // 国际化
 const { t } = useI18n()
@@ -109,22 +110,20 @@ onMounted(() => {
   loadMediaStatistic()
 })
 
-onActivated(() => {
-  loadMediaStatistic()
-})
+useKeepAliveRefresh(loadMediaStatistic)
 </script>
 
 <template>
   <VCard class="dashboard-summary-card dashboard-grid-fill">
-    <VCardItem>
+    <VCardItem class="dashboard-summary-header">
       <VCardTitle>{{ t('dashboard.mediaStatistic') }}</VCardTitle>
     </VCardItem>
 
     <VCardText class="dashboard-summary-content">
       <div class="dashboard-stat-grid">
         <div v-for="item in statistics" :key="item.title" class="dashboard-stat-item">
-          <VAvatar :color="item.color" size="46" class="dashboard-stat-icon">
-            <VIcon size="24" :icon="item.icon" />
+          <VAvatar :color="item.color" variant="tonal" size="36" class="dashboard-stat-icon">
+            <VIcon size="18" :icon="item.icon" />
           </VAvatar>
           <div class="dashboard-stat-copy">
             <span class="dashboard-stat-label">{{ item.title }}</span>
@@ -145,7 +144,11 @@ onActivated(() => {
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  min-block-size: 160px;
+  min-block-size: 148px;
+}
+
+.dashboard-summary-header {
+  padding: 14px 16px 6px;
 }
 
 .dashboard-summary-content {
@@ -153,6 +156,7 @@ onActivated(() => {
   flex: 1 1 auto;
   align-items: center;
   min-block-size: 0;
+  padding: 4px 16px 14px;
 }
 
 .dashboard-stat-grid {
@@ -165,44 +169,57 @@ onActivated(() => {
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  gap: 0.7rem;
-  padding-inline: 1.1rem;
+  gap: 13px;
+  padding-inline: 16px;
 }
 
 .dashboard-stat-item:first-child {
   padding-inline-start: 0;
 }
 
+.dashboard-stat-item:last-child {
+  padding-inline-end: 0;
+}
+
 .dashboard-stat-item + .dashboard-stat-item {
-  border-inline-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-inline-start: 1px solid var(--mp-border-subtle);
+}
+
+.dashboard-stat-icon {
+  flex-shrink: 0;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px !important;
 }
 
 .dashboard-stat-copy {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
-}
-
-.dashboard-stat-label,
-.dashboard-stat-addition {
-  font-size: 0.72rem;
+  gap: 2px;
 }
 
 .dashboard-stat-label {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .dashboard-number {
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
 .dashboard-stat-addition {
   overflow: hidden;
   color: rgb(var(--v-theme-success));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -210,11 +227,11 @@ onActivated(() => {
 @media (max-width: 740px) {
   .dashboard-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: 1rem;
+    row-gap: 13px;
   }
 
   .dashboard-stat-item {
-    padding-inline: 0.5rem;
+    padding-inline: 10px;
   }
 
   .dashboard-stat-item:nth-child(odd) {

@@ -247,4 +247,216 @@ describe('ProgressiveCardGrid mount scheduling', () => {
 
     expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(18)
   })
+
+  it('preserves measured item heights and staged window when deleting a card instead of resetting to zero', async () => {
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    class MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+      disconnect() {}
+      observe() {}
+      unobserve() {}
+    }
+    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(200)
+    const getBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('progressive-card-grid__track')) {
+        return {
+          bottom: 2400,
+          height: 2400,
+          left: 0,
+          right: 400,
+          toJSON: () => ({}),
+          top: 0,
+          width: 400,
+          x: 0,
+          y: 0,
+        }
+      }
+      return getBoundingClientRect.call(this)
+    })
+
+    const items = Array.from({ length: 12 }, (_, id) => ({ id, title: `card-${id}` }))
+    const { container, rerender } = render(ProgressiveCardGrid, {
+      props: {
+        batchSize: 2,
+        columns: 2,
+        estimatedItemHeight: 400,
+        gap: 0,
+        initialCount: 2,
+        items,
+        getItemKey: (item: { id: number }) => item.id,
+      },
+      slots: {
+        default: ({ item }: { item: { title: string } }) => h('div', item.title),
+      },
+    })
+
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-progressive-grid-index]').length).toBeGreaterThanOrEqual(4),
+    )
+
+    // 为当前挂载的所有卡片写入真实测量高度 150px（远小于失真的 estimatedItemHeight 400px）
+    const notifyResize = (elements: HTMLElement[]) => {
+      const entries = elements.map(
+        target =>
+          ({
+            borderBoxSize: [{ blockSize: 150, inlineSize: 200 }],
+            contentRect: { height: 150, width: 200 } as DOMRectReadOnly,
+            target,
+          }) as unknown as ResizeObserverEntry,
+      )
+      resizeCallbacks.forEach(cb => cb(entries, {} as ResizeObserver))
+    }
+
+    notifyResize(Array.from(container.querySelectorAll<HTMLElement>('[data-progressive-grid-index]')))
+    await nextTick()
+
+    // 删除前两张卡片后，存活卡片 #2~#5 应保留 150px 实测高度，底部占位高度反映 150px 而非全部回退为 400px
+    const mountedCountBeforeDelete = container.querySelectorAll('[data-progressive-grid-index]').length
+    await rerender({
+      batchSize: 2,
+      columns: 2,
+      estimatedItemHeight: 400,
+      gap: 0,
+      initialCount: 2,
+      items: items.slice(2),
+      getItemKey: (item: { id: number }) => item.id,
+    })
+    await nextTick()
+
+    // 200px 视口在行高 150px 下可见 2 行（4 项），且渐进挂载窗口未被归零卸载重挂
+    expect(container.querySelectorAll('[data-progressive-grid-index]').length).toBeGreaterThanOrEqual(
+      Math.min(mountedCountBeforeDelete - 2, 4),
+    )
+    expect(container.querySelectorAll('[data-progressive-grid-index]').length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('refreshes frozenVisibleRange immediately when items are deleted during overlay close transition', async () => {
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(200)
+    const items = Array.from({ length: 12 }, (_, id) => ({ id, title: `item-${id}` }))
+    const { container, rerender } = render(ProgressiveCardGrid, {
+      props: {
+        batchSize: 2,
+        columns: 2,
+        estimatedItemHeight: 100,
+        gap: 0,
+        initialCount: 4,
+        overscanRows: 1,
+        items,
+        getItemKey: (item: { id: number }) => item.id,
+      },
+      slots: {
+        default: ({ item }: { item: { title: string } }) => h('span', item.title),
+      },
+    })
+
+    await waitFor(() => expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(6))
+
+    // 模拟 ConfirmDialog 打开并处于关闭退场动画中（v-overlay-scroll-blocked 仍存在）
+    document.documentElement.classList.add('v-overlay-scroll-blocked')
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    // 删除前两张卡片，后续卡片 item-6、item-7 必须立即补进可见窗口，不能冻结卡顿
+    await rerender({
+      batchSize: 2,
+      columns: 2,
+      estimatedItemHeight: 100,
+      gap: 0,
+      initialCount: 4,
+      overscanRows: 1,
+      items: items.slice(2),
+      getItemKey: (item: { id: number }) => item.id,
+    })
+
+    expect(container.querySelectorAll('[data-progressive-grid-index]')).toHaveLength(6)
+    expect(container.textContent).toContain('item-6')
+    expect(container.textContent).toContain('item-7')
+    document.documentElement.classList.remove('v-overlay-scroll-blocked')
+  })
+
+  it('plays GPU FLIP translate3d animation on deletion/reorder but never on pure append', async () => {
+    const positions = new Map<string, { left: number; top: number }>()
+    const getBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const indexAttr = this.getAttribute('data-progressive-grid-index')
+      if (indexAttr !== null) {
+        const idx = Number(indexAttr)
+        const pos = positions.get(this.textContent || '') ?? { left: (idx % 2) * 200, top: Math.floor(idx / 2) * 160 }
+        return {
+          bottom: pos.top + 150,
+          height: 150,
+          left: pos.left,
+          right: pos.left + 190,
+          toJSON: () => ({}),
+          top: pos.top,
+          width: 190,
+          x: pos.left,
+          y: pos.top,
+        }
+      }
+      return getBoundingClientRect.call(this)
+    })
+
+    const animateSpy = vi.fn().mockReturnValue({
+      cancel: vi.fn(),
+      oncancel: null,
+      onfinish: null,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animateSpy,
+      writable: true,
+    })
+
+    const items = [
+      { id: 'a', label: 'card-a' },
+      { id: 'b', label: 'card-b' },
+      { id: 'c', label: 'card-c' },
+    ]
+    const { rerender } = render(ProgressiveCardGrid, {
+      props: {
+        columns: 2,
+        estimatedItemHeight: 150,
+        items,
+        getItemKey: (item: { id: string }) => item.id,
+      },
+      slots: {
+        default: ({ item }: { item: { label: string } }) => h('div', item.label),
+      },
+    })
+    await nextTick()
+    expect(animateSpy).not.toHaveBeenCalled()
+
+    // 纯末尾分页追加：严禁触发 FLIP 动画
+    const appendedItems = [...items, { id: 'd', label: 'card-d' }]
+    await rerender({
+      columns: 2,
+      estimatedItemHeight: 150,
+      items: appendedItems,
+      getItemKey: (item: { id: string }) => item.id,
+    })
+    await nextTick()
+    expect(animateSpy).not.toHaveBeenCalled()
+
+    // 删除首张卡片 card-a：card-b 从 (200, 0) 移到 (0, 0)，dx = 200, dy = 0，应触发平滑补位动画
+    await rerender({
+      columns: 2,
+      estimatedItemHeight: 150,
+      items: appendedItems.slice(1),
+      getItemKey: (item: { id: string }) => item.id,
+    })
+    await nextTick()
+
+    expect(animateSpy).toHaveBeenCalled()
+    expect(animateSpy).toHaveBeenCalledWith(
+      [{ transform: 'translate3d(200px, 0px, 0)' }, { transform: 'translate3d(0, 0, 0)' }],
+      { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    )
+
+    // 清理原型属性
+    delete (HTMLElement.prototype as { animate?: unknown }).animate
+  })
 })

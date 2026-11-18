@@ -51,6 +51,12 @@ const isLimit = ref(false)
 const sentinelAlert = ref(true)
 // 加入 CookieCloud 同步域名黑名单状态
 const addingToCookieCloudBlacklist = ref(false)
+// 表单引用与保存加载状态
+const siteFormRef = ref()
+const saving = ref(false)
+const optionalNumberValidator = (val: unknown) =>
+  val === undefined || val === null || val === '' || numberValidator(val)
+const priorityRequiredValidator = (val: unknown) => val !== undefined && val !== null && val !== ''
 
 // 状态下拉项
 const statusItems = [
@@ -128,7 +134,10 @@ async function fetchSiteInfo() {
 
 // 调用API 新增站点
 async function addSite() {
-  if (!siteForm.value?.url) return
+  if (saving.value) return
+  const { valid } = (await siteFormRef.value?.validate()) || { valid: true }
+  if (!valid || !siteForm.value?.url) return
+  saving.value = true
   startNProgress()
   try {
     syncSentinelAlertToNote()
@@ -140,13 +149,20 @@ async function addSite() {
       $toast.error(`${t('site.messages.addFailed')}：${result.message}`)
     }
   } catch (error) {
+    $toast.error(`${t('site.messages.addFailed')}！`)
     console.error(error)
+  } finally {
+    saving.value = false
+    doneNProgress()
   }
-  doneNProgress()
 }
 
 // 调用API更新站点信息
 async function updateSiteInfo() {
+  if (saving.value) return
+  const { valid } = (await siteFormRef.value?.validate()) || { valid: true }
+  if (!valid || !siteForm.value?.url) return
+  saving.value = true
   startNProgress()
   try {
     if (isLimit.value) {
@@ -169,8 +185,10 @@ async function updateSiteInfo() {
   } catch (error) {
     $toast.error(`${siteForm.value?.name} ${t('site.messages.updateFailed')}！`)
     console.error(error)
+  } finally {
+    saving.value = false
+    doneNProgress()
   }
-  doneNProgress()
 }
 
 // 将当前已保存站点加入 CookieCloud 同步域名黑名单
@@ -209,226 +227,262 @@ onMounted(async () => {
 </script>
 
 <template>
-  <VDialog scrollable :close-on-back="false" eager max-width="45rem" :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem :class="props.oper === 'add' ? 'py-3' : 'py-2'">
+  <VDialog scrollable :close-on-back="false" eager max-width="46rem" :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon :icon="oper == 'add' ? 'mdi-web-plus' : 'mdi-web'" class="me-2" />
+          <VIcon :icon="oper == 'add' ? 'mdi-web-plus' : 'mdi-web'" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ `${props.oper === 'add' ? t('site.actions.add') : t('site.actions.edit')}` }}</VCardTitle>
-        <VCardSubtitle>{{ siteForm.name }}</VCardSubtitle>
+        <VCardSubtitle v-if="siteForm.name">{{ siteForm.name }}</VCardSubtitle>
       </VCardItem>
-      <VDialogCloseBtn @click="emit('close')" />
+      <VDialogCloseBtn :disabled="saving" @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VForm @submit.prevent="() => {}">
-          <VRow>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="siteForm.url"
-                :label="t('site.fields.url')"
-                :rules="[requiredValidator]"
-                :hint="t('site.hints.url')"
-                persistent-hint
-                prepend-inner-icon="mdi-web"
-              />
-            </VCol>
-            <VCol cols="6" md="3">
-              <VAutocomplete
-                v-model="siteForm.pri"
-                :label="t('site.fields.priority')"
-                :items="priorityItems"
-                :rules="[requiredValidator]"
-                :hint="t('site.hints.priority')"
-                persistent-hint
-                prepend-inner-icon="mdi-priority-high"
-              />
-            </VCol>
-            <VCol cols="6" md="3">
-              <VSelect
-                v-model="siteForm.is_active"
-                :items="statusItems"
-                :label="t('site.fields.status')"
-                :hint="t('site.hints.status')"
-                persistent-hint
-                prepend-inner-icon="mdi-toggle-switch"
-              />
-            </VCol>
-          </VRow>
-          <VRow>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="siteForm.rss"
-                :label="t('site.fields.rss')"
-                :hint="t('site.hints.rss')"
-                persistent-hint
-                prepend-inner-icon="mdi-rss"
-              />
-            </VCol>
-            <VCol cols="6" md="3">
-              <VTextField
-                v-model="siteForm.timeout"
-                :label="t('site.fields.timeout')"
-                :hint="t('site.hints.timeout')"
-                persistent-hint
-                prepend-inner-icon="mdi-timer"
-              />
-            </VCol>
-            <VCol cols="6" md="3">
-              <VAutocomplete
-                v-model="siteForm.downloader"
-                :label="t('site.fields.downloader')"
-                :items="downloaderOptions"
-                :hint="t('site.hints.downloader')"
-                persistent-hint
-                prepend-inner-icon="mdi-download"
-              />
-            </VCol>
-          </VRow>
-          <VTabs v-model="siteType" show-arrows class="v-tabs-pill mt-3">
-            <VTab value="cookie" selected-class="v-tab--selected">
-              <div>
-                <VIcon size="20" start icon="mdi-cookie" />
-                Cookie
+      <VCardText class="mp-dialog-body">
+        <VForm ref="siteFormRef" @submit.prevent="() => {}" class="mp-form-sections">
+          <!-- 基础站点连接与调度 -->
+          <section class="mp-form-section">
+            <VRow class="mp-form-grid">
+              <VCol cols="12">
+                <VTextField
+                  v-model="siteForm.url"
+                  :label="t('site.fields.url')"
+                  :rules="[requiredValidator]"
+                  :hint="t('site.hints.url')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-web"
+                />
+              </VCol>
+              <VCol cols="12">
+                <VTextField
+                  v-model="siteForm.rss"
+                  :label="t('site.fields.rss')"
+                  :hint="t('site.hints.rss')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-rss"
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VAutocomplete
+                  v-model="siteForm.pri"
+                  :label="t('site.fields.priority')"
+                  :items="priorityItems"
+                  :rules="[priorityRequiredValidator]"
+                  :hint="t('site.hints.priority')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-priority-high"
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VSelect
+                  v-model="siteForm.is_active"
+                  :items="statusItems"
+                  :label="t('site.fields.status')"
+                  :hint="t('site.hints.status')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-toggle-switch"
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VTextField
+                  v-model="siteForm.timeout"
+                  :label="t('site.fields.timeout')"
+                  :hint="t('site.hints.timeout')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-timer"
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VAutocomplete
+                  v-model="siteForm.downloader"
+                  :label="t('site.fields.downloader')"
+                  :items="downloaderOptions"
+                  :hint="t('site.hints.downloader')"
+                  persistent-hint
+                  prepend-inner-icon="mdi-download"
+                />
+              </VCol>
+            </VRow>
+          </section>
+
+          <!-- 鉴权模式与凭证 -->
+          <section class="mp-form-section">
+            <div class="mp-segmented-bar">
+              <VTabs v-model="siteType" density="compact" class="mp-segmented-tabs">
+                <VTab value="cookie" :ripple="false">
+                  <VIcon size="16" start icon="mdi-cookie" />
+                  Cookie
+                </VTab>
+                <VTab value="api" :ripple="false">
+                  <VIcon size="16" start icon="mdi-api" />
+                  API
+                </VTab>
+              </VTabs>
+            </div>
+            <VWindow v-model="siteType" class="mt-3 disable-tab-transition" :touch="false">
+              <VWindowItem value="cookie">
+                <VRow class="mp-form-grid">
+                  <VCol cols="12">
+                    <VTextarea
+                      v-model="siteForm.cookie"
+                      :label="t('site.fields.cookie')"
+                      :hint="t('site.hints.cookie')"
+                      rows="3"
+                      auto-grow
+                      persistent-hint
+                      prepend-inner-icon="mdi-cookie"
+                    />
+                  </VCol>
+                  <VCol cols="12">
+                    <VTextField
+                      v-model="siteForm.ua"
+                      :label="t('site.fields.userAgent')"
+                      :hint="t('site.hints.userAgent')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-web-box"
+                    />
+                  </VCol>
+                </VRow>
+              </VWindowItem>
+              <VWindowItem value="api">
+                <VRow class="mp-form-grid">
+                  <VCol cols="12" sm="6">
+                    <VTextField
+                      v-model="siteForm.token"
+                      :label="t('site.fields.authorization')"
+                      :hint="t('site.hints.authorization')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-key"
+                    />
+                  </VCol>
+                  <VCol cols="12" sm="6">
+                    <VTextField
+                      v-model="siteForm.apikey"
+                      :label="t('site.fields.apiKey')"
+                      :hint="t('site.hints.apiKey')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-api"
+                    />
+                  </VCol>
+                </VRow>
+              </VWindowItem>
+            </VWindow>
+          </section>
+
+          <!-- 访问频率流控分组面板 -->
+          <section class="mp-form-section">
+            <div class="mp-settings-card">
+              <div class="mp-setting-row">
+                <VSwitch
+                  v-model="isLimit"
+                  :label="t('site.fields.limitAccess')"
+                  color="primary"
+                  inset
+                  density="compact"
+                  hide-details
+                />
               </div>
-            </VTab>
-            <VTab value="api" selected-class="v-tab--selected">
-              <div>
-                <VIcon size="20" start icon="mdi-api" />
-                API
+              <div v-if="isLimit" class="mp-setting-subpanel">
+                <VRow class="mp-form-grid">
+                  <VCol cols="12" sm="4">
+                    <VTextField
+                      v-model="siteForm.limit_interval"
+                      :label="t('site.fields.limitInterval')"
+                      :rules="[optionalNumberValidator]"
+                      :hint="t('site.hints.limitInterval')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-clock-outline"
+                    />
+                  </VCol>
+                  <VCol cols="12" sm="4">
+                    <VTextField
+                      v-model="siteForm.limit_count"
+                      :label="t('site.fields.limitCount')"
+                      :rules="[optionalNumberValidator]"
+                      :hint="t('site.hints.limitCount')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-counter"
+                    />
+                  </VCol>
+                  <VCol cols="12" sm="4">
+                    <VTextField
+                      v-model="siteForm.limit_seconds"
+                      :label="t('site.fields.limitSeconds')"
+                      :rules="[optionalNumberValidator]"
+                      :hint="t('site.hints.limitSeconds')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-timer-sand"
+                    />
+                  </VCol>
+                </VRow>
               </div>
-            </VTab>
-          </VTabs>
-          <VWindow v-model="siteType" class="my-3 disable-tab-transition" :touch="false">
-            <VWindowItem value="cookie">
-              <VRow>
-                <VCol cols="12">
-                  <VTextarea
-                    v-model="siteForm.cookie"
-                    :label="t('site.fields.cookie')"
-                    :hint="t('site.hints.cookie')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-cookie"
-                  />
-                </VCol>
-                <VCol cols="12">
-                  <VTextField
-                    v-model="siteForm.ua"
-                    :label="t('site.fields.userAgent')"
-                    :hint="t('site.hints.userAgent')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-web-box"
-                  />
-                </VCol>
-              </VRow>
-            </VWindowItem>
-            <VWindowItem value="api">
-              <VRow>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="siteForm.token"
-                    :label="t('site.fields.authorization')"
-                    :hint="t('site.hints.authorization')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-key"
-                  />
-                </VCol>
-                <VCol cols="12" md="6">
-                  <VTextField
-                    v-model="siteForm.apikey"
-                    :label="t('site.fields.apiKey')"
-                    :hint="t('site.hints.apiKey')"
-                    persistent-hint
-                    prepend-inner-icon="mdi-api"
-                  />
-                </VCol>
-              </VRow>
-            </VWindowItem>
-          </VWindow>
-          <VRow>
-            <VCol cols="12" md="4">
-              <VSwitch v-model="isLimit" :label="t('site.fields.limitAccess')" />
-            </VCol>
-          </VRow>
-          <VRow v-if="isLimit">
-            <VCol cols="12" md="4">
-              <VTextField
-                v-model="siteForm.limit_interval"
-                :label="t('site.fields.limitInterval')"
-                :rules="[numberValidator]"
-                :hint="t('site.hints.limitInterval')"
-                persistent-hint
-                prepend-inner-icon="mdi-clock-outline"
-              />
-            </VCol>
-            <VCol cols="12" md="4">
-              <VTextField
-                v-model="siteForm.limit_count"
-                :label="t('site.fields.limitCount')"
-                :rules="[numberValidator]"
-                :hint="t('site.hints.limitCount')"
-                persistent-hint
-                prepend-inner-icon="mdi-counter"
-              />
-            </VCol>
-            <VCol cols="12" md="4">
-              <VTextField
-                v-model="siteForm.limit_seconds"
-                :label="t('site.fields.limitSeconds')"
-                :rules="[numberValidator]"
-                :hint="t('site.hints.limitSeconds')"
-                persistent-hint
-                prepend-inner-icon="mdi-timer-sand"
-              />
-            </VCol>
-          </VRow>
-          <VRow>
-            <VCol cols="12" md="6">
-              <VSwitch
-                v-model="siteForm.proxy"
-                :label="t('site.fields.useProxy')"
-                :hint="t('site.hints.useProxy')"
-                persistent-hint
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VSwitch
-                v-model="siteForm.render"
-                :label="t('site.fields.browserSimulation')"
-                :hint="t('site.hints.browserSimulation')"
-                persistent-hint
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VSwitch
-                v-model="sentinelAlert"
-                :label="t('site.fields.sentinelAlert')"
-                :hint="t('site.hints.sentinelAlert')"
-                persistent-hint
-              />
-            </VCol>
-          </VRow>
+            </div>
+          </section>
+
+          <!-- 网络策略与监控预警紧凑开关组 -->
+          <section class="mp-form-section">
+            <div class="mp-settings-card">
+              <div class="mp-setting-row" :title="t('site.hints.useProxy')">
+                <VSwitch
+                  v-model="siteForm.proxy"
+                  :label="t('site.fields.useProxy')"
+                  hide-details
+                  color="primary"
+                  inset
+                  density="compact"
+                />
+              </div>
+              <div class="mp-setting-row" :title="t('site.hints.browserSimulation')">
+                <VSwitch
+                  v-model="siteForm.render"
+                  :label="t('site.fields.browserSimulation')"
+                  hide-details
+                  color="primary"
+                  inset
+                  density="compact"
+                />
+              </div>
+              <div class="mp-setting-row" :title="t('site.hints.sentinelAlert')">
+                <VSwitch
+                  v-model="sentinelAlert"
+                  :label="t('site.fields.sentinelAlert')"
+                  hide-details
+                  color="primary"
+                  inset
+                  density="compact"
+                />
+              </div>
+            </div>
+          </section>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VBtn
           v-if="props.oper !== 'add'"
-          color="error"
-          variant="tonal"
+          color="default"
+          variant="outlined"
+          size="small"
           prepend-icon="mdi-cloud-off-outline"
           :loading="addingToCookieCloudBlacklist"
+          :disabled="addingToCookieCloudBlacklist || saving"
           @click="addToCookieCloudBlacklist"
         >
           {{ t('site.actions.addToBlacklist') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="saving" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           v-if="props.oper === 'add'"
           color="primary"
           variant="flat"
+          size="small"
+          class="px-4"
+          :loading="saving"
+          :disabled="saving"
           @click="addSite"
-          prepend-icon="mdi-plus"
-          class="px-5"
         >
           {{ t('site.actions.add') }}
         </VBtn>
@@ -436,9 +490,11 @@ onMounted(async () => {
           v-else
           color="primary"
           variant="flat"
+          size="small"
+          class="px-4"
+          :loading="saving"
+          :disabled="saving"
           @click="updateSiteInfo"
-          prepend-icon="mdi-content-save"
-          class="px-5"
         >
           {{ t('common.save') }}
         </VBtn>
@@ -446,3 +502,88 @@ onMounted(async () => {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+.mp-segmented-bar {
+  display: flex;
+  align-items: center;
+}
+
+.mp-segmented-tabs {
+  display: inline-flex;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  block-size: 36px !important;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-block-size: 36px !important;
+  padding: 3px;
+
+  :deep(.v-slide-group__container),
+  :deep(.v-slide-group__content) {
+    align-items: center;
+    gap: 2px;
+  }
+
+  :deep(.v-tab__slider) {
+    display: none !important;
+  }
+
+  :deep(.v-tab) {
+    border-radius: 6px !important;
+    block-size: 28px !important;
+    color: rgba(var(--v-theme-on-surface), 0.64);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    min-block-size: 28px !important;
+    min-inline-size: 84px;
+    padding-inline: 14px;
+    text-transform: none;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  :deep(.v-tab--selected) {
+    background: rgb(var(--v-theme-surface));
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+    color: rgb(var(--v-theme-on-surface)) !important;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

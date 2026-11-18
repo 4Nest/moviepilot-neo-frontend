@@ -430,4 +430,39 @@ describe('dashboard media server cards', () => {
     expect(await screen.findByText('继续观看 A')).toBeInTheDocument()
     expect(screen.getByText('继续观看 B')).toBeInTheDocument()
   })
+
+  it.each([
+    [MediaServerLatest, 'mediaserver/latest', { id: 'ok-1', title: '健康服务器入库' }, '健康服务器入库'],
+    [MediaServerLibrary, 'mediaserver/library', { id: 'ok-lib', name: '健康服务器媒体库' }, '健康服务器媒体库'],
+    [MediaServerPlaying, 'mediaserver/playing', { id: 'ok-play', title: '健康服务器播放' }, '健康服务器播放'],
+  ])(
+    'displays healthy server data when one of multiple servers fails for %s',
+    async (component, endpoint, okItem, expectedText) => {
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      mocks.apiGet.mockImplementation((url: string, options?: { params?: { server?: string } }) => {
+        if (url === 'system/setting/MediaServers') {
+          return {
+            data: {
+              value: [
+                { enabled: true, name: 'healthy-server' },
+                { enabled: true, name: 'broken-server' },
+              ],
+            },
+          }
+        }
+        if (url === endpoint) {
+          if (options?.params?.server === 'broken-server') {
+            throw new Error('broken server timeout')
+          }
+          return [okItem]
+        }
+        throw new Error(`Unexpected GET ${url}`)
+      })
+
+      await renderWithProviders(keepAliveHarness(component))
+
+      expect(await screen.findByText(expectedText)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '刷新失败，当前显示上次数据' })).toBeInTheDocument()
+    },
+  )
 })

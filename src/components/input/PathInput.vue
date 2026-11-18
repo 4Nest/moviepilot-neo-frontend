@@ -21,40 +21,59 @@ const emit = defineEmits(['update:modelValue'])
 
 const menuVisible = ref(false)
 
-const treeItems = ref<FileItem[]>([
-  {
+function normalizeDirPath(rawPath?: string): string {
+  if (!rawPath || rawPath === '/') return '/'
+  const normalized = rawPath.replace(/\\/g, '/')
+  const withLeading = normalized.startsWith('/') ? normalized : `/${normalized}`
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`
+}
+
+function createRootItem(storage = props.storage, root = props.root): FileItem {
+  const normalizedRoot = normalizeDirPath(root)
+  return {
     name: '/',
-    path: props.root,
+    path: normalizedRoot,
     children: [],
     type: 'dir',
-    basename: props.root,
-    storage: props.storage,
-  },
-])
+    basename: normalizedRoot,
+    storage,
+  }
+}
+
+const treeItems = ref<FileItem[]>([createRootItem()])
 
 const activedDirs = ref<FileItem[]>([])
 
 const openedDirs = ref<FileItem[]>([])
 
-// 调用API查询子目录
+// 调用API查询子目录（覆盖赋值避免重复展开时追加重复节点）
 async function fetchDirs(item: any) {
   return api
     .post('/storage/list', item)
     .then((data: any) => {
-      data = data.filter((i: any) => i.type === 'dir')
-      item.children?.push(...data)
+      const dirs = Array.isArray(data)
+        ? data
+            .filter((i: any) => i.type === 'dir')
+            .map((i: FileItem) => ({
+              ...i,
+              path: normalizeDirPath(i.path),
+              children: Array.isArray(i.children) ? i.children : [],
+            }))
+        : []
+      item.children = dirs
     })
     .catch(err => console.warn(err))
 }
 
 // 递归查询路径
 function findPath(item: FileItem, path: string): FileItem | null {
-  if (item.path === path) {
+  const normalizedTarget = normalizeDirPath(path)
+  if (normalizeDirPath(item.path) === normalizedTarget) {
     return item
   }
   if (item.children) {
     for (const child of item.children) {
-      const res: FileItem | null = findPath(child, path)
+      const res: FileItem | null = findPath(child, normalizedTarget)
       if (res) {
         return res
       }
@@ -63,16 +82,25 @@ function findPath(item: FileItem, path: string): FileItem | null {
   return null
 }
 
-// 根据路径展开所有子目录
+// 根据路径从 props.root 起始逐级展开子目录
 async function expandDirs(path: string) {
-  // 分割路径
-  const paths = path.split('/').filter(i => i)
-  // 展开根目录
+  const baseRoot = normalizeDirPath(props.root)
+  const targetPath = normalizeDirPath(path || baseRoot)
   const root_item = treeItems.value[0]
   await fetchDirs(root_item)
-  openedDirs.value.push(root_item)
-  // 逐级展开
-  let currentPath = '/'
+  if (!openedDirs.value.includes(root_item)) {
+    openedDirs.value.push(root_item)
+  }
+
+  if (targetPath === baseRoot) {
+    activedDirs.value = [root_item]
+    return
+  }
+
+  const relativePath = targetPath.startsWith(baseRoot) ? targetPath.slice(baseRoot.length) : targetPath
+  const paths = relativePath.split('/').filter(Boolean)
+  let currentPath = targetPath.startsWith(baseRoot) ? baseRoot : '/'
+
   for (const p of paths) {
     currentPath += `${p}/`
     // 查询当前目录
@@ -81,15 +109,15 @@ async function expandDirs(path: string) {
       break
     }
     // 加载子目录
-    if (item.children?.length === 0) {
+    if (!item.children || item.children.length === 0) {
       await fetchDirs(item)
     }
     // 打开当前目录
-    if (!openedDirs.value.includes(item) && path != currentPath) {
+    if (!openedDirs.value.includes(item) && targetPath !== currentPath) {
       openedDirs.value.push(item)
     }
     // 选中当前目录
-    if (path == currentPath) {
+    if (targetPath === currentPath) {
       activedDirs.value = [item]
     }
   }
@@ -125,16 +153,7 @@ watch(
   () => menuVisible.value,
   async visible => {
     if (visible) {
-      treeItems.value = [
-        {
-          name: '/',
-          path: props.root,
-          children: [],
-          type: 'dir',
-          basename: props.root,
-          storage: props.storage,
-        },
-      ]
+      treeItems.value = [createRootItem()]
       openedDirs.value = []
       activedDirs.value = []
       await expandDirs(props.modelValue)
@@ -143,18 +162,9 @@ watch(
 )
 
 watch(
-  () => props.storage,
-  async newVal => {
-    treeItems.value = [
-      {
-        name: '/',
-        path: props.root,
-        children: [],
-        type: 'dir',
-        basename: props.root,
-        storage: newVal,
-      },
-    ]
+  () => [props.storage, props.root],
+  ([newStorage, newRoot]) => {
+    treeItems.value = [createRootItem(newStorage, newRoot)]
     activedDirs.value = []
     openedDirs.value = []
   },

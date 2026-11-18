@@ -162,6 +162,7 @@ async function handleDelete(item: Workflow) {
 
 // 开始任务
 async function handleEnable(item: Workflow) {
+  if (loading.value) return
   loading.value = true
   try {
     const result: { [key: string]: string } = await api.post(`workflow/${item.id}/start`)
@@ -173,12 +174,15 @@ async function handleEnable(item: Workflow) {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 // 停用任务
 async function handlePause(item: Workflow) {
+  if (loading.value) return
   loading.value = true
   try {
     const result: { [key: string]: string } = await api.post(`workflow/${item.id}/pause`)
@@ -190,12 +194,15 @@ async function handlePause(item: Workflow) {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 // 立即执行任务
 async function handleRun(item: Workflow, from_begin: boolean) {
+  if (loading.value) return
   loading.value = true
   try {
     setTimeout(() => {
@@ -213,12 +220,15 @@ async function handleRun(item: Workflow, from_begin: boolean) {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 // 重置任务
 async function handleReset(item: Workflow) {
+  if (loading.value) return
   const isConfirmed = await createConfirm({
     title: t('common.confirm'),
     content: t('workflow.task.confirmReset', { name: item.name }),
@@ -226,6 +236,7 @@ async function handleReset(item: Workflow) {
 
   if (!isConfirmed) return
 
+  loading.value = true
   try {
     const result: { [key: string]: string } = await api.post(`workflow/${item.id}/reset`)
     if (result.success) {
@@ -236,6 +247,9 @@ async function handleReset(item: Workflow) {
     }
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.error'))
+  } finally {
+    loading.value = false
   }
 }
 
@@ -469,11 +483,11 @@ const executionStatus = computed(() => {
             <div class="workflow-task-card__header-actions">
               <VChip
                 :color="statusVariant.color"
-                :prepend-icon="statusVariant.icon"
                 size="x-small"
                 variant="tonal"
                 class="workflow-task-card__status-chip"
               >
+                <span class="workflow-task-card__status-dot" aria-hidden="true" />
                 {{ statusVariant.text }}
               </VChip>
 
@@ -485,7 +499,7 @@ const executionStatus = computed(() => {
                 :aria-label="t('workflow.task.moreActions')"
                 @click.stop
               >
-                <VIcon icon="mdi-dots-vertical" size="18" />
+                <VIcon icon="mdi-dots-vertical" size="16" />
                 <VTooltip activator="parent" location="top">{{ t('workflow.task.moreActions') }}</VTooltip>
                 <VMenu activator="parent" close-on-content-click>
                   <VList density="compact">
@@ -683,18 +697,12 @@ const executionStatus = computed(() => {
   --workflow-status-rgb: var(--v-theme-info);
   --workflow-status-on-rgb: var(--v-theme-on-info);
   --workflow-card-header-content-rgb: var(--v-theme-on-surface);
-  --workflow-card-header-background: linear-gradient(
-    125deg,
-    rgba(var(--workflow-status-rgb), 0.16) 0%,
-    rgba(var(--workflow-status-rgb), 0.06) 56%,
-    rgba(var(--workflow-status-rgb), 0.01) 100%
-  );
-  --workflow-card-header-shadow: inset 0 -1px 0 rgba(var(--v-theme-on-surface), 0.06);
 
   display: flex;
   min-block-size: 176px;
   flex-direction: column;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  border: 1px solid var(--mp-border-card);
+  background-color: rgb(var(--v-theme-surface));
   overflow: hidden;
   cursor: pointer;
 }
@@ -737,22 +745,21 @@ const executionStatus = computed(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 10px;
-  padding: 12px 12px 11px 14px;
-  background: var(--workflow-card-header-background);
-  box-shadow: var(--workflow-card-header-shadow);
+  gap: 11px;
+  padding: 13px 14px 11px 15px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  background-color: rgb(var(--v-theme-surface));
 }
 
 .workflow-task-card__trigger-badge {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 0 38px;
   align-items: center;
   justify-content: center;
-  inline-size: 34px;
-  block-size: 34px;
-  border-radius: var(--app-control-radius);
+  inline-size: 38px;
+  block-size: 38px;
+  border-radius: 9px;
   background: rgba(var(--workflow-status-rgb), 0.14);
-  box-shadow: inset 0 0 0 1px rgba(var(--workflow-status-rgb), 0.22);
   color: rgb(var(--workflow-status-rgb));
 }
 
@@ -768,9 +775,9 @@ const executionStatus = computed(() => {
   min-inline-size: 0;
   overflow: hidden;
   color: rgba(var(--workflow-card-header-content-rgb), var(--v-high-emphasis-opacity));
-  font-size: 0.95rem;
+  font-size: 14.5px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -781,15 +788,16 @@ const executionStatus = computed(() => {
   align-items: center;
   overflow: hidden;
   color: rgba(var(--workflow-card-header-content-rgb), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.25;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .workflow-task-card__cron {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.72rem;
+  font-size: 11.5px;
   letter-spacing: 0.01em;
 }
 
@@ -802,20 +810,40 @@ const executionStatus = computed(() => {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .workflow-task-card__status-chip {
+  border-radius: 6px !important;
+  block-size: 21px !important;
+  font-size: 11.5px !important;
   font-weight: 500;
   letter-spacing: 0;
+  padding-inline: 7px !important;
+}
+
+.workflow-task-card__status-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: rgb(var(--workflow-status-rgb));
+  block-size: 6px;
+  inline-size: 6px;
+  margin-inline-end: 5px;
 }
 
 .workflow-task-card__menu {
-  flex: 0 0 auto;
+  flex: 0 0 26px;
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
   color: rgba(var(--workflow-card-header-content-rgb), var(--v-medium-emphasis-opacity)) !important;
 }
 
 .workflow-task-card__menu:hover {
+  background: rgba(var(--workflow-card-header-content-rgb), 0.06);
   color: rgba(var(--workflow-card-header-content-rgb), var(--v-high-emphasis-opacity)) !important;
 }
 
@@ -825,18 +853,18 @@ const executionStatus = computed(() => {
   flex: 1 1 auto;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px !important;
+  gap: 11px;
+  padding: 12px 15px 13px !important;
 }
 
 .workflow-task-card__progress-panel {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
-  gap: 8px;
-  padding: 9px 11px;
+  gap: 7px;
+  padding: 8px 11px;
   border-radius: var(--app-control-radius);
-  background: rgba(var(--v-theme-on-surface), 0.035);
+  background: rgba(var(--v-theme-on-surface), 0.03);
   box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.05);
 }
 
@@ -858,16 +886,16 @@ const executionStatus = computed(() => {
 
 .workflow-task-card__telemetry-label {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.2;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .workflow-task-card__telemetry-value {
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 0.82rem;
+  font-size: 12.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .workflow-task-card__action-track {

@@ -143,4 +143,24 @@ describe('PersonCardListView', () => {
     expect(await screen.findByText('人物重试结果')).toBeInTheDocument()
     expect(requests).toBe(2)
   })
+
+  it('renders empty state with noContent description instead of networkError', async () => {
+    server.use(http.get(LIST_URL, () => HttpResponse.json([])))
+
+    await renderWithProviders(PersonCardListView, {
+      props: { apipath: LIST_PATH },
+      global: {
+        stubs: {
+          LoadingBanner: LoadingBannerStub,
+          PersonCard: PersonCardStub,
+          ProgressiveCardGrid: ProgressiveCardGridStub,
+          VInfiniteScroll: InfiniteScrollStub,
+        },
+      },
+    })
+
+    expect(await screen.findByText('暂无数据')).toBeInTheDocument()
+    expect(screen.getByText('没有找到相关内容')).toBeInTheDocument()
+    expect(screen.queryByText('无法获取到媒体信息，请检查网络连接。')).not.toBeInTheDocument()
+  })
 })

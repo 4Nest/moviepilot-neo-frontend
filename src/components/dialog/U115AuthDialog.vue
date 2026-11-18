@@ -32,10 +32,12 @@ const authUrl = ref('')
 const authState = ref('')
 const text = ref('')
 const alertType = ref<'success' | 'info' | 'error' | 'warning'>('info')
+const resetting = ref(false)
 
-// 授权窗口引用
+// 授权窗口引用与生命周期销毁标志
 let authWindow: Window | null = null
 let pollTimer: NodeJS.Timeout | undefined
+let disposed = false
 
 // 清理资源
 function cleanup() {
@@ -57,23 +59,40 @@ function setMessage(type: typeof alertType.value, message: string) {
 
 // 完成授权
 function handleDone() {
+  disposed = true
   cleanup()
   emit('done')
 }
 
+// 关闭弹窗并终止后台轮询
+function handleClose() {
+  disposed = true
+  cleanup()
+  emit('close')
+}
+
 // 重置配置
 async function handleReset() {
+  if (resetting.value) return
+  resetting.value = true
   try {
     const result: { [key: string]: any } = await api.get('/storage/reset/u115')
-    if (result.success) {
+    if (disposed) return
+    if (result?.success) {
+      if (props.conf && typeof props.conf === 'object') {
+        Object.keys(props.conf).forEach(key => Reflect.deleteProperty(props.conf, key))
+      }
       setMessage('success', t('dialog.u115Auth.authSuccess'))
       handleDone()
     } else {
-      setMessage('error', result.message || t('dialog.u115Auth.authFailed'))
+      setMessage('error', result?.message || t('dialog.u115Auth.authFailed'))
     }
   } catch (error) {
+    if (disposed) return
     console.error('Reset failed:', error)
     setMessage('error', t('dialog.u115Auth.authFailed'))
+  } finally {
+    if (!disposed) resetting.value = false
   }
 }
 
@@ -81,14 +100,16 @@ async function handleReset() {
 async function fetchAuthUrl() {
   try {
     const result: { [key: string]: any } = await api.get('/storage/auth_url/u115')
+    if (disposed) return
 
-    if (result.success && result.data) {
+    if (result?.success && result.data) {
       authUrl.value = result.data.authUrl
       authState.value = result.data.state
     } else {
-      setMessage('error', result.message || t('dialog.u115Auth.urlFetchFailed'))
+      setMessage('error', result?.message || t('dialog.u115Auth.urlFetchFailed'))
     }
   } catch (error) {
+    if (disposed) return
     console.error('Fetch auth URL failed:', error)
     setMessage('error', t('dialog.u115Auth.urlFetchFailed'))
   }
@@ -96,11 +117,13 @@ async function fetchAuthUrl() {
 
 // 打开授权窗口
 function openAuthWindow() {
+  if (disposed) return
   if (!authUrl.value) {
     setMessage('error', t('dialog.u115Auth.urlEmpty'))
     return
   }
 
+  cleanup()
   const left = (window.screen.width - AUTH_WINDOW_WIDTH) / 2
   const top = (window.screen.height - AUTH_WINDOW_HEIGHT) / 2
   const features = [
@@ -128,10 +151,12 @@ function openAuthWindow() {
 
 // 检查授权状态
 async function checkAuthStatus() {
+  if (disposed) return
   try {
     const result: { [key: string]: any } = await api.get('/storage/check/u115')
+    if (disposed) return
 
-    if (result.success && result.data) {
+    if (result?.success && result.data) {
       const { status, tip } = result.data
 
       if (status === AUTH_STATUS_SUCCESS) {
@@ -151,8 +176,11 @@ async function checkAuthStatus() {
       // status === 0 或 1，继续等待
     }
   } catch (error) {
+    if (disposed) return
     console.error('Check auth status failed:', error)
   }
+
+  if (disposed) return
 
   // 检查窗口是否被用户关闭
   if (authWindow?.closed) {
@@ -167,39 +195,48 @@ async function checkAuthStatus() {
 
 // 生命周期钩子
 onMounted(() => {
+  disposed = false
   fetchAuthUrl()
 })
 
 onUnmounted(() => {
+  disposed = true
   cleanup()
 })
 </script>
 
 <template>
-  <VDialog width="40rem" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VDialogCloseBtn @click="emit('close')" />
-
-      <VCardItem>
+  <VDialog
+    max-width="30rem"
+    scrollable
+    :fullscreen="!display.mdAndUp.value"
+    @update:model-value="val => !val && handleClose()"
+  >
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-shield-key" class="me-2" />
+          <VIcon icon="mdi-shield-key" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>
           {{ t('dialog.u115Auth.loginTitle') }}
         </VCardTitle>
       </VCardItem>
+      <VDialogCloseBtn :disabled="resetting" @click="handleClose" />
 
       <VDivider />
 
-      <VCardText class="pt-2 flex flex-col items-center justify-center">
-        <!-- 授权按钮 -->
-        <div class="mt-6 mb-4 text-center">
+      <VCardText class="mp-dialog-body">
+        <div class="u115-auth-guide">
+          <div class="u115-auth-guide__icon">
+            <VIcon icon="mdi-open-in-new" size="24" color="primary" />
+          </div>
           <VBtn
-            size="x-large"
             color="primary"
+            variant="flat"
+            size="default"
             prepend-icon="mdi-login"
-            :disabled="!authUrl"
-            class="px-8"
+            :disabled="!authUrl || resetting"
+            class="px-5"
             @click="openAuthWindow"
           >
             {{ t('dialog.u115Auth.openAuthWindow') }}
@@ -207,24 +244,70 @@ onUnmounted(() => {
         </div>
 
         <!-- 状态提示 -->
-        <div v-if="text" class="w-full">
-          <VAlert variant="tonal" :type="alertType" :text="text" class="my-4 text-center">
-            <template #prepend />
-          </VAlert>
-        </div>
+        <VAlert v-if="text" variant="tonal" density="compact" :type="alertType" :text="text" class="mt-3 text-center">
+          <template #prepend />
+        </VAlert>
       </VCardText>
 
-      <VCardActions class="app-dialog-actions">
-        <VBtn color="error" variant="tonal" prepend-icon="mdi-restore" @click="handleReset">
+      <VDivider />
+
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          prepend-icon="mdi-restore"
+          :loading="resetting"
+          :disabled="resetting"
+          @click="handleReset"
+        >
           {{ t('dialog.u115Auth.reset') }}
         </VBtn>
 
         <VSpacer />
 
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-check" class="px-5" @click="handleDone">
-          {{ t('dialog.u115Auth.complete') }}
+        <VBtn color="default" variant="text" size="small" :disabled="resetting" @click="handleClose">
+          {{ t('common.cancel') }}
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.u115-auth-guide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: var(--mp-item-bg);
+  gap: 14px;
+  padding: 22px 16px;
+}
+
+.u115-auth-guide__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.12);
+  block-size: 44px;
+  inline-size: 44px;
+}
+</style>

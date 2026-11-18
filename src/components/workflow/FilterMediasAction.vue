@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import api from '@/api'
 import { Handle, Position } from '@vue-flow/core'
 import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 
-const props = defineProps({
+defineProps({
   id: {
     type: String,
     required: true,
@@ -27,51 +26,79 @@ const typeOptions = ref([
     value: '电视剧',
   },
 ])
-
-// 二级分类策略
-const mediaCategories = ref<{ [key: string]: any }>({})
-
-// 调用API查询自动分类配置
-async function loadMediaCategories() {
-  try {
-    mediaCategories.value = await api.get('media/category')
-  } catch (error) {
-    console.log(error)
-  }
-}
-
-onMounted(() => {
-  loadMediaCategories()
-})
 </script>
 <template>
   <div>
-    <VCard max-width="20rem">
+    <VCard max-width="20rem" class="workflow-node-card">
       <Handle id="edge_in" type="target" :position="Position.Left" />
-      <VCardItem>
-        <template v-slot:prepend>
-          <VAvatar>
-            <VIcon icon="mdi-filter-check" size="x-large"></VIcon>
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="primary" class="workflow-node-avatar">
+            <VIcon icon="mdi-filter-check" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.filterMedias.title') }}</VCardTitle>
-        <VCardSubtitle>{{ t('workflow.filterMedias.subtitle') }}</VCardSubtitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.filterMedias.title') }}</VCardTitle>
+        <VCardSubtitle class="workflow-node-subtitle">{{ t('workflow.filterMedias.subtitle') }}</VCardSubtitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VSelect v-model="data.type" :label="t('workflow.filterMedias.type')" :items="typeOptions" outlined dense />
-          </VCol>
-          <VCol cols="6">
-            <VTextField v-model="data.year" :label="t('workflow.filterMedias.year')" outlined dense />
-          </VCol>
-          <VCol cols="6">
-            <VTextField v-model="data.vote" type="number" :label="t('workflow.filterMedias.vote')" outlined dense />
-          </VCol>
-        </VRow>
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="data.type"
+                :label="t('workflow.filterMedias.type')"
+                :items="typeOptions"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="6">
+              <VTextField
+                v-model="data.year"
+                :label="t('workflow.filterMedias.year')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="6">
+              <VTextField
+                v-model="data.vote"
+                type="number"
+                :label="t('workflow.filterMedias.vote')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <Handle id="edge_out" type="source" :position="Position.Right" />
     </VCard>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-block-start: 1px;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
+}
+</style>

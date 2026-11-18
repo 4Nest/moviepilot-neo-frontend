@@ -70,13 +70,14 @@ onMounted(async () => {
             >
               <template #prepend>
                 <VAvatar
-                  size="42"
+                  size="34"
                   color="primary"
-                  variant="text"
+                  variant="tonal"
+                  rounded="lg"
                   class="settings-list-icon me-3"
                   :class="`settings-list-icon--tone-${app.iconColor || 'primary'}`"
                 >
-                  <VIcon :icon="app.icon as string" size="24"></VIcon>
+                  <VIcon :icon="app.icon as string" size="18"></VIcon>
                 </VAvatar>
               </template>
 
@@ -121,7 +122,6 @@ onMounted(async () => {
 .settings-section-card {
   overflow: hidden;
   border: var(--app-grouped-list-border);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
   background-color: var(--app-grouped-list-background);
   box-shadow: var(--app-surface-shadow);
   transition:
@@ -146,6 +146,43 @@ onMounted(async () => {
   &:hover {
     background-color: var(--app-grouped-list-hover-background);
   }
+}
+
+.settings-list-icon {
+  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-primary-rgb, var(--v-theme-primary));
+
+  block-size: 34px !important;
+  inline-size: 34px !important;
+  border: 1px solid rgba(var(--app-grouped-list-icon-rgb), 0.16);
+  border-radius: max(var(--app-control-radius), 8px) !important;
+  background: rgba(var(--app-grouped-list-icon-rgb), 0.12) !important;
+  color: rgb(var(--app-grouped-list-icon-rgb)) !important;
+}
+
+.settings-list-icon--tone-info {
+  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-info-rgb, var(--v-theme-info));
+}
+
+.settings-list-icon--tone-success {
+  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-success-rgb, var(--v-theme-success));
+}
+
+.settings-list-icon--tone-warning {
+  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-warning-rgb, var(--v-theme-warning));
+}
+
+.settings-list-icon--tone-secondary {
+  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-secondary-rgb, var(--v-theme-secondary));
+}
+
+.settings-list-icon :deep(.v-icon) {
+  color: rgb(var(--app-grouped-list-icon-rgb)) !important;
+  font-size: 18px !important;
+}
+
+.settings-list-chevron {
+  color: var(--app-grouped-list-chevron-color);
+  font-size: 1.25rem;
 }
 
 @media (width <= 768px) {
@@ -215,39 +252,9 @@ onMounted(async () => {
     background-color: var(--app-grouped-list-active-background);
   }
 
-  .settings-list-icon {
-    --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-primary-rgb);
-
-    block-size: var(--app-grouped-list-icon-size) !important;
-    inline-size: var(--app-grouped-list-icon-size) !important;
-    border-radius: max(var(--app-control-radius), 8px) !important;
-    background: rgba(var(--app-grouped-list-icon-rgb), var(--app-grouped-list-icon-opacity)) !important;
-    color: var(--app-grouped-list-icon-foreground) !important;
-  }
-
-  .settings-list-icon--tone-info {
-    --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-info-rgb);
-  }
-
-  .settings-list-icon--tone-success {
-    --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-success-rgb);
-  }
-
-  .settings-list-icon--tone-warning {
-    --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-warning-rgb);
-  }
-
-  .settings-list-icon--tone-secondary {
-    --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-secondary-rgb);
-  }
-
   .settings-list-item :deep(.v-list-item__content) {
     min-inline-size: 0;
     overflow: hidden;
-  }
-
-  .settings-list-icon :deep(.v-icon) {
-    font-size: var(--app-grouped-list-icon-glyph-size) !important;
   }
 
   .settings-list-title {

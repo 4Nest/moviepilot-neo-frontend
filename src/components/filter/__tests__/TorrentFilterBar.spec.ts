@@ -132,8 +132,8 @@ describe('TorrentFilterBar', () => {
     await fireEvent.click(siteValueControl as HTMLElement)
     await fireEvent.click(screen.getAllByRole('button', { name: '全选' }).at(-1) as HTMLElement)
     await fireEvent.click(screen.getByRole('button', { name: '清除' }))
-    await fireEvent.click(screen.getByRole('button', { name: '移除筛选' }))
-    await fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+    await fireEvent.click(screen.getAllByRole('button', { name: '移除筛选' })[0])
+    await fireEvent.click(screen.getAllByRole('button', { name: '清除筛选' })[0])
 
     expect(result.emitted()['update:sortType']).toEqual([['asc']])
     expect(result.emitted()['update:sortField']).toEqual([['size']])
@@ -213,5 +213,33 @@ describe('TorrentFilterBar', () => {
 
     expect(mocks.openSharedDialog).toHaveBeenCalledTimes(4)
     result.unmount()
+  })
+
+  it('renders selected filter chips and clear-all action on mobile and clears animation timers on unmount', async () => {
+    vi.useFakeTimers()
+    const result = await renderWithProviders(TorrentFilterBar, {
+      props: { ...defaultProps, enableAnimation: true },
+      global: { stubs: componentStubs },
+    })
+
+    const mobileHeader = result.container.querySelector('.search-header-mobile') as HTMLElement
+    expect(mobileHeader).not.toBeNull()
+    const mobileRemoveBtn = mobileHeader.querySelector('button[aria-label="移除筛选"]') as HTMLButtonElement
+    expect(mobileRemoveBtn).not.toBeNull()
+    await fireEvent.click(mobileRemoveBtn)
+    expect(result.emitted().removeFilter).toEqual([['site', 'Site A']])
+
+    const mobileClearBtn = Array.from(mobileHeader.querySelectorAll('button')).find(btn =>
+      btn.textContent?.includes('清除筛选'),
+    )
+    expect(mobileClearBtn).toBeDefined()
+    await fireEvent.click(mobileClearBtn as HTMLButtonElement)
+    expect(result.emitted().clearAllFilters).toEqual([[]])
+
+    await Promise.resolve()
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    result.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
   })
 })

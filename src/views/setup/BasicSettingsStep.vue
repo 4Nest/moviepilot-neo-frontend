@@ -59,112 +59,142 @@ const usernameErrorMessage = computed(() => {
 </script>
 
 <template>
-  <VCard variant="outlined">
-    <VCardText>
-      <div class="text-center mb-6">
-        <h3 class="text-h4 mb-2">{{ t('setupWizard.basic.title') }}</h3>
-        <p class="text-body-1 text-medium-emphasis">{{ t('setupWizard.basic.description') }}</p>
-      </div>
-      <VRow>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.appDomain"
-            :label="t('setupWizard.basic.appDomain')"
-            :hint="t('setupWizard.basic.appDomainHint')"
-            placeholder="http://localhost:3000"
-            persistent-hint
-            prepend-inner-icon="mdi-web"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.username"
-            :label="t('user.username')"
-            :hint="t('setupWizard.basic.currentUserHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-account"
-            readonly
-            :error="usernameError"
-            :error-messages="usernameError ? [usernameErrorMessage] : []"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.password"
-            :type="isPasswordVisible ? 'text' : 'password'"
-            :label="t('user.password')"
-            :hint="t('setupWizard.basic.passwordOptionalHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-lock"
-            :append-inner-icon="isPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-            @click:append-inner="isPasswordVisible = !isPasswordVisible"
-            :error="passwordError"
-            :error-messages="passwordError ? [passwordErrorMessage] : []"
-            clearable
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.confirmPassword"
-            :type="isConfirmPasswordVisible ? 'text' : 'password'"
-            :label="t('user.confirmPassword')"
-            :hint="t('setupWizard.basic.confirmPasswordHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-lock-check"
-            :append-inner-icon="isConfirmPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-            @click:append-inner="isConfirmPasswordVisible = !isConfirmPasswordVisible"
-            :disabled="!wizardData.basic.password"
-            :error="confirmPasswordError"
-            :error-messages="confirmPasswordError ? [confirmPasswordErrorMessage] : []"
-            clearable
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.ocrHost"
-            :label="t('setting.system.ocrHost')"
-            :hint="t('setting.system.ocrHostHint')"
-            placeholder="https://movie-pilot.org"
-            persistent-hint
-            prepend-inner-icon="mdi-text-recognition"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.proxyHost"
-            :label="t('setting.system.proxyHost')"
-            :hint="t('setting.system.proxyHostHint')"
-            placeholder="http://127.0.0.1:7890"
-            persistent-hint
-            prepend-inner-icon="mdi-server-network"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.githubToken"
-            :label="t('setting.system.githubToken')"
-            :placeholder="t('setting.system.githubTokenFormat')"
-            :hint="t('setting.system.githubTokenHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-github"
-          />
-        </VCol>
-        <VCol cols="12" md="6">
-          <VTextField
-            v-model="wizardData.basic.apiToken"
-            :label="t('setupWizard.basic.apiToken')"
-            :hint="t('setupWizard.basic.apiTokenHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-key"
-            :append-inner-icon="wizardData.basic.apiToken ? 'mdi-content-copy' : 'mdi-reload'"
-            @click:append-inner="
-              wizardData.basic.apiToken ? copyValue(wizardData.basic.apiToken) : createRandomString()
-            "
-            :error="apiTokenError"
-            :error-messages="apiTokenError ? [apiTokenErrorMessage] : []"
-          />
-        </VCol>
-      </VRow>
-    </VCardText>
-  </VCard>
+  <div class="setup-step">
+    <div class="setup-step-head">
+      <h3 class="setup-step-title">{{ t('setupWizard.basic.title') }}</h3>
+      <p class="setup-step-desc">{{ t('setupWizard.basic.description') }}</p>
+    </div>
+    <div class="setup-step-panel">
+      <VForm @submit.prevent="() => {}">
+        <VRow>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.appDomain"
+              :label="t('setupWizard.basic.appDomain')"
+              :hint="t('setupWizard.basic.appDomainHint')"
+              placeholder="http://localhost:3000"
+              persistent-hint
+              prepend-inner-icon="mdi-web"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.username"
+              :label="t('user.username')"
+              :hint="t('setupWizard.basic.currentUserHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-account"
+              readonly
+              :error="usernameError"
+              :error-messages="usernameError ? [usernameErrorMessage] : []"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.password"
+              :type="isPasswordVisible ? 'text' : 'password'"
+              :label="t('user.password')"
+              :hint="t('setupWizard.basic.passwordOptionalHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-lock"
+              :append-inner-icon="isPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+              @click:append-inner="isPasswordVisible = !isPasswordVisible"
+              :error="passwordError"
+              :error-messages="passwordError ? [passwordErrorMessage] : []"
+              clearable
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.confirmPassword"
+              :type="isConfirmPasswordVisible ? 'text' : 'password'"
+              :label="t('user.confirmPassword')"
+              :hint="t('setupWizard.basic.confirmPasswordHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-lock-check"
+              :append-inner-icon="isConfirmPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+              @click:append-inner="isConfirmPasswordVisible = !isConfirmPasswordVisible"
+              :disabled="!wizardData.basic.password"
+              :error="confirmPasswordError"
+              :error-messages="confirmPasswordError ? [confirmPasswordErrorMessage] : []"
+              clearable
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.ocrHost"
+              :label="t('setting.system.ocrHost')"
+              :hint="t('setting.system.ocrHostHint')"
+              placeholder="https://movie-pilot.org"
+              persistent-hint
+              prepend-inner-icon="mdi-text-recognition"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.proxyHost"
+              :label="t('setting.system.proxyHost')"
+              :hint="t('setting.system.proxyHostHint')"
+              placeholder="http://127.0.0.1:7890"
+              persistent-hint
+              prepend-inner-icon="mdi-server-network"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.githubToken"
+              :label="t('setting.system.githubToken')"
+              :placeholder="t('setting.system.githubTokenFormat')"
+              :hint="t('setting.system.githubTokenHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-github"
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VTextField
+              v-model="wizardData.basic.apiToken"
+              :label="t('setupWizard.basic.apiToken')"
+              :hint="t('setupWizard.basic.apiTokenHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-key"
+              :append-inner-icon="wizardData.basic.apiToken ? 'mdi-content-copy' : 'mdi-reload'"
+              @click:append-inner="
+                wizardData.basic.apiToken ? copyValue(wizardData.basic.apiToken) : createRandomString()
+              "
+              :error="apiTokenError"
+              :error-messages="apiTokenError ? [apiTokenErrorMessage] : []"
+            />
+          </VCol>
+        </VRow>
+      </VForm>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.setup-step-head {
+  margin-block-end: 16px;
+}
+
+.setup-step-title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.setup-step-desc {
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.setup-step-panel {
+  padding: 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
+}
+</style>

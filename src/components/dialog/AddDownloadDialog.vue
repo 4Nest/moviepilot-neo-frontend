@@ -104,6 +104,10 @@ const directories = ref<TransferDirectoryConf[]>([])
 
 // 是否正在加载
 const loading = ref(false)
+// 表单引用
+const downloadFormRef = ref()
+const optionalNumberValidator = (val: unknown) =>
+  val === undefined || val === null || val === '' || numberValidator(val)
 
 // 是否显示高级选项
 const showAdvancedOptions = ref(false)
@@ -332,9 +336,18 @@ async function addBatchDownload(torrents: TorrentInfo[]) {
 
 // 添加下载
 async function addDownload() {
+  if (loading.value) return
   if (isManualMode.value && !manualTorrentItems.value.length) {
     $toast.error(t('dialog.addDownload.emptyTorrentError'))
     return
+  }
+
+  if (!isBatchMode.value) {
+    const { valid } = (await downloadFormRef.value?.validate()) || { valid: true }
+    if (!valid) {
+      showAdvancedOptions.value = true
+      return
+    }
   }
 
   if (isManualBatch.value) {
@@ -426,12 +439,12 @@ onMounted(() => {
 })
 </script>
 <template>
-  <VDialog max-width="36rem" scrollable>
+  <VDialog max-width="38rem" scrollable>
     <VCard class="add-download-dialog">
-      <VCardItem class="add-download-header py-3">
+      <VCardItem class="add-download-header">
         <template #prepend>
           <div class="add-download-header__icon">
-            <VIcon icon="mdi-monitor-arrow-down-variant" size="22" />
+            <VIcon icon="mdi-monitor-arrow-down-variant" size="20" />
           </div>
         </template>
         <VCardTitle class="add-download-header__title">
@@ -456,7 +469,7 @@ onMounted(() => {
             :disabled="!!manualTorrentFiles.length"
             prepend-inner-icon="mdi-link-variant"
             variant="outlined"
-            density="comfortable"
+            density="compact"
             rows="2"
             auto-grow
             hide-details
@@ -472,8 +485,9 @@ onMounted(() => {
           <div class="add-download-manual__file-actions">
             <VBtn
               class="add-download-manual__file-button"
-              variant="tonal"
-              color="primary"
+              variant="outlined"
+              color="default"
+              size="small"
               prepend-icon="mdi-file-upload-outline"
               :title="manualFileName || undefined"
               @click="fileInputRef?.click()"
@@ -491,6 +505,7 @@ onMounted(() => {
             <VBtn
               v-if="manualFileName"
               icon="mdi-close"
+              size="small"
               variant="text"
               :aria-label="t('dialog.addDownload.clearTorrentFile')"
               @click="clearTorrentFile"
@@ -503,7 +518,7 @@ onMounted(() => {
             :placeholder="t('dialog.addDownload.customTitlePlaceholder')"
             prepend-inner-icon="mdi-form-textbox"
             variant="outlined"
-            density="comfortable"
+            density="compact"
             hide-details
           />
         </div>
@@ -543,7 +558,7 @@ onMounted(() => {
             :label="t('dialog.addDownload.downloader')"
             variant="outlined"
             :placeholder="t('dialog.addDownload.defaultPlaceholder')"
-            density="comfortable"
+            density="compact"
             prepend-inner-icon="mdi-download"
             hide-details
           />
@@ -556,7 +571,7 @@ onMounted(() => {
             :label="t('dialog.addDownload.saveDirectory')"
             :placeholder="t('dialog.addDownload.autoPlaceholder')"
             variant="outlined"
-            density="comfortable"
+            density="compact"
             prepend-inner-icon="mdi-folder-outline"
             hide-details
           >
@@ -580,39 +595,51 @@ onMounted(() => {
               : t('dialog.addDownload.showAdvancedOptions')
           }}
         </VBtn>
-        <div v-show="showAdvancedOptions && !isBatchMode" class="add-download-advanced">
-          <VTextField
-            v-model="mediaId"
-            :disabled="isBatchMode"
-            :label="mediaIdLabel"
-            :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
-            :rules="[numberValidator]"
-            append-inner-icon="mdi-magnify"
-            :hint="t('dialog.reorganize.mediaIdHint')"
-            persistent-hint
-            prepend-inner-icon="mdi-identifier"
-            variant="outlined"
-            density="comfortable"
-            @click:append-inner="mediaSelectorDialog = true"
-          />
-        </div>
+        <VForm ref="downloadFormRef" @submit.prevent="() => {}">
+          <div v-show="showAdvancedOptions && !isBatchMode" class="add-download-advanced">
+            <VTextField
+              v-model="mediaId"
+              :disabled="isBatchMode"
+              :label="mediaIdLabel"
+              :placeholder="t('dialog.reorganize.mediaIdPlaceholder')"
+              :rules="[optionalNumberValidator]"
+              append-inner-icon="mdi-magnify"
+              :hint="t('dialog.reorganize.mediaIdHint')"
+              persistent-hint
+              prepend-inner-icon="mdi-identifier"
+              variant="outlined"
+              density="compact"
+              @click:append-inner="mediaSelectorDialog = true"
+            />
+          </div>
+        </VForm>
       </VCardText>
       <VDivider />
-      <div class="add-download-actions">
-        <VBtn variant="text" class="add-download-actions__cancel" @click="emit('close')">
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn
+          color="default"
+          variant="text"
+          size="small"
+          class="add-download-actions__cancel"
+          :disabled="loading"
+          @click="emit('close')"
+        >
           {{ t('common.cancel') }}
         </VBtn>
         <VBtn
           color="primary"
           variant="flat"
-          min-width="9rem"
+          size="small"
+          class="px-4"
+          :loading="loading"
           :disabled="loading"
           :prepend-icon="icon"
           @click="addDownload"
         >
           {{ buttonText }}
         </VBtn>
-      </div>
+      </VCardActions>
     </VCard>
     <!-- 媒体ID选择器 -->
     <VDialog v-model="mediaSelectorDialog" width="40rem" scrollable max-height="85vh">
@@ -626,27 +653,32 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.9));
-  background:
-    radial-gradient(circle at 5% 0%, rgba(var(--v-theme-primary), 0.08), transparent 24rem), rgb(var(--v-theme-surface));
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 14px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.add-download-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
 }
 
 .add-download-header__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(var(--v-theme-primary), 0.28);
-  border-radius: 0.75rem;
-  background: rgba(var(--v-theme-primary), 0.14);
-  block-size: 2.5rem;
+  border: 1px solid rgba(var(--v-theme-primary), 0.24);
+  border-radius: 9px;
+  background: rgba(var(--v-theme-primary), 0.12);
+  block-size: 2.25rem;
   color: rgb(var(--v-theme-primary));
-  inline-size: 2.5rem;
+  inline-size: 2.25rem;
   margin-inline-end: 0.25rem;
 }
 
 .add-download-header__title {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .add-download-header__subtitle {
@@ -655,16 +687,20 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.add-download-content {
+  padding: 18px 22px !important;
+}
+
 .add-download-manual {
   display: grid;
-  gap: 0.75rem;
+  gap: 14px;
 }
 
 .add-download-manual__file-actions {
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.375rem;
 }
 
 .add-download-manual__file-button {
@@ -685,16 +721,16 @@ onMounted(() => {
 }
 
 .add-download-info {
-  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7));
-  border-radius: 0.75rem;
-  background: rgba(var(--v-theme-on-surface), 0.03);
-  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  padding: 12px 14px;
 }
 
 .add-download-info__title {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.92rem;
-  font-weight: 650;
+  font-size: 0.9rem;
+  font-weight: 600;
   line-height: 1.45;
   white-space: break-spaces;
 }
@@ -739,32 +775,33 @@ onMounted(() => {
 
 .add-download-form {
   display: grid;
-  gap: 0.75rem;
+  gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-block-start: 1rem;
+  margin-block-start: 16px;
 }
 
 @media (max-width: 37.5rem) {
+  .add-download-content {
+    padding: 16px !important;
+  }
+
   .add-download-form {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 .add-download-advanced {
-  margin-block-start: 0.5rem;
+  margin-block-start: 10px;
 }
 
 .add-download-advanced__toggle {
-  margin-block-start: 0.25rem;
+  margin-block-start: 8px;
   margin-inline-start: -0.5rem;
 }
 
-.add-download-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem 1rem;
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
 }
 
 .add-download-actions__cancel {

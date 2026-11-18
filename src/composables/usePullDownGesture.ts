@@ -109,11 +109,8 @@ export function usePullDownGesture(options: PullDownOptions = {}) {
         const elements = document.querySelectorAll(selector)
         if (elements.length > 0) {
           // 如果需要排除特定元素（如QuickAccess面板）
-          if (excludeSelector && elements.length === 1) {
-            const element = elements[0]
-            if (element.closest(excludeSelector)) {
-              continue
-            }
+          if (excludeSelector && Array.from(elements).every(element => element.closest(excludeSelector))) {
+            continue
           }
           return true
         }
@@ -134,7 +131,7 @@ export function usePullDownGesture(options: PullDownOptions = {}) {
     if (options.canUsePullGesture && !options.canUsePullGesture()) return
 
     // 检查是否有弹窗打开
-    hasDialogOpen.value = hasOpenDialog('.quick-access-panel')
+    hasDialogOpen.value = hasOpenDialog('.quick-access-panel, .plugin-quick-access')
     lastDialogCheckTime.value = Date.now()
 
     if (hasDialogOpen.value) return
@@ -159,7 +156,7 @@ export function usePullDownGesture(options: PullDownOptions = {}) {
     // 只在必要时重新检测弹窗
     const currentTime = Date.now()
     if (currentTime - lastDialogCheckTime.value > DIALOG_CHECK_INTERVAL) {
-      hasDialogOpen.value = hasOpenDialog('.quick-access-panel')
+      hasDialogOpen.value = hasOpenDialog('.quick-access-panel, .plugin-quick-access')
       lastDialogCheckTime.value = currentTime
     }
 

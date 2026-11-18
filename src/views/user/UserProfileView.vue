@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
 import { VForm } from 'vuetify/lib/components/index.mjs'
-import api from '@/api'
+import api, { getApiErrorMessage } from '@/api'
 import type { ApiResponse, User, PassKey } from '@/api/types'
-import avatar1 from '@images/avatars/avatar-1.png'
-import { useDisplay } from 'vuetify'
 import { useUserStore } from '@/stores'
 import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+
+// 极简现代几何线性默认头像（深灰蓝圆底 + 柔和中性色人像轮廓）
+const DEFAULT_AVATAR_DATA_URI =
+  'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Crect%20width%3D%22128%22%20height%3D%22128%22%20fill%3D%22%23232A38%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2252%22%20fill%3D%22%232C3547%22%20stroke%3D%22%2394A3B8%22%20stroke-opacity%3D%220.18%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2249%22%20r%3D%2215.5%22%20fill%3D%22%23CBD5E1%22%20fill-opacity%3D%220.9%22%2F%3E%3Cpath%20d%3D%22M37%20102c3.8-14.8%2014.4-23%2027-23s23.2%208.2%2027%2023%22%20fill%3D%22none%22%20stroke%3D%22%23CBD5E1%22%20stroke-opacity%3D%220.88%22%20stroke-width%3D%228%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E'
 
 const OTPAuthDialog = defineAsyncComponent(() => import('@/components/dialog/OTPAuthDialog.vue'))
 const PasskeyDialog = defineAsyncComponent(() => import('@/components/dialog/PasskeyDialog.vue'))
@@ -15,9 +17,6 @@ const VerifyPasswordDialog = defineAsyncComponent(() => import('@/components/dia
 
 // 国际化
 const { t } = useI18n()
-
-// 显示器宽度
-const display = useDisplay()
 
 const isNewPasswordVisible = ref(false)
 const isConfirmPasswordVisible = ref(false)
@@ -36,7 +35,7 @@ const refInputEl = ref<HTMLElement>()
 const isSaving = ref(false)
 
 // 当前头像缓存
-const currentAvatar = ref(avatar1)
+const currentAvatar = ref(DEFAULT_AVATAR_DATA_URI)
 
 // 当前用户名
 const currentUserName = ref('')
@@ -139,20 +138,23 @@ function closeVerifyPasswordDialog() {
 }
 
 // 更新头像
-function changeAvatar(file: Event) {
+function changeAvatar(e: Event) {
   const fileReader = new FileReader()
-  const { files } = file.target as HTMLInputElement
+  const target = e.target as HTMLInputElement
+  const { files } = target
   if (files && files.length > 0) {
     const selectedFile = files[0]
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
     const maxSize = 800 * 1024
     // 检查文件是否为图片
     if (!allowedTypes.includes(selectedFile.type)) {
+      target.value = ''
       $toast.error(t('profile.avatarFormatError'))
       return
     }
     // 检查文件大小
     if (selectedFile.size > maxSize) {
+      target.value = ''
       $toast.error(t('profile.avatarSizeError'))
       return
     }
@@ -164,18 +166,26 @@ function changeAvatar(file: Event) {
       }
     }
   }
+  target.value = ''
+}
+
+// 提示头像预览已更新，待保存后生效
+function notifyAvatarPreviewUpdated() {
+  const message = '已更新头像预览，点击保存后生效'
+  if (typeof $toast.info === 'function') $toast.info(message)
+  else $toast.success(message)
 }
 
 // 重置默认头像
 function resetDefaultAvatar() {
-  currentAvatar.value = avatar1
-  $toast.success(t('profile.resetAvatarSuccess'))
+  currentAvatar.value = DEFAULT_AVATAR_DATA_URI
+  notifyAvatarPreviewUpdated()
 }
 
 // 还原当前头像
 function restoreCurrentAvatar() {
   currentAvatar.value = accountInfo.value.avatar
-  $toast.success(t('profile.restoreAvatarSuccess'))
+  notifyAvatarPreviewUpdated()
 }
 
 // 加载当前用户信息
@@ -183,8 +193,11 @@ async function fetchUserInfo() {
   try {
     const result: User = await api.get('user/current')
     if (result) {
-      accountInfo.value = result
-      accountInfo.value.avatar = accountInfo.value.avatar ? accountInfo.value.avatar : avatar1
+      accountInfo.value = {
+        ...result,
+        settings: result.settings || {},
+      }
+      accountInfo.value.avatar = accountInfo.value.avatar ? accountInfo.value.avatar : DEFAULT_AVATAR_DATA_URI
       accountInfo.value.nickname = accountInfo.value.settings?.nickname ?? ''
       currentUserName.value = accountInfo.value.name
       currentAvatar.value = accountInfo.value.avatar
@@ -210,16 +223,20 @@ function saveAccountInfo() {
   }
   // 修改密码前需要验证当前登录密码
   if (newPassword.value) {
-    withPasswordVerification(t('profile.accountSecurity'), t('profile.confirmToChangePassword'), () => {
-      doSaveAccountInfo()
-    })
+    withPasswordVerification(
+      t('profile.accountSecurity'),
+      t('profile.confirmToChangePassword'),
+      (currentPassword: string) => {
+        doSaveAccountInfo(currentPassword)
+      },
+    )
     return
   }
   doSaveAccountInfo()
 }
 
 // 执行账户信息保存，仅回传允许修改的字段
-async function doSaveAccountInfo() {
+async function doSaveAccountInfo(currentPassword?: string) {
   const oldAvatar = accountInfo.value.avatar
   accountInfo.value.avatar = currentAvatar.value
   isSaving.value = true
@@ -229,6 +246,7 @@ async function doSaveAccountInfo() {
       avatar: string
       email: string
       password?: string
+      current_password?: string
       settings: User['settings']
     } = {
       email: accountInfo.value.email,
@@ -237,6 +255,9 @@ async function doSaveAccountInfo() {
     }
     if (newPassword.value) {
       payload.password = newPassword.value
+      if (currentPassword !== undefined) {
+        payload.current_password = currentPassword
+      }
     }
 
     const result = (await api.put('user/current', payload)) as ApiResponse<unknown>
@@ -251,15 +272,17 @@ async function doSaveAccountInfo() {
         userStore.setAvatar(currentAvatar.value)
       }
     } else {
-      $toast.error(t('profile.saveFailed', { message: result.message }))
-      // 失败缓存值还原
-      currentAvatar.value = oldAvatar
+      $toast.error(result.message || t('profile.saveFailed', { message: '' }))
+      // 失败缓存值还原，且保留已填写的新密码避免用户重输
       accountInfo.value.avatar = oldAvatar
     }
   } catch (error) {
+    accountInfo.value.avatar = oldAvatar
+    $toast.error(getApiErrorMessage(error) || t('profile.saveFailed', { message: (error as Error)?.message || '' }))
     console.log('保存失败:', error)
+  } finally {
+    isSaving.value = false
   }
-  isSaving.value = false
 }
 
 // 验证密码载荷接口
@@ -327,100 +350,132 @@ watch(
     <VRow>
       <!-- 👉 账号概览 -->
       <VCol cols="12" md="4">
-        <VCard :title="t('profile.accountOverview')">
-          <VCardText class="d-flex flex-column align-center gap-4">
+        <VCard>
+          <VCardItem>
+            <VCardTitle>{{ t('profile.accountOverview') }}</VCardTitle>
+          </VCardItem>
+          <VCardText class="profile-overview-body">
             <!-- 👉 Avatar -->
-            <VAvatar rounded="lg" size="120" :image="currentAvatar" />
+            <VAvatar rounded="lg" size="88" :image="currentAvatar" class="profile-avatar" />
 
             <!-- 👉 Username（只读） -->
             <VTextField
               v-model="currentUserName"
-              density="comfortable"
               readonly
+              hide-details="auto"
               class="w-100"
               :label="t('user.username')"
               prepend-inner-icon="mdi-account"
             />
 
             <!-- 👉 Upload Photo -->
-            <form class="w-100">
-              <div class="flex flex-wrap justify-center gap-2">
-                <VBtn color="primary" @click="refInputEl?.click()">
-                  <VIcon icon="mdi-cloud-upload-outline" />
-                  <span v-if="display.mdAndUp.value" class="ms-2">{{ t('profile.uploadNewAvatar') }}</span>
+            <form class="w-100" @submit.prevent>
+              <div class="profile-avatar-actions">
+                <VBtn
+                  color="primary"
+                  variant="flat"
+                  size="small"
+                  rounded="lg"
+                  prepend-icon="mdi-cloud-upload-outline"
+                  @click="refInputEl?.click()"
+                >
+                  {{ t('profile.uploadNewAvatar') }}
                 </VBtn>
 
                 <input
                   ref="refInputEl"
                   type="file"
                   name="file"
-                  accept=".jpeg,.png,.jpg,GIF"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   hidden
-                  @input="changeAvatar"
+                  @change="changeAvatar"
                 />
 
-                <VBtn type="reset" color="info" variant="tonal" @click="restoreCurrentAvatar">
-                  <VIcon icon="mdi-refresh" />
-                  <span v-if="display.mdAndUp.value" class="ms-2">{{ t('common.reset') }}</span>
+                <VBtn
+                  type="reset"
+                  color="secondary"
+                  variant="outlined"
+                  size="small"
+                  rounded="lg"
+                  prepend-icon="mdi-refresh"
+                  @click="restoreCurrentAvatar"
+                >
+                  {{ t('common.reset') }}
                 </VBtn>
 
-                <VBtn type="reset" color="error" variant="tonal" @click="resetDefaultAvatar">
-                  <VIcon icon="mdi-image-sync-outline" />
-                  <span v-if="display.mdAndUp.value" class="ms-2">{{ t('common.default') }}</span>
+                <VBtn
+                  type="reset"
+                  color="secondary"
+                  variant="outlined"
+                  size="small"
+                  rounded="lg"
+                  prepend-icon="mdi-image-sync-outline"
+                  @click="resetDefaultAvatar"
+                >
+                  {{ t('common.default') }}
                 </VBtn>
               </div>
 
-              <p class="text-body-1 text-center mb-0 mt-4">{{ t('profile.avatarFormatTip') }}</p>
+              <p class="profile-avatar-tip">{{ t('profile.avatarFormatTip') }}</p>
             </form>
+
+            <!-- 👉 账号安全入口 -->
+            <div class="profile-security-section w-100">
+              <div class="profile-section-label">{{ t('profile.accountSecurity') }}</div>
+              <div class="mp-settings-group">
+                <button type="button" class="mp-settings-row profile-security-row" @click="openOtpDialog">
+                  <span class="mp-settings-row__meta profile-security-meta">
+                    <span class="profile-security-icon" aria-hidden="true">
+                      <VIcon icon="mdi-cellphone-key" size="16" />
+                    </span>
+                    <span class="profile-security-copy">
+                      <span class="mp-settings-row__title">{{ t('profile.authenticatorManagement') }}</span>
+                      <span class="mp-settings-row__desc">{{ t('profile.otpSecondFactor') }}</span>
+                    </span>
+                  </span>
+                  <span class="mp-settings-row__control profile-security-control">
+                    <VChip v-if="accountInfo.is_otp" color="success" variant="tonal" size="x-small">
+                      {{ t('profile.enabled') }}
+                    </VChip>
+                    <VIcon icon="mdi-chevron-right" size="16" class="profile-security-arrow" />
+                  </span>
+                </button>
+
+                <button type="button" class="mp-settings-row profile-security-row" @click="openPasskeyDialog">
+                  <span class="mp-settings-row__meta profile-security-meta">
+                    <span class="profile-security-icon" aria-hidden="true">
+                      <VIcon icon="material-symbols:passkey" size="16" />
+                    </span>
+                    <span class="profile-security-copy">
+                      <span class="mp-settings-row__title">{{ t('profile.passkeyManagement') }}</span>
+                      <span class="mp-settings-row__desc">{{ t('profile.passkeyPasswordless') }}</span>
+                    </span>
+                  </span>
+                  <span class="mp-settings-row__control profile-security-control">
+                    <VChip v-if="passkeyList.length > 0" color="success" variant="tonal" size="x-small">
+                      {{ t('profile.keysCount', { count: passkeyList.length }) }}
+                    </VChip>
+                    <VIcon icon="mdi-chevron-right" size="16" class="profile-security-arrow" />
+                  </span>
+                </button>
+              </div>
+            </div>
           </VCardText>
-
-          <!-- 👉 账号安全入口 -->
-          <VDivider class="my-2">
-            <span>{{ t('profile.accountSecurity') }}</span>
-          </VDivider>
-
-          <VList>
-            <VListItem @click="openOtpDialog">
-              <template #prepend>
-                <VIcon icon="mdi-cellphone-key" />
-              </template>
-              <VListItemTitle>{{ t('profile.authenticatorManagement') }}</VListItemTitle>
-              <VListItemSubtitle>
-                {{ t('profile.otpSecondFactor') }}
-              </VListItemSubtitle>
-              <template #append>
-                <VChip v-if="accountInfo.is_otp" color="success" size="small">{{ t('profile.enabled') }}</VChip>
-              </template>
-            </VListItem>
-            <VListItem @click="openPasskeyDialog">
-              <template #prepend>
-                <VIcon icon="material-symbols:passkey" />
-              </template>
-              <VListItemTitle>{{ t('profile.passkeyManagement') }}</VListItemTitle>
-              <VListItemSubtitle>
-                {{ t('profile.passkeyPasswordless') }}
-              </VListItemSubtitle>
-              <template #append>
-                <VChip v-if="passkeyList.length > 0" color="success" size="small">
-                  {{ t('profile.keysCount', { count: passkeyList.length }) }}
-                </VChip>
-              </template>
-            </VListItem>
-          </VList>
         </VCard>
       </VCol>
 
       <!-- 👉 资料与安全表单 -->
       <VCol cols="12" md="8">
-        <VCard :title="t('profile.personalInfo')">
+        <VCard>
+          <VCardItem>
+            <VCardTitle>{{ t('profile.personalInfo') }}</VCardTitle>
+          </VCardItem>
           <VCardText>
-            <!-- 👉 Form -->
-            <VForm class="mt-2">
+            <VForm @submit.prevent="saveAccountInfo">
               <VRow>
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="accountInfo.email"
-                    density="comfortable"
                     clearable
                     :label="t('user.email')"
                     type="email"
@@ -430,7 +485,6 @@ watch(
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="accountInfo.nickname"
-                    density="comfortable"
                     clearable
                     :label="t('profile.nickname')"
                     :placeholder="t('profile.nicknamePlaceholder')"
@@ -440,7 +494,6 @@ watch(
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="newPassword"
-                    density="comfortable"
                     :type="isNewPasswordVisible ? 'text' : 'password'"
                     :append-inner-icon="isNewPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                     clearable
@@ -451,10 +504,8 @@ watch(
                   />
                 </VCol>
                 <VCol cols="12" md="6">
-                  <!-- 👉 confirm password -->
                   <VTextField
                     v-model="confirmPassword"
-                    density="comfortable"
                     :type="isConfirmPasswordVisible ? 'text' : 'password'"
                     :append-inner-icon="isConfirmPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                     clearable
@@ -465,15 +516,13 @@ watch(
                 </VCol>
               </VRow>
 
-              <VDivider class="my-10">
-                <span>{{ t('profile.accountBinding') }}</span>
-              </VDivider>
+              <VDivider class="profile-form-divider" />
+              <div class="profile-section-heading">{{ t('profile.accountBinding') }}</div>
 
               <VRow>
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="accountInfo.settings.wechat_userid"
-                    density="comfortable"
                     clearable
                     :label="t('profile.wechatUser')"
                     prepend-inner-icon="mdi-wechat"
@@ -482,22 +531,28 @@ watch(
                 <VCol cols="12" md="6">
                   <VTextField
                     v-model="accountInfo.settings.telegram_userid"
-                    density="comfortable"
                     clearable
                     :label="t('profile.telegramUser')"
                     prepend-inner-icon="mdi-send"
                   />
                 </VCol>
               </VRow>
-              <VRow>
-                <!-- 👉 Form Actions -->
-                <VCol cols="12" class="d-flex flex-wrap gap-4">
-                  <VBtn @click="saveAccountInfo" :disabled="isSaving" prepend-icon="mdi-content-save">
-                    <span v-if="isSaving">{{ t('common.saving') }}...</span>
-                    <span v-else>{{ t('common.save') }}</span>
-                  </VBtn>
-                </VCol>
-              </VRow>
+
+              <div class="mp-card-footer">
+                <VBtn
+                  type="submit"
+                  size="small"
+                  color="primary"
+                  variant="flat"
+                  rounded="lg"
+                  prepend-icon="mdi-content-save-outline"
+                  class="px-4"
+                  :loading="isSaving"
+                  :disabled="isSaving"
+                >
+                  {{ isSaving ? `${t('common.saving')}...` : t('common.save') }}
+                </VBtn>
+              </div>
             </VForm>
           </VCardText>
         </VCard>
@@ -505,3 +560,106 @@ watch(
     </VRow>
   </div>
 </template>
+
+<style scoped>
+.profile-overview-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+}
+
+.profile-avatar {
+  border: 1px solid var(--mp-border-subtle);
+}
+
+.profile-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.profile-avatar-tip {
+  margin: 8px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.profile-security-section {
+  border-block-start: 1px solid var(--mp-border-subtle);
+  margin-block-start: 4px;
+  padding-block-start: 13px;
+}
+
+.profile-section-label {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 12px;
+  font-weight: 600;
+  margin-block-end: 8px;
+}
+
+.profile-security-row {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  inline-size: 100%;
+  text-align: start;
+  transition: background-color 0.14s ease;
+}
+
+.profile-security-row:hover {
+  background: rgba(var(--v-theme-on-surface), 0.035);
+}
+
+.profile-security-meta {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-security-icon {
+  display: inline-flex;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: rgba(var(--v-theme-on-surface), 0.045);
+  block-size: 30px;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  inline-size: 30px;
+}
+
+.profile-security-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+}
+
+.profile-security-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-security-arrow {
+  color: rgba(var(--v-theme-on-surface), 0.42);
+}
+
+.profile-form-divider {
+  margin-block: 21px 13px;
+}
+
+.profile-section-heading {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-block-end: 13px;
+}
+</style>

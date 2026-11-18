@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import SlideViewTitle from '@/components/slide/SlideViewTitle.vue'
+import { useI18n } from '@/composables/useChineseText'
 import { useDisplay } from 'vuetify'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -284,6 +287,7 @@ watch(
         variant="tonal"
         icon="mdi-chevron-left"
         color="white"
+        :aria-label="t('common.previous')"
         @click.stop="slideNext(false)"
       />
 
@@ -293,6 +297,7 @@ watch(
         variant="tonal"
         icon="mdi-chevron-right"
         color="white"
+        :aria-label="t('common.next')"
         @click.stop="slideNext(true)"
       />
     </div>
@@ -321,7 +326,7 @@ watch(
   gap: 8px;
   margin-block-end: 12px;
   padding-block: 0;
-  padding-inline: 8px;
+  padding-inline: 0;
 
   & > :first-child {
     flex-grow: 1;
@@ -338,8 +343,9 @@ watch(
   color: rgb(var(--v-theme-primary));
   font-size: 0.85rem;
   font-weight: 500;
-  padding-block: 5px;
-  padding-inline: var(--slider-shadow-bleed-inline);
+  margin-inline-end: -6px;
+  padding-block: 4px;
+  padding-inline: 6px;
   text-decoration: none;
   transition: all 0.25s ease;
 
@@ -376,13 +382,14 @@ watch(
 }
 
 .slider-content {
-  // 横向滚动会让纵向 visible 被浏览器计算成可裁剪区域，这里用缓冲区承接卡片阴影。
+  // 横向滚动会让纵向 visible 被浏览器计算成可裁剪区域，这里用负外边距配合内边距保留阴影缓冲且对齐页面左右基准线。
   margin-block: calc(var(--slider-shadow-bleed-start) * -1) calc(var(--slider-shadow-bleed-end) * -1);
+  margin-inline: calc(var(--slider-shadow-bleed-inline) * -1);
   -ms-overflow-style: none !important;
   overflow: auto hidden;
   overscroll-behavior-x: contain !important;
   padding-block: var(--slider-shadow-bleed-start) var(--slider-shadow-bleed-end);
-  padding-inline: 12px;
+  padding-inline: var(--slider-shadow-bleed-inline);
   scroll-behavior: smooth;
   scrollbar-width: none !important;
 
@@ -420,12 +427,11 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 14%);
+  border: 1px solid rgba(255, 255, 255, 16%);
   border-radius: 50%;
-  backdrop-filter: blur(8px);
-  background: rgba(8, 18, 28, 52%) !important;
+  background: rgba(22, 23, 29, 88%) !important;
   block-size: 40px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 22%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 28%);
   color: rgb(255, 255, 255);
   cursor: pointer;
   inline-size: 40px;

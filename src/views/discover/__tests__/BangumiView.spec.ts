@@ -2,7 +2,7 @@ import BangumiView from '@/views/discover/BangumiView.vue'
 import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMediaListHarness, latestMediaListRequest } from './sourceViewTestUtils'
 
 describe('BangumiView', () => {
@@ -10,6 +10,10 @@ describe('BangumiView', () => {
 
   beforeEach(() => {
     mediaList = createMediaListHarness()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   async function renderView() {
@@ -22,11 +26,11 @@ describe('BangumiView', () => {
     })
   }
 
-  it('starts with number, string, and null values and builds ten years from a fixed clock', async () => {
+  it('starts with number, string, and null values and builds ten years in descending order from a fixed clock', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-18T12:00:00+08:00'))
 
-    await renderView()
+    const { container } = await renderView()
 
     expect(latestMediaListRequest(mediaList)).toEqual({
       apipath: 'discover/bangumi',
@@ -37,13 +41,16 @@ describe('BangumiView', () => {
         year: null,
       },
     })
-    for (const year of ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']) {
-      expect(screen.getByText(year)).toBeInTheDocument()
-    }
+    const expectedYears = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']
+    const yearRow = container.querySelectorAll('.discover-filter-row')[2]
+    const renderedYears = [...(yearRow?.querySelectorAll('.discover-filter-chip') ?? [])].map(el =>
+      el.textContent?.trim(),
+    )
+    expect(renderedYears).toEqual(expectedYears)
     expect(screen.queryByText('2016')).not.toBeInTheDocument()
   })
 
-  it('passes object keys as strings while keeping the fixed Bangumi type numeric', async () => {
+  it('passes selected filter values as strings while keeping the fixed Bangumi type numeric', async () => {
     const user = userEvent.setup()
     const currentYear = String(new Date().getFullYear())
     await renderView()
@@ -65,7 +72,7 @@ describe('BangumiView', () => {
     })
   })
 
-  it('leaves deselected optional chip values undefined instead of normalizing them', async () => {
+  it('keeps mandatory sort selected while allowing optional category and year chips to be deselected', async () => {
     const user = userEvent.setup()
     const currentYear = String(new Date().getFullYear())
     await renderView()
@@ -83,7 +90,7 @@ describe('BangumiView', () => {
         params: {
           type: 2,
           cat: undefined,
-          sort: undefined,
+          sort: 'date',
           year: undefined,
         },
       })

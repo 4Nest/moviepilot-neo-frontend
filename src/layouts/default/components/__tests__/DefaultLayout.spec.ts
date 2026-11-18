@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import DefaultLayout from '@/layouts/default/components/DefaultLayout.vue'
+import vuetifyDefaults from '@/plugins/vuetify/defaults'
 import { THEME_CUSTOMIZER_CHANGE_EVENT, THEME_CUSTOMIZER_OPEN_EVENT } from '@/composables/useThemeCustomizer'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import type { PluginSidebarNavItem } from '@/api/types'
@@ -20,7 +24,21 @@ const mocks = vi.hoisted(() => ({
   },
   sidebarStore: undefined as SidebarStoreMock | undefined,
   userStore: undefined as { superUser: boolean } | undefined,
-  verticalNavLayout: { template: '<div><slot name="vertical-nav-content" /></div>' },
+  routeMock: { path: '/', meta: {} as Record<string, unknown> },
+  footerStub: {
+    name: 'Footer',
+    props: ['showNav'],
+    template: '<div data-testid="footer-stub" :data-show-nav="String(showNav)" />',
+  },
+  headerTabStub: {
+    name: 'HeaderTab',
+    props: ['items', 'modelValue'],
+    template: '<div data-testid="header-tab-stub"><slot name="append" /></div>',
+  },
+  verticalNavLayout: {
+    template:
+      '<div><slot name="vertical-nav-content" /><slot name="dynamic-header-tab" /><slot /><slot name="footer" /></div>',
+  },
 }))
 
 vi.mock('@layouts/components/VerticalNavLayout.vue', () => ({ default: mocks.verticalNavLayout }))
@@ -28,8 +46,8 @@ vi.mock('@layouts/components/VerticalNavLink.vue', () => ({ default: mocks.navLi
 vi.mock('@layouts/components/VerticalNavSectionTitle.vue', () => ({ default: mocks.emptyComponent }))
 vi.mock('@/components/misc/ThemeLogoMark.vue', () => ({ default: mocks.emptyComponent }))
 vi.mock('@/components/theme/ThemeCustomizer.vue', () => ({ default: mocks.emptyComponent }))
-vi.mock('@/layouts/default/components/Footer.vue', () => ({ default: mocks.emptyComponent }))
-vi.mock('@/layouts/default/components/HeaderTab.vue', () => ({ default: mocks.emptyComponent }))
+vi.mock('@/layouts/default/components/Footer.vue', () => ({ default: mocks.footerStub }))
+vi.mock('@/layouts/default/components/HeaderTab.vue', () => ({ default: mocks.headerTabStub }))
 vi.mock('@/layouts/default/components/OfflinePage.vue', () => ({ default: mocks.emptyComponent }))
 vi.mock('@/layouts/default/components/QuickAccess.vue', () => ({ default: mocks.emptyComponent }))
 vi.mock('@/layouts/default/components/SearchBar.vue', () => ({ default: mocks.emptyComponent }))
@@ -83,7 +101,7 @@ vi.mock('@/composables/useChineseText', () => ({
 }))
 vi.mock('vue-router', async importOriginal => ({
   ...(await importOriginal<typeof import('vue-router')>()),
-  useRoute: () => ({ path: '/' }),
+  useRoute: () => mocks.routeMock,
   useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('vuetify', async importOriginal => ({
@@ -97,6 +115,8 @@ describe('DefaultLayout', () => {
     mocks.ensureSidebarNav.mockResolvedValue(undefined)
     mocks.sidebarStore!.items = []
     mocks.userStore!.superUser = true
+    mocks.routeMock.path = '/'
+    mocks.routeMock.meta = {}
   })
 
   it('removes theme customizer listeners while sidebar loading is still pending', async () => {
@@ -182,5 +202,161 @@ describe('DefaultLayout', () => {
 
     expect(wrapper.text()).toContain('New plugin')
     expect(wrapper.text()).not.toContain('Old plugin')
+  })
+
+  it('keeps mainContentPaddingTop at zero on desktop even when dynamic header tabs are registered', async () => {
+    const wrapper = shallowMount(DefaultLayout, {
+      global: {
+        renderStubDefaultSlot: true,
+        stubs: {
+          IconBtn: mocks.emptyComponent as Component,
+          RouterLink: mocks.emptyComponent as Component,
+          VerticalNavLayout: mocks.verticalNavLayout,
+          VerticalNavLink: mocks.navLink,
+        },
+      },
+    })
+    await flushPromises()
+
+    const injectRegister = (
+      window as Window & {
+        __VUE_INJECT_DYNAMIC_HEADER_TAB__?: (tab: {
+          items: Array<{ tab: string; title: string }>
+          modelValue: string
+        }) => void
+      }
+    ).__VUE_INJECT_DYNAMIC_HEADER_TAB__
+
+    expect(injectRegister).toBeTypeOf('function')
+    injectRegister?.({
+      items: [{ title: 'TMDB', tab: 'themoviedb' }],
+      modelValue: 'themoviedb',
+    })
+    await nextTick()
+
+    const contentWrapper = wrapper.find('.main-content-wrapper')
+    expect(contentWrapper.exists()).toBe(true)
+    expect((contentWrapper.element as HTMLElement).style.paddingTop).toBe('0rem')
+
+    wrapper.unmount()
+  })
+
+  it('enforces Antigravity golden-ratio brand header, compact controls, inset switch, and settings tokens', () => {
+    const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
+    const verticalNavSource = readFileSync(resolve(rootDir, 'src/@layouts/components/VerticalNav.vue'), 'utf8')
+    const verticalNavLayoutSource = readFileSync(
+      resolve(rootDir, 'src/@layouts/components/VerticalNavLayout.vue'),
+      'utf8',
+    )
+    const verticalNavScss = readFileSync(resolve(rootDir, 'src/@core/scss/_vertical-nav.scss'), 'utf8')
+    const defaultLayoutSource = readFileSync(
+      resolve(rootDir, 'src/layouts/default/components/DefaultLayout.vue'),
+      'utf8',
+    )
+    const neoLogoSource = readFileSync(resolve(rootDir, 'src/components/misc/NeoLogoMark.vue'), 'utf8')
+    const commonScss = readFileSync(resolve(rootDir, 'src/styles/common.scss'), 'utf8')
+
+    // 1. VSwitch defaults to inset capsule
+    expect(vuetifyDefaults.VSwitch).toMatchObject({
+      color: 'primary',
+      inset: true,
+      hideDetails: 'auto',
+    })
+
+    // 2. Dual-axis centered nav-header and golden-ratio NEO logo (24px mark / 9px gap / 15px title)
+    expect(verticalNavScss).toMatch(/\.nav-header\s*\{[\s\S]*?justify-content:\s*center;/m)
+    expect(verticalNavSource).toMatch(/\.app-title-wrapper\s*\{[\s\S]*?gap:\s*9px;/m)
+    expect(verticalNavSource).toMatch(/\.brand-logo-mark\s*\{[\s\S]*?block-size:\s*1\.5rem;/m)
+    expect(verticalNavSource).toMatch(/\.app-logo-title\s*\{[\s\S]*?font-size:\s*0\.9375rem;/m)
+    expect(verticalNavLayoutSource).toMatch(/\.app-logo\s+\.brand-logo-mark\s*\{[\s\S]*?block-size:\s*25px;/m)
+    expect(defaultLayoutSource).toMatch(/\.theme-horizontal-logo\s*\{[\s\S]*?column-gap:\s*9px;/m)
+    expect(neoLogoSource).toMatch(/\.neo-logo-mark\s*\{[\s\S]*?display:\s*block;[\s\S]*?flex-shrink:\s*0;/m)
+
+    // 3. Global compact buttons, inset switch track/thumb, breathable inputs, and settings rows
+    expect(commonScss).toContain('--mp-switch-off-bg:')
+    expect(commonScss).toContain('--mp-field-bg:')
+    expect(commonScss).toContain('--mp-field-hover-bg:')
+    expect(commonScss).toContain('--v-btn-height: 32px;')
+    expect(commonScss).toContain('.v-btn--variant-outlined:is(.text-primary, .text-secondary, .text-default)')
+    expect(commonScss).toContain('.mp-settings-section-title')
+    expect(commonScss).toContain('.mp-settings-group')
+    expect(commonScss).toContain('.mp-settings-row')
+    expect(commonScss).toContain('.mp-segmented')
+    expect(commonScss).toContain('.mp-switch-card')
+    expect(commonScss).toContain(':is(.v-radio, .v-checkbox, .v-checkbox-btn):not(.v-switch)')
+    expect(commonScss).toContain('--v-field-label-scale: 0.85em;')
+    expect(commonScss).not.toMatch(/--v-field-label-scale:\s*[\d.]+px/)
+  })
+
+  it('binds disabled, aria-label, title, click guard on dynamic header buttons and hides Footer when route.meta.hideFooter is set', async () => {
+    mocks.routeMock.meta = { hideFooter: true }
+    const disabledAction = vi.fn()
+    const enabledAction = vi.fn()
+
+    const BtnStub = {
+      name: 'VBtn',
+      props: ['icon', 'disabled', 'loading', 'title'],
+      emits: ['click'],
+      template:
+        '<button type="button" data-testid="dyn-btn" :disabled="disabled" :title="title" @click="$emit(`click`)">{{ icon }}</button>',
+    }
+
+    const wrapper = shallowMount(DefaultLayout, {
+      global: {
+        renderStubDefaultSlot: true,
+        stubs: {
+          Footer: mocks.footerStub,
+          HeaderTab: mocks.headerTabStub,
+          IconBtn: mocks.emptyComponent as Component,
+          RouterLink: mocks.emptyComponent as Component,
+          VBtn: BtnStub,
+          VerticalNavLayout: mocks.verticalNavLayout,
+          VerticalNavLink: mocks.navLink,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="footer-stub"]').attributes('data-show-nav')).toBe('false')
+
+    const injectRegister = (
+      window as Window & {
+        __VUE_INJECT_DYNAMIC_HEADER_TAB__?: (tab: {
+          items: Array<{ tab: string; title: string }>
+          modelValue: string
+          appendButtons?: Array<{
+            title?: string
+            icon: string
+            disabled?: boolean
+            action?: () => void
+          }>
+        }) => void
+      }
+    ).__VUE_INJECT_DYNAMIC_HEADER_TAB__
+
+    injectRegister?.({
+      items: [{ title: 'TMDB', tab: 'themoviedb' }],
+      modelValue: 'themoviedb',
+      appendButtons: [
+        { title: '禁用刷新', icon: 'mdi-refresh', disabled: true, action: disabledAction },
+        { title: '可用刷新', icon: 'mdi-refresh', disabled: false, action: enabledAction },
+      ],
+    })
+    await nextTick()
+
+    const buttons = wrapper.findAll('[data-testid="dyn-btn"]')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0].attributes('aria-label')).toBe('禁用刷新')
+    expect(buttons[0].attributes('title')).toBe('禁用刷新')
+    expect(buttons[0].attributes('disabled')).toBeDefined()
+
+    // 即使直接触发组件 click 事件，handleHeaderButtonClick 守卫也应阻止禁用按钮执行 action
+    wrapper.findAllComponents(BtnStub)[0].vm.$emit('click')
+    expect(disabledAction).not.toHaveBeenCalled()
+
+    await buttons[1].trigger('click')
+    expect(enabledAction).toHaveBeenCalledOnce()
+
+    wrapper.unmount()
   })
 })

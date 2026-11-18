@@ -76,6 +76,10 @@ const seasonsNotExisted = ref<{ [key: number]: number }>({})
 // 是否刷新过
 const isRefreshed = ref(false)
 
+// 异步请求代次计数器，防止切换剧集组时在途旧请求覆盖最新季列表与入库状态
+let seasonsRequestSeq = 0
+let notExistsRequestSeq = 0
+
 // 所有剧集组
 const episodeGroups = ref<EpisodeGroupInfo[]>([])
 
@@ -108,13 +112,6 @@ const subscribeModeOptions = computed<SubscribeModeOption[]>(() => [
     icon: 'mdi-shimmer',
   },
 ])
-
-// 获取订阅模式的主题色。
-function getSubscribeModeColor(mode: SubscribeMode) {
-  if (mode === 'normal') return 'primary'
-  if (mode === 'best_version') return 'warning'
-  return 'success'
-}
 
 // 校验弹窗输入是否为支持的订阅模式。
 function isSubscribeMode(value: unknown): value is SubscribeMode {
@@ -200,9 +197,10 @@ async function getEpisodeGroups() {
 
 // 查询媒体的季信息
 async function getMediaSeasons() {
+  const requestSeq = ++seasonsRequestSeq
   isRefreshed.value = false
   try {
-    seasonInfos.value = await api.get('media/seasons', {
+    const seasons: MediaSeason[] = await api.get('media/seasons', {
       params: {
         mediaid: getMediaId(),
         title: props.media?.title,
@@ -210,27 +208,44 @@ async function getMediaSeasons() {
         season: props.media?.season,
       },
     })
+    if (requestSeq === seasonsRequestSeq) {
+      seasonInfos.value = seasons
+    }
   } catch (error) {
-    console.error(error)
+    if (requestSeq === seasonsRequestSeq) {
+      console.error(error)
+    }
   } finally {
-    isRefreshed.value = true
+    if (requestSeq === seasonsRequestSeq) {
+      isRefreshed.value = true
+    }
   }
 }
 
 // 查询剧集组的剧集
 async function getGroupSeasons() {
   if (getMediaSubscribeIdentity(props.media)?.source !== 'themoviedb' || !episodeGroup.value) return
+  const requestSeq = ++seasonsRequestSeq
   isRefreshed.value = false
   try {
-    seasonInfos.value = await api.get(`media/group/seasons/${episodeGroup.value}`)
+    const seasons: MediaSeason[] = await api.get(`media/group/seasons/${episodeGroup.value}`)
+    if (requestSeq === seasonsRequestSeq) {
+      seasonInfos.value = seasons
+    }
   } catch (error) {
-    console.error(error)
+    if (requestSeq === seasonsRequestSeq) {
+      console.error(error)
+    }
+  } finally {
+    if (requestSeq === seasonsRequestSeq) {
+      isRefreshed.value = true
+    }
   }
-  isRefreshed.value = true
 }
 
 // 检查所有季的缺失状态（数据库）
 async function checkSeasonsNotExists() {
+  const requestSeq = ++notExistsRequestSeq
   // 开始处理
   try {
     const tmpMedia = {
@@ -238,17 +253,22 @@ async function checkSeasonsNotExists() {
       episode_group: episodeGroup.value || '',
     }
     const result: NotExistMediaInfo[] = await api.post('mediaserver/notexists', tmpMedia)
+    if (requestSeq !== notExistsRequestSeq) return
     if (result) {
+      const nextStates: { [key: number]: number } = {}
       result.forEach(item => {
         // 0-已入库 1-部分缺失 2-全部缺失
         let state = 0
         if (item.episodes.length === 0) state = 2
         else if (item.episodes.length < item.total_episode) state = 1
-        seasonsNotExisted.value[item.season] = state
+        nextStates[item.season] = state
       })
+      seasonsNotExisted.value = nextStates
     }
   } catch (error) {
-    console.error(error)
+    if (requestSeq === notExistsRequestSeq) {
+      console.error(error)
+    }
   }
 }
 
@@ -497,19 +517,19 @@ onBeforeUnmount(() => {
 
 <template>
   <VDialog max-width="45rem" scrollable :fullscreen="!mdAndUp">
-    <VCard class="subscribe-season-dialog">
-      <VCardItem class="py-2">
+    <VCard class="subscribe-season-dialog mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-clipboard-list-outline" class="me-2" />
+          <VIcon icon="mdi-clipboard-list-outline" size="20" class="me-2 text-primary" />
         </template>
-        <VCardTitle class="pe-10">
+        <VCardTitle>
           {{ t('dialog.subscribeSeason.selectSeasons') }}
         </VCardTitle>
         <VCardSubtitle>
           {{ props.media?.title }}
         </VCardSubtitle>
-        <VDialogCloseBtn @click="emit('close')" />
       </VCardItem>
+      <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
       <VCardText>
         <div class="subscribe-season-group-selector">
@@ -636,9 +656,8 @@ onBeforeUnmount(() => {
                     v-if="isSeasonSelected(item.season_number ?? 0)"
                     :model-value="seasonModes[item.season_number ?? 0] || 'normal'"
                     density="compact"
-                    divided
                     mandatory
-                    variant="outlined"
+                    variant="text"
                     class="subscribe-season-mode-toggle"
                     @click.stop
                     @update:model-value="updateSeasonMode(item.season_number ?? 0, $event)"
@@ -647,11 +666,10 @@ onBeforeUnmount(() => {
                       v-for="mode in subscribeModeOptions"
                       :key="mode.value"
                       :value="mode.value"
-                      :color="getSubscribeModeColor(mode.value)"
                       size="small"
                       class="subscribe-season-mode-button"
                     >
-                      <VIcon :icon="mode.icon" size="small" />
+                      <VIcon :icon="mode.icon" size="14" />
                       <span>{{ mode.title }}</span>
                     </VBtn>
                   </VBtnToggle>
@@ -662,14 +680,18 @@ onBeforeUnmount(() => {
         </div>
         <NoDataFound v-else errorTitle="出错啦！" :errorDescription="`${props.media?.title} 未查询到季集信息`" />
       </VCardText>
-      <VCardActions class="justify-center py-3">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           :disabled="!hasSelectionChanges"
-          width="30%"
-          min-width="8rem"
           color="primary"
-          variant="elevated"
-          class="subscribe-season-submit"
+          variant="flat"
+          size="small"
+          class="subscribe-season-submit px-4"
           @click="subscribeSeasons"
         >
           <template #prepend>
@@ -685,6 +707,16 @@ onBeforeUnmount(() => {
 <style scoped>
 /* stylelint-disable selector-pseudo-class-no-unknown */
 
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
 .subscribe-season-actions {
   display: grid;
   align-content: space-between;
@@ -692,14 +724,14 @@ onBeforeUnmount(() => {
   block-size: 100%;
   gap: 0.5rem;
   justify-items: end;
-  min-inline-size: 18rem;
+  min-inline-size: 0;
 }
 
-/* 固定无标签开关的宽度，避免操作区缺少模式按钮时被网格收缩，滑块偏出轨道。 */
+/* 固定无标签开关的自适应胶囊宽度，避免操作区缺少模式按钮时被网格收缩。 */
 .subscribe-season-switch {
-  inline-size: 52px;
-  min-inline-size: 52px;
-  max-inline-size: 52px;
+  inline-size: 28px;
+  min-inline-size: 28px;
+  max-inline-size: 28px;
 }
 
 .subscribe-season-group-selector {
@@ -737,10 +769,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex: 0 0 12rem;
   align-items: center;
-  backdrop-filter: var(--app-grouped-list-backdrop-filter, blur(var(--transparent-blur-light, 6px)));
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px solid var(--mp-border-card);
   border-radius: 8px;
-  background: rgba(var(--v-theme-surface), 0.82);
+  background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
   gap: 0.5rem;
   min-inline-size: 0;
@@ -756,8 +787,7 @@ onBeforeUnmount(() => {
 
 .subscribe-season-group-option:hover {
   border-color: rgba(var(--v-theme-primary), 0.45);
-  background: rgba(var(--v-theme-surface), 0.9);
-  box-shadow: 0 6px 18px rgba(var(--v-theme-on-surface), 0.08);
+  background: var(--mp-elevated-bg);
 }
 
 .subscribe-season-group-option--active {
@@ -810,10 +840,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: var(--app-grouped-list-backdrop-filter, blur(var(--transparent-blur-light, 6px)));
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border: 1px solid var(--mp-border-hover);
   border-radius: 9999px;
-  background: rgba(var(--v-theme-surface), 0.96);
+  background: var(--mp-elevated-bg);
   block-size: 2.5rem;
   color: rgb(var(--v-theme-on-surface));
   inline-size: 2.5rem;
@@ -878,13 +907,41 @@ onBeforeUnmount(() => {
 }
 
 .subscribe-season-mode-toggle {
-  block-size: 2rem;
-  max-inline-size: 18rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-tab-groove-bg);
+  block-size: 30px;
+  gap: 2px;
 }
 
 .subscribe-season-mode-button {
-  min-inline-size: 0;
-  padding-inline: 0.5rem;
+  border-radius: 6px !important;
+  block-size: 24px !important;
+  color: rgba(var(--v-theme-on-surface), 0.65) !important;
+  font-weight: 500;
+  letter-spacing: 0;
+  min-block-size: 24px !important;
+  min-inline-size: 0 !important;
+  padding-inline: 8px !important;
+  text-transform: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.subscribe-season-mode-button:hover {
+  background: rgba(var(--v-theme-on-surface), 0.05) !important;
+  color: rgba(var(--v-theme-on-surface), 0.9) !important;
+}
+
+.subscribe-season-mode-button.v-btn--active {
+  background: var(--mp-tab-active-bg) !important;
+  box-shadow: var(--mp-tab-active-shadow);
+  color: rgb(var(--v-theme-primary)) !important;
+  font-weight: 600;
 }
 
 .subscribe-season-mode-button span {
@@ -897,17 +954,16 @@ onBeforeUnmount(() => {
 @media (width <= 960px) {
   .subscribe-season-actions {
     gap: 0.375rem;
-    min-inline-size: 6.75rem;
+    min-inline-size: 0;
   }
 
   .subscribe-season-mode-toggle {
-    inline-size: 6.75rem;
     max-inline-size: 6.75rem;
   }
 
   .subscribe-season-mode-button {
     flex: 1 1 0;
-    padding-inline: 0.25rem;
+    padding-inline: 0.375rem !important;
   }
 
   .subscribe-season-mode-button span {

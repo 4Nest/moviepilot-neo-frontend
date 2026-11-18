@@ -1,20 +1,37 @@
 import {
   applyDocumentThemeChrome,
   getThemeColorScheme,
+  normalizeResolvedThemeName,
   resolveThemeName,
   themeRootPalettes,
 } from '@/utils/themePalette'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('theme palette', () => {
-  // 玻璃主题在首屏与运行阶段都应保持深色外壳和夜航底色。
-  it('resolves glass as a dark theme with its dedicated launch palette', () => {
-    expect(resolveThemeName('glass')).toBe('glass')
-    expect(getThemeColorScheme('glass')).toBe('dark')
-    expect(themeRootPalettes.glass).toEqual({
-      background: '#0B1322',
-      primary: '#8D51F9',
+  it('defines Antigravity Dark and Light launch palettes and migrates legacy themes seamlessly to dark', () => {
+    expect(themeRootPalettes.dark).toEqual({
+      background: '#16171D',
+      primary: '#8B7CF6',
     })
+    expect(themeRootPalettes.light).toEqual({
+      background: '#F1F2F6',
+      primary: '#6E5DCF',
+    })
+
+    expect(resolveThemeName('dark')).toBe('dark')
+    expect(resolveThemeName('light')).toBe('light')
+    expect(['dark', 'light']).toContain(resolveThemeName('auto'))
+    expect(resolveThemeName('glass')).toBe('dark')
+    expect(resolveThemeName('transparent')).toBe('dark')
+    expect(resolveThemeName('purple')).toBe('dark')
+
+    expect(normalizeResolvedThemeName('glass')).toBe('dark')
+    expect(normalizeResolvedThemeName('transparent')).toBe('dark')
+    expect(normalizeResolvedThemeName('purple')).toBe('dark')
+    expect(normalizeResolvedThemeName('light')).toBe('light')
+
+    expect(getThemeColorScheme('dark')).toBe('dark')
+    expect(getThemeColorScheme('light')).toBe('light')
   })
 
   it('notifies the favicon renderer with the applied primary color', () => {
@@ -24,7 +41,7 @@ describe('theme palette', () => {
 
     try {
       const result = applyDocumentThemeChrome('dark', {
-        background: '#0E1116',
+        background: '#16171D',
         primary: '#00BCD4',
       })
       const event = handleFaviconChange.mock.calls[0]?.[0] as CustomEvent<{ color: string }>
@@ -40,13 +57,13 @@ describe('theme palette', () => {
 
   it('persists the resolved auto theme for the next PWA resume', () => {
     applyDocumentThemeChrome('auto', {
-      background: '#0E1116',
+      background: '#16171D',
       persistLoaderColors: true,
-      primary: '#6E66ED',
+      primary: '#8B7CF6',
       resolvedTheme: 'dark',
     })
 
-    expect(localStorage.getItem('materio-initial-loader-bg')).toBe('#0E1116')
+    expect(localStorage.getItem('materio-initial-loader-bg')).toBe('#16171D')
     expect(localStorage.getItem('materio-initial-resolved-theme')).toBe('dark')
   })
 
@@ -54,9 +71,9 @@ describe('theme palette', () => {
     localStorage.setItem('materio-initial-resolved-theme', 'dark')
 
     applyDocumentThemeChrome('light', {
-      background: '#F4F5FA',
+      background: '#F1F2F6',
       persistLoaderColors: true,
-      primary: '#8D51F9',
+      primary: '#6E5DCF',
       resolvedTheme: 'light',
     })
 

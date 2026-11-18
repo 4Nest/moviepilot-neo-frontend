@@ -1,3 +1,4 @@
+import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
 import type { Subscribe, SubscrbieInfo } from '@/api/types'
 import SubscribeFilesDialog from '@/components/dialog/SubscribeFilesDialog.vue'
 import { screen, waitFor, within } from '@testing-library/vue'
@@ -123,18 +124,18 @@ function setViewport(width: number) {
   window.dispatchEvent(new Event('resize'))
 }
 
-function useFilesResponse(
-  id: number,
-  response: JsonBodyType,
-  status = 200,
-  onRequest: (url: URL) => void = () => {},
-) {
+function useFilesResponse(id: number, response: JsonBodyType, status = 200, onRequest: (url: URL) => void = () => {}) {
   server.use(subscribeFilesHandler(id, response, status, onRequest))
 }
 
 async function renderDialog(subid: number) {
   const close = vi.fn()
   const result = await renderWithProviders(SubscribeFilesDialog, {
+    global: {
+      components: {
+        VDialogCloseBtn: DialogCloseBtn,
+      },
+    },
     initialState: {
       globalSettings: {
         data: { GLOBAL_IMAGE_CACHE: false },
@@ -437,11 +438,13 @@ describe('SubscribeFilesDialog', () => {
   it('distinguishes an HTTP failure from an empty response and offers retry', async () => {
     const info = createFilesInfo({ subscribe: createSubscribe({ name: '重试恢复剧', total_episode: 1 }) })
     let requestCount = 0
-    server.use(http.get(subscribeApiUrls.filesById(3102), () => {
-      requestCount += 1
-      if (requestCount === 1) return HttpResponse.json({}, { status: 500 })
-      return HttpResponse.json(info as unknown as JsonBodyType)
-    }))
+    server.use(
+      http.get(subscribeApiUrls.filesById(3102), () => {
+        requestCount += 1
+        if (requestCount === 1) return HttpResponse.json({}, { status: 500 })
+        return HttpResponse.json(info as unknown as JsonBodyType)
+      }),
+    )
     const user = userEvent.setup()
 
     await renderDialog(3102)
@@ -456,9 +459,11 @@ describe('SubscribeFilesDialog', () => {
 
   it('shows loading until the request resolves', async () => {
     const deferred = createDeferred<JsonBodyType>()
-    server.use(http.get(subscribeApiUrls.filesById(3116), async () => {
-      return HttpResponse.json(await deferred.promise)
-    }))
+    server.use(
+      http.get(subscribeApiUrls.filesById(3116), async () => {
+        return HttpResponse.json(await deferred.promise)
+      }),
+    )
 
     await renderDialog(3116)
 

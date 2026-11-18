@@ -29,32 +29,57 @@ const sourceOptions = computed(() => [
 </script>
 <template>
   <div>
-    <VCard max-width="20rem">
+    <VCard max-width="20rem" class="workflow-node-card">
       <Handle id="edge_in" type="target" :position="Position.Left" />
-      <VCardItem>
-        <template v-slot:prepend>
-          <VAvatar>
-            <VIcon icon="mdi-file-move" size="x-large"></VIcon>
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="primary" class="workflow-node-avatar">
+            <VIcon icon="mdi-file-move" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.transferFile.title') }}</VCardTitle>
-        <VCardSubtitle>{{ t('workflow.transferFile.subtitle') }}</VCardSubtitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.transferFile.title') }}</VCardTitle>
+        <VCardSubtitle class="workflow-node-subtitle">{{ t('workflow.transferFile.subtitle') }}</VCardSubtitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VSelect
-              v-model="data.source"
-              :label="t('workflow.transferFile.source')"
-              :items="sourceOptions"
-              outlined
-              dense
-            />
-          </VCol>
-        </VRow>
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="data.source"
+                :label="t('workflow.transferFile.source')"
+                :items="sourceOptions"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <Handle id="edge_out" type="source" :position="Position.Right" />
     </VCard>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-block-start: 1px;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
+}
+</style>

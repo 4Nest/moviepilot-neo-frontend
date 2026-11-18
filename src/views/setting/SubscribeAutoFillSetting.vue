@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
 import { useDisplay } from 'vuetify'
-import api from '@/api'
+import VDialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
+import api, { getApiErrorMessage } from '@/api'
 import { effectOptions, qualityOptions, resolutionOptions } from '@/api/constants'
 import type { CategoryConfig, DownloaderConf, FilterRuleGroup, Site } from '@/api/types'
 import { useI18n } from '@/composables/useChineseText'
@@ -43,10 +44,19 @@ const createConfirm = useConfirm()
 const rules = ref<CategoryRule[]>([])
 const backfillFields = ref<string[]>([])
 
+const savingDraft = ref(false)
+const deletingDraft = ref(false)
+const savingBackfill = ref(false)
+
 const categoryConfig = ref<CategoryConfig>({})
 const sites = ref<Site[]>([])
 const filterRuleGroups = ref<FilterRuleGroup[]>([])
 const downloaders = ref<DownloaderConf[]>([])
+
+const cancelLabel = computed(() => {
+  const label = t('common.cancel')
+  return label === 'common.cancel' ? '取消' : label
+})
 
 const typeOptions = computed(() => [
   { title: t('mediaType.movie'), value: '电影' },
@@ -162,20 +172,28 @@ async function persist(key: string, value: unknown): Promise<boolean> {
   try {
     const result = (await api.post(`system/setting/${key}`, value)) as SettingResponse<unknown>
     if (result?.success) return true
+    $toast.error(t('setting.subscribe.settingsSaveFailed'))
+    return false
   } catch (error) {
     console.error(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.subscribe.settingsSaveFailed'))
+    return false
   }
-  $toast.error(t('setting.subscribe.settingsSaveFailed'))
-  return false
 }
 
 function saveRules() {
   return persist('SubscribeCategoryRules', rules.value.map(serializeRule))
 }
 
-function saveBackfill(fields: string[]) {
+async function saveBackfill(fields: string[]) {
+  if (savingBackfill.value) return false
   backfillFields.value = fields
-  return persist('SubscribeDownloadBackfill', fields)
+  savingBackfill.value = true
+  try {
+    return await persist('SubscribeDownloadBackfill', fields)
+  } finally {
+    savingBackfill.value = false
+  }
 }
 
 function toggleRule(rule: CategoryRule, enabled: boolean | null) {
@@ -209,17 +227,23 @@ function onDraftTypeChange() {
 }
 
 async function confirmDraft() {
-  if (!draft.value) return
+  if (!draft.value || savingDraft.value || deletingDraft.value) return
   if (!draft.value.categories.length) {
     $toast.error(t('setting.subscribe.autoFill.categoryRequired'))
     return
   }
-  if (draftIndex.value >= 0) rules.value.splice(draftIndex.value, 1, draft.value)
-  else rules.value.push(draft.value)
-  if (await saveRules()) dialogVisible.value = false
+  savingDraft.value = true
+  try {
+    if (draftIndex.value >= 0) rules.value.splice(draftIndex.value, 1, draft.value)
+    else rules.value.push(draft.value)
+    if (await saveRules()) dialogVisible.value = false
+  } finally {
+    savingDraft.value = false
+  }
 }
 
 async function deleteDraft() {
+  if (savingDraft.value || deletingDraft.value) return
   if (draftIndex.value < 0) {
     dialogVisible.value = false
     return
@@ -230,19 +254,30 @@ async function deleteDraft() {
     confirmText: t('common.delete'),
   })
   if (!confirmed) return
-  rules.value.splice(draftIndex.value, 1)
-  if (await saveRules()) dialogVisible.value = false
+  deletingDraft.value = true
+  try {
+    rules.value.splice(draftIndex.value, 1)
+    if (await saveRules()) dialogVisible.value = false
+  } finally {
+    deletingDraft.value = false
+  }
 }
 
 /** 调整规则顺序（同一分类以靠前的规则为准），立即生效 */
-function moveDraft(offset: number) {
+async function moveDraft(offset: number) {
+  if (savingDraft.value || deletingDraft.value) return
   const from = draftIndex.value
   const target = from + offset
   if (from < 0 || target < 0 || target >= rules.value.length) return
-  const [rule] = rules.value.splice(from, 1)
-  rules.value.splice(target, 0, rule)
-  draftIndex.value = target
-  saveRules()
+  savingDraft.value = true
+  try {
+    const [rule] = rules.value.splice(from, 1)
+    rules.value.splice(target, 0, rule)
+    draftIndex.value = target
+    await saveRules()
+  } finally {
+    savingDraft.value = false
+  }
 }
 
 onMounted(() => {
@@ -259,9 +294,17 @@ watch(
 </script>
 
 <template>
-  <VCard>
+  <VCard class="mp-setting-card">
     <VCardItem>
-      <VCardTitle>{{ t('setting.subscribe.autoFill.title') }}</VCardTitle>
+      <template #prepend>
+        <div class="mp-setting-card__icon mp-setting-card__icon--success">
+          <VIcon icon="mdi-auto-fix" size="18" />
+        </div>
+      </template>
+      <VCardTitle class="d-flex align-center gap-2">
+        <span>{{ t('setting.subscribe.autoFill.title') }}</span>
+        <span v-if="rules.length > 0" class="mp-count-pill">{{ rules.length }}</span>
+      </VCardTitle>
       <VCardSubtitle>{{ t('setting.subscribe.autoFill.desc') }}</VCardSubtitle>
     </VCardItem>
 
@@ -308,6 +351,7 @@ watch(
               class="auto-fill__switch"
               density="compact"
               hide-details
+              inset
               color="primary"
               @click.stop
               @update:model-value="enabled => toggleRule(rule, enabled)"
@@ -352,9 +396,10 @@ watch(
           v-for="option in backfillOptions"
           :key="option.value"
           :value="option.value"
-          :color="backfillFields.includes(option.value) ? 'primary' : ''"
+          :color="backfillFields.includes(option.value) ? 'primary' : undefined"
+          :variant="backfillFields.includes(option.value) ? 'tonal' : 'outlined'"
+          rounded="lg"
           filter
-          variant="outlined"
         >
           {{ option.title }}
         </VChip>
@@ -362,160 +407,218 @@ watch(
     </VCardText>
   </VCard>
 
-  <!-- 规则编辑对话框 -->
-  <VDialog v-model="dialogVisible" scrollable max-width="45rem" :fullscreen="!display.smAndUp.value">
-    <VCard v-if="draft">
-      <VCardItem>
-        <VCardTitle>
-          {{ draftIndex >= 0 ? t('setting.subscribe.autoFill.editRule') : t('setting.subscribe.autoFill.addRule') }}
-        </VCardTitle>
-      </VCardItem>
-      <VDialogCloseBtn v-model="dialogVisible" />
-      <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12" sm="4">
-            <VSelect
-              v-model="draft.type"
-              :items="typeOptions"
-              :label="t('setting.subscribe.autoFill.mediaType')"
-              @update:model-value="onDraftTypeChange"
-            />
-          </VCol>
-          <VCol cols="12" sm="8">
-            <VAutocomplete
-              v-model="draft.categories"
-              :items="categoryOptions(draft.type)"
-              :label="t('setting.subscribe.autoFill.categories')"
-              chips
-              closable-chips
-              multiple
-            />
-          </VCol>
-          <VCol cols="12" sm="4">
-            <VSelect
-              v-model="draft.resolution"
-              :items="resolutionOptions"
-              :label="t('setting.subscribe.autoFill.fieldResolution')"
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="4">
-            <VSelect
-              v-model="draft.quality"
-              :items="qualityOptions"
-              :label="t('setting.subscribe.autoFill.fieldQuality')"
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="4">
-            <VSelect
-              v-model="draft.effect"
-              :items="effectOptions"
-              :label="t('setting.subscribe.autoFill.fieldEffect')"
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="6">
-            <VTextField
-              v-model="draft.include"
-              :label="t('setting.subscribe.autoFill.include')"
-              :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="6">
-            <VTextField
-              v-model="draft.exclude"
-              :label="t('setting.subscribe.autoFill.exclude')"
-              :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="6">
-            <VAutocomplete
-              v-model="draft.sites"
-              :items="siteOptions"
-              :label="t('setting.subscribe.autoFill.fieldSite')"
-              chips
-              closable-chips
-              multiple
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="6">
-            <VAutocomplete
-              v-model="draft.filter_groups"
-              :items="filterRuleGroupOptions"
-              :label="t('setting.subscribe.autoFill.filterGroups')"
-              chips
-              closable-chips
-              multiple
-              clearable
-            />
-          </VCol>
-          <VCol cols="12" sm="4">
-            <VSelect
-              v-model="draft.downloader"
-              :items="downloaderOptions"
-              :label="t('setting.subscribe.autoFill.downloader')"
-            />
-          </VCol>
-          <VCol cols="12" sm="8">
-            <VTextField
-              v-model="draft.save_path"
-              :label="t('setting.subscribe.autoFill.savePath')"
-              :placeholder="t('setting.subscribe.autoFill.savePathHint')"
-              clearable
-            />
-          </VCol>
-        </VRow>
+  <!-- 规则编辑对话框（清爽分组排版与底栏） -->
+  <VDialog v-model="dialogVisible" scrollable max-width="46rem" :fullscreen="!display.smAndUp.value">
+    <VCard v-if="draft" class="auto-fill-dialog">
+      <header class="auto-fill-dialog__header">
+        <div class="auto-fill-dialog__header-copy">
+          <h3 class="auto-fill-dialog__title">
+            {{ draftIndex >= 0 ? t('setting.subscribe.autoFill.editRule') : t('setting.subscribe.autoFill.addRule') }}
+          </h3>
+          <p class="auto-fill-dialog__subtitle">为选中的二级分类自动填充默认订阅过滤与下载配置</p>
+        </div>
+        <VDialogCloseBtn inner-class="auto-fill-dialog__close flex-shrink-0" @click="dialogVisible = false" />
+      </header>
+
+      <VCardText class="auto-fill-dialog__body">
+        <VForm class="auto-fill-dialog__form" @submit.prevent="() => {}">
+          <div class="auto-fill-dialog__group">
+            <div class="auto-fill-dialog__group-title">适用分类</div>
+            <VRow>
+              <VCol cols="12" sm="4">
+                <VSelect
+                  v-model="draft.type"
+                  :items="typeOptions"
+                  :label="t('setting.subscribe.autoFill.mediaType')"
+                  hide-details="auto"
+                  @update:model-value="onDraftTypeChange"
+                />
+              </VCol>
+              <VCol cols="12" sm="8">
+                <VAutocomplete
+                  v-model="draft.categories"
+                  :items="categoryOptions(draft.type)"
+                  :label="t('setting.subscribe.autoFill.categories')"
+                  hide-details="auto"
+                  chips
+                  closable-chips
+                  multiple
+                />
+              </VCol>
+            </VRow>
+          </div>
+
+          <div class="auto-fill-dialog__group">
+            <div class="auto-fill-dialog__group-title">资源规格与过滤条件</div>
+            <VRow>
+              <VCol cols="12" sm="4">
+                <VSelect
+                  v-model="draft.resolution"
+                  :items="resolutionOptions"
+                  :label="t('setting.subscribe.autoFill.fieldResolution')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="4">
+                <VSelect
+                  v-model="draft.quality"
+                  :items="qualityOptions"
+                  :label="t('setting.subscribe.autoFill.fieldQuality')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="4">
+                <VSelect
+                  v-model="draft.effect"
+                  :items="effectOptions"
+                  :label="t('setting.subscribe.autoFill.fieldEffect')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VTextField
+                  v-model="draft.include"
+                  :label="t('setting.subscribe.autoFill.include')"
+                  :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VTextField
+                  v-model="draft.exclude"
+                  :label="t('setting.subscribe.autoFill.exclude')"
+                  :placeholder="t('setting.subscribe.autoFill.regexPlaceholder')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VAutocomplete
+                  v-model="draft.sites"
+                  :items="siteOptions"
+                  :label="t('setting.subscribe.autoFill.fieldSite')"
+                  hide-details="auto"
+                  chips
+                  closable-chips
+                  multiple
+                  clearable
+                />
+              </VCol>
+              <VCol cols="12" sm="6">
+                <VAutocomplete
+                  v-model="draft.filter_groups"
+                  :items="filterRuleGroupOptions"
+                  :label="t('setting.subscribe.autoFill.filterGroups')"
+                  hide-details="auto"
+                  chips
+                  closable-chips
+                  multiple
+                  clearable
+                />
+              </VCol>
+            </VRow>
+          </div>
+
+          <div class="auto-fill-dialog__group">
+            <div class="auto-fill-dialog__group-title">下载目标</div>
+            <VRow>
+              <VCol cols="12" sm="4">
+                <VSelect
+                  v-model="draft.downloader"
+                  :items="downloaderOptions"
+                  :label="t('setting.subscribe.autoFill.downloader')"
+                  hide-details="auto"
+                />
+              </VCol>
+              <VCol cols="12" sm="8">
+                <VTextField
+                  v-model="draft.save_path"
+                  :label="t('setting.subscribe.autoFill.savePath')"
+                  :placeholder="t('setting.subscribe.autoFill.savePathHint')"
+                  hide-details="auto"
+                  clearable
+                />
+              </VCol>
+            </VRow>
+          </div>
+        </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
-        <template v-if="draftIndex >= 0">
+
+      <footer class="auto-fill-dialog__footer">
+        <div class="auto-fill-dialog__footer-left">
+          <template v-if="draftIndex >= 0">
+            <VBtn
+              color="error"
+              variant="tonal"
+              size="small"
+              icon="mdi-delete-outline"
+              class="auto-fill-dialog__icon-btn"
+              :loading="deletingDraft"
+              :disabled="savingDraft || deletingDraft"
+              :aria-label="t('common.delete')"
+              @click="deleteDraft"
+            />
+            <VTooltip :text="t('setting.subscribe.autoFill.moveUp')" location="top">
+              <template #activator="{ props: tip }">
+                <VBtn
+                  v-bind="tip"
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  icon="mdi-arrow-up"
+                  class="auto-fill-dialog__icon-btn"
+                  :disabled="draftIndex === 0 || savingDraft || deletingDraft"
+                  :aria-label="t('setting.subscribe.autoFill.moveUp')"
+                  @click="moveDraft(-1)"
+                />
+              </template>
+            </VTooltip>
+            <VTooltip :text="t('setting.subscribe.autoFill.moveDown')" location="top">
+              <template #activator="{ props: tip }">
+                <VBtn
+                  v-bind="tip"
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  icon="mdi-arrow-down"
+                  class="auto-fill-dialog__icon-btn"
+                  :disabled="draftIndex === rules.length - 1 || savingDraft || deletingDraft"
+                  :aria-label="t('setting.subscribe.autoFill.moveDown')"
+                  @click="moveDraft(1)"
+                />
+              </template>
+            </VTooltip>
+          </template>
+        </div>
+        <div class="auto-fill-dialog__footer-right">
           <VBtn
-            color="error"
-            variant="tonal"
-            class="app-dialog-actions__icon-btn"
-            :aria-label="t('common.delete')"
-            @click="deleteDraft"
+            variant="text"
+            color="default"
+            size="small"
+            rounded="lg"
+            :disabled="savingDraft || deletingDraft"
+            @click="dialogVisible = false"
           >
-            <VIcon icon="mdi-delete" />
+            {{ cancelLabel }}
           </VBtn>
-          <VTooltip :text="t('setting.subscribe.autoFill.moveUp')" location="top">
-            <template #activator="{ props: tip }">
-              <VBtn
-                v-bind="tip"
-                variant="tonal"
-                class="app-dialog-actions__icon-btn"
-                :disabled="draftIndex === 0"
-                :aria-label="t('setting.subscribe.autoFill.moveUp')"
-                @click="moveDraft(-1)"
-              >
-                <VIcon icon="mdi-arrow-up" />
-              </VBtn>
-            </template>
-          </VTooltip>
-          <VTooltip :text="t('setting.subscribe.autoFill.moveDown')" location="top">
-            <template #activator="{ props: tip }">
-              <VBtn
-                v-bind="tip"
-                variant="tonal"
-                class="app-dialog-actions__icon-btn"
-                :disabled="draftIndex === rules.length - 1"
-                :aria-label="t('setting.subscribe.autoFill.moveDown')"
-                @click="moveDraft(1)"
-              >
-                <VIcon icon="mdi-arrow-down" />
-              </VBtn>
-            </template>
-          </VTooltip>
-        </template>
-        <VSpacer />
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-check" class="px-5" @click="confirmDraft">
-          {{ t('common.confirm') }}
-        </VBtn>
-      </VCardActions>
+          <VBtn
+            color="primary"
+            variant="flat"
+            size="small"
+            rounded="lg"
+            class="px-4"
+            :loading="savingDraft"
+            :disabled="savingDraft || deletingDraft"
+            @click="confirmDraft"
+          >
+            {{ t('common.confirm') }}
+          </VBtn>
+        </div>
+      </footer>
     </VCard>
   </VDialog>
 </template>
@@ -524,13 +627,13 @@ watch(
 .auto-fill__section-head {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  margin-block-end: 0.75rem;
+  gap: 6px;
+  margin-block-end: 13px;
 }
 
 .auto-fill__section-title {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
 .auto-fill__info {
@@ -541,27 +644,27 @@ watch(
 /* ===== 规则卡片网格 ===== */
 .auto-fill__grid {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 13px;
+  grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
 }
 
 .auto-fill__rule {
   display: flex;
   flex-direction: column;
-  padding: 0.75rem 0.875rem 0.875rem;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
-  background: rgba(var(--v-theme-on-surface), 0.03);
+  padding: 11px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background: rgba(var(--v-theme-on-surface), 0.025) !important;
   cursor: pointer;
-  min-block-size: 5.5rem;
-  gap: 0.375rem;
+  gap: 5px;
+  min-block-size: 76px;
   transition:
     border-color 0.15s,
     opacity 0.15s;
 }
 
 .auto-fill__rule:hover {
-  border-color: rgba(var(--v-theme-primary), 0.6);
+  border-color: var(--mp-border-hover);
 }
 
 .auto-fill__rule--disabled {
@@ -571,7 +674,7 @@ watch(
 .auto-fill__rule-top {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 6px;
 }
 
 .auto-fill__switch {
@@ -584,7 +687,7 @@ watch(
 
 .auto-fill__rule-title {
   overflow: hidden;
-  font-size: 1rem;
+  font-size: 13.5px;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -593,17 +696,17 @@ watch(
 .auto-fill__rule-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .auto-fill__tag {
   overflow: hidden;
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.25rem;
+  font-size: 12px;
+  line-height: 1.4;
   max-inline-size: 100%;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -620,15 +723,15 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem;
-  border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
-  border-radius: 8px;
+  padding: 11px 14px;
+  border: 1px dashed var(--mp-border-hover);
+  border-radius: 10px;
   background: none;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: pointer;
-  font-size: 0.8125rem;
-  gap: 0.25rem;
-  min-block-size: 5.5rem;
+  font-size: 12.5px;
+  gap: 4px;
+  min-block-size: 76px;
   transition:
     border-color 0.15s,
     color 0.15s;
@@ -641,5 +744,80 @@ watch(
 
 .auto-fill__backfill {
   padding-block: 0;
+}
+
+/* ===== 规则编辑弹窗分组样式 ===== */
+.auto-fill-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 15px 21px 12px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  gap: 13px;
+}
+
+.auto-fill-dialog__title {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.auto-fill-dialog__subtitle {
+  margin: 2px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.auto-fill-dialog__close {
+  color: rgba(var(--v-theme-on-surface), 0.56) !important;
+}
+
+.auto-fill-dialog__body {
+  padding: 16px 21px !important;
+}
+
+.auto-fill-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.auto-fill-dialog__group {
+  padding: 13px 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.015);
+}
+
+.auto-fill-dialog__group-title {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 12px;
+  font-weight: 600;
+  margin-block-end: 10px;
+}
+
+.auto-fill-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 21px;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 13px;
+}
+
+.auto-fill-dialog__footer-left,
+.auto-fill-dialog__footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auto-fill-dialog__icon-btn {
+  border-radius: 7px !important;
+  block-size: 30px !important;
+  inline-size: 30px !important;
 }
 </style>

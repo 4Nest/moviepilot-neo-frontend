@@ -117,6 +117,7 @@ const headers = [
     title: t('transferHistory.pathColumn'),
     key: 'src',
     sortable: true,
+    cellProps: { class: 'history-path-td' },
   },
   {
     title: t('transferHistory.modeColumn'),
@@ -158,6 +159,7 @@ const groupHeaders = [
     title: t('transferHistory.pathColumn'),
     key: 'src',
     sortable: true,
+    cellProps: { class: 'history-path-td' },
   },
   {
     title: t('transferHistory.modeColumn'),
@@ -472,11 +474,23 @@ async function fetchData(page = currentPage.value, count = itemsPerPage.value, o
     if (requestSeed !== fetchDataRequestSeed) return
 
     const list: TransferHistory[] = Array.isArray(result.data?.list) ? result.data.list : []
+    const isQueryChanged = displayedDesktopQueryKey !== undefined && displayedDesktopQueryKey !== queryKey
 
     isRefreshed.value = true
     dataList.value = list
     totalItems.value = ensureNumber(result.data?.total, 0)
     updateSearchHintList(list)
+
+    if (isDesktop.value) {
+      if (isQueryChanged) {
+        selected.value = []
+      } else if (selected.value.length > 0) {
+        const validItems = new Map(list.map(item => [item.id, item]))
+        selected.value = selected.value
+          .map(item => validItems.get(item.id))
+          .filter((item): item is TransferHistory => Boolean(item))
+      }
+    }
 
     // 等新数据和虚拟列表更新后再归零；同页刷新及 KeepAlive 返回保留阅读位置。
     await nextTick()
@@ -768,12 +782,17 @@ async function remove(item: TransferHistory, deleteSrc: boolean, deleteDest: boo
 async function removeSingle(deleteSrc: boolean, deleteDest: boolean) {
   // 关闭弹窗
   closeDeleteConfirmDialog()
-  if (!currentHistory.value) return
+  const targetHistory = currentHistory.value
+  if (!targetHistory) return
 
   // 删除
-  await remove(currentHistory.value, deleteSrc, deleteDest)
+  const deleted = await remove(targetHistory, deleteSrc, deleteDest)
+  if (deleted) {
+    selected.value = selected.value.filter(item => item.id !== targetHistory.id)
+    currentHistory.value = undefined
+  }
   // 刷新
-  await refreshDataAfterOperation()
+  await refreshDataAfterOperation(isMobile.value ? selected.value : [])
 }
 
 // 批量删除记录
@@ -840,8 +859,9 @@ async function removeHistoryBatch() {
 async function retransferBatch() {
   if (selected.value.length === 0) return
 
-  // 清空当前操作记录
+  // 清空当前操作记录与单条重整理残留的目标存储
   currentHistory.value = undefined
+  redoTargetStorage.value = undefined
   // 重新整理IDS
   redoIds.value = selected.value.map(item => item.id)
   // 打开识别弹窗
@@ -993,6 +1013,19 @@ function getHistoryStorageName(storage?: string) {
   }
 
   return storageDict.value[storage] || fallbackNames[storage] || storage
+}
+
+/** 拆分完整路径为「目录前缀 + 末尾完整文件名」，既完整保留路径又突出核心文件名。 */
+function splitHistoryPath(rawPath?: string): { dir: string; file: string } {
+  const text = rawPath || ''
+  const slashIdx = Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'))
+  if (slashIdx < 0 || slashIdx === text.length - 1) {
+    return { dir: '', file: text }
+  }
+  return {
+    dir: text.slice(0, slashIdx + 1),
+    file: text.slice(slashIdx + 1),
+  }
 }
 
 // 获取移动端卡片状态对应的主题色。
@@ -1330,56 +1363,112 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VCard v-if="isDesktop" ref="desktopHistoryCardRef">
-    <VCardItem>
-      <VCardTitle>
-        <VRow>
-          <VCol cols="8" md="6" class="flex">
-            <VCombobox
-              key="search_navbar"
-              :model-value="search"
-              @update:model-value="setSearchValue"
-              :items="searchHintList"
-              @compositionstart="isComposing = true"
-              @compositionend="isComposing = false"
-              class="text-disabled"
-              density="compact"
-              :placeholder="t('transferHistory.searchPlaceholder')"
-              :aria-label="t('transferHistory.searchPlaceholder')"
-              prepend-inner-icon="mdi-magnify"
-              variant="solo-filled"
-              max-width="25rem"
-              single-line
-              hide-details
-              flat
-              rounded="pill"
-              clearable
-            />
-          </VCol>
-          <VCol cols="4" md="6" class="text-end">
-            <VTooltip :text="t('transferHistory.actions.clearAll')" location="top">
-              <template #activator="{ props }">
-                <VBtn
-                  v-bind="props"
-                  icon="mdi-delete-sweep-outline"
-                  variant="text"
-                  color="error"
-                  :loading="clearing"
-                  :disabled="!hasHistoryRecords || clearing"
-                  :aria-label="t('transferHistory.actions.clearAll')"
-                  @click="clearAllHistory"
-                />
-              </template>
-            </VTooltip>
-            <VBtnGroup variant="outlined" divided rounded>
-              <VBtn :icon="group ? 'mdi-format-list-bulleted' : 'mdi-format-list-group'" @click="group = !group" />
-            </VBtnGroup>
-          </VCol>
-        </VRow>
-      </VCardTitle>
-    </VCardItem>
+  <VCard v-if="isDesktop" ref="desktopHistoryCardRef" class="transfer-history-card">
+    <!-- 干净标准的 54px 顶部工具栏 -->
+    <div class="transfer-history-toolbar">
+      <div class="transfer-history-toolbar__left">
+        <VCombobox
+          key="search_navbar"
+          :model-value="search"
+          @update:model-value="setSearchValue"
+          :items="searchHintList"
+          @compositionstart="isComposing = true"
+          @compositionend="isComposing = false"
+          class="transfer-history-search"
+          density="compact"
+          :placeholder="t('transferHistory.searchPlaceholder')"
+          :aria-label="t('transferHistory.searchPlaceholder')"
+          prepend-inner-icon="mdi-magnify"
+          variant="outlined"
+          single-line
+          hide-details
+          clearable
+        />
+      </div>
+
+      <div class="transfer-history-toolbar__actions">
+        <template v-if="selected.length > 0">
+          <span class="history-selected-badge">已选 {{ selected.length }} 项</span>
+          <VBtn
+            size="small"
+            color="secondary"
+            variant="text"
+            rounded="lg"
+            class="history-clear-selection-btn"
+            :aria-label="t('transferHistory.actions.deselectAll')"
+            @click="selected = []"
+          >
+            {{ t('transferHistory.actions.deselectAll') }}
+          </VBtn>
+        </template>
+
+        <template v-if="!appMode && isRefreshed">
+          <VBtn
+            v-if="selected.length > 0"
+            size="small"
+            color="secondary"
+            variant="outlined"
+            rounded="lg"
+            prepend-icon="mdi-redo-variant"
+            @click="retransferBatch"
+          >
+            {{ t('transferHistory.actions.batchRedo') }}
+          </VBtn>
+          <VBtn
+            v-if="selected.length > 0"
+            size="small"
+            color="error"
+            variant="tonal"
+            rounded="lg"
+            prepend-icon="mdi-trash-can-outline"
+            @click="removeHistoryBatch"
+          >
+            {{ t('transferHistory.actions.batchDelete') }}
+          </VBtn>
+          <VBtn
+            size="small"
+            color="secondary"
+            variant="outlined"
+            rounded="lg"
+            prepend-icon="mdi-timer-sand-paused"
+            @click="openTransferQueueDialog"
+          >
+            {{ t('dialog.transferQueue.title') }}
+          </VBtn>
+        </template>
+
+        <VBtn
+          size="small"
+          color="secondary"
+          variant="outlined"
+          rounded="lg"
+          :prepend-icon="group ? 'mdi-format-list-bulleted' : 'mdi-format-list-group'"
+          :aria-label="group ? '切换为列表视图' : '按标题分组视图'"
+          @click="group = !group"
+        >
+          {{ group ? '列表视图' : '分组视图' }}
+        </VBtn>
+
+        <VBtn
+          size="small"
+          color="error"
+          variant="tonal"
+          rounded="lg"
+          prepend-icon="mdi-delete-sweep-outline"
+          class="history-toolbar-clear-btn"
+          :loading="clearing"
+          :disabled="!hasHistoryRecords || clearing"
+          :aria-label="t('transferHistory.actions.clearAll')"
+          @click="clearAllHistory"
+        >
+          {{ t('transferHistory.actions.clearAll') }}
+        </VBtn>
+      </div>
+    </div>
+
     <VDataTableVirtual
       v-model="selected"
+      class="transfer-history-table"
       :groupBy="group ? groupBy : undefined"
       :headers="group ? groupHeaders : headers"
       :items="dataList"
@@ -1399,21 +1488,28 @@ onUnmounted(() => {
         <span>{{ t('transferHistory.titleColumn') }}</span>
       </template>
       <template v-if="group" v-slot:group-header="{ item, columns, toggleGroup, isGroupOpen }">
-        <tr>
+        <tr class="history-group-row">
           <td :colspan="columns.length">
-            <div class="d-flex align-center gap-2">
+            <div class="d-flex align-center gap-2 py-1">
               <VBtn
                 :icon="isGroupOpen(item) ? '$expand' : '$next'"
-                size="small"
+                size="x-small"
+                color="default"
                 variant="text"
                 @click="toggleGroup(item)"
               />
               <VCheckbox
+                density="compact"
+                hide-details
                 :model-value="selectedCountsGroupedByTitle[item.value] == item.items.length"
-                :indeterminate="selectedCountsGroupedByTitle[item.value] < item.items.length"
+                :indeterminate="
+                  (selectedCountsGroupedByTitle[item.value] || 0) > 0 &&
+                  selectedCountsGroupedByTitle[item.value] < item.items.length
+                "
                 @update:modelValue="checked => toggleGroupSelection(checked, item.items)"
               />
-              {{ item.value }}
+              <span class="font-weight-medium text-high-emphasis">{{ item.value }}</span>
+              <span class="history-group-count">{{ item.items.length }}</span>
             </div>
           </td>
         </tr>
@@ -1430,59 +1526,77 @@ onUnmounted(() => {
         />
       </template>
       <template #item.title="{ item }">
-        <div class="d-flex align-center">
-          <VAvatar>
-            <VIcon :icon="getIcon(item.type || '')" />
-          </VAvatar>
-          <div class="d-flex flex-column ms-1">
-            <span v-if="item.type === '电视剧'" class="d-block text-high-emphasis min-w-20">
+        <div class="history-title-cell" :class="{ 'history-title-cell--grouped': group }">
+          <span class="history-title-icon">
+            <VIcon :icon="getIcon(item.type || '')" size="16" />
+          </span>
+          <div class="history-title-copy">
+            <span v-if="item.type === '电视剧'" class="history-title-primary text-high-emphasis">
               <template v-if="!group">{{ item?.title }} </template>{{ item?.seasons }}{{ item?.episodes }}
             </span>
-            <span v-else class="d-block text-high-emphasis min-w-20">
+            <span v-else class="history-title-primary text-high-emphasis">
               {{ item?.title || item?.year || item?.type }}
             </span>
-            <small>{{ item?.category }}</small>
+            <span v-if="item?.category" class="history-title-category">{{ item?.category }}</span>
           </div>
         </div>
       </template>
       <template #item.src="{ item }">
-        <div>
-          <span>
-            <VChip variant="tonal" size="small" label class="my-1"> {{ storageDict[item?.src_storage || ''] }}</VChip>
-            <small>{{ item?.src }}</small>
-          </span>
-          <span class="text-high-emphasis text-bold"> => </span>
-          <br />
-          <span v-if="item?.dest">
-            <VChip variant="tonal" size="small" label class="my-1"> {{ storageDict[item?.dest_storage || ''] }}</VChip>
-            <small>{{ item?.dest }}</small>
-          </span>
+        <div class="history-paths">
+          <div class="history-paths__row">
+            <span class="history-storage-badge">{{ getHistoryStorageName(item?.src_storage) }}</span>
+            <span class="history-paths__src" :title="item?.src">
+              <span class="history-paths__dir">{{ splitHistoryPath(item?.src).dir }}</span
+              ><span class="history-paths__file">{{ splitHistoryPath(item?.src).file }}</span>
+            </span>
+          </div>
+          <div v-if="item?.dest" class="history-paths__row history-paths__row--dest">
+            <VIcon icon="mdi-subdirectory-arrow-right" size="14" class="history-paths__arrow" />
+            <span class="history-storage-badge">{{ getHistoryStorageName(item?.dest_storage) }}</span>
+            <span class="history-paths__dest" :title="item?.dest">
+              <span class="history-paths__dir">{{ splitHistoryPath(item?.dest).dir }}</span
+              ><span class="history-paths__file history-paths__file--dest">{{
+                splitHistoryPath(item?.dest).file
+              }}</span>
+            </span>
+          </div>
         </div>
       </template>
       <template #item.mode="{ item }">
-        <VChip variant="outlined" color="primary" size="small">
+        <VChip variant="tonal" color="secondary" size="x-small" label class="history-pill">
           {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
         </VChip>
       </template>
       <template #item.status="{ item }">
-        <VChip v-if="item?.status" color="success" size="small"> {{ t('transferHistory.status.success') }} </VChip>
-        <VTooltip v-else :text="item?.errmsg">
+        <VChip v-if="item?.status" variant="tonal" color="success" size="x-small" label class="history-pill">
+          {{ t('transferHistory.status.success') }}
+        </VChip>
+        <VTooltip v-else :text="item?.errmsg" max-width="360">
           <template #activator="{ props }">
-            <VChip v-bind="props" color="error" size="small"> {{ t('transferHistory.status.failed') }} </VChip>
+            <VChip
+              v-bind="props"
+              variant="tonal"
+              color="error"
+              size="x-small"
+              label
+              class="history-pill history-pill--clickable"
+            >
+              {{ t('transferHistory.status.failed') }}
+            </VChip>
           </template>
         </VTooltip>
       </template>
       <template #item.size="{ item }">
-        <small>{{ formatFileSize(item?.src_fileitem?.size || 0) }}</small>
+        <span class="history-meta-text">{{ formatFileSize(item?.src_fileitem?.size || 0) }}</span>
       </template>
       <template #item.date="{ item }">
-        <small>{{ item?.date }}</small>
+        <span class="history-meta-text">{{ item?.date }}</span>
       </template>
       <template #item.actions="{ item }">
-        <IconBtn>
-          <VIcon icon="mdi-dots-vertical" />
+        <IconBtn class="history-row-menu-btn">
+          <VIcon icon="mdi-dots-vertical" size="18" />
           <VMenu activator="parent" close-on-content-click>
-            <VList>
+            <VList density="compact">
               <VListItem
                 v-for="(menu, i) in getDropdownItems(item)"
                 :key="i"
@@ -1491,7 +1605,7 @@ onUnmounted(() => {
                 @click="menu.props.click()"
               >
                 <template #prepend>
-                  <VIcon :icon="menu.props.prependIcon" />
+                  <VIcon :icon="menu.props.prependIcon" size="17" />
                 </template>
                 <VListItemTitle v-text="menu.title" />
               </VListItem>
@@ -1499,17 +1613,36 @@ onUnmounted(() => {
           </VMenu>
         </IconBtn>
       </template>
-      <template #no-data> {{ t('transferHistory.noData') }} </template>
+      <template #no-data>
+        <div class="history-empty-state">
+          <VIcon icon="mdi-history" size="28" class="history-empty-state__icon" />
+          <span>{{ t('transferHistory.noData') }}</span>
+        </div>
+      </template>
     </VDataTableVirtual>
-    <VDivider />
-    <div class="flex items-center justify-between">
-      <div class="transfer-history-pagination__size w-auto">
-        <VSelect v-model="itemsPerPage" :items="pageRange" density="compact" flat class="ms-1" />
+
+    <div class="transfer-history-footer">
+      <div class="transfer-history-footer__left">
+        <VSelect
+          v-model="itemsPerPage"
+          :items="pageRange"
+          variant="outlined"
+          density="compact"
+          hide-details
+          class="transfer-history-footer__select"
+        />
+        <span class="transfer-history-pagination__info">
+          {{ t('transferHistory.pageInfo', pageTip) }}
+        </span>
       </div>
-      <div class="transfer-history-pagination__info w-auto text-sm">
-        {{ t('transferHistory.pageInfo', pageTip) }}
-      </div>
-      <VPagination v-model="currentPage" show-first-last-page :length="totalPage" :total-visible="7" />
+      <VPagination
+        v-model="currentPage"
+        density="compact"
+        size="small"
+        show-first-last-page
+        :length="totalPage"
+        :total-visible="7"
+      />
     </div>
   </VCard>
 
@@ -1519,6 +1652,16 @@ onUnmounted(() => {
         :title="t('navItems.mediaOrganize')"
         class="transfer-history-mobile-title my-0"
         style="margin-block: 0"
+      />
+      <VBtn
+        v-if="!appMode && isRefreshed"
+        icon="mdi-timer-sand-paused"
+        color="primary"
+        :aria-label="t('dialog.transferQueue.title')"
+        :title="t('dialog.transferQueue.title')"
+        variant="text"
+        class="settings-icon-button"
+        @click="openTransferQueueDialog"
       />
       <VBtn
         icon="mdi-delete-sweep-outline"
@@ -1533,7 +1676,7 @@ onUnmounted(() => {
       />
       <VBtn
         icon="mdi-checkbox-multiple-marked-outline"
-        :color="mobileBatchMode ? 'primary' : 'gray'"
+        :color="mobileBatchMode ? 'primary' : undefined"
         :aria-label="
           mobileBatchMode ? t('transferHistory.actions.exitBatchSelect') : t('transferHistory.actions.batchSelect')
         "
@@ -1554,7 +1697,7 @@ onUnmounted(() => {
       @compositionstart="isComposing = true"
       @compositionend="isComposing = false"
       class="transfer-history-mobile-search"
-      density="comfortable"
+      density="compact"
       :placeholder="t('transferHistory.searchPlaceholder')"
       :aria-label="t('transferHistory.searchPlaceholder')"
       prepend-inner-icon="mdi-magnify"
@@ -1562,7 +1705,7 @@ onUnmounted(() => {
       single-line
       hide-details
       flat
-      rounded="pill"
+      rounded="lg"
       clearable
     />
 
@@ -1683,7 +1826,13 @@ onUnmounted(() => {
               </IconBtn>
 
               <div class="transfer-history-mobile-record__meta">
-                <VChip class="transfer-history-mobile-record__mode" variant="outlined" color="primary" size="small">
+                <VChip
+                  class="transfer-history-mobile-record__mode"
+                  variant="tonal"
+                  color="secondary"
+                  size="x-small"
+                  label
+                >
                   {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
                 </VChip>
                 <span>{{ formatFileSize(item?.src_fileitem?.size || 0) }}</span>
@@ -1702,7 +1851,15 @@ onUnmounted(() => {
                 <span class="transfer-history-mobile-record__storage">
                   {{ getHistoryStorageName(item?.src_storage) }}
                 </span>
-                <p>{{ item?.src || t('common.unknown') }}</p>
+                <p>
+                  <template v-if="item?.src">
+                    <span class="transfer-history-mobile-record__path-dir">{{ splitHistoryPath(item.src).dir }}</span
+                    ><span class="transfer-history-mobile-record__path-file">{{
+                      splitHistoryPath(item.src).file
+                    }}</span>
+                  </template>
+                  <template v-else>{{ t('common.unknown') }}</template>
+                </p>
               </div>
               <div v-if="item?.dest" class="transfer-history-mobile-record__path-arrow">
                 <VIcon icon="mdi-arrow-down" size="18" />
@@ -1711,7 +1868,10 @@ onUnmounted(() => {
                 <span class="transfer-history-mobile-record__storage">
                   {{ getHistoryStorageName(item?.dest_storage) }}
                 </span>
-                <p>{{ item.dest }}</p>
+                <p>
+                  <span class="transfer-history-mobile-record__path-dir">{{ splitHistoryPath(item.dest).dir }}</span
+                  ><span class="transfer-history-mobile-record__path-file">{{ splitHistoryPath(item.dest).file }}</span>
+                </p>
               </div>
             </button>
 
@@ -1729,57 +1889,316 @@ onUnmounted(() => {
       <span>{{ t('transferHistory.noData') }}</span>
     </div>
   </section>
-
-  <!-- 非 app 模式下的 FAB 按钮 -->
-  <Teleport to="body" v-if="!appMode && route.path === '/history'">
-    <div v-if="isRefreshed" class="compact-fab-stack compact-fab-stack--history">
-      <VFab
-        v-if="selected.length > 0"
-        icon="mdi-trash-can-outline"
-        color="warning"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="removeHistoryBatch"
-      />
-      <VFab
-        v-if="selected.length > 0"
-        icon="mdi-redo-variant"
-        color="success"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="retransferBatch"
-      />
-      <VFab
-        icon="mdi-timer-sand-paused"
-        color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
-        @click="openTransferQueueDialog"
-      />
-    </div>
-  </Teleport>
 </template>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* stylelint-disable selector-pseudo-class-no-unknown */
 
-.v-table th {
+/* ===== 桌面端整理记录顶部工具栏 ===== */
+.transfer-history-card {
+  overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px !important;
+}
+
+.transfer-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  gap: 12px;
+  min-block-size: 54px;
+}
+
+.transfer-history-toolbar__left {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  max-inline-size: 320px;
+}
+
+.transfer-history-search {
+  inline-size: 100%;
+}
+
+.transfer-history-search :deep(.v-field) {
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.transfer-history-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.history-selected-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 6px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.history-clear-selection-btn {
+  font-size: 12px !important;
+  min-inline-size: 0 !important;
+  padding-inline: 8px !important;
+}
+
+/* ===== 桌面端数据表格与路径展示 ===== */
+:deep(.v-table th) {
+  color: rgba(var(--v-theme-on-surface), 0.62) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding-inline: 10px !important;
   white-space: nowrap;
 }
 
-.v-table__wrapper {
+:deep(.v-table__wrapper) {
+  overflow-x: auto;
   border-radius: 0;
 }
 
+:deep(.v-table tbody td) {
+  padding-block: 8px !important;
+  padding-inline: 10px !important;
+  white-space: nowrap;
+}
+
+:deep(.v-table tbody td.history-path-td) {
+  inline-size: 100%;
+  max-inline-size: 0;
+  white-space: normal !important;
+}
+
+.history-group-row td {
+  background: rgba(var(--v-theme-on-surface), 0.02);
+}
+
+.history-group-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.history-title-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-inline-size: 15rem;
+  min-inline-size: 9rem;
+}
+
+.history-title-cell--grouped {
+  max-inline-size: 10.5rem;
+  min-inline-size: 6.25rem;
+}
+
+.history-title-icon {
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  block-size: 32px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  inline-size: 32px;
+}
+
+.history-title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+}
+
+.history-title-primary {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-title-category {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+/* 双行结构化路径组件：自然换行完整展示文件名，目录前缀弱化、文件名高对比突出 */
+.history-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  padding-block: 2px;
+}
+
+.history-paths__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.history-paths__arrow {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), 0.44);
+  margin-block-start: 2px;
+}
+
+.history-storage-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 5px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-block-start: 1px;
+  white-space: nowrap;
+}
+
+.history-paths__src,
+.history-paths__dest {
+  flex: 1 1 auto;
+  font-size: 12px;
+  line-height: 1.45;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.history-paths__dir {
+  color: rgba(var(--v-theme-on-surface), 0.48);
+}
+
+.history-paths__file {
+  color: rgba(var(--v-theme-on-surface), 0.8);
+}
+
+.history-paths__file--dest {
+  color: rgba(var(--v-theme-on-surface), 0.96);
+  font-weight: 500;
+}
+
+/* 转移方式与状态 22px 小胶囊 */
+.history-pill {
+  border-radius: 6px !important;
+  block-size: 22px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  padding-inline: 8px !important;
+}
+
+.history-pill--clickable {
+  cursor: help;
+}
+
+.history-meta-text {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-row-menu-btn {
+  border-radius: 6px !important;
+  block-size: 28px !important;
+  color: rgba(var(--v-theme-on-surface), 0.6) !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+
+.history-row-menu-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.history-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 13.5px;
+  gap: 8px;
+}
+
+.history-empty-state__icon {
+  color: rgba(var(--v-theme-on-surface), 0.34);
+}
+
+/* 底部分页栏 */
+.transfer-history-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 12px;
+}
+
+.transfer-history-footer__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.transfer-history-footer__select {
+  inline-size: 96px;
+  max-inline-size: 96px;
+}
+
+.transfer-history-footer__select :deep(.v-field) {
+  border-radius: 7px;
+  font-size: 12.5px;
+  min-block-size: 30px !important;
+}
+
+.transfer-history-footer__select :deep(.v-field__input) {
+  min-block-size: 30px !important;
+  padding-block: 0 !important;
+}
+
+.transfer-history-pagination__info {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .transfer-history-mobile-page {
-  --transfer-history-mobile-surface-opacity: 0.92;
   --transfer-history-mobile-search-bg: rgba(var(--v-theme-on-surface), 0.045);
   --transfer-history-mobile-muted-bg: rgba(var(--v-theme-on-surface), 0.06);
-  --transfer-history-mobile-border: rgba(var(--v-theme-on-surface), 0.1);
+  --transfer-history-mobile-border: var(--mp-border-card);
   --transfer-history-mobile-storage-width: 4.85rem;
-  --transfer-history-mobile-surface-blur: none;
 
   display: flex;
   flex-direction: column;
@@ -1806,8 +2225,9 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-title :deep(h2) {
-  font-size: 1.875rem;
-  line-height: 1.15;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .transfer-history-mobile-search {
@@ -1815,12 +2235,16 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-search :deep(.v-field) {
+  border-radius: 8px;
   background: var(--transfer-history-mobile-search-bg);
-  min-block-size: 3.75rem;
+  font-size: 13px;
+  min-block-size: 36px;
 }
 
 .transfer-history-mobile-search :deep(.v-field__input) {
-  font-size: 1rem;
+  font-size: 13px;
+  min-block-size: 36px;
+  padding-block: 0;
 }
 
 .transfer-history-mobile-scroll {
@@ -1858,9 +2282,9 @@ onUnmounted(() => {
 
 .transfer-history-mobile-record {
   overflow: hidden;
-  border-radius: 10px;
-  backdrop-filter: var(--transfer-history-mobile-surface-blur);
-  background: rgba(var(--v-theme-surface), var(--transfer-history-mobile-surface-opacity));
+  border: 1px solid var(--transfer-history-mobile-border);
+  border-radius: var(--app-surface-radius);
+  background: rgb(var(--v-theme-surface));
   box-shadow: var(--app-card-rest-shadow);
 }
 
@@ -1997,10 +2421,11 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-record__mode {
-  border-color: rgb(var(--v-theme-primary)) !important;
-  border-radius: 999px !important;
-  color: rgb(var(--v-theme-primary)) !important;
-  font-weight: 650;
+  border-radius: 6px !important;
+  block-size: 22px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  padding-inline: 7px !important;
 }
 
 .transfer-history-mobile-record__dot {
@@ -2057,17 +2482,34 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-record__path-row p {
-  overflow: hidden;
   margin: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.45;
+  min-inline-size: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.transfer-history-mobile-record__path-dir {
+  display: block;
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), 0.46);
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transfer-history-mobile-record__paths--expanded .transfer-history-mobile-record__path-row p {
+.transfer-history-mobile-record__path-file {
+  display: block;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-weight: 500;
+  white-space: normal;
+}
+
+.transfer-history-mobile-record__paths--expanded .transfer-history-mobile-record__path-dir {
+  overflow: visible;
+  text-overflow: clip;
   white-space: normal;
 }
 
@@ -2087,14 +2529,5 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
   padding-block: 0.65rem;
   padding-inline: 0.75rem;
-}
-
-html[data-theme='transparent'] .transfer-history-mobile-page,
-.v-theme--transparent .transfer-history-mobile-page {
-  --transfer-history-mobile-surface-opacity: var(--transparent-opacity-light, 0.2);
-  --transfer-history-mobile-search-bg: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.2));
-  --transfer-history-mobile-muted-bg: rgba(var(--v-theme-surface), var(--transparent-opacity, 0.3));
-  --transfer-history-mobile-border: rgba(var(--v-theme-on-surface), 0.14);
-  --transfer-history-mobile-surface-blur: blur(var(--transparent-blur, 10px));
 }
 </style>

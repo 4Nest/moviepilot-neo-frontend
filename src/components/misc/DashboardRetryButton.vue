@@ -10,15 +10,72 @@ const emit = defineEmits<{
   /** 请求用户主动重新加载当前卡片。 */
   retry: []
 }>()
+
+const buttonRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
+const isCardInteractive = ref(false)
+let hostCardEl: HTMLElement | null = null
+let isHovered = false
+
+function updateInteractiveState() {
+  const hasFocus = Boolean(hostCardEl && hostCardEl.contains(document.activeElement))
+  isCardInteractive.value = isHovered || hasFocus
+}
+
+function handleMouseEnter() {
+  isHovered = true
+  updateInteractiveState()
+}
+
+function handleMouseLeave() {
+  isHovered = false
+  updateInteractiveState()
+}
+
+function handleFocusIn() {
+  updateInteractiveState()
+}
+
+function handleFocusOut() {
+  requestAnimationFrame(updateInteractiveState)
+}
+
+function detachCardListeners() {
+  if (!hostCardEl) return
+  hostCardEl.removeEventListener('mouseenter', handleMouseEnter)
+  hostCardEl.removeEventListener('mouseleave', handleMouseLeave)
+  hostCardEl.removeEventListener('focusin', handleFocusIn)
+  hostCardEl.removeEventListener('focusout', handleFocusOut)
+  hostCardEl = null
+}
+
+onMounted(() => {
+  const rawEl = buttonRef.value instanceof HTMLElement ? buttonRef.value : buttonRef.value?.$el
+  const card = rawEl?.closest<HTMLElement>('.v-card') ?? null
+  if (!card) return
+  hostCardEl = card
+  hostCardEl.addEventListener('mouseenter', handleMouseEnter)
+  hostCardEl.addEventListener('mouseleave', handleMouseLeave)
+  hostCardEl.addEventListener('focusin', handleFocusIn)
+  hostCardEl.addEventListener('focusout', handleFocusOut)
+})
+
+onBeforeUnmount(() => {
+  detachCardListeners()
+})
 </script>
 
 <template>
   <VBtn
+    ref="buttonRef"
     icon
     variant="text"
     color="warning"
     size="small"
-    :class="{ 'dashboard-retry-button--deferred': props.deferred }"
+    :class="{
+      'dashboard-retry-button--deferred': props.deferred,
+      'dashboard-retry-button--interactive': isCardInteractive,
+    }"
+    :title="props.label"
     :aria-label="props.label"
     @click="emit('retry')"
   >
@@ -32,7 +89,8 @@ const emit = defineEmits<{
 <style scoped>
 @media (hover: none), (pointer: coarse) {
   .dashboard-retry-button--deferred {
-    display: none;
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
@@ -43,8 +101,8 @@ const emit = defineEmits<{
     transition: opacity 180ms ease;
   }
 
-  :global(.v-card:hover .dashboard-retry-button--deferred),
-  :global(.v-card:focus-within .dashboard-retry-button--deferred) {
+  .dashboard-retry-button--deferred.dashboard-retry-button--interactive,
+  .dashboard-retry-button--deferred:focus-visible {
     opacity: 1;
     pointer-events: auto;
   }

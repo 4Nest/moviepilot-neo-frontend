@@ -24,24 +24,58 @@ function handleImport() {
 </script>
 
 <template>
-  <VDialog width="40rem" scrollable max-height="85vh">
-    <VCard>
-      <VCardItem>
+  <VDialog max-width="40rem" scrollable max-height="85vh">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-code-json" class="me-2" />
+          <VIcon icon="mdi-code-json" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ props.title }}</VCardTitle>
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
-      <VCardText class="pt-2">
-        <VTextarea v-model="codeString" prepend-inner-icon="mdi-code-json" />
+      <VDivider />
+      <VCardText class="mp-dialog-body">
+        <VTextarea
+          v-model="codeString"
+          rows="5"
+          auto-grow
+          hide-details="auto"
+          variant="outlined"
+          prepend-inner-icon="mdi-code-json"
+        />
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
-        <VBtn color="primary" variant="flat" @click="handleImport" prepend-icon="mdi-import" class="px-5">
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="px-4" @click="handleImport">
           {{ t('dialog.importCode.import') }}
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

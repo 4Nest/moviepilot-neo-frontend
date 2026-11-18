@@ -9,8 +9,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiDelete: vi.fn(),
   apiPost: vi.fn(),
+  confirm: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('@/api', () => ({
@@ -87,6 +92,7 @@ describe('ForkWorkflowDialog', () => {
   beforeEach(() => {
     mocks.apiDelete.mockReset()
     mocks.apiPost.mockReset()
+    mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
   })
@@ -151,13 +157,27 @@ describe('ForkWorkflowDialog', () => {
     }
   })
 
-  it('deletes the share for a superuser and handles Response[None] without reading data.id', async () => {
+  it('confirms deletion and passes the workflow share_uid query parameter', async () => {
     mocks.apiDelete.mockResolvedValue({ data: null, success: true })
-    const { events } = await renderDialog(createWorkflowShare(), { canManage: true, superUser: true })
+    const { events } = await renderDialog(createWorkflowShare({ share_uid: 'target-author-uid' }), {
+      canManage: true,
+      superUser: true,
+      userUniqueId: 'admin-local-uid',
+    })
 
-    await fireEvent.click(await screen.findByRole('button', { name: '取消分享' }))
+    const cancelBtn = await screen.findByRole('button', { name: '取消分享' })
+    mocks.confirm.mockResolvedValueOnce(false)
+    await fireEvent.click(cancelBtn)
+    expect(mocks.apiDelete).not.toHaveBeenCalled()
 
-    await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalledWith('workflow/share/91'))
+    mocks.confirm.mockResolvedValueOnce(true)
+    await fireEvent.click(cancelBtn)
+
+    await waitFor(() =>
+      expect(mocks.apiDelete).toHaveBeenCalledWith('workflow/share/91', {
+        params: { share_uid: 'target-author-uid' },
+      }),
+    )
     expect(events.delete).toHaveBeenCalledOnce()
     expect(events.delete).toHaveBeenCalledWith()
     expect(mocks.toastSuccess).toHaveBeenCalledWith('取消分享成功')

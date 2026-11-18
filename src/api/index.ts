@@ -118,13 +118,14 @@ api.interceptors.response.use(
 
       if (error.code === 'NETWORK_ERROR' || error.code === 'ERR_NETWORK') {
         // 网络连接问题
-        return Promise.reject(new Error('Network connection failed, please check your network status'))
+        return Promise.reject(new Error('网络连接失败，请检查网络状态'))
       } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
         // 请求超时
-        return Promise.reject(new Error('Request timeout, please try again later'))
+        return Promise.reject(new Error('请求超时，请稍后重试'))
       }
       // 其他网络错误
-      return Promise.reject(new Error(error.message || 'Network error'))
+      const fallbackMessage = !error.message || error.message === 'Network Error' ? '网络请求异常' : error.message
+      return Promise.reject(new Error(fallbackMessage))
     } else if (
       error.response.status === 403 ||
       (error.response.status === 401 && !error.config?.url?.includes('login/access-token'))

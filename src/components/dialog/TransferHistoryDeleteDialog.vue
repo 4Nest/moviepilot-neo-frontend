@@ -34,25 +34,37 @@ function selectDeleteMode(deleteSrc: boolean, deleteDest: boolean) {
 
 <template>
   <VBottomSheet v-if="visible" v-model="visible" inset>
-    <VCard class="text-center">
-      <VDialogCloseBtn v-model="visible" />
-      <VCardTitle class="pe-10">
-        {{ props.title }}
-      </VCardTitle>
-      <div class="d-flex flex-column flex-lg-row justify-center my-3">
-        <VBtn color="primary" class="mb-2 mx-2" @click="selectDeleteMode(false, false)">
-          {{ t('transferHistory.deleteRecordOnly') }}
+    <VCard class="transfer-delete-sheet">
+      <VCardItem class="py-3">
+        <VCardTitle class="pe-8">
+          {{ props.title }}
+        </VCardTitle>
+        <VDialogCloseBtn v-model="visible" />
+      </VCardItem>
+      <VDivider />
+      <VCardText class="py-4">
+        <div class="d-flex flex-column flex-lg-row flex-wrap justify-center gap-2">
+          <VBtn color="default" variant="outlined" @click="selectDeleteMode(false, false)">
+            {{ t('transferHistory.deleteRecordOnly') }}
+          </VBtn>
+          <VBtn color="warning" variant="tonal" @click="selectDeleteMode(true, false)">
+            {{ t('transferHistory.deleteSourceOnly') }}
+          </VBtn>
+          <VBtn color="warning" variant="tonal" @click="selectDeleteMode(false, true)">
+            {{ t('transferHistory.deleteDestOnly') }}
+          </VBtn>
+          <VBtn color="error" variant="flat" @click="selectDeleteMode(true, true)">
+            {{ t('transferHistory.deleteAll') }}
+          </VBtn>
+        </div>
+      </VCardText>
+      <VDivider />
+      <VCardActions class="app-dialog-actions">
+        <VSpacer />
+        <VBtn color="default" variant="text" @click="visible = false">
+          {{ t('common.cancel') }}
         </VBtn>
-        <VBtn color="warning" class="mb-2 mx-2" @click="selectDeleteMode(true, false)">
-          {{ t('transferHistory.deleteSourceOnly') }}
-        </VBtn>
-        <VBtn color="info" class="mb-2 mx-2" @click="selectDeleteMode(false, true)">
-          {{ t('transferHistory.deleteDestOnly') }}
-        </VBtn>
-        <VBtn color="error" class="mb-2 mx-2" @click="selectDeleteMode(true, true)">
-          {{ t('transferHistory.deleteAll') }}
-        </VBtn>
-      </div>
+      </VCardActions>
     </VCard>
   </VBottomSheet>
 </template>

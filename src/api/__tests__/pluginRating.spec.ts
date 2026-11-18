@@ -75,4 +75,12 @@ describe('plugin rating snapshot API', () => {
       response: { status: 503 },
     })
   })
+
+  it('safely handles null or non-object rating snapshots without throwing', async () => {
+    server.use(http.get(ratingUrl, () => HttpResponse.json(null)))
+
+    await expect(getPluginRatings(['DemoPlugin'])).resolves.toEqual({
+      DemoPlugin: { plugin_id: 'DemoPlugin', average_rating: 0, rating_count: 0, user_rating: null },
+    })
+  })
 })

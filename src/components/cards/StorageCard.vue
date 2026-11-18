@@ -14,7 +14,6 @@ import { useToast } from 'vue-toastification'
 import { isNullOrEmptyObject } from '@/@core/utils'
 import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
-import { useCardAccentColor } from '@/composables/useCardAccentColor'
 
 const AliyunAuthDialog = defineAsyncComponent(() => import('../dialog/AliyunAuthDialog.vue'))
 const U115AuthDialog = defineAsyncComponent(() => import('../dialog/U115AuthDialog.vue'))
@@ -25,7 +24,6 @@ const StorageCustomConfigDialog = defineAsyncComponent(() => import('../dialog/S
 
 // 国际化
 const { t } = useI18n()
-const { accentRgb, imageRef, updateAccentColor } = useCardAccentColor('#FFB400')
 
 // 定义输入
 const props = defineProps({
@@ -51,6 +49,14 @@ const available = ref(0)
 const used = computed(() => {
   return total.value - available.value
 })
+
+const storageTypeLabel = computed(() => {
+  const rawType = props.storage.type
+  if (!rawType || rawType.startsWith('custom')) return t('storage.custom')
+  return t(`storage.${rawType}`)
+})
+
+const isConfigured = computed(() => props.storage.type === 'local' || !isNullOrEmptyObject(props.storage.config))
 
 /** 打开指定类型的共享存储配置弹窗。 */
 function openStorageDialog() {
@@ -115,7 +121,7 @@ const progressColor = computed(() => {
   } else if (usage.value > 70) {
     return 'warning'
   } else {
-    return 'success'
+    return 'primary'
   }
 })
 
@@ -126,11 +132,18 @@ const usage = computed(() => {
 
 /** 查询存储空间使用信息。 */
 async function queryStorage() {
+  if (!isConfigured.value) {
+    total.value = 0
+    available.value = 0
+    return
+  }
   try {
     const data: { total: number; available: number } = await api.get(`storage/usage/${props.storage.type}`)
-    total.value = data.total
-    available.value = data.available
+    total.value = data?.total ?? 0
+    available.value = data?.available ?? 0
   } catch (error) {
+    total.value = 0
+    available.value = 0
     console.error(error)
   }
 }
@@ -138,10 +151,19 @@ async function queryStorage() {
 /** 完成配置后的处理并通知父级刷新。 */
 function handleDone(storage?: StorageConf) {
   emit('done', storage || props.storage)
+  void queryStorage()
 }
 
+watch(
+  () => [props.storage.type, props.storage.config],
+  () => {
+    void queryStorage()
+  },
+  { deep: true },
+)
+
 onMounted(() => {
-  queryStorage()
+  void queryStorage()
 })
 
 /** 关闭存储卡片。 */
@@ -151,31 +173,183 @@ function onClose() {
 </script>
 
 <template>
-  <VCard
-    variant="tonal"
-    class="app-card-shell app-card-colorful"
-    :style="{ '--app-card-accent-rgb': accentRgb }"
-    @click="openStorageDialog"
-  >
-    <VDialogCloseBtn @click="onClose" />
-    <VCardText class="flex justify-space-between align-center gap-3">
-      <div class="align-self-start flex-1">
-        <h5 class="text-h6 mb-1">{{ storage.name }}</h5>
-        <div class="mb-3 text-sm" v-if="total">{{ formatBytes(used, 1) }} / {{ formatBytes(total, 1) }}</div>
-        <div v-else-if="isNullOrEmptyObject(storage.config)">{{ t('storage.notConfigured') }}</div>
+  <VCard v-bind="$attrs" variant="flat" class="app-card-shell setting-item-card" @click="openStorageDialog">
+    <div class="setting-item-card__body">
+      <div class="setting-item-card__icon-box" aria-hidden="true">
+        <VImg :src="getIcon" contain width="22" height="22" max-width="22" max-height="22" />
       </div>
-      <VImg
-        ref="imageRef"
-        :src="getIcon"
-        cover
-        class="mt-8"
-        max-width="3rem"
-        min-width="3rem"
-        @load="updateAccentColor"
-      />
-    </VCardText>
-    <div class="w-full absolute bottom-0">
-      <VProgressLinear v-if="usage > 0" :model-value="usage" :bg-color="progressColor" :color="progressColor" />
+
+      <div class="setting-item-card__main">
+        <div class="setting-item-card__head">
+          <div class="setting-item-card__title-wrap">
+            <span class="setting-item-card__dot" :class="{ 'setting-item-card__dot--active': isConfigured }" />
+            <span class="setting-item-card__title app-card-summary__title" :title="storage.name">
+              {{ storage.name }}
+            </span>
+          </div>
+
+          <div class="setting-item-card__actions" @click.stop>
+            <VBtn variant="text" icon class="setting-item-card__action-btn" @click.stop>
+              <VIcon class="cursor-move" icon="mdi-drag" size="16" />
+            </VBtn>
+            <VBtn
+              variant="text"
+              icon
+              class="setting-item-card__action-btn"
+              :aria-label="t('common.delete')"
+              @click.stop="onClose"
+            >
+              <VIcon icon="mdi-close" size="16" />
+            </VBtn>
+          </div>
+        </div>
+
+        <div class="setting-item-card__subtitle">
+          <template v-if="total > 0">
+            <span>{{ formatBytes(used, 1) }} / {{ formatBytes(total, 1) }}</span>
+            <span class="setting-item-card__sep">·</span>
+            <span>{{ usage }}%</span>
+          </template>
+          <template v-else>
+            <span>{{ storageTypeLabel }}</span>
+            <span class="setting-item-card__sep">·</span>
+            <span>{{ isConfigured ? '已就绪' : t('storage.notConfigured') }}</span>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="usage > 0" class="setting-item-card__progress">
+      <VProgressLinear :model-value="usage" :color="progressColor" bg-color="surface-variant" height="3" />
     </div>
   </VCard>
 </template>
+
+<style scoped>
+.setting-item-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.025) !important;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.setting-item-card:hover {
+  border-color: var(--mp-border-hover);
+  background-color: rgba(var(--v-theme-on-surface), 0.045) !important;
+}
+
+.setting-item-card__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 66px;
+  padding: 12px 14px;
+}
+
+.setting-item-card__icon-box {
+  display: inline-flex;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: rgba(var(--v-theme-on-surface), 0.045);
+  block-size: 38px;
+  inline-size: 38px;
+}
+
+.setting-item-card__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.setting-item-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.setting-item-card__title-wrap {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.setting-item-card__dot {
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-on-surface), 0.28);
+  block-size: 7px;
+  inline-size: 7px;
+}
+
+.setting-item-card__dot--active {
+  background: rgb(var(--v-theme-success));
+}
+
+.setting-item-card__title {
+  overflow: hidden;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-item-card__actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.setting-item-card__action-btn {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
+}
+
+.setting-item-card__action-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.setting-item-card__subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px 6px;
+  line-height: 1.35;
+  min-inline-size: 0;
+}
+
+.setting-item-card__sep {
+  opacity: 0.55;
+}
+
+.setting-item-card__progress {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+}
+</style>

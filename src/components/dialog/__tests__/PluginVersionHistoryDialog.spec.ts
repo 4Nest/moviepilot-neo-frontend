@@ -162,7 +162,7 @@ describe('PluginVersionHistoryDialog', () => {
     })
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
-    const closeButton = document.querySelector<HTMLButtonElement>('.absolute.right-3.top-3')
+    const closeButton = document.querySelector<HTMLButtonElement>('.app-dialog-close-btn')
     expect(closeButton).not.toBeNull()
     await fireEvent.click(closeButton!)
 

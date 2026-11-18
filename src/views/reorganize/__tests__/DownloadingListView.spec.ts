@@ -82,7 +82,13 @@ const DownloadingCardStub = defineComponent({
     downloaderName: String,
     info: Object,
   },
-  template: '<article :data-testid="`download-${info.hash}`">{{ info.title }}|{{ downloaderName }}</article>',
+  emits: ['remove'],
+  template: `
+    <article :data-testid="\`download-\${info.hash}\`">
+      <span>{{ info.title }}|{{ downloaderName }}</span>
+      <button type="button" @click="$emit('remove', info.hash)">remove-{{ info.hash }}</button>
+    </article>
+  `,
 })
 
 const ProgressiveCardGridStub = defineComponent({
@@ -179,11 +185,20 @@ describe('DownloadingListView loading and listing', () => {
 
     expect(await screen.findByText('Own by id|qb-main')).toBeInTheDocument()
     expect(screen.getByText('Own by name|qb-main')).toBeInTheDocument()
-    expect(screen.getByText('Own by id|qb-main').parentElement).toHaveAttribute('data-item-key', 'own-id')
-    expect(screen.getByText('Own by name|qb-main').parentElement).toHaveAttribute('data-item-key', 'Own by name')
+    expect(screen.getByText('Own by id|qb-main').closest('[data-item-key]')).toHaveAttribute('data-item-key', 'own-id')
+    expect(screen.getByText('Own by name|qb-main').closest('[data-item-key]')).toHaveAttribute(
+      'data-item-key',
+      'Own by name',
+    )
     expect(screen.getByText('Other task|qb-main')).toBeInTheDocument()
     expect(requested).toHaveBeenCalledOnce()
     expect(requested.mock.calls[0][0].searchParams.get('name')).toBe('qb-main')
+
+    // 删除任务后立即释放网格槽位，无需等待 3 秒轮询
+    await fireEvent.click(screen.getByRole('button', { name: 'remove-own-id' }))
+    expect(screen.queryByText('Own by id|qb-main')).not.toBeInTheDocument()
+    expect(screen.getByText('Other task|qb-main')).toBeInTheDocument()
+    expect(requested).toHaveBeenCalledOnce()
   })
 
   it('replaces the loading state with the successful empty state', async () => {

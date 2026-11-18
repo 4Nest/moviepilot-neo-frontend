@@ -4,7 +4,6 @@ import { useI18n } from '@/composables/useChineseText'
 
 const { t } = useI18n()
 const { visibleShortcuts, openShortcutDialog } = useShortcutTools()
-const actionColors = ['primary', 'success', 'warning', 'info', 'secondary', 'error', 'teal', 'primary']
 </script>
 
 <template>
@@ -14,16 +13,16 @@ const actionColors = ['primary', 'success', 'warning', 'info', 'secondary', 'err
     </VCardItem>
     <VCardText class="dashboard-quick-actions">
       <button
-        v-for="(action, index) in visibleShortcuts"
+        v-for="action in visibleShortcuts"
         :key="action.dialog"
         type="button"
         class="dashboard-quick-action dashboard-grid-no-drag"
         @click="openShortcutDialog(action)"
       >
-        <VAvatar :color="actionColors[index]" variant="tonal" rounded="lg" size="38">
-          <VIcon :icon="action.icon" size="23" />
-        </VAvatar>
-        <span>{{ action.title }}</span>
+        <span class="dashboard-quick-action__icon-box" aria-hidden="true">
+          <VIcon :icon="action.icon" size="16" />
+        </span>
+        <span class="dashboard-quick-action__label">{{ action.title }}</span>
       </button>
     </VCardText>
   </VCard>
@@ -37,53 +36,71 @@ const actionColors = ['primary', 'success', 'warning', 'info', 'secondary', 'err
 }
 
 .dashboard-quick-heading {
-  padding-block: 0.8rem 0.2rem;
+  padding: 14px 16px 8px;
 }
 
 .dashboard-quick-actions {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding-block: 0.35rem 0.8rem;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 16px 14px;
 }
 
 .dashboard-quick-action {
   display: flex;
   min-inline-size: 0;
+  block-size: 40px;
   align-items: center;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: var(--mp-item-bg);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   cursor: pointer;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.25rem 0.1rem;
+  gap: 8px;
+  padding: 0 10px;
+  text-align: start;
   transition:
-    background-color 0.18s ease,
-    transform 0.18s ease;
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.dashboard-quick-action__icon-box {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 6px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  block-size: 26px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 26px;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .dashboard-quick-action:hover,
 .dashboard-quick-action:focus-visible {
-  background: rgba(var(--v-theme-primary), 0.06);
+  border-color: rgba(var(--v-theme-primary), 0.36);
+  background-color: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
   outline: none;
-  transform: translateY(-1px);
 }
 
-.dashboard-quick-action span {
+.dashboard-quick-action:hover .dashboard-quick-action__icon-box,
+.dashboard-quick-action:focus-visible .dashboard-quick-action__icon-box {
+  background-color: rgba(var(--v-theme-primary), 0.16);
+}
+
+.dashboard-quick-action__label {
   overflow: hidden;
-  inline-size: 100%;
-  font-size: 0.68rem;
-  text-align: center;
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (max-width: 740px) {
-  .dashboard-quick-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 </style>

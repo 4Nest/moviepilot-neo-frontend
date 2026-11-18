@@ -23,8 +23,9 @@ vi.mock('vuedraggable', async () => {
   const { defineComponent } = await import('vue')
   return {
     default: defineComponent({
-      props: ['modelValue'],
-      template: '<div><slot v-for="element in modelValue" name="item" :element="element" /></div>',
+      props: ['modelValue', 'itemKey'],
+      template:
+        '<div data-testid="notif-draggable" :data-item-key="itemKey"><slot v-for="element in modelValue" name="item" :element="element" /></div>',
     }),
   }
 })
@@ -54,9 +55,10 @@ describe('通知渠道设置', () => {
     })
     await renderWithProviders(wrapper, { global: { stubs: { VImg: true, VDialogCloseBtn: true } } })
     await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('system/setting/Notifications'))
-    await fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    await fireEvent.click(screen.getByRole('button', { name: /添加通知渠道/ }))
     await fireEvent.click(await screen.findByText(channel, { selector: '.v-list-item-title' }))
     await fireEvent.click(await screen.findByText('通知1', { selector: '.app-card-summary__title' }))
+    expect(screen.getByTestId('notif-draggable').getAttribute('data-item-key')).toBe('id')
     const dialog = await screen.findByRole('dialog')
     await fireEvent.update(await within(dialog).findByLabelText(fieldLabel), 'test-channel-value')
     await fireEvent.click(within(dialog).getByRole('button', { name: '确认' }))
@@ -73,5 +75,38 @@ describe('通知渠道设置', () => {
       ]),
     )
     expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('通知发送范围使用分段胶囊列表替代圆圈表格，支持切换范围并保存', async () => {
+    const { container } = await renderWithProviders(AccountSettingNotification)
+    await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('system/setting/NotificationSwitchs'))
+
+    expect(container.querySelector('.v-table')).toBeNull()
+    expect(container.querySelector('.v-radio-group')).toBeNull()
+    expect(container.querySelector('.mp-empty-hint')).not.toBeNull()
+    expect(container.querySelectorAll('.mp-settings-group .mp-settings-row')).toHaveLength(8)
+    expect(container.querySelectorAll('.mp-card-footer')).toHaveLength(3)
+
+    const downloadScopeGroup = screen.getByRole('radiogroup', { name: '资源下载' })
+    const adminBtn = within(downloadScopeGroup).getByRole('radio', { name: '仅管理员' })
+    const allUsersBtn = within(downloadScopeGroup).getByRole('radio', { name: '所有用户' })
+
+    expect(allUsersBtn).toHaveAttribute('aria-checked', 'true')
+    expect(adminBtn).toHaveAttribute('aria-checked', 'false')
+
+    await fireEvent.click(adminBtn)
+    expect(adminBtn).toHaveAttribute('aria-checked', 'true')
+    expect(adminBtn).toHaveClass('is-active')
+
+    const scopeCard = screen.getByText('通知发送范围').closest('.v-card') as HTMLElement
+    expect(scopeCard).not.toBeNull()
+    await fireEvent.click(within(scopeCard).getByRole('button', { name: '保存' }))
+
+    await waitFor(() =>
+      expect(mocks.apiPost).toHaveBeenCalledWith(
+        'system/setting/NotificationSwitchs',
+        expect.arrayContaining([expect.objectContaining({ type: '资源下载', action: 'admin' })]),
+      ),
+    )
   })
 })

@@ -56,21 +56,22 @@ function submitOrder() {
   <VDialog
     v-if="visible"
     v-model="visible"
-    width="35rem"
+    max-width="44rem"
+    width="100%"
     class="settings-dialog"
     scrollable
     :fullscreen="!display.mdAndUp.value"
   >
     <VCard class="settings-card">
       <VCardItem class="settings-card-header">
-        <VCardTitle>
-          <VIcon icon="mdi-order-alphabetical-ascending" size="small" class="me-2" />
-          {{ t('discover.setTabOrder') }}
+        <VCardTitle class="d-flex align-center">
+          <VIcon icon="mdi-order-alphabetical-ascending" size="18" class="me-2" />
+          <span>{{ t('discover.setTabOrder') }}</span>
         </VCardTitle>
         <VDialogCloseBtn v-model="visible" />
       </VCardItem>
       <VDivider />
-      <VCardText>
+      <VCardText class="settings-card-body">
         <p class="settings-hint">{{ t('discover.dragToReorder') }}</p>
         <draggable
           v-model="localTabs"
@@ -80,21 +81,36 @@ function submitOrder() {
           :animation="180"
           :component-data="{ 'class': 'settings-grid' }"
         >
-          <template #item="{ element }">
-            <VCard variant="text" class="setting-item enabled">
+          <template #item="{ element, index }">
+            <div class="setting-item" :title="element.name">
               <div class="setting-item-inner">
+                <VIcon icon="mdi-drag-vertical" size="18" class="drag-icon cursor-move" />
                 <span class="setting-label">{{ element.name }}</span>
-                <VIcon icon="mdi-drag" class="drag-icon cursor-move" />
+                <span class="setting-order-badge">{{ (index ?? localTabs.indexOf(element)) + 1 }}</span>
               </div>
-            </VCard>
+            </div>
           </template>
         </draggable>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions settings-card-actions">
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          class="setting-action-btn"
+          prepend-icon="mdi-restore"
+          @click="resetLocalTabs"
+        >
+          {{ t('common.reset') }}
+        </VBtn>
         <VSpacer />
-        <VBtn color="primary" variant="flat" class="px-5" @click="submitOrder">
+        <VBtn color="default" variant="text" size="small" class="setting-action-btn" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="setting-action-btn px-4" @click="submitOrder">
           <template #prepend>
-            <VIcon icon="mdi-content-save" />
+            <VIcon icon="mdi-content-save-outline" size="18" />
           </template>
           {{ t('common.save') }}
         </VBtn>
@@ -104,15 +120,27 @@ function submitOrder() {
 </template>
 
 <style scoped>
+.settings-card {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 14px;
+  background-color: rgb(var(--v-theme-surface));
+}
+
 .settings-card-header {
-  padding-block: 16px;
+  padding-block: 14px;
+  padding-inline: 20px;
+}
+
+.settings-card-body {
+  padding-block: 16px 18px;
   padding-inline: 20px;
 }
 
 .settings-hint {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.9rem;
-  margin-block-end: 16px;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-block-end: 14px;
 }
 
 .settings-grid {
@@ -124,82 +152,96 @@ function submitOrder() {
 .setting-item {
   position: relative;
   overflow: hidden;
-  min-block-size: 48px;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 10px;
-  background-color: rgba(var(--v-theme-on-surface), 0.04);
-  cursor: grab;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background-color: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.03));
+  min-block-size: 42px;
   padding-block: 10px;
-  padding-inline: 12px;
+  padding-inline: 10px 12px;
   transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.setting-item::before {
-  position: absolute;
-  background-color: rgb(var(--v-theme-primary));
-  block-size: 100%;
-  content: '';
-  inline-size: 3px;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.setting-item.enabled {
-  border-color: rgba(var(--v-theme-primary), 0.3);
-  background-color: rgba(var(--v-theme-primary), 0.08);
-}
-
-.setting-item.enabled::before {
-  opacity: 1;
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .setting-item:hover {
-  border-color: rgba(var(--v-theme-primary), 0.32);
-  background-color: rgba(var(--v-theme-primary), 0.06);
-}
-
-.setting-item:active {
-  cursor: grabbing;
-  transform: scale(0.99);
+  border-color: var(--mp-border-hover, rgba(var(--v-theme-on-surface), 0.22));
+  background-color: rgba(var(--v-theme-on-surface), 0.065);
 }
 
 .setting-item-inner {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.setting-label {
-  flex: 1;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.9rem;
-  font-weight: 550;
-  line-height: 1.35;
-  transition: color 0.2s ease;
-}
-
-.setting-item.enabled .setting-label {
-  color: rgb(var(--v-theme-on-surface));
+  gap: 8px;
+  min-inline-size: 0;
 }
 
 .drag-icon {
   flex-shrink: 0;
-  color: rgba(var(--v-theme-on-surface), 0.52);
-  transition: color 0.2s ease;
+  color: rgba(var(--v-theme-on-surface), 0.42);
+  cursor: grab;
+  transition: color 0.16s ease;
+}
+
+.drag-icon:active {
+  cursor: grabbing;
 }
 
 .setting-item:hover .drag-icon {
-  color: rgb(var(--v-theme-primary));
+  color: rgba(var(--v-theme-on-surface), 0.82);
+}
+
+.setting-label {
+  overflow: hidden;
+  flex: 1;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-order-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 6px;
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  block-size: 20px;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-inline-size: 20px;
+  padding-inline: 5px;
+}
+
+.settings-card-actions {
+  gap: 8px;
+  padding-block: 12px 16px;
+  padding-inline: 20px;
+}
+
+.setting-action-btn {
+  border-radius: 8px;
 }
 
 @media (width <= 760px) {
   .settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 480px) {
+  .settings-card {
+    border-radius: 0;
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

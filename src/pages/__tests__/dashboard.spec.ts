@@ -39,11 +39,11 @@ const mocks = vi.hoisted(() => {
   return {
     apiGet: vi.fn(),
     apiPost: vi.fn(),
+    confirm: vi.fn(),
     displayWidth: undefined as unknown as { value: number },
     grid,
     gridInit: vi.fn<(options: unknown, element: unknown) => unknown>(() => grid),
     openSharedDialog: vi.fn(),
-    themeName: undefined as unknown as { value: string },
     useDynamicButton: vi.fn(),
   }
 })
@@ -114,12 +114,10 @@ vi.mock('@/api', () => ({
 vi.mock('vuetify', async importOriginal => {
   const { ref } = await import('vue')
   mocks.displayWidth = ref(1512)
-  mocks.themeName = ref('light')
 
   return {
     ...(await importOriginal<typeof import('vuetify')>()),
     useDisplay: () => ({ width: mocks.displayWidth }),
-    useTheme: () => ({ global: { name: mocks.themeName } }),
   }
 })
 
@@ -142,6 +140,10 @@ vi.mock('@/composables/usePWA', async () => {
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('@/components/misc/DashboardElement.vue', async () => {
@@ -233,8 +235,8 @@ describe('dashboard page initial layout', () => {
     mocks.grid.setAnimation.mockClear()
     mocks.apiGet.mockReset()
     mocks.apiPost.mockReset()
+    mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.displayWidth.value = 1512
-    mocks.themeName.value = 'light'
     vi.stubGlobal('ResizeObserver', ResizeObserverMock)
   })
 
@@ -279,24 +281,36 @@ describe('dashboard page initial layout', () => {
     await waitFor(() => expect(mocks.grid.load).toHaveBeenCalled())
   })
 
-  it('disables automatic grid transitions only while browsing with the glass theme', async () => {
-    mocks.themeName.value = 'glass'
-    mocks.apiGet.mockImplementation((url: string) => {
-      if (url === '/user/config/DashboardOrder' || url === '/user/config/DashboardGridLayout') {
-        return { data: {} }
-      }
-      if (url === '/user/config/Dashboard') return { data: {} }
-      if (url === '/plugin/dashboard/meta') return []
-      throw new Error('Unexpected GET ' + url)
-    })
+  it('disables automatic grid transitions when prefers-reduced-motion is enabled', async () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      addEventListener: vi.fn(),
+      addListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+      removeListener: vi.fn(),
+    }))
 
-    await renderDashboard()
+    try {
+      mocks.apiGet.mockImplementation((url: string) => {
+        if (url === '/user/config/DashboardOrder' || url === '/user/config/DashboardGridLayout') {
+          return { data: {} }
+        }
+        if (url === '/user/config/Dashboard') return { data: {} }
+        if (url === '/plugin/dashboard/meta') return []
+        throw new Error('Unexpected GET ' + url)
+      })
 
-    expect(mocks.gridInit).toHaveBeenCalledWith(expect.objectContaining({ animate: false }), expect.any(HTMLElement))
-    await waitFor(() => expect(mocks.grid.setAnimation).toHaveBeenCalledWith(false))
+      await renderDashboard()
 
-    await fireEvent.click(document.querySelector('.compact-fab--primary') as HTMLElement)
-    await waitFor(() => expect(mocks.grid.setAnimation).toHaveBeenCalledWith(true))
+      expect(mocks.gridInit).toHaveBeenCalledWith(expect.objectContaining({ animate: false }), expect.any(HTMLElement))
+      await waitFor(() => expect(mocks.grid.setAnimation).toHaveBeenCalledWith(false))
+    } finally {
+      window.matchMedia = originalMatchMedia
+    }
   })
 
   it('keeps the upstream progressive default while an uncached remote profile is loading', async () => {
@@ -544,7 +558,7 @@ describe('dashboard page initial layout', () => {
     await fireEvent.click(screen.getByTestId('dashboard-item'))
     const sizeSource = container.querySelector('[data-layout-size-source]')!
     const observer = await findLayoutSourceObserver(sizeSource)
-    await fireEvent.click(document.querySelector('.compact-fab--primary') as HTMLElement)
+    await fireEvent.click(screen.getByTestId('dashboard-edit-layout-btn'))
     await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)))
     mocks.grid.resizeToContent.mockClear()
     observer.resize(sizeSource, 480)
@@ -636,7 +650,7 @@ describe('dashboard page initial layout', () => {
     )
 
     mocks.grid.load.mockClear()
-    await fireEvent.click(document.querySelector('.compact-fab--primary') as HTMLElement)
+    await fireEvent.click(screen.getByTestId('dashboard-edit-layout-btn'))
     await waitFor(() => expect(mocks.grid.load).toHaveBeenCalled())
 
     loadedWidgets = mocks.grid.load.mock.calls.at(-1)?.[0] as Array<Record<string, unknown>>
@@ -773,7 +787,7 @@ describe('dashboard page initial layout', () => {
 
     if (element?.gridstackNode) element.gridstackNode.h = 13
     mocks.grid.load.mockClear()
-    await fireEvent.click(document.querySelector('.compact-fab--primary') as HTMLElement)
+    await fireEvent.click(screen.getByTestId('dashboard-edit-layout-btn'))
     await waitFor(() => expect(mocks.grid.load).toHaveBeenCalled())
 
     const loadedWidgets = mocks.grid.load.mock.calls.at(-1)?.[0] as Array<Record<string, unknown>>
@@ -804,7 +818,7 @@ describe('dashboard page initial layout', () => {
 
     if (element?.gridstackNode) element.gridstackNode.h = 13
     mocks.grid.load.mockClear()
-    await fireEvent.click(document.querySelector('.compact-fab--primary') as HTMLElement)
+    await fireEvent.click(screen.getByTestId('dashboard-edit-layout-btn'))
     await waitFor(() => expect(mocks.grid.load).toHaveBeenCalled())
 
     const loadedWidgets = mocks.grid.load.mock.calls.at(-1)?.[0] as Array<Record<string, unknown>>
@@ -1158,5 +1172,66 @@ describe('dashboard page initial layout', () => {
     })
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)))
     consoleError.mockRestore()
+  })
+
+  it('requires confirmation before resetting layout and restores persisted layout without saving when cancelling edit mode', async () => {
+    localStorage.setItem(
+      'MP_DASHBOARD_GRID_LAYOUT',
+      JSON.stringify({
+        enabled: enabledOnlySystemInfo,
+        items: { systemInfo: { x: 8, y: 0, w: 4, h: 6 } },
+        updatedAt: 10,
+      }),
+    )
+    localStorage.setItem('MP_DASHBOARD_ORDER', JSON.stringify([{ id: 'systemInfo', key: '' }]))
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url === '/user/config/DashboardOrder') return { data: { value: [{ id: 'systemInfo', key: '' }] } }
+      if (url === '/user/config/DashboardGridLayout') {
+        return {
+          data: {
+            value: {
+              enabled: enabledOnlySystemInfo,
+              items: { systemInfo: { x: 8, y: 0, w: 4, h: 6 } },
+              updatedAt: 10,
+            },
+          },
+        }
+      }
+      if (url === '/plugin/dashboard/meta') return []
+      throw new Error('Unexpected GET ' + url)
+    })
+
+    await renderDashboard()
+    await waitFor(() => expect(mocks.grid.makeWidget).toHaveBeenCalledTimes(1))
+    mocks.apiPost.mockClear()
+
+    // 进入编辑模式
+    await fireEvent.click(screen.getByTestId('dashboard-edit-layout-btn'))
+    const resetBtn = screen.getByTestId('dashboard-reset-layout-btn')
+    const cancelBtn = screen.getByTestId('dashboard-cancel-layout-btn')
+
+    // 第一次点击恢复默认布局但取消确认，不清空草稿
+    mocks.confirm.mockResolvedValueOnce(false)
+    mocks.grid.removeAll.mockClear()
+    await fireEvent.click(resetBtn)
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.grid.removeAll).not.toHaveBeenCalled()
+
+    // 第二次确认恢复默认布局（写入编辑草稿）
+    mocks.confirm.mockResolvedValueOnce(true)
+    await fireEvent.click(resetBtn)
+    await waitFor(() => expect(mocks.grid.removeAll).toHaveBeenCalled())
+
+    // 点击「取消」退出编辑模式：不发持久化 POST，且还原已持久化的 { x: 8, y: 0, w: 4, h: 6 }
+    mocks.grid.load.mockClear()
+    await fireEvent.click(cancelBtn)
+    await waitFor(() => expect(screen.queryByTestId('dashboard-cancel-layout-btn')).not.toBeInTheDocument())
+    expect(mocks.apiPost).not.toHaveBeenCalled()
+    await waitFor(() => {
+      const loadedWidgets = mocks.grid.load.mock.calls.at(-1)?.[0] as Array<Record<string, unknown>> | undefined
+      expect(loadedWidgets?.find(widget => widget.id === 'systemInfo')).toEqual(
+        expect.objectContaining({ x: 8, y: 0, w: 4, h: 6 }),
+      )
+    })
   })
 })

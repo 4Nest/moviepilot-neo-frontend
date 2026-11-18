@@ -44,70 +44,112 @@ onMounted(() => {
 </script>
 <template>
   <div>
-    <VCard max-width="20rem">
+    <VCard max-width="20rem" class="workflow-node-card">
       <Handle id="edge_in" type="target" :position="Position.Left" />
-      <VCardItem>
-        <template v-slot:prepend>
-          <VAvatar>
-            <VIcon icon="mdi-download" size="x-large"></VIcon>
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="primary" class="workflow-node-avatar">
+            <VIcon icon="mdi-download" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.addDownload.title') }}</VCardTitle>
-        <VCardSubtitle>{{ t('workflow.addDownload.subtitle') }}</VCardSubtitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.addDownload.title') }}</VCardTitle>
+        <VCardSubtitle class="workflow-node-subtitle">{{ t('workflow.addDownload.subtitle') }}</VCardSubtitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VSelect
-              v-model="nodeData.downloader"
-              :items="downloaderOptions"
-              :label="t('workflow.addDownload.downloader')"
-              outlined
-              dense
-            />
-          </VCol>
-          <VCol cols="12">
-            <VTextField
-              v-model="nodeData.labels"
-              :label="t('workflow.addDownload.category')"
-              :placeholder="t('workflow.addDownload.categoryPlaceholder')"
-              outlined
-              dense
-            />
-          </VCol>
-          <VCol cols="12">
-            <VPathField
-              v-model="nodeData.save_path"
-              storage="local"
-              :label="t('workflow.addDownload.savePath')"
-              clearable
-              :placeholder="t('workflow.addDownload.savePathPlaceholder')"
-            />
-          </VCol>
-          <VCol cols="12">
-            <VTextField
-              v-model="nodeData.max_downloads"
-              type="number"
-              min="1"
-              clearable
-              :label="t('workflow.addDownload.maxDownloads')"
-              :placeholder="t('workflow.addDownload.maxDownloadsPlaceholder')"
-              outlined
-              dense
-            />
-          </VCol>
-          <VCol cols="12" class="py-1">
-            <VSwitch
-              v-model="nodeData.only_lack"
-              :label="t('workflow.addDownload.onlyLack')"
-              hide-details
-              density="compact"
-            />
-          </VCol>
-        </VRow>
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="nodeData.downloader"
+                :items="downloaderOptions"
+                :label="t('workflow.addDownload.downloader')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="12">
+              <VTextField
+                v-model="nodeData.labels"
+                :label="t('workflow.addDownload.category')"
+                :placeholder="t('workflow.addDownload.categoryPlaceholder')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="12">
+              <VPathField
+                v-model="nodeData.save_path"
+                storage="local"
+                :label="t('workflow.addDownload.savePath')"
+                clearable
+                :placeholder="t('workflow.addDownload.savePathPlaceholder')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="12">
+              <VTextField
+                v-model="nodeData.max_downloads"
+                type="number"
+                min="1"
+                clearable
+                :label="t('workflow.addDownload.maxDownloads')"
+                :placeholder="t('workflow.addDownload.maxDownloadsPlaceholder')"
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+              />
+            </VCol>
+            <VCol cols="12">
+              <div class="mp-switch-card workflow-node-switch">
+                <VSwitch
+                  v-model="nodeData.only_lack"
+                  :label="t('workflow.addDownload.onlyLack')"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  :mobile-layout="false"
+                />
+              </div>
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <Handle id="edge_out" type="source" :position="Position.Right" />
     </VCard>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-block-start: 1px;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
+}
+
+.workflow-node-switch {
+  justify-content: space-between;
+  gap: 6px;
+  min-block-size: 32px;
+  padding: 3px 10px;
+}
+</style>

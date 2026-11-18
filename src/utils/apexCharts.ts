@@ -11,7 +11,7 @@ export function configureApexChartsTheme(themeName: string) {
   }
 
   try {
-    const isDark = ['dark', 'glass', 'transparent'].includes(themeName)
+    const isDark = themeName === 'dark'
 
     window.Apex.dataLabels = {
       formatter: function (_: number, { seriesIndex, w }: { seriesIndex: number; w: any }) {

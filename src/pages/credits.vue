@@ -11,7 +11,7 @@ const props = defineProps({
 const route = useRoute()
 
 // 标题
-let title = route.query?.title?.toString()
+const title = computed(() => route.query?.title?.toString())
 
 // 计算API路径
 function getApiPath(paths: string[] | string) {

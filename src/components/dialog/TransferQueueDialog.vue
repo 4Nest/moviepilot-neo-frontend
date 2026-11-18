@@ -365,11 +365,10 @@ onUnmounted(() => {
 
 <template>
   <VDialog scrollable max-width="60rem" :fullscreen="!display.mdAndUp.value">
-    <VCard class="mx-auto" width="100%">
-      <VCardItem :class="{ 'py-2': dataList.length > 0 }">
-        <VDialogCloseBtn @click="emit('close')" />
+    <VCard class="mx-auto mp-dialog-card" width="100%">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-menu" color="primary" size="28" class="me-2" />
+          <VIcon icon="mdi-tray-full" color="primary" size="20" class="me-2" />
         </template>
         <VCardTitle>{{ t('dialog.transferQueue.title') }}</VCardTitle>
         <VCardSubtitle v-if="dataList.length > 0">
@@ -381,6 +380,7 @@ onUnmounted(() => {
           }}
         </VCardSubtitle>
       </VCardItem>
+      <VDialogCloseBtn @click="emit('close')" />
 
       <VDivider />
 
@@ -545,6 +545,11 @@ onUnmounted(() => {
 <style scoped>
 /* stylelint-disable selector-pseudo-class-no-unknown */
 
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
 .transfer-queue-content {
   display: flex;
   overflow: hidden;
@@ -615,49 +620,34 @@ onUnmounted(() => {
   position: relative;
   display: grid;
   align-items: center;
-  padding: 0.9rem;
-  border: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  gap: 0.9rem;
-  grid-template-columns: 4.25rem minmax(0, 1fr);
+  gap: 0.85rem;
+  grid-template-columns: 4rem minmax(0, 1fr);
   inline-size: 100%;
   text-align: start;
   transition:
-    background-color 0.18s ease,
-    color 0.18s ease;
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .media-selector__item + .media-selector__item {
   border-block-start: 0;
 }
 
-.media-selector__item::before {
-  position: absolute;
-  border-radius: var(--app-vuetify-rounded-pill);
-  background: rgb(var(--v-theme-primary));
-  block-size: 0;
-  content: '';
-  inline-size: 3px;
-  inset-block-start: 50%;
-  inset-inline-start: 0.25rem;
-  transition:
-    block-size 0.18s ease,
-    inset-block-start 0.18s ease;
-}
-
 .media-selector__item:hover {
-  background: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
+  border-color: var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
 .media-selector__item--active {
-  background: rgba(var(--v-theme-primary), 0.08);
-}
-
-.media-selector__item--active::before {
-  block-size: calc(100% - 1rem);
-  inset-block-start: 0.5rem;
+  border-color: rgba(var(--v-theme-primary), 0.42);
+  background: rgba(var(--v-theme-primary), 0.07);
 }
 
 .media-selector__poster,

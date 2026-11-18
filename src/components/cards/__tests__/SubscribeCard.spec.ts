@@ -408,10 +408,10 @@ describe('SubscribeCard interaction boundaries', () => {
     dialog.events.save()
     dialog.events.remove()
     expect(emitted('save')).toHaveLength(1)
-    expect(emitted('remove')).toHaveLength(1)
+    expect(emitted('remove')).toEqual([[media.id]])
   })
 
-  it('passes exact file and TV share data while keeping compatibility TV values unshared', async () => {
+  it('passes exact file and share data for both TV and movie subscriptions when superuser', async () => {
     const { container, media, rerender } = await renderCard({ season: 1, total_episode: 12, type: '电视剧' })
 
     await chooseMenuItem(container, '分享')
@@ -422,9 +422,10 @@ describe('SubscribeCard interaction boundaries', () => {
     expect(getDialogCall(1).props).toEqual({ subid: media.id })
     expect(getDialogCall(1).options).toEqual({ closeOn: ['close'] })
 
-    await rerender({ media: { ...media, type: 'tv' } })
-    await openMenu(container)
-    expect(screen.queryByText('分享')).not.toBeInTheDocument()
+    const movieMedia = { ...media, season: undefined, total_episode: undefined, type: '电影' }
+    await rerender({ media: movieMedia })
+    await chooseMenuItem(container, '分享')
+    expect(getDialogCall(2).props).toEqual({ sub: movieMedia })
   })
 
   it.each([
@@ -587,19 +588,25 @@ describe('SubscribeCard item operations', () => {
   })
 
   it.each([
-    ['success', 200, { success: true }, true, null],
-    ['HTTP failure', 500, { message: 'server down', success: false }, false, '请求失败，请稍后重试'],
+    ['success', true, 200, { success: true }, true, null],
+    ['confirmation cancellation', false, 200, { success: true }, false, null],
+    ['business failure', true, 200, { message: '权限不足', success: false }, false, '取消订阅失败：权限不足！'],
+    ['HTTP failure', true, 500, { message: 'server down', success: false }, false, '请求失败，请稍后重试'],
   ] as const)(
-    'handles delete %s without a synthetic business-failure branch',
-    async (_case, status, response, removed, error) => {
+    'handles unsubscribe %s with confirmation and business-failure feedback and zero DOM prop pollution',
+    async (_case, confirmed, status, response, removed, error) => {
       const requested = vi.fn()
-      const { container, emitted, media } = await renderCard()
+      mocks.confirm.mockResolvedValueOnce(confirmed)
+      const { container, emitted, media } = await renderCard({ total_episode: 12, type: '电视剧' })
+      expect(container.querySelector('[media]')).toBeNull()
       server.use(deleteSubscribeByIdHandler(media.id, response, status, requested))
 
       await chooseMenuItem(container, '取消订阅')
+      await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
 
-      await waitFor(() => expect(requested).toHaveBeenCalledOnce())
-      expect(emitted('remove') ?? []).toHaveLength(removed ? 1 : 0)
+      if (confirmed) await waitFor(() => expect(requested).toHaveBeenCalledOnce())
+      else expect(requested).not.toHaveBeenCalled()
+      expect(emitted('remove') ?? []).toEqual(removed ? [[media.id]] : [])
       if (error) await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(error))
       else expect(mocks.toastError).not.toHaveBeenCalled()
     },

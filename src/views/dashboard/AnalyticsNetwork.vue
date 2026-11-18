@@ -204,23 +204,30 @@ useKeepAliveRefresh(refresh)
 
 <template>
   <VCard class="dashboard-chart-card dashboard-grid-fill">
-    <VCardItem>
-      <template #prepend><VIcon icon="mdi-swap-vertical-bold" size="20" class="me-2" /></template>
+    <VCardItem class="dashboard-chart-header">
+      <template #prepend>
+        <span class="dashboard-chart-icon" aria-hidden="true">
+          <VIcon icon="mdi-swap-vertical-bold" size="18" />
+        </span>
+      </template>
       <VCardTitle>{{ t('dashboard.network') }}</VCardTitle>
+      <template #append>
+        <strong class="dashboard-chart-current">{{ animatedCurrentDownloadText }}</strong>
+      </template>
     </VCardItem>
     <VCardText class="dashboard-chart-content">
       <div class="dashboard-chart-plot">
         <VApexChart type="area" :options="chartOptions" :series="series" height="100%" />
       </div>
       <div class="dashboard-chart-footer">
-        <span
-          ><i class="network-dot network-dot--upload" />{{ t('dashboard.upload') }}
-          {{ animatedCurrentUploadText }}</span
-        >
-        <span
-          ><i class="network-dot network-dot--download" />{{ t('dashboard.download') }}
-          {{ animatedCurrentDownloadText }}</span
-        >
+        <span>
+          <i class="network-dot network-dot--upload" />{{ t('dashboard.upload') }}
+          <strong>{{ animatedCurrentUploadText }}</strong>
+        </span>
+        <span>
+          <i class="network-dot network-dot--download" />{{ t('dashboard.download') }}
+          <strong>{{ animatedCurrentDownloadText }}</strong>
+        </span>
       </div>
     </VCardText>
   </VCard>
@@ -231,7 +238,23 @@ useKeepAliveRefresh(refresh)
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  min-block-size: 270px;
+  min-block-size: 256px;
+}
+
+.dashboard-chart-header {
+  padding: 14px 16px 6px;
+}
+
+.dashboard-chart-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-info), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-info));
+  inline-size: 34px;
+  margin-inline-end: 10px;
 }
 
 .dashboard-chart-content {
@@ -240,6 +263,7 @@ useKeepAliveRefresh(refresh)
   flex-direction: column;
   min-block-size: 0;
   overflow: hidden;
+  padding: 4px 16px 13px;
 }
 
 .dashboard-chart-plot {
@@ -247,15 +271,29 @@ useKeepAliveRefresh(refresh)
   min-block-size: 120px;
 }
 
+.dashboard-chart-current {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
 .dashboard-chart-footer {
   display: flex;
   justify-content: space-between;
-  border-block-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-block-start: 1px solid var(--mp-border-subtle);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.68rem;
-  gap: 0.6rem;
+  font-size: 11.5px;
+  gap: 8px;
   font-variant-numeric: tabular-nums;
-  padding-block-start: 0.55rem;
+  padding-block-start: 8px;
+}
+
+.dashboard-chart-footer strong {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-weight: 600;
 }
 
 .network-dot {
@@ -263,7 +301,7 @@ useKeepAliveRefresh(refresh)
   border-radius: 50%;
   block-size: 6px;
   inline-size: 6px;
-  margin-inline-end: 0.3rem;
+  margin-inline-end: 4px;
 }
 
 .network-dot--upload {

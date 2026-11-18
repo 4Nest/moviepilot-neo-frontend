@@ -1,33 +1,26 @@
 import { applyDocumentThemeChrome } from '@/utils/themePalette'
 
-// 主题管理器 - 动态加载主题CSS
+// 主题管理器 - 管理应用主题状态与按需扩展主题样式
 export interface ThemeConfig {
   name: string
   cssPath: string
   isLoaded: boolean
 }
 
+const legacyDarkThemes = new Set(['glass', 'purple', 'transparent'])
+
 class ThemeManager {
   private themes: Map<string, ThemeConfig> = new Map()
   private currentTheme: string = 'default'
   private loadedLinks: Map<string, HTMLLinkElement> = new Map()
   private themeListeners: Map<(theme: string) => void, EventListener> = new Map()
-  private bundledThemeLoaders: Record<string, () => Promise<unknown>> = {
-    glass: () => import('@/styles/themes/glass.scss'),
-    transparent: () => import('@/styles/themes/transparent.scss'),
-  }
 
-  /** 注册内置主题及其按需加载的样式入口。 */
+  /** 注册内置主题。 */
   constructor() {
-    // 注册所有可用主题
     this.registerTheme('default', '')
     this.registerTheme('light', '')
     this.registerTheme('dark', '')
-    this.registerTheme('purple', '')
     this.registerTheme('auto', '')
-    // 透明和玻璃主题使用独立的按需样式文件。
-    this.registerTheme('transparent', './src/styles/themes/transparent.css')
-    this.registerTheme('glass', './src/styles/themes/glass.css')
   }
 
   /**
@@ -49,15 +42,16 @@ class ThemeManager {
   }
 
   /**
-   * 设置主题
+   * 设置主题（兼容历史持久化值平滑迁移到 dark）
    */
   async setTheme(themeName: string): Promise<void> {
-    if (!this.themes.has(themeName)) {
-      console.warn(`Theme "${themeName}" not found`)
+    const normalizedTheme = legacyDarkThemes.has(themeName) ? 'dark' : themeName
+    if (!this.themes.has(normalizedTheme)) {
+      console.warn(`Theme "${normalizedTheme}" not found`)
       return
     }
 
-    const theme = this.themes.get(themeName)!
+    const theme = this.themes.get(normalizedTheme)!
 
     // 清理其他主题的CSS（除了当前要设置的主题）
     this.unloadOtherThemes()
@@ -65,43 +59,31 @@ class ThemeManager {
     // 如果主题有CSS文件，则加载CSS
     if (theme.cssPath) {
       try {
-        await this.loadThemeCSS(themeName, theme.cssPath)
+        await this.loadThemeCSS(normalizedTheme, theme.cssPath)
       } catch (error) {
-        console.error(`Failed to load CSS for theme "${themeName}":`, error)
-        // 即使CSS加载失败，也继续应用主题（使用默认样式）
+        console.error(`Failed to load CSS for theme "${normalizedTheme}":`, error)
       }
     }
 
-    // 应用主题（无论是否有CSS文件）
-    this.applyTheme(themeName)
+    // 应用主题
+    this.applyTheme(normalizedTheme)
   }
 
   /**
    * 加载主题CSS文件
    */
   private async loadThemeCSS(themeName: string, cssPath: string): Promise<void> {
-    // 如果已经加载过，直接返回
     if (this.loadedLinks.has(themeName)) {
       return
     }
 
     try {
-      // 动态导入打包内置的主题样式模块。
-      const bundledThemeLoader = this.bundledThemeLoaders[themeName]
-      if (bundledThemeLoader) {
-        await bundledThemeLoader()
-        this.themes.get(themeName)!.isLoaded = true
-        return
-      }
-
-      // 对于其他主题，使用传统的link方式
       const link = document.createElement('link')
       link.rel = 'stylesheet'
       link.type = 'text/css'
       link.href = cssPath
       link.id = `theme-${themeName}`
 
-      // 等待CSS加载完成
       await new Promise<void>((resolve, reject) => {
         link.onload = () => {
           this.loadedLinks.set(themeName, link)
@@ -113,7 +95,6 @@ class ThemeManager {
         }
       })
 
-      // 添加到head
       document.head.appendChild(link)
     } catch (error) {
       console.error(`Error loading theme "${themeName}":`, error)
@@ -125,12 +106,10 @@ class ThemeManager {
    * 应用主题到DOM
    */
   private applyTheme(themeName: string): void {
-    // auto 是用户偏好，DOM 上必须落到实际主题，避免恢复前台时短暂匹配不到深色样式。
     const { resolvedTheme } = applyDocumentThemeChrome(themeName)
 
     this.currentTheme = themeName
 
-    // 触发主题变更事件
     this.dispatchThemeChangeEvent(resolvedTheme)
   }
 
@@ -141,13 +120,6 @@ class ThemeManager {
     const theme = this.themes.get(themeName)
     if (!theme) return
 
-    // 对于动态导入的 CSS，我们无法直接卸载，但可以标记为未加载。
-    if (this.bundledThemeLoaders[themeName]) {
-      theme.isLoaded = false
-      return
-    }
-
-    // 对于传统link方式加载的CSS
     const link = this.loadedLinks.get(themeName)
     if (link) {
       link.remove()

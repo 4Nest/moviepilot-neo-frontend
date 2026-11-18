@@ -8,6 +8,7 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
+import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
 const WorkflowAddEditDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowAddEditDialog.vue'))
@@ -19,10 +20,12 @@ type TriggerFilterValue = 'all' | 'timer' | 'event' | 'manual'
 // 国际化
 const { t } = useI18n()
 const $toast = useToast()
+const { appMode } = usePWA()
 
 // 是否刷新完成首次加载
 const isRefreshed = ref(false)
 const isRefreshing = ref(false)
+const loadError = ref(false)
 
 // 所有任务
 const workflowList = ref<Workflow[]>([])
@@ -148,9 +151,14 @@ async function fetchData() {
     const workflows: Workflow[] = await api.get('workflow/', { params: { summary: true } })
     if (sequence !== fetchSequence) return
     workflowList.value = workflows
+    loadError.value = false
     isRefreshed.value = true
   } catch (error) {
+    if (sequence !== fetchSequence) return
     console.error(error)
+    if (!isRefreshed.value) {
+      loadError.value = true
+    }
   } finally {
     if (sequence === fetchSequence) {
       isRefreshing.value = false
@@ -293,8 +301,13 @@ function handleImportJsonSave(_dataType: string, codeRef: { value?: string } | s
   }
 }
 
+function openImportJsonDialog() {
+  importJsonDialog.value = true
+}
+
 defineExpose({
   openAddDialog,
+  openImportJsonDialog,
   openTemplateDialog,
   refresh: fetchData,
 })
@@ -302,10 +315,23 @@ defineExpose({
 
 <template>
   <div>
-    <LoadingBanner v-if="!isRefreshed" class="mt-12" />
+    <LoadingBanner v-if="!isRefreshed && !loadError" class="mt-12" />
+
+    <NoDataFound
+      v-if="loadError && !isRefreshed"
+      error-code="500"
+      :error-title="t('common.serverConnectionFailed')"
+      :error-description="t('common.troubleshooting')"
+    >
+      <template #button>
+        <VBtn color="primary" variant="tonal" rounded="lg" size="small" @click="fetchData">
+          {{ t('common.retry') }}
+        </VBtn>
+      </template>
+    </NoDataFound>
 
     <!-- 顶部筛选、搜索与快捷动作工具栏 -->
-    <div v-if="workflowList.length > 0 && isRefreshed" class="workflow-list-toolbar px-2 mb-3">
+    <div v-if="workflowList.length > 0 && isRefreshed" class="workflow-list-toolbar mb-3">
       <div class="workflow-list-toolbar__filters">
         <div class="workflow-status-pills" role="group">
           <VChip
@@ -346,27 +372,34 @@ defineExpose({
       </div>
 
       <div class="workflow-list-toolbar__actions">
-        <VBtn color="primary" variant="tonal" size="small" prepend-icon="mdi-auto-fix" @click="openTemplateDialog()">
-          {{ t('workflow.quickActions.createFromTemplate') }}
-        </VBtn>
-        <VBtn
-          color="secondary"
-          variant="tonal"
-          size="small"
-          prepend-icon="mdi-code-json"
-          @click="importJsonDialog = true"
-        >
-          {{ t('workflow.quickActions.importJsonCreate') }}
-        </VBtn>
         <IconBtn
           :loading="isRefreshing"
           size="small"
+          class="workflow-refresh-btn"
           :aria-label="t('workflow.quickActions.refresh')"
           @click="fetchData"
         >
-          <VIcon icon="mdi-refresh" />
+          <VIcon icon="mdi-refresh" size="17" />
           <VTooltip activator="parent" location="top">{{ t('workflow.quickActions.refresh') }}</VTooltip>
         </IconBtn>
+        <template v-if="!appMode">
+          <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-code-json" @click="openImportJsonDialog">
+            {{ t('workflow.quickActions.importJsonCreate') }}
+          </VBtn>
+          <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-auto-fix" @click="openTemplateDialog">
+            {{ t('workflow.quickActions.createFromTemplate') }}
+          </VBtn>
+          <VBtn
+            size="small"
+            variant="flat"
+            color="primary"
+            rounded="lg"
+            prepend-icon="mdi-plus"
+            @click="openAddDialog()"
+          >
+            {{ t('workflow.quickActions.createWorkflow') }}
+          </VBtn>
+        </template>
       </div>
     </div>
 
@@ -375,8 +408,7 @@ defineExpose({
       :items="filteredWorkflowList"
       :get-item-key="item => item.id"
       :min-item-width="288"
-      :estimated-item-height="420"
-      class="px-2"
+      :estimated-item-height="196"
     >
       <template #default="{ item }">
         <WorkflowTaskCard :workflow="item" :event-types="eventTypes" @refresh="fetchData" @remove="removeWorkflow" />
@@ -388,26 +420,32 @@ defineExpose({
       <VIcon icon="mdi-filter-remove-outline" size="42" class="text-medium-emphasis mb-2" />
       <div class="text-subtitle-1 font-weight-medium">{{ t('workflow.filter.noMatchTitle') }}</div>
       <div class="text-body-2 text-medium-emphasis mt-1 mb-4">{{ t('workflow.filter.noMatchDescription') }}</div>
-      <VBtn color="primary" variant="tonal" size="small" prepend-icon="mdi-restore" @click="resetFilters">
+      <VBtn variant="outlined" rounded="lg" size="small" prepend-icon="mdi-restore" @click="resetFilters">
         {{ t('workflow.filter.resetFilter') }}
       </VBtn>
     </div>
 
     <!-- 空工作流引导状态 -->
-    <div v-if="workflowList.length === 0 && isRefreshed" class="workflow-empty-state">
+    <div v-if="workflowList.length === 0 && isRefreshed && !loadError" class="workflow-empty-state">
       <NoDataFound
         error-code="404"
         :error-title="t('workflow.noWorkflow')"
         :error-description="t('workflow.noWorkflowDescription')"
       />
       <div class="workflow-empty-state__actions">
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-plus" @click="openAddDialog()">
+        <VBtn size="small" color="primary" variant="flat" rounded="lg" prepend-icon="mdi-plus" @click="openAddDialog()">
           {{ t('workflow.quickActions.createWorkflow') }}
         </VBtn>
-        <VBtn color="primary" variant="tonal" prepend-icon="mdi-auto-fix" @click="openTemplateDialog()">
+        <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-auto-fix" @click="openTemplateDialog()">
           {{ t('workflow.quickActions.quickCreateFromTemplate') }}
         </VBtn>
-        <VBtn color="secondary" variant="tonal" prepend-icon="mdi-code-json" @click="importJsonDialog = true">
+        <VBtn
+          size="small"
+          variant="outlined"
+          rounded="lg"
+          prepend-icon="mdi-code-json"
+          @click="importJsonDialog = true"
+        >
           {{ t('workflow.quickActions.importJsonCreate') }}
         </VBtn>
       </div>
@@ -431,7 +469,7 @@ defineExpose({
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 14px;
+  gap: 8px 13px;
 }
 
 .workflow-list-toolbar__filters {
@@ -440,46 +478,71 @@ defineExpose({
   flex: 1 1 520px;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .workflow-status-pills {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .workflow-status-pill {
+  border-radius: 6px !important;
+  block-size: 26px !important;
   cursor: pointer;
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
+  padding-inline: 9px !important;
 }
 
 .workflow-list-toolbar__inputs {
   display: flex;
   min-inline-size: 0;
-  flex: 1 1 280px;
-  flex-wrap: wrap;
+  flex: 1 1 268px;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .workflow-trigger-select {
-  flex: 0 0 132px;
-  max-inline-size: 150px;
+  flex: 0 0 112px;
+  max-inline-size: 124px;
 }
 
 .workflow-search-field {
-  min-inline-size: 180px;
-  flex: 1 1 200px;
-  max-inline-size: 320px;
+  min-inline-size: 140px;
+  flex: 1 1 150px;
+  max-inline-size: 260px;
+}
+
+.workflow-trigger-select :deep(.v-field),
+.workflow-search-field :deep(.v-field) {
+  border-radius: 7px;
+  font-size: 13px;
+  min-block-size: 32px;
+}
+
+.workflow-trigger-select :deep(.v-field__input),
+.workflow-search-field :deep(.v-field__input) {
+  min-block-size: 32px;
+  padding-block: 4px;
 }
 
 .workflow-list-toolbar__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.workflow-refresh-btn {
+  border-radius: 7px !important;
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
 }
 
 .workflow-empty-state__actions {
@@ -487,7 +550,7 @@ defineExpose({
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   margin-block-start: -8px;
   padding-block-end: 24px;
   padding-inline: 16px;
@@ -495,6 +558,7 @@ defineExpose({
 
 @media (width <= 680px) {
   .workflow-list-toolbar__inputs {
+    flex-wrap: wrap;
     inline-size: 100%;
   }
 

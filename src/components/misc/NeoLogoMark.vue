@@ -40,6 +40,7 @@ defineOptions({ name: 'NeoLogoMark' })
 
 <style scoped>
 .neo-logo-mark {
-  display: inline-block;
+  display: block;
+  flex-shrink: 0;
 }
 </style>

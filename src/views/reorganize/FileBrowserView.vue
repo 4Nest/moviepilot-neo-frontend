@@ -128,6 +128,70 @@ function determineBrowserInitialParams(downloadDirectories: TransferDirectoryCon
   }
 }
 
+/** 按目标路径完整拆解并重建面包屑层级栈，保留同存储下已缓存层级的元数据。 */
+function buildItemStack(targetItem: FileItem, previousStack: FileItem[] = []): FileItem[] {
+  const sameStorage = previousStack[0]?.storage === targetItem.storage
+  const existingByPath = new Map<string, FileItem>()
+  if (sameStorage) {
+    for (const entry of previousStack) {
+      if (entry?.path) existingByPath.set(entry.path, entry)
+    }
+  }
+
+  const rootDriveId = targetItem.path === '/' ? targetItem.drive_id : existingByPath.get('/')?.drive_id
+  const rootEntry: FileItem =
+    targetItem.path === '/'
+      ? {
+          storage: targetItem.storage,
+          type: 'dir',
+          name: '/',
+          path: '/',
+          fileid: targetItem.fileid || existingByPath.get('/')?.fileid || 'root',
+          ...(rootDriveId ? { drive_id: rootDriveId } : {}),
+        }
+      : (existingByPath.get('/') ?? {
+          storage: targetItem.storage,
+          type: 'dir',
+          name: '/',
+          path: '/',
+          fileid: 'root',
+        })
+
+  const stack: FileItem[] = [rootEntry]
+  if (!targetItem.path || targetItem.path === '/') {
+    return stack
+  }
+
+  const isFileItem = targetItem.type === 'file'
+  const parts = targetItem.path.split('/').filter(Boolean)
+  parts.forEach((segmentName, index) => {
+    const isLast = index === parts.length - 1
+    const segmentPath = '/' + parts.slice(0, index + 1).join('/') + (isLast && isFileItem ? '' : '/')
+
+    if (isLast) {
+      stack.push({
+        ...(existingByPath.get(segmentPath) ?? {}),
+        ...targetItem,
+        name: targetItem.name || segmentName,
+        path: segmentPath,
+        type: isFileItem ? 'file' : 'dir',
+      })
+      return
+    }
+
+    stack.push(
+      existingByPath.get(segmentPath) ?? {
+        storage: targetItem.storage,
+        type: 'dir',
+        name: segmentName,
+        path: segmentPath,
+      },
+    )
+  })
+
+  return stack
+}
+
 // 查询下载目录
 async function loadDownloadDirectories() {
   try {
@@ -143,34 +207,14 @@ async function loadDownloadDirectories() {
     if (result.success) {
       const directories = Array.isArray(result.data?.value) ? result.data.value : []
       const { storage, path, name } = determineBrowserInitialParams(directories)
-      // operItem初始化
-      operItem.value = {
+      const initialItem: FileItem = {
         type: 'dir',
         storage,
-        name: name,
-        path: path,
+        name,
+        path,
       }
-      // itemstack初始化
-      itemstack.value = [
-        {
-          storage: storage,
-          type: 'dir',
-          name: '/',
-          path: '/',
-          fileid: 'root',
-        },
-      ]
-      // 将初始数据拆分到堆栈中
-      const paths = path.split('/').filter(Boolean)
-      paths.map((name, index) => {
-        const path = '/' + paths.slice(0, index + 1).join('/') + '/'
-        itemstack.value.push({
-          storage,
-          type: 'dir',
-          name,
-          path,
-        })
-      })
+      itemstack.value = buildItemStack(initialItem)
+      operItem.value = initialItem
     }
   } catch (error) {
     console.log(error)
@@ -179,30 +223,15 @@ async function loadDownloadDirectories() {
 
 // 目录变化
 function pathChanged(item: FileItem) {
+  if (!item) return
   // save storage to localStorage
   if (item.storage !== operItem.value?.storage) {
     localStorage.setItem(STORAGE_KEY, item.storage)
   }
 
-  operItem.value = item
-  if (item.path == '/') {
-    itemstack.value = [
-      {
-        storage: item.storage,
-        type: 'dir',
-        name: '/',
-        path: '/',
-        fileid: item.fileid || 'root',
-      },
-    ]
-    return
-  }
-  const index = itemstack.value.findIndex(i => i.path === item.path)
-  if (index >= 0) {
-    itemstack.value = itemstack.value.slice(0, index + 1)
-  } else {
-    itemstack.value.push(item)
-  }
+  const nextStack = buildItemStack(item, itemstack.value)
+  itemstack.value = nextStack
+  operItem.value = nextStack[nextStack.length - 1]
 }
 
 // 加载初始目录
@@ -210,7 +239,7 @@ onMounted(loadDownloadDirectories)
 </script>
 
 <template>
-  <div class="file-browser-view app-surface-static">
+  <div class="file-browser-view">
     <FileBrowser
       v-if="operItem"
       :storages="storages"

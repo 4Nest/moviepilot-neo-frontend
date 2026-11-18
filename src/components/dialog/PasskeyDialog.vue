@@ -250,23 +250,25 @@ watch(
 </script>
 
 <template>
-  <VDialog v-model="show" max-width="45rem" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem>
+  <VDialog v-model="show" max-width="40rem" scrollable :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="material-symbols:passkey" size="20" class="me-2 text-primary" />
+        </template>
         <VCardTitle>
-          <VIcon icon="material-symbols:passkey" class="me-2" />
           {{ t('profile.passkeyManagement') }}
         </VCardTitle>
-        <VDialogCloseBtn @click="show = false" />
       </VCardItem>
+      <VDialogCloseBtn @click="show = false" />
       <VDivider />
-      <VCardText>
-        <p class="mb-6">
+      <VCardText class="mp-dialog-body passkey-body">
+        <p class="passkey-intro">
           {{ t('profile.passkeyAppDescription') }}
         </p>
 
         <!-- 安全警告 -->
-        <VAlert type="warning" variant="tonal" class="mb-6" icon="mdi-alert">
+        <VAlert type="warning" variant="tonal" density="compact" icon="mdi-alert" class="passkey-alert">
           <span>
             {{ domainWarningParts.prefix }}<b v-if="domainWarningParts.domain">{{ domainWarningParts.domain }}</b
             >{{ domainWarningParts.suffix }}
@@ -274,84 +276,173 @@ watch(
         </VAlert>
 
         <!-- 当前访问环境不支持时的明确告警 -->
-        <VAlert v-if="environmentError" type="error" variant="tonal" class="mb-6" icon="mdi-shield-alert-outline">
+        <VAlert
+          v-if="environmentError"
+          type="error"
+          variant="tonal"
+          density="compact"
+          icon="mdi-shield-alert-outline"
+          class="passkey-alert"
+        >
           {{ environmentError }}
         </VAlert>
 
         <!-- 注册新通行密钥 -->
-        <VCard variant="tonal" class="mb-6">
-          <VCardText>
-            <h5 class="text-h5 font-weight-medium mb-2">{{ t('profile.registerNewPasskey') }}</h5>
-            <p class="mb-4">{{ t('profile.passkeyDescription') }}</p>
-            <VForm @submit.prevent="registerPassKey">
-              <VTextField
-                v-model="passkeyName"
-                :label="t('profile.passkeyName')"
-                :placeholder="t('profile.passkeyNamePlaceholder')"
-                class="mb-4"
-                variant="outlined"
-                prepend-inner-icon="mdi-form-textbox"
-              />
-              <VBtn color="primary" type="submit" :loading="passkeyRegistering" prepend-icon="mdi-plus">
+        <div class="passkey-panel">
+          <h5 class="passkey-panel__title">{{ t('profile.registerNewPasskey') }}</h5>
+          <p class="passkey-panel__desc">{{ t('profile.passkeyDescription') }}</p>
+          <VForm class="passkey-form" @submit.prevent="registerPassKey">
+            <VTextField
+              v-model="passkeyName"
+              :label="t('profile.passkeyName')"
+              :placeholder="t('profile.passkeyNamePlaceholder')"
+              variant="outlined"
+              density="compact"
+              hide-details
+              prepend-inner-icon="mdi-form-textbox"
+            />
+            <div>
+              <VBtn
+                color="primary"
+                variant="flat"
+                size="small"
+                type="submit"
+                :loading="passkeyRegistering"
+                prepend-icon="mdi-plus"
+                class="px-4"
+              >
                 {{ t('profile.registerPasskey') }}
               </VBtn>
-            </VForm>
-          </VCardText>
-        </VCard>
+            </div>
+          </VForm>
+        </div>
 
         <!-- 已注册的通行密钥列表 -->
-        <div v-if="passkeyList.length > 0" class="mt-6 px-4">
-          <div
-            v-for="passkey in passkeyList"
-            :key="passkey.id"
-            class="py-4 d-flex align-center justify-space-between border-b last:border-0"
-          >
-            <div>
-              <div class="text-body-1 font-weight-bold mb-1">{{ passkey.name }}</div>
-              <div class="text-caption text-disabled d-flex flex-wrap gap-x-3">
+        <div v-if="passkeyList.length > 0" class="passkey-list">
+          <div v-for="passkey in passkeyList" :key="passkey.id" class="passkey-row">
+            <div class="min-w-0">
+              <div class="passkey-row__name text-truncate">{{ passkey.name }}</div>
+              <div class="text-caption text-medium-emphasis d-flex flex-wrap gap-x-3">
                 <span>{{ t('profile.createdAt') }} {{ formatDate(passkey.created_at) }}</span>
                 <span v-if="passkey.last_used_at">
                   {{ t('profile.lastUsedAt') }} {{ formatDateDifference(passkey.last_used_at) }}
                 </span>
               </div>
             </div>
-            <div>
-              <VBtn
-                variant="flat"
-                color="error"
-                size="small"
-                class="rounded delete-btn"
-                @click="deletePassKey(passkey.id)"
-              >
-                <VIcon icon="mdi-trash-can-outline" size="20" />
-              </VBtn>
-            </div>
+            <VBtn
+              variant="tonal"
+              color="error"
+              size="small"
+              icon="mdi-trash-can-outline"
+              :aria-label="t('profile.deletePasskey')"
+              @click="deletePassKey(passkey.id)"
+            />
           </div>
         </div>
-        <VAlert v-else type="info" variant="tonal" class="mt-6">
+        <VAlert v-else type="info" variant="tonal" density="compact" class="passkey-alert">
           {{ t('profile.noPasskeys') }}
         </VAlert>
       </VCardText>
-
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
-        <VBtn color="primary" variant="flat" class="px-5" @click="show = false">{{ t('common.close') }}</VBtn>
+        <VBtn color="default" variant="tonal" size="small" class="px-4" @click="show = false">
+          {{ t('common.close') }}
+        </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
 
 <style scoped>
-.v-btn.delete-btn {
-  min-width: 45px;
-  padding: 0;
-  background-color: rgba(var(--v-theme-error), 0.1);
-  color: rgb(var(--v-theme-error));
-  transition: all 0.2s ease;
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
 }
 
-.v-btn.delete-btn:hover {
-  background-color: rgba(var(--v-theme-error), 0.2);
-  color: rgb(var(--v-theme-error));
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.passkey-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.passkey-intro {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.passkey-alert {
+  font-size: 0.8125rem;
+}
+
+.passkey-panel {
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: var(--mp-item-bg);
+  padding: 14px 16px;
+}
+
+.passkey-panel__title {
+  margin: 0 0 4px;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.passkey-panel__desc {
+  margin: 0 0 12px;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.passkey-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.passkey-list {
+  overflow: hidden;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: var(--mp-item-bg);
+}
+
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.passkey-row + .passkey-row {
+  border-block-start: 1px solid var(--mp-border-subtle);
+}
+
+.passkey-row__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-block-end: 2px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
 }
 </style>

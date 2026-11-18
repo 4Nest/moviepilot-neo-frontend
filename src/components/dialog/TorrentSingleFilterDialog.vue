@@ -45,6 +45,7 @@ function getFilterIcon(key: string) {
     videoCode: 'mdi-video-vintage',
     edition: 'mdi-quality-high',
     releaseGroup: 'mdi-account-group-outline',
+    subtitle: 'mdi-subtitles-outline',
   }
   return icons[key] || 'mdi-filter-variant'
 }
@@ -57,26 +58,32 @@ function updateFilter(values: string[]) {
 
 <template>
   <VDialog v-if="visible" v-model="visible" max-width="25rem" max-height="85vh" location="center" scrollable>
-    <VCard>
-      <VCardTitle class="py-3 d-flex align-center">
-        <VIcon :icon="getFilterIcon(props.filterKey)" class="me-2"></VIcon>
-        <span>{{ props.filterTitle }}</span>
-        <VSpacer />
-        <VBtn
-          v-if="filterValues.length > 0"
-          variant="text"
-          size="small"
-          color="error"
-          @click="emit('clearFilter', props.filterKey)"
-        >
-          {{ t('torrent.clear') }}
-        </VBtn>
-        <VBtn variant="text" size="small" color="primary" @click="emit('selectAll', props.filterKey)">
-          {{ t('torrent.selectAll') }}
-        </VBtn>
-      </VCardTitle>
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon :icon="getFilterIcon(props.filterKey)" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ props.filterTitle }}</VCardTitle>
+        <template #append>
+          <div class="d-flex align-center gap-0.5">
+            <VBtn variant="text" size="x-small" color="primary" @click="emit('selectAll', props.filterKey)">
+              {{ t('torrent.selectAll') }}
+            </VBtn>
+            <VBtn
+              v-if="filterValues.length > 0"
+              variant="text"
+              size="x-small"
+              color="error"
+              @click="emit('clearFilter', props.filterKey)"
+            >
+              {{ t('torrent.clear') }}
+            </VBtn>
+          </div>
+        </template>
+      </VCardItem>
+      <VDialogCloseBtn v-model="visible" />
       <VDivider />
-      <VCardText>
+      <VCardText class="mp-dialog-body">
         <VChipGroup
           :model-value="filterValues"
           column
@@ -89,17 +96,26 @@ function updateFilter(values: string[]) {
             :key="option"
             :value="option"
             filter
-            variant="elevated"
-            class="ma-1 filter-chip"
+            variant="tonal"
+            rounded="lg"
+            class="filter-chip"
             size="small"
           >
             {{ option }}
           </VChip>
         </VChipGroup>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-check" class="px-5" @click="visible = false">
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          prepend-icon="mdi-check"
+          class="px-4"
+          @click="visible = false"
+        >
           {{ t('torrent.confirm') }}
         </VBtn>
       </VCardActions>
@@ -108,28 +124,53 @@ function updateFilter(values: string[]) {
 </template>
 
 <style scoped>
+.mp-dialog-header {
+  padding-block: 12px;
+  padding-inline: 18px 48px;
+}
+
+.mp-dialog-body {
+  padding: 14px 18px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 18px !important;
+}
+
 .filter-options {
   display: flex;
   flex-wrap: wrap;
 }
 
+.filter-options :deep(.v-slide-group__content) {
+  gap: 5px;
+}
+
 .filter-chip {
-  border: 1px solid rgba(var(--v-theme-primary), 0.2);
-  margin: 4px;
-  background-color: rgba(var(--v-theme-primary), 0.1) !important;
-  color: rgba(var(--v-theme-on-surface), 0.9) !important;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  margin: 0 !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.04) !important;
+  color: rgba(var(--v-theme-on-surface), 0.88) !important;
+  font-size: 12px !important;
   font-weight: 500;
-  transition: all 0.2s ease;
+  padding-inline: 9px !important;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .filter-chip:hover {
-  background-color: rgba(var(--v-theme-primary), 0.15) !important;
+  border-color: var(--mp-border-hover);
+  background-color: rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .filter-chip.v-chip--selected {
-  background-color: rgba(var(--v-theme-primary), 0.85) !important;
-  box-shadow: 0 2px 4px rgba(var(--v-theme-primary), 0.3);
-  color: rgb(var(--v-theme-on-primary)) !important;
+  border-color: rgba(var(--v-theme-primary), 0.35);
+  background-color: rgba(var(--v-theme-primary), 0.14) !important;
+  color: rgb(var(--v-theme-primary)) !important;
   font-weight: 600;
 }
 </style>

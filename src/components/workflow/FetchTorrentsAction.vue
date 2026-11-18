@@ -74,98 +74,154 @@ onMounted(() => {
 </script>
 <template>
   <div>
-    <VCard max-width="20rem">
+    <VCard max-width="20rem" class="workflow-node-card">
       <Handle id="edge_in" type="target" :position="Position.Left" />
-      <VCardItem>
-        <template v-slot:prepend>
-          <VAvatar>
-            <VIcon icon="mdi-search-web" size="x-large"></VIcon>
+      <VCardItem class="workflow-node-header">
+        <template #prepend>
+          <VAvatar size="34" rounded="lg" variant="tonal" color="primary" class="workflow-node-avatar">
+            <VIcon icon="mdi-search-web" size="18" />
           </VAvatar>
         </template>
-        <VCardTitle>{{ t('workflow.fetchTorrents.title') }}</VCardTitle>
-        <VCardSubtitle>{{ t('workflow.fetchTorrents.subtitle') }}</VCardSubtitle>
+        <VCardTitle class="workflow-node-title">{{ t('workflow.fetchTorrents.title') }}</VCardTitle>
+        <VCardSubtitle class="workflow-node-subtitle">{{ t('workflow.fetchTorrents.subtitle') }}</VCardSubtitle>
       </VCardItem>
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VSelect
-              v-model="nodeData.search_type"
-              :label="t('workflow.fetchTorrents.searchType')"
-              :items="searchOptions"
-              outlined
-              dense
-            />
-          </VCol>
-        </VRow>
-        <VRow v-if="nodeData.search_type === 'keyword'">
-          <VCol cols="6">
-            <VTextField v-model="nodeData.name" :label="t('workflow.fetchTorrents.name')" outlined dense />
-          </VCol>
-          <VCol cols="6">
-            <VTextField v-model="nodeData.year" :label="t('workflow.fetchTorrents.year')" outlined dense />
-          </VCol>
-          <VCol cols="6">
-            <VSelect
-              v-model="nodeData.type"
-              :label="t('workflow.fetchTorrents.type')"
-              :items="typeOptions"
-              outlined
-              dense
-            />
-          </VCol>
-          <VCol cols="6">
-            <VTextField
-              v-model="nodeData.season"
-              type="number"
-              :label="t('workflow.fetchTorrents.season')"
-              outlined
-              dense
-            />
-          </VCol>
-        </VRow>
-        <VRow>
-          <VCol cols="12">
-            <VSelect
-              v-model="nodeData.sites"
-              :label="t('workflow.fetchTorrents.sites')"
-              :items="siteOptions"
-              chips
-              multiple
-              outlined
-              dense
-              clearable
-            />
-          </VCol>
-        </VRow>
-        <VRow>
-          <VCol v-if="nodeData.search_type === 'keyword'" cols="12" class="py-1">
-            <VSwitch
-              v-model="nodeData.match_media"
-              :label="t('workflow.fetchTorrents.matchMedia')"
-              hide-details
-              density="compact"
-            />
-          </VCol>
-          <VCol cols="12" class="py-1">
-            <div class="d-flex align-center">
-              <VSwitch
-                v-model="nodeData.only_new"
-                :label="t('workflow.fetchTorrents.onlyNew')"
-                hide-details
+      <VCardText class="workflow-node-body">
+        <VForm @submit.prevent="() => {}">
+          <VRow>
+            <VCol cols="12">
+              <VSelect
+                v-model="nodeData.search_type"
+                :label="t('workflow.fetchTorrents.searchType')"
+                :items="searchOptions"
+                variant="outlined"
                 density="compact"
+                hide-details="auto"
               />
-              <VTooltip location="top" max-width="260">
-                <template #activator="{ props: tipProps }">
-                  <VIcon v-bind="tipProps" icon="mdi-help-circle-outline" size="16" class="ms-1 text-medium-emphasis" />
-                </template>
-                <span>{{ t('workflow.fetchTorrents.onlyNewHint') }}</span>
-              </VTooltip>
-            </div>
-          </VCol>
-        </VRow>
+            </VCol>
+            <template v-if="nodeData.search_type === 'keyword'">
+              <VCol cols="6">
+                <VTextField
+                  v-model="nodeData.name"
+                  :label="t('workflow.fetchTorrents.name')"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                />
+              </VCol>
+              <VCol cols="6">
+                <VTextField
+                  v-model="nodeData.year"
+                  :label="t('workflow.fetchTorrents.year')"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                />
+              </VCol>
+              <VCol cols="6">
+                <VSelect
+                  v-model="nodeData.type"
+                  :label="t('workflow.fetchTorrents.type')"
+                  :items="typeOptions"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                />
+              </VCol>
+              <VCol cols="6">
+                <VTextField
+                  v-model="nodeData.season"
+                  type="number"
+                  :label="t('workflow.fetchTorrents.season')"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                />
+              </VCol>
+            </template>
+            <VCol cols="12">
+              <VSelect
+                v-model="nodeData.sites"
+                :label="t('workflow.fetchTorrents.sites')"
+                :items="siteOptions"
+                chips
+                multiple
+                variant="outlined"
+                density="compact"
+                hide-details="auto"
+                clearable
+              />
+            </VCol>
+            <VCol v-if="nodeData.search_type === 'keyword'" cols="12">
+              <div class="mp-switch-card workflow-node-switch">
+                <VSwitch
+                  v-model="nodeData.match_media"
+                  :label="t('workflow.fetchTorrents.matchMedia')"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  :mobile-layout="false"
+                />
+              </div>
+            </VCol>
+            <VCol cols="12">
+              <div class="mp-switch-card workflow-node-switch">
+                <VSwitch
+                  v-model="nodeData.only_new"
+                  :label="t('workflow.fetchTorrents.onlyNew')"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  :mobile-layout="false"
+                />
+                <VTooltip location="top" max-width="260">
+                  <template #activator="{ props: tipProps }">
+                    <VIcon
+                      v-bind="tipProps"
+                      icon="mdi-help-circle-outline"
+                      size="15"
+                      class="flex-shrink-0 text-medium-emphasis"
+                    />
+                  </template>
+                  <span>{{ t('workflow.fetchTorrents.onlyNewHint') }}</span>
+                </VTooltip>
+              </div>
+            </VCol>
+          </VRow>
+        </VForm>
       </VCardText>
       <Handle id="edge_out" type="source" :position="Position.Right" />
     </VCard>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workflow-node-header {
+  padding: 10px 14px;
+}
+
+.workflow-node-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.workflow-node-subtitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-block-start: 1px;
+}
+
+.workflow-node-body {
+  padding: 12px 14px !important;
+}
+
+.workflow-node-switch {
+  justify-content: space-between;
+  gap: 6px;
+  min-block-size: 32px;
+  padding: 3px 10px;
+}
+</style>

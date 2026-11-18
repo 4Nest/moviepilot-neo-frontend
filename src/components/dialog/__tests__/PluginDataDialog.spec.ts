@@ -55,15 +55,7 @@ const CloseButtonStub = defineComponent({
   setup:
     (_, { attrs }) =>
     () =>
-      h('button', { ...attrs, 'aria-label': '关闭', type: 'button' }),
-})
-
-const FabStub = defineComponent({
-  name: 'VFab',
-  setup:
-    (_, { attrs }) =>
-    () =>
-      h('button', { ...attrs, 'aria-label': '切换配置', type: 'button' }),
+      h('button', { ...attrs, 'aria-label': '关闭弹窗', type: 'button' }),
 })
 
 const PageRenderStub = defineComponent({
@@ -131,7 +123,6 @@ async function renderDialog(showSwitch = true) {
         PageRender: PageRenderStub,
         VDialog: DialogStub,
         VDialogCloseBtn: CloseButtonStub,
-        VFab: FabStub,
       },
     },
   })
@@ -174,11 +165,13 @@ describe('PluginDataDialog', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'VBtn' }))
     expect(await screen.findByRole('button', { name: 'VChip' })).toBeInTheDocument()
+    expect(result.container.querySelector('.v-fab')).toBeNull()
     await fireEvent.click(screen.getByRole('button', { name: '切换配置' }))
     await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    await fireEvent.click(screen.getByRole('button', { name: '关闭弹窗' }))
     expect(mocks.apiGet).toHaveBeenCalledTimes(2)
     expect(result.emitted().switch).toHaveLength(1)
-    expect(result.emitted().close).toHaveLength(1)
+    expect(result.emitted().close).toHaveLength(2)
   })
 
   it('passes the same host capabilities through props and provide and forwards remote events', async () => {

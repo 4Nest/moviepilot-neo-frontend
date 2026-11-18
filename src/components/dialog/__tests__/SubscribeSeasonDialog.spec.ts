@@ -491,7 +491,7 @@ describe('SubscribeSeasonDialog', () => {
 
     expect(await screen.findByText(`${media.title} 未查询到季集信息`)).toBeInTheDocument()
     await settleRequests()
-    const closeButton = document.querySelector('.absolute.right-3')
+    const closeButton = document.querySelector('.app-dialog-close-btn')
     expect(closeButton).not.toBeNull()
     await fireEvent.click(closeButton!)
 
@@ -535,10 +535,10 @@ describe('SubscribeSeasonDialog', () => {
     expect(rail.scrollBy).toHaveBeenCalledWith({ behavior: 'smooth', left: -288 })
   })
 
-  it('labels each season switch and constrains its inline width to 52px', async () => {
+  it('labels each season switch and constrains its inline width to 28px', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync('src/components/dialog/SubscribeSeasonDialog.vue', 'utf8')
-    expect(source).toMatch(/\.subscribe-season-switch\s*\{[\s\S]*?inline-size:\s*52px;/)
+    expect(source).toMatch(/\.subscribe-season-switch\s*\{[\s\S]*?inline-size:\s*28px;/)
 
     const media = createTvMedia({ tmdb_id: 7315 })
     server.use(
@@ -552,5 +552,34 @@ describe('SubscribeSeasonDialog', () => {
     const switchRoot = seasonRow(1).querySelector('.subscribe-season-switch')
     expect(switchRoot).not.toBeNull()
     expect(within(seasonRow(1)).getByRole('checkbox', { name: '第 1 季' })).toBeInTheDocument()
+  })
+
+  it('ignores out-of-order season responses from an earlier episode group selection', async () => {
+    const staleGate = createDeferred()
+    const media = createTvMedia({ tmdb_id: 7399 })
+    server.use(
+      mediaSeasonsHandler([createMediaSeason({ season_number: 1 })]),
+      mediaNotExistsHandler([]),
+      mediaEpisodeGroupsHandler(media.tmdb_id!, [
+        { episode_count: 12, group_count: 1, id: 'group-slow', name: '慢剧集组' },
+        { episode_count: 24, group_count: 1, id: 'group-fast', name: '快剧集组' },
+      ]),
+      mediaGroupSeasonsHandler('group-slow', [createMediaSeason({ season_number: 9 })], 200, async () => {
+        await staleGate.promise
+      }),
+      mediaGroupSeasonsHandler('group-fast', [createMediaSeason({ season_number: 2 })]),
+    )
+    const user = userEvent.setup()
+    await renderDialog({ media })
+    await screen.findByText('快剧集组')
+
+    await user.click(screen.getByRole('button', { name: /慢剧集组/ }))
+    await user.click(screen.getByRole('button', { name: /快剧集组/ }))
+    expect(await screen.findByText('第 2 季')).toBeInTheDocument()
+
+    staleGate.resolve()
+    await settleRequests()
+    expect(screen.getByText('第 2 季')).toBeInTheDocument()
+    expect(screen.queryByText('第 9 季')).not.toBeInTheDocument()
   })
 })

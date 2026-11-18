@@ -37,7 +37,8 @@ const visible = computed({
   },
 })
 
-// 插件分身表单
+// 插件分身表单引用与数据
+const cloneFormRef = ref()
 const cloneForm = ref({
   suffix: '',
   name: '',
@@ -58,7 +59,10 @@ function initializeCloneForm() {
 }
 
 /** 提交插件分身表单。 */
-function submitClone() {
+async function submitClone() {
+  if (props.loading) return
+  const { valid } = (await cloneFormRef.value?.validate()) || { valid: true }
+  if (!valid || !cloneForm.value.suffix.trim()) return
   emit('clone', { ...cloneForm.value })
 }
 
@@ -68,21 +72,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog v-if="visible" v-model="visible" width="600" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog v-if="visible" v-model="visible" max-width="40rem" scrollable :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-content-copy" class="me-2" />
+          <VIcon icon="mdi-content-copy" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('plugin.cloneTitle') }}</VCardTitle>
         <VCardSubtitle>{{ t('plugin.cloneSubtitle', { name: props.plugin?.plugin_name }) }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn v-model="visible" />
       <VDivider />
-      <VCardText>
-        <VForm>
-          <VRow>
-            <VCol cols="12" md="6">
+      <VCardText class="mp-dialog-body">
+        <VForm ref="cloneFormRef" @submit.prevent="submitClone">
+          <VRow class="mp-form-grid">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="cloneForm.suffix"
                 :label="t('plugin.suffix') + ' *'"
@@ -99,7 +103,7 @@ onMounted(() => {
               />
             </VCol>
 
-            <VCol cols="12" md="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="cloneForm.name"
                 :label="t('plugin.cloneName')"
@@ -121,7 +125,7 @@ onMounted(() => {
               />
             </VCol>
 
-            <VCol cols="12" md="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="cloneForm.version"
                 :label="t('plugin.cloneVersion')"
@@ -132,7 +136,7 @@ onMounted(() => {
               />
             </VCol>
 
-            <VCol cols="12" md="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="cloneForm.icon"
                 :label="t('plugin.cloneIcon')"
@@ -144,7 +148,7 @@ onMounted(() => {
             </VCol>
 
             <VCol cols="12">
-              <VAlert type="warning" variant="tonal" density="compact" class="mt-2" icon="mdi-alert-circle-outline">
+              <VAlert type="warning" variant="tonal" density="compact" icon="mdi-alert-circle-outline">
                 <div class="text-body-2">
                   <strong>{{ t('common.notice') }}</strong
                   >：{{ t('plugin.cloneNotice') }}
@@ -154,16 +158,20 @@ onMounted(() => {
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="props.loading" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
-          @click="submitClone"
-          prepend-icon="mdi-content-copy"
-          class="px-5"
-          :disabled="!cloneForm.suffix.trim()"
+          size="small"
+          class="px-4"
+          :disabled="props.loading"
           :loading="props.loading"
+          @click="submitClone"
         >
           {{ t('plugin.createClone') }}
         </VBtn>
@@ -171,3 +179,29 @@ onMounted(() => {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

@@ -57,42 +57,63 @@ function closeDialog() {
 
 <template>
   <VDialog v-model="dialogVisible" max-width="35rem">
-    <VCard>
-      <VCardItem>
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-pencil" class="me-2" />
+          <VIcon icon="mdi-pencil-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('file.rename') }}</VCardTitle>
       </VCardItem>
       <VDialogCloseBtn @click="closeDialog" />
       <VDivider />
-      <VCardText>
-        <VRow>
-          <VCol cols="12">
-            <VTextField
-              v-model="renameName"
-              :label="t('file.newName')"
-              :loading="loading"
-              prepend-inner-icon="mdi-format-text"
-              mobile-control-width="80%"
-            />
-          </VCol>
-          <VCol v-if="item && item.type == 'dir'" cols="12">
-            <VSwitch v-model="includeSubfolders" :label="t('file.includeSubfolders')" />
-          </VCol>
-        </VRow>
+      <VCardText class="mp-dialog-body">
+        <div class="mp-form-sections">
+          <VTextField
+            v-model="renameName"
+            :label="t('file.newName')"
+            :loading="loading"
+            hide-details="auto"
+            prepend-inner-icon="mdi-format-text"
+            mobile-control-width="80%"
+          />
+          <div v-if="item && item.type == 'dir'" class="mp-settings-card">
+            <div class="mp-setting-row">
+              <VSwitch
+                v-model="includeSubfolders"
+                :label="t('file.includeSubfolders')"
+                color="primary"
+                inset
+                density="compact"
+                hide-details
+              />
+            </div>
+          </div>
+        </div>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
-        <VBtn color="success" variant="tonal" prepend-icon="mdi-magic" @click="emit('auto-name')">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          color="default"
+          variant="outlined"
+          size="small"
+          prepend-icon="mdi-magic"
+          :loading="loading"
+          :disabled="loading"
+          @click="emit('auto-name')"
+        >
           {{ t('file.autoRecognizeName') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="loading" @click="closeDialog">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
-          :disabled="!renameName"
-          prepend-icon="mdi-check"
-          class="px-5"
+          size="small"
+          :loading="loading"
+          :disabled="loading || !renameName?.trim()"
+          class="px-4"
           @click="emit('rename')"
         >
           {{ t('common.confirm') }}
@@ -101,3 +122,31 @@ function closeDialog() {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

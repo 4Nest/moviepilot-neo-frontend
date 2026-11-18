@@ -1,3 +1,4 @@
+import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
 import type { TorrentInfo } from '@/api/types'
 import SiteResourceDialog from '@/components/dialog/SiteResourceDialog.vue'
 import { getActiveRequestsCount } from '@/utils/requestOptimizer'
@@ -95,6 +96,9 @@ async function renderDialog(
   const result = await renderWithProviders(SiteResourceDialog, {
     props: { site, onClose: close },
     global: {
+      components: {
+        VDialogCloseBtn: DialogCloseBtn,
+      },
       stubs: {
         AddDownloadDialog: AddDownloadDialogStub,
         ProgressiveCardGrid: ProgressiveCardGridStub,
@@ -375,9 +379,8 @@ describe('SiteResourceDialog', () => {
 
     await user.click(addDownload)
     await user.click(screen.getByRole('button', { name: 'error' }))
-    expect(screen.queryByTestId('add-download-dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('add-download-dialog')).toBeInTheDocument()
 
-    await user.click(addDownload)
     await user.click(screen.getByRole('button', { name: 'close-download' }))
     expect(screen.queryByTestId('add-download-dialog')).not.toBeInTheDocument()
   })

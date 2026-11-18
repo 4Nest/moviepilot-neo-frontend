@@ -88,11 +88,11 @@ const filteredSites = computed(() => {
 </script>
 <template>
   <!-- Site Selection Dialog -->
-  <VDialog scrollable max-width="40rem" :fullscreen="!display.smAndUp.value">
+  <VDialog scrollable max-width="42rem" :fullscreen="!display.smAndUp.value">
     <VCard class="site-dialog">
-      <VCardItem>
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-web-check" />
+          <VIcon icon="mdi-web-check" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>
           {{ t('dialog.searchSite.selectSites') }}
@@ -100,18 +100,31 @@ const filteredSites = computed(() => {
       </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText class="site-dialog__content overflow-y-auto px-4 py-4">
+      <VCardText class="site-dialog__content overflow-y-auto mp-dialog-body">
+        <!-- 站点筛选框 -->
+        <VTextField
+          v-if="sites.length > 0"
+          v-model="siteFilter"
+          :placeholder="t('common.filter')"
+          :aria-label="t('common.filter')"
+          prepend-inner-icon="mdi-magnify"
+          density="compact"
+          variant="outlined"
+          clearable
+          hide-details
+          class="mb-3"
+        />
+
         <!-- 站点列表 -->
         <div v-if="filteredSites.length > 0">
           <!-- 选择操作 -->
-          <div class="d-flex align-center mb-4">
+          <div class="d-flex align-center mb-3">
             <VBtn
+              color="default"
               size="small"
-              :color="selectedSites.length < sites.length ? 'primary' : 'error'"
+              variant="outlined"
+              class="me-3 site-bulk-btn"
               @click="checkAllSitesorNot"
-              class="me-2"
-              rounded="pill"
-              variant="tonal"
             >
               <VIcon start size="small">
                 {{ selectedSites.length < sites.length ? 'mdi-check-all' : 'mdi-close-circle-outline' }}
@@ -120,40 +133,38 @@ const filteredSites = computed(() => {
             </VBtn>
             <div
               class="text-body-2 font-weight-medium"
-              :class="selectedSites.length > 0 ? 'text-primary' : 'text-medium-emphasis'"
+              :class="selectedSites.length > 0 ? 'text-high-emphasis' : 'text-medium-emphasis'"
             >
               {{ t('dialog.searchSite.searchAllSites', { selected: selectedSites.length, total: sites.length }) }}
             </div>
           </div>
 
           <!-- 站点选择器 -->
-          <VRow dense>
-            <VCol v-for="site in filteredSites" :key="site.id" cols="6" sm="6" md="4">
-              <VHover v-slot="{ isHovering, props }">
-                <div
-                  v-bind="props"
-                  :class="[
-                    'site-checkbox-wrapper pa-2 pa-sm-3 d-flex align-center',
-                    {
-                      'site-selected': selectedSites.includes(site.id),
-                      'site-hover': isHovering && !selectedSites.includes(site.id),
-                    },
-                  ]"
-                  @click="toggleSiteSelection(site.id)"
-                >
-                  <VIcon
-                    :icon="selectedSites.includes(site.id) ? 'mdi-check-circle' : 'mdi-checkbox-blank-circle-outline'"
-                    :color="selectedSites.includes(site.id) ? 'primary' : 'medium-emphasis'"
-                    class="me-2"
-                    size="small"
-                  />
-                  <span :class="['text-body-2 site-name', { 'font-weight-medium': selectedSites.includes(site.id) }]">
-                    {{ site.name }}
-                  </span>
-                </div>
-              </VHover>
-            </VCol>
-          </VRow>
+          <div class="site-grid">
+            <VHover v-for="site in filteredSites" :key="site.id" v-slot="{ isHovering, props: hoverProps }">
+              <div
+                v-bind="hoverProps"
+                :class="[
+                  'site-checkbox-wrapper d-flex align-center',
+                  {
+                    'site-selected': selectedSites.includes(site.id),
+                    'site-hover': isHovering && !selectedSites.includes(site.id),
+                  },
+                ]"
+                @click="toggleSiteSelection(site.id)"
+              >
+                <VIcon
+                  :icon="selectedSites.includes(site.id) ? 'mdi-check-circle' : 'mdi-checkbox-blank-circle-outline'"
+                  :color="selectedSites.includes(site.id) ? 'primary' : 'medium-emphasis'"
+                  class="me-2"
+                  size="18"
+                />
+                <span :class="['text-body-2 site-name', { 'font-weight-medium': selectedSites.includes(site.id) }]">
+                  {{ site.name }}
+                </span>
+              </div>
+            </VHover>
+          </div>
         </div>
         <div v-else class="text-center py-8 empty-site-state">
           <div class="search-icon-wrapper mb-4 mx-auto warning">
@@ -167,27 +178,40 @@ const filteredSites = computed(() => {
             v-if="siteFilter"
             color="primary"
             variant="flat"
+            size="small"
             class="mt-3"
             prepend-icon="mdi-refresh"
             @click="siteFilter = ''"
           >
             {{ t('torrent.clearFilters') }}
           </VBtn>
-          <VBtn v-else color="primary" variant="flat" class="mt-3" prepend-icon="mdi-refresh" @click="emit('reload')">
-            {{ t('common.loading') }}
+          <VBtn
+            v-else
+            color="primary"
+            variant="flat"
+            size="small"
+            class="mt-3"
+            prepend-icon="mdi-refresh"
+            @click="emit('reload')"
+          >
+            {{ t('common.retry') }}
           </VBtn>
         </div>
       </VCardText>
-
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
           :disabled="selectedSites.length === 0"
-          @click="confirmSearch"
           prepend-icon="mdi-magnify"
-          class="d-flex align-center justify-center px-5"
+          class="d-flex align-center justify-center px-4"
+          @click="confirmSearch"
         >
           {{ t('common.search') }}
         </VBtn>
@@ -196,13 +220,40 @@ const filteredSites = computed(() => {
   </VDialog>
 </template>
 <style scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.site-bulk-btn {
+  border-radius: 8px;
+}
+
+.site-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .site-checkbox-wrapper {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  border-radius: var(--app-surface-radius);
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background-color: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.02));
   cursor: pointer;
+  min-block-size: 40px;
+  padding: 8px 12px;
   transition:
-    transform 0.2s ease,
-    background-color 0.2s ease;
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 @media (min-width: 600px) {
@@ -211,8 +262,16 @@ const filteredSites = computed(() => {
   }
 }
 
-.site-checkbox-wrapper:hover {
-  transform: translateY(-2px);
+@media (max-width: 759.98px) {
+  .site-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
 }
 
 .site-name {
@@ -222,12 +281,13 @@ const filteredSites = computed(() => {
 }
 
 .site-selected {
-  border-color: rgba(var(--v-theme-primary), 0.2);
-  background-color: rgba(var(--v-theme-primary), 0.08);
-  color: rgb(var(--v-theme-primary));
+  border-color: rgba(var(--v-theme-primary), 0.45);
+  background-color: rgba(var(--v-theme-on-surface), 0.045);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .site-hover {
-  background-color: rgba(var(--v-theme-primary), 0.04);
+  border-color: var(--mp-border-hover, rgba(var(--v-theme-on-surface), 0.22));
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 </style>

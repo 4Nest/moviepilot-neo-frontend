@@ -240,7 +240,7 @@ describe('SiteAddEditDialog', () => {
   it('emits close from the dialog close button', async () => {
     const { events } = await renderDialog('add')
 
-    await fireEvent.click(document.querySelector('.absolute.right-3.top-3')!)
+    await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
 
     expect(events.close).toHaveBeenCalledOnce()
   })
@@ -315,5 +315,13 @@ describe('SiteAddEditDialog', () => {
 
     await waitFor(() => expect(updated).toHaveBeenCalledOnce())
     expect(updated.mock.calls[0][0].note).toEqual(originalNote)
+  })
+
+  it('renders segmented auth tabs, grouped switch cards, and non-cramped field columns', async () => {
+    await renderDialog('add')
+
+    expect(document.querySelector('.mp-segmented-tabs')).not.toBeNull()
+    expect(document.querySelectorAll('.mp-settings-card').length).toBeGreaterThanOrEqual(2)
+    expect(document.querySelector('.v-col-md-3')).toBeNull()
   })
 })

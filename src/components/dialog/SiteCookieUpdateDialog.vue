@@ -36,14 +36,19 @@ const updateButtonDisable = ref(false)
 // 进度条
 const progressDialog = ref(false)
 
+// 表单引用
+const cookieFormRef = ref()
+
 // 进度文本
 const progressText = ref(t('dialog.siteCookieUpdate.processing'))
 
 // 调用API，更新站点Cookie UA
 async function updateSiteCookie() {
-  try {
-    if (!userPwForm.value.username || !userPwForm.value.password) return
+  if (updateButtonDisable.value) return
+  const { valid } = (await cookieFormRef.value?.validate()) || { valid: true }
+  if (!valid || !userPwForm.value.username || !userPwForm.value.password) return
 
+  try {
     // 更新按钮状态
     updateButtonDisable.value = true
 
@@ -81,16 +86,28 @@ async function updateSiteCookie() {
 }
 </script>
 <template>
-  <VDialog max-width="30rem" scrollable>
+  <VDialog max-width="32rem" scrollable>
     <!-- Dialog Content -->
-    <VCard :title="t('dialog.siteCookieUpdate.title')">
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-cookie-refresh-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ t('dialog.siteCookieUpdate.title') }}</VCardTitle>
+        <VCardSubtitle v-if="cardProps.site?.name">{{ cardProps.site.name }}</VCardSubtitle>
+      </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
       <VDivider />
-      <VCardText>
-        <VForm @submit.prevent="() => {}">
-          <VRow>
+      <VCardText class="mp-dialog-body">
+        <VForm ref="cookieFormRef" @submit.prevent="() => {}">
+          <VRow class="mp-form-grid">
             <VCol cols="12">
-              <VTextField v-model="userPwForm.username" :label="t('login.username')" :rules="[requiredValidator]" />
+              <VTextField
+                v-model="userPwForm.username"
+                :label="t('login.username')"
+                :rules="[requiredValidator]"
+                prepend-inner-icon="mdi-account-outline"
+              />
             </VCol>
             <VCol cols="12">
               <VTextField
@@ -99,26 +116,36 @@ async function updateSiteCookie() {
                 :type="isPasswordVisible ? 'text' : 'password'"
                 :append-inner-icon="isPasswordVisible ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                 :rules="[requiredValidator]"
+                prepend-inner-icon="mdi-lock-outline"
                 @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 @keydown.enter="updateSiteCookie"
               />
             </VCol>
             <VCol cols="12">
-              <VTextField v-model="userPwForm.code" :label="t('login.otpCode')" />
+              <VTextField
+                v-model="userPwForm.code"
+                :label="t('login.otpCode')"
+                hide-details="auto"
+                prepend-inner-icon="mdi-shield-key-outline"
+              />
             </VCol>
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
-          @click="updateSiteCookie"
+          size="small"
           :disabled="updateButtonDisable"
           :loading="updateButtonDisable"
-          prepend-icon="mdi-refresh"
-          class="px-5"
+          class="px-4"
+          @click="updateSiteCookie"
         >
           {{ t('dialog.siteCookieUpdate.updateButton') }}
         </VBtn>
@@ -128,3 +155,29 @@ async function updateSiteCookie() {
     <ProgressDialog v-if="progressDialog" v-model="progressDialog" :text="progressText" />
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

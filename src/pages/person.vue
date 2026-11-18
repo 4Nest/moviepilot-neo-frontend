@@ -5,13 +5,13 @@ import PersonDetailView from '@/views/discover/PersonDetailView.vue'
 const route = useRoute()
 
 // Person Id
-const personid = route.query?.personid?.toString()
+const personid = computed(() => route.query?.personid?.toString())
 
 // 来源
-const source = route.query?.source?.toString()
+const source = computed(() => route.query?.source?.toString())
 
 // 类型
-const type = route.query?.type?.toString()
+const type = computed(() => route.query?.type?.toString())
 </script>
 
 <template>

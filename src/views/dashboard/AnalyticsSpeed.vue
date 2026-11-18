@@ -132,43 +132,39 @@ const { loading } = useDataRefresh(
 
 <template>
   <VCard class="dashboard-work-card dashboard-grid-fill">
-    <VCardItem>
+    <VCardItem class="dashboard-work-header">
       <VCardTitle>{{ t('dashboard.realTimeSpeed') }}</VCardTitle>
     </VCardItem>
 
     <VCardText class="dashboard-work-content">
       <div class="dashboard-speed-overview">
         <div class="dashboard-speed-rate">
-          <VIcon icon="mdi-arrow-up" color="primary" size="26" />
+          <span class="dashboard-speed-icon dashboard-speed-icon--upload" aria-hidden="true">
+            <VIcon icon="mdi-arrow-up" size="18" />
+          </span>
           <strong class="dashboard-speed-number">{{ uploadSpeedText }}</strong>
-          <span>{{ t('dashboard.uploadSpeed') }}</span>
+          <span class="dashboard-speed-label">{{ t('dashboard.uploadSpeed') }}</span>
         </div>
         <div class="dashboard-speed-rate">
-          <VIcon icon="mdi-arrow-down" color="primary" size="26" />
+          <span class="dashboard-speed-icon dashboard-speed-icon--download" aria-hidden="true">
+            <VIcon icon="mdi-arrow-down" size="18" />
+          </span>
           <strong class="dashboard-speed-number">{{ downloadSpeedText }}</strong>
-          <span>{{ t('dashboard.downloadSpeed') }}</span>
+          <span class="dashboard-speed-label">{{ t('dashboard.downloadSpeed') }}</span>
         </div>
       </div>
-      <VDivider class="my-3" />
-      <VList class="card-list">
-        <VListItem v-for="item in infoItems" :key="item.title">
-          <template #prepend>
-            <VIcon rounded :icon="item.avatar" />
-          </template>
 
-          <VListItemTitle class="text-sm font-weight-medium mb-1">
-            {{ item.title }}
-          </VListItemTitle>
+      <div class="dashboard-speed-divider" />
 
-          <template #append>
-            <div>
-              <h6 class="dashboard-speed-number text-sm font-weight-medium mb-2">
-                {{ item.amount }}
-              </h6>
-            </div>
-          </template>
-        </VListItem>
-      </VList>
+      <div class="dashboard-speed-stats">
+        <div v-for="item in infoItems" :key="item.title" class="dashboard-speed-stat-row">
+          <span class="dashboard-speed-stat-icon" aria-hidden="true">
+            <VIcon :icon="item.avatar" size="16" />
+          </span>
+          <span class="dashboard-speed-stat-title">{{ item.title }}</span>
+          <strong class="dashboard-speed-number dashboard-speed-stat-amount">{{ item.amount }}</strong>
+        </div>
+      </div>
     </VCardText>
   </VCard>
 </template>
@@ -181,12 +177,8 @@ const { loading } = useDataRefresh(
   min-block-size: 0;
 }
 
-.card-list {
-  --v-card-list-gap: 0.15rem;
-
-  flex: 1 1 auto;
-  min-block-size: 0;
-  overflow: auto;
+.dashboard-work-header {
+  padding: 14px 16px 8px;
 }
 
 .dashboard-work-content {
@@ -195,6 +187,7 @@ const { loading } = useDataRefresh(
   flex-direction: column;
   min-block-size: 0;
   overflow: hidden;
+  padding: 4px 16px 14px;
 }
 
 .dashboard-speed-number {
@@ -203,23 +196,95 @@ const { loading } = useDataRefresh(
 
 .dashboard-speed-overview {
   display: grid;
-  gap: 0.6rem;
+  gap: 8px;
 }
 
 .dashboard-speed-rate {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.45rem;
+  gap: 10px;
+}
+
+.dashboard-speed-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+.dashboard-speed-icon--upload {
+  background-color: rgba(var(--v-theme-info), 0.1);
+  color: rgb(var(--v-theme-info));
+}
+
+.dashboard-speed-icon--download {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
 }
 
 .dashboard-speed-rate strong {
-  font-size: 1.35rem;
-  line-height: 1.5;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
 }
 
-.dashboard-speed-rate span {
+.dashboard-speed-label {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dashboard-speed-divider {
+  border-block-start: 1px solid var(--mp-border-subtle);
+  margin-block: 13px 10px;
+}
+
+.dashboard-speed-stats {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.dashboard-speed-stat-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 32px;
+}
+
+.dashboard-speed-stat-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background-color: var(--mp-item-bg);
+  block-size: 28px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  inline-size: 28px;
+}
+
+.dashboard-speed-stat-title {
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-speed-stat-amount {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 </style>

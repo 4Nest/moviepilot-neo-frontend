@@ -104,23 +104,31 @@ watch(mediaSource, () => {
   mediaId.value = null
   mediaSelectorDialog.value = false
 })
+
+// 切换回自动媒体类型时清空残留媒体 ID，避免旧值锁死提交按钮或误传参数。
+watch(mediaType, val => {
+  if (!val) {
+    mediaId.value = null
+    mediaSelectorDialog.value = false
+  }
+})
 </script>
 
 <template>
-  <VDialog v-model="dialogVisible" max-width="45rem" scrollable>
-    <VCard>
-      <VCardItem class="py-2">
+  <VDialog v-model="dialogVisible" max-width="44rem" scrollable>
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-auto-fix" class="me-2" />
+          <VIcon icon="mdi-auto-fix" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('file.manualScrape') }}</VCardTitle>
         <VCardSubtitle>{{ dialogSubtitle }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn @click="closeDialog" />
       <VDivider />
-      <VCardText class="pt-6">
-        <VRow>
-          <VCol cols="12" md="4">
+      <VCardText class="mp-dialog-body">
+        <VRow class="mp-form-grid">
+          <VCol cols="12" sm="6">
             <VSelect
               v-model="mediaType"
               :label="t('dialog.reorganize.mediaType')"
@@ -134,7 +142,7 @@ watch(mediaSource, () => {
               prepend-inner-icon="mdi-movie-open"
             />
           </VCol>
-          <VCol cols="12" md="4">
+          <VCol cols="12" sm="6">
             <VSelect
               v-model="mediaSource"
               :items="mediaSourceItems"
@@ -144,7 +152,7 @@ watch(mediaSource, () => {
               prepend-inner-icon="mdi-database-search"
             />
           </VCol>
-          <VCol cols="12" md="4">
+          <VCol cols="12">
             <VTextField
               v-model="mediaId"
               :disabled="mediaType === ''"
@@ -160,16 +168,13 @@ watch(mediaSource, () => {
           </VCol>
         </VRow>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
-        <VBtn
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-auto-fix"
-          class="px-5"
-          :disabled="!canSubmit"
-          @click="submitScrape"
-        >
+        <VBtn color="default" variant="text" size="small" @click="closeDialog">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="px-4" :disabled="!canSubmit" @click="submitScrape">
           {{ t('common.confirm') }}
         </VBtn>
       </VCardActions>
@@ -185,3 +190,29 @@ watch(mediaSource, () => {
     </VDialog>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

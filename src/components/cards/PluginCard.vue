@@ -62,9 +62,6 @@ const pluginSidebarNavStore = usePluginSidebarNavStore()
 // 确认框
 const createConfirm = useConfirm()
 
-// 本身是否可见
-const isVisible = ref(true)
-
 // 菜单显示状态
 const menuVisible = ref(false)
 
@@ -138,7 +135,7 @@ async function uninstallPlugin() {
     if (result.success) {
       $toast.success(t('plugin.uninstallSuccess', { name: props.plugin?.plugin_name }))
 
-      emit('remove')
+      emit('remove', props.plugin?.id)
       // 生命周期成功后刷新动态导航。
       void pluginSidebarNavStore.ensureSidebarNav(true)
     } else {
@@ -636,7 +633,7 @@ watch(
     <VHover>
       <template #default="hover">
         <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
-        <div v-if="isVisible" v-bind="hover.props" class="plugin-card-hover-area h-full">
+        <div v-bind="hover.props" class="plugin-card-hover-area h-full">
           <VCard
             :width="props.width"
             :height="props.height"
@@ -650,32 +647,32 @@ watch(
             :ripple="!props.sortable"
           >
             <div class="plugin-card__banner flex-grow">
-              <VCardText class="px-2 pt-2 pb-0">
+              <div class="plugin-card__header">
                 <VCardTitle
-                  class="text-white px-2 pb-0 text-lg text-shadow whitespace-nowrap overflow-hidden text-ellipsis"
+                  class="plugin-card__title text-high-emphasis whitespace-nowrap overflow-hidden text-ellipsis"
                   :class="{ 'plugin-card__title--with-status': hasCardStatus }"
                 >
                   <VBadge dot inline :color="props.plugin?.state ? 'success' : 'secondary'" />
                   {{ props.plugin?.plugin_name }}
-                  <span class="text-sm mt-1 text-gray-200"> v{{ props.plugin?.plugin_version }} </span>
+                  <span class="plugin-card__version text-medium-emphasis">v{{ props.plugin?.plugin_version }}</span>
                 </VCardTitle>
-              </VCardText>
-              <div class="relative flex flex-row items-start px-2 justify-between grow">
+              </div>
+              <div class="plugin-card__main relative flex flex-row items-start justify-between grow">
                 <div class="relative flex-1 min-w-0">
-                  <div class="px-2 py-1 text-white text-sm text-shadow overflow-hidden line-clamp-3 ...">
+                  <div class="plugin-card__desc text-medium-emphasis overflow-hidden line-clamp-3">
                     {{ props.plugin?.plugin_desc }}
                   </div>
                 </div>
                 <div
-                  class="relative flex-shrink-0 self-center pb-3"
+                  class="plugin-card__icon-slot relative flex-shrink-0 self-center"
                   :class="{ 'cursor-move': props.sortable && display.mdAndUp.value }"
                 >
-                  <VAvatar size="48">
+                  <VAvatar size="42" class="plugin-card__icon-avatar">
                     <VImg
                       ref="imageRef"
                       :src="iconPath"
-                      aspect-ratio="4/3"
-                      cover
+                      contain
+                      class="w-full h-full"
                       @load="imageLoaded"
                       @error="imageFailed"
                     />
@@ -683,14 +680,22 @@ watch(
                 </div>
               </div>
             </div>
-            <VCardText
-              class="flex flex-col align-self-baseline justify-between px-2 py-2 w-full overflow-hidden max-h-10 min-h-10"
-            >
-              <div class="flex flex-nowrap items-center w-full pe-10">
-                <div class="flex flex-nowrap max-w-40 items-center align-middle">
-                  <VImg :src="authorPath" class="author-avatar" @load="isAvatarLoaded = true">
+            <VCardText class="plugin-card__footer relative flex items-center justify-between w-full overflow-hidden">
+              <div class="flex flex-nowrap items-center w-full pe-8 min-w-0">
+                <div class="plugin-card__author flex flex-nowrap max-w-40 items-center">
+                  <VImg
+                    :src="authorPath"
+                    width="18"
+                    height="18"
+                    max-width="18"
+                    max-height="18"
+                    class="author-avatar"
+                    :class="{ 'author-avatar--loaded': isAvatarLoaded && Boolean(authorPath) }"
+                    @load="isAvatarLoaded = true"
+                    @error="isAvatarLoaded = false"
+                  >
                     <template #default>
-                      <VIcon v-if="!isAvatarLoaded" size="small" icon="mdi-github" class="me-1" />
+                      <VIcon v-if="!isAvatarLoaded || !authorPath" size="14" icon="mdi-github" />
                     </template>
                   </VImg>
                   <span v-if="props.sortable" class="overflow-hidden text-ellipsis whitespace-nowrap">
@@ -706,16 +711,16 @@ watch(
                     {{ props.plugin?.plugin_author }}
                   </a>
                 </div>
-                <span v-if="props.count" class="ms-2 flex-shrink-0 download-count items-center align-middle">
-                  <VIcon size="small" icon="mdi-download" />
-                  <span class="text-sm">{{ formatDownloadCount(props.count) }}</span>
+                <span v-if="props.count" class="plugin-card__downloads ms-2.5 flex-shrink-0 inline-flex items-center">
+                  <VIcon size="13" icon="mdi-download" class="me-0.5" />
+                  <span>{{ formatDownloadCount(props.count) }}</span>
                 </span>
               </div>
-              <div v-if="!props.sortable" class="absolute bottom-0 right-0">
-                <IconBtn @click.stop>
-                  <VIcon icon="mdi-dots-vertical" />
+              <div v-if="!props.sortable" class="plugin-card__menu-wrap">
+                <IconBtn class="plugin-card__menu-btn" @click.stop>
+                  <VIcon icon="mdi-dots-vertical" size="16" />
                   <VMenu v-model="menuVisible" activator="parent" close-on-content-click>
-                    <VList>
+                    <VList density="compact">
                       <VListItem
                         v-for="(item, i) in dropdownItems"
                         v-show="item.show"
@@ -724,7 +729,7 @@ watch(
                         @click="item.props.click"
                       >
                         <template #prepend>
-                          <VIcon :icon="item.props.prependIcon" />
+                          <VIcon :icon="item.props.prependIcon" size="18" />
                         </template>
                         <VListItemTitle>{{ item.title }}</VListItemTitle>
                       </VListItem>
@@ -739,7 +744,7 @@ watch(
               :aria-label="t('plugin.hasUpdate')"
               :title="t('plugin.hasUpdate')"
             >
-              <VIcon icon="mdi-new-box" class="text-white" size="20" />
+              <VIcon icon="mdi-arrow-up-circle" color="success" size="18" />
             </div>
             <div
               v-else-if="hasCardRating"
@@ -747,7 +752,7 @@ watch(
               :aria-label="cardRatingSummary"
               :title="cardRatingSummary"
             >
-              <VIcon icon="mdi-star" color="warning" size="16" />
+              <VIcon icon="mdi-star" color="warning" size="13" />
               <span>{{ cardRatingValue }}</span>
             </div>
           </VCard>
@@ -762,8 +767,123 @@ watch(
   inline-size: 100%;
 }
 
+.plugin-card {
+  border: 1px solid var(--mp-border-card) !important;
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+  transition:
+    border-color 0.16s ease,
+    transform 0.18s ease;
+}
+
+.plugin-card:hover {
+  border-color: var(--mp-border-hover) !important;
+}
+
+.plugin-card__banner {
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 11px;
+  background: rgba(var(--v-theme-on-surface), 0.025) !important;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  gap: 6px;
+}
+
+.plugin-card__header {
+  min-inline-size: 0;
+}
+
+.plugin-card__title {
+  padding: 0 !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+.plugin-card__version {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin-inline-start: 4px;
+}
+
+.plugin-card__main {
+  gap: 12px;
+}
+
+.plugin-card__desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.plugin-card__icon-slot {
+  padding-block-end: 2px;
+}
+
+.plugin-card__icon-avatar {
+  padding: 5px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.plugin-card__icon-avatar :deep(.v-img__img) {
+  object-fit: contain !important;
+}
+
 .plugin-card__title--with-status {
-  padding-inline-end: 4rem !important;
+  padding-inline-end: 3.5rem !important;
+}
+
+.plugin-card__footer {
+  block-size: 36px;
+  max-block-size: 36px;
+  min-block-size: 36px;
+  padding: 0 14px !important;
+}
+
+.plugin-card__author {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.plugin-card__author a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.plugin-card__author a:hover {
+  color: rgb(var(--v-theme-primary));
+}
+
+.plugin-card__downloads {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.plugin-card__menu-wrap {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  inset-block: 0;
+  inset-inline-end: 8px;
+}
+
+.plugin-card__menu-btn {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  inline-size: 26px !important;
+  min-inline-size: 26px !important;
+  padding: 0 !important;
+}
+
+.plugin-card__menu-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .plugin-card__status {
@@ -771,34 +891,40 @@ watch(
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  color: white;
-  inset-block-start: 0.625rem;
-  inset-inline-end: 0.625rem;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
   line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 65%);
 }
 
 .plugin-card__status--rating {
-  gap: 0.125rem;
-  font-size: 0.75rem;
+  border-radius: 5px;
+  background: rgba(var(--v-theme-warning), 0.14);
+  block-size: 20px;
+  color: rgb(var(--v-theme-warning));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-}
-
-.card-cover-blurred::before {
-  position: absolute;
-  /* stylelint-disable-next-line property-no-vendor-prefix */
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  background: rgba(29, 39, 59, 48%);
-  content: '';
-  inset: 0;
+  gap: 2px;
+  line-height: 1;
+  padding-inline: 6px;
 }
 
 .author-avatar {
+  display: inline-flex;
+  flex: 0 0 18px;
+  flex-grow: 0;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
-  block-size: 24px;
-  inline-size: 24px;
-  margin-inline-end: 8px;
+  block-size: 18px;
+  inline-size: 18px;
+  margin-inline-end: 5px;
+  max-block-size: 18px;
+  max-inline-size: 18px;
   object-fit: cover;
+}
+
+.author-avatar:not(.author-avatar--loaded) :deep(.v-img__img) {
+  opacity: 0;
 }
 </style>

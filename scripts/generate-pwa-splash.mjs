@@ -7,7 +7,7 @@ import appleSplashSpecs from './pwa-splash-specs.json' with { type: 'json' }
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const logoPath = path.join(projectRoot, 'public', 'logo.svg')
 const outputDirectory = path.join(projectRoot, 'public', 'splash')
-const background = '#0E1116'
+const background = '#16171D'
 
 async function createSplash(width, height, scaleFactor, outputPath, format) {
   // Match the DOM loader's `min(160px, 36vw)` in CSS pixels, then convert it

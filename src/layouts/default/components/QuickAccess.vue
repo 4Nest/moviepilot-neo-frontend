@@ -583,9 +583,9 @@ function handleBackdropClick(event: MouseEvent) {
           <div class="section-title">{{ t('plugin.recentlyUsed') }}</div>
         </div>
 
-        <div v-if="recentPlugins.length > 0" class="recent-plugins-row">
+        <div v-if="filteredRecentPlugins.length > 0" class="recent-plugins-row">
           <div
-            v-for="plugin in recentPlugins"
+            v-for="plugin in filteredRecentPlugins"
             :key="`recent-${plugin.id}`"
             class="plugin-item app-surface-shape"
             @click="handlePluginClick(plugin)"
@@ -611,20 +611,21 @@ function handleBackdropClick(event: MouseEvent) {
           </div>
         </div>
 
-        <!-- 没有最近访问时显示"无" -->
+        <!-- 没有最近访问时显示文字提示 -->
         <div v-else class="no-recent-plugins">
-          <VIcon icon="mdi-puzzle-outline" size="24" color="grey" />
+          <VIcon icon="mdi-puzzle-outline" size="20" color="grey" />
+          <span class="no-recent-text">{{ t('plugin.noRecentPlugins') }}</span>
         </div>
 
         <!-- 所有插件 -->
-        <div v-if="pluginsWithPage.length > 0" class="section-header with-margin">
+        <div v-if="filteredPlugins.length > 0" class="section-header with-margin">
           <div class="section-title">{{ t('plugin.allPlugins') }}</div>
         </div>
 
-        <div v-if="pluginsWithPage.length > 0" class="all-plugins-container">
+        <div v-if="filteredPlugins.length > 0" class="all-plugins-container">
           <div class="all-plugins-grid quick-access-scroll">
             <div
-              v-for="plugin in pluginsWithPage"
+              v-for="plugin in filteredPlugins"
               :key="plugin.id"
               class="plugin-item app-surface-shape"
               @click="handlePluginClick(plugin)"
@@ -656,10 +657,12 @@ function handleBackdropClick(event: MouseEvent) {
             </div>
           </div>
         </div>
-        <!-- 空状态（只有在没有插件时显示） -->
-        <div v-else-if="pluginsWithPage.length === 0" class="empty-state">
+        <!-- 空状态（没有匹配的可用插件时显示） -->
+        <div v-else class="empty-state">
           <VIcon icon="mdi-puzzle-outline" size="48" color="grey" />
-          <div class="empty-text">{{ t('plugin.noPluginsWithPage') }}</div>
+          <div class="empty-text">
+            {{ t(searchKeyword ? 'plugin.noMatchingContent' : 'plugin.noPluginsWithPage') }}
+          </div>
         </div>
       </template>
     </div>
@@ -701,8 +704,7 @@ function handleBackdropClick(event: MouseEvent) {
   display: flex;
   overflow: hidden;
   flex-direction: column;
-  backdrop-filter: blur(32px);
-  background: rgba(var(--v-theme-surface), 0.95);
+  background: rgb(var(--v-theme-background));
   block-size: 100vh;
   block-size: 100dvh;
   inset-block-start: 0;
@@ -811,6 +813,10 @@ function handleBackdropClick(event: MouseEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 13px;
+  gap: 6px;
+  padding-block: 8px;
   padding-inline: 0;
 }
 
@@ -945,8 +951,9 @@ function handleBackdropClick(event: MouseEvent) {
   }
 }
 
-// 深色模式适配
+// 深色模式适配（实色背景 + 磨砂兜底，防止首页内容透字）
 html[data-theme='dark'] .plugin-quick-access {
-  background: rgba(var(--v-theme-surface), 0.9);
+  background: rgb(var(--v-theme-surface));
+  backdrop-filter: blur(16px);
 }
 </style>

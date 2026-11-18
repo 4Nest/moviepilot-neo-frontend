@@ -29,15 +29,15 @@ const emit = defineEmits<{
 // 对话框类型对应的图标和颜色
 const typeConfig = {
   info: {
-    icon: 'mdi-information',
+    icon: 'mdi-information-outline',
     color: 'info',
   },
   warn: {
-    icon: 'mdi-alert',
+    icon: 'mdi-alert-outline',
     color: 'warning',
   },
   error: {
-    icon: 'mdi-alert-circle',
+    icon: 'mdi-alert-circle-outline',
     color: 'error',
   },
 }
@@ -67,29 +67,21 @@ function handleCancel() {
     data-native-confirm-dialog
     :data-native-confirm-kind="type"
   >
-    <VCard>
-      <VCardItem>
-        <div class="d-flex align-center justify-start mt-3">
-          <VAvatar :color="currentType.color" variant="text" size="x-large">
-            <VIcon size="x-large" :icon="currentType.icon" />
-          </VAvatar>
-          <div class="mx-3">
-            <p data-native-confirm-title class="font-weight-bold text-xl text-high-emphasis">{{ title }}</p>
-            <p data-native-confirm-message>{{ content }}</p>
-          </div>
+    <VCard class="app-confirm-dialog-card">
+      <div class="app-confirm-dialog-body">
+        <div class="app-confirm-dialog-icon" :class="`app-confirm-dialog-icon--${currentType.color}`">
+          <VIcon size="20" :color="currentType.color" :icon="currentType.icon" />
         </div>
-      </VCardItem>
-      <VCardActions class="app-confirm-dialog-actions mx-auto">
-        <VBtn data-native-confirm-cancel variant="tonal" color="secondary" class="px-5" @click="handleCancel">
+        <div class="app-confirm-dialog-copy">
+          <p data-native-confirm-title class="app-confirm-dialog-title">{{ title }}</p>
+          <p data-native-confirm-message class="app-confirm-dialog-message">{{ content }}</p>
+        </div>
+      </div>
+      <VCardActions class="app-confirm-dialog-actions">
+        <VBtn data-native-confirm-cancel variant="outlined" color="secondary" class="px-4" @click="handleCancel">
           {{ cancelText }}
         </VBtn>
-        <VBtn
-          data-native-confirm-accept
-          variant="elevated"
-          :color="currentType.color"
-          @click="handleConfirm"
-          class="px-5"
-        >
+        <VBtn data-native-confirm-accept variant="flat" :color="currentType.color" class="px-4" @click="handleConfirm">
           {{ confirmText }}
         </VBtn>
       </VCardActions>
@@ -97,3 +89,63 @@ function handleCancel() {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.app-confirm-dialog-card {
+  border-radius: 14px !important;
+}
+
+.app-confirm-dialog-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-block: 20px 12px;
+  padding-inline: 20px 52px;
+}
+
+.app-confirm-dialog-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background-color: rgba(var(--v-theme-info), 0.12);
+  block-size: 38px;
+  inline-size: 38px;
+}
+
+.app-confirm-dialog-icon--warning {
+  background-color: rgba(var(--v-theme-warning), 0.12);
+}
+
+.app-confirm-dialog-icon--error {
+  background-color: rgba(var(--v-theme-error), 0.12);
+}
+
+.app-confirm-dialog-copy {
+  min-inline-size: 0;
+}
+
+.app-confirm-dialog-title {
+  margin: 0 0 6px;
+  color: rgba(var(--v-theme-on-surface), 0.95);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.app-confirm-dialog-message {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.app-confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-block: 8px 16px !important;
+  padding-inline: 20px !important;
+}
+</style>

@@ -2,7 +2,7 @@ import api from '@/api'
 import AnalyticsMediaStatistic from '@/views/dashboard/AnalyticsMediaStatistic.vue'
 import { renderWithProviders } from '@tests/support/render'
 import { screen, waitFor } from '@testing-library/vue'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/api', () => ({ default: { get: vi.fn() } }))
@@ -100,16 +100,28 @@ describe('AnalyticsMediaStatistic', () => {
     expect(screen.getByText('7')).toBeInTheDocument()
   })
 
-  it('keeps the newest KeepAlive response when initial refreshes finish out of order', async () => {
+  it('avoids duplicate initial KeepAlive requests and keeps the newest response when reactivation finishes out of order', async () => {
     const firstRequest = deferred<Record<string, number>>()
     const secondRequest = deferred<Record<string, number>>()
     apiGet.mockReturnValueOnce(firstRequest.promise).mockReturnValueOnce(secondRequest.promise)
     const KeepAliveHarness = defineComponent({
       components: { AnalyticsMediaStatistic },
-      template: '<KeepAlive><AnalyticsMediaStatistic /></KeepAlive>',
+      setup() {
+        const active = ref(true)
+        return { active }
+      },
+      template: `
+        <button type="button" @click="active = false">停用统计</button>
+        <button type="button" @click="active = true">启用统计</button>
+        <KeepAlive><AnalyticsMediaStatistic v-if="active" /></KeepAlive>
+      `,
     })
 
     await renderWithProviders(KeepAliveHarness, { initialState: { user: { userID: 7 } } })
+    expect(apiGet).toHaveBeenCalledTimes(1)
+
+    await screen.getByRole('button', { name: '停用统计' }).click()
+    await screen.getByRole('button', { name: '启用统计' }).click()
     await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(2))
 
     secondRequest.resolve({

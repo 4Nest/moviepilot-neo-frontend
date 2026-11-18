@@ -112,6 +112,8 @@ describe('VirtualSlideView', () => {
     resizeCallbacks[0]?.([], resizeObservers[0])
 
     await fireEvent.click(container.querySelector('.nav-button-right') as HTMLElement)
+    expect(container.querySelector('.nav-button-right')).toHaveAttribute('aria-label', '下一步')
+    expect(container.querySelector('.nav-button-left')).toHaveAttribute('aria-label', '上一步')
     expect(scrollTo).toHaveBeenCalledWith({ behavior: 'smooth', left: 220, top: 0 })
     expect(container.querySelector('.slider-container')).toHaveClass('is-scrolling')
 

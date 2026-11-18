@@ -45,9 +45,12 @@ const optionMeta: Record<SubscribeMode, { icon: string; title: string }> = {
 <template>
   <VDialog :model-value="modelValue" max-width="28rem" @update:model-value="emit('update:modelValue', $event)">
     <VCard>
-      <VCardTitle class="text-lg font-weight-bold px-5 pt-5">
-        {{ t('dialog.subscribeMode.title') }}
-      </VCardTitle>
+      <VCardItem class="py-3">
+        <VCardTitle>
+          {{ t('dialog.subscribeMode.title') }}
+        </VCardTitle>
+        <VDialogCloseBtn @click="emit('close')" />
+      </VCardItem>
       <VDivider />
       <VList class="py-2">
         <VListItem
@@ -58,7 +61,6 @@ const optionMeta: Record<SubscribeMode, { icon: string; title: string }> = {
           @click="emit('choose', mode)"
         />
       </VList>
-      <VDialogCloseBtn @click="emit('close')" />
     </VCard>
   </VDialog>
 </template>

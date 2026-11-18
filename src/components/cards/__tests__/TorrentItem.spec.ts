@@ -281,7 +281,7 @@ describe('TorrentItem display and interactions', () => {
     await waitFor(() => expect(container.querySelector<HTMLImageElement>('img')?.src).toContain('site-101.png'))
   })
 
-  it('falls back to the recognized name, placeholder description, and tracker initial', async () => {
+  it('falls back to the recognized name and tracker initial while omitting an empty description', async () => {
     mocks.getCachedSiteIcon.mockRejectedValue(new Error('icon unavailable'))
     const context = createContext({
       media: { title: undefined },
@@ -292,7 +292,7 @@ describe('TorrentItem display and interactions', () => {
     const { container } = await renderItem(context)
 
     expect(screen.getByText('列表识别名称')).toBeInTheDocument()
-    expect(screen.getByText('暂无描述')).toBeInTheDocument()
+    expect(screen.queryByText('暂无描述')).not.toBeInTheDocument()
     expect(screen.getByText('备')).toBeInTheDocument()
     expect(container.querySelector('img')).not.toBeInTheDocument()
   })
@@ -335,9 +335,11 @@ describe('TorrentItem display and interactions', () => {
 
     events.done('')
     expect(getItem(container)).not.toHaveClass('border-success')
+    expect(screen.queryByText('已下载')).not.toBeInTheDocument()
 
     events.done(context.torrent_info.enclosure)
-    await waitFor(() => expect(getItem(container)).toHaveClass('border-success'))
+    await waitFor(() => expect(screen.getByText('已下载')).toBeInTheDocument())
+    expect(getItem(container)).not.toHaveClass('border-start')
 
     events.error('下载失败')
     expect(console.error).toHaveBeenCalledWith('下载失败')

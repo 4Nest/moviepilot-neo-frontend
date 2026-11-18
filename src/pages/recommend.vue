@@ -6,7 +6,6 @@ import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useDynamicButton } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
-import { getItemColor, initializeItemColors } from '@/utils/colorUtils'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { getRecommendTabs } from '@/router/i18n-menu'
 
@@ -42,7 +41,6 @@ function openRecommendSettings() {
   settingsDialogController = openSharedDialog(
     ContentToggleSettingsDialog,
     {
-      colors: itemColors.value,
       enabled: enableConfig.value,
       hint: t('recommend.selectContentToDisplay'),
       items: viewList,
@@ -81,17 +79,6 @@ const filteredViews = computed(() => {
 const enableConfig = ref<{ [key: string]: boolean }>({
   ...Object.fromEntries(viewList.map(item => [item.title, true])),
 })
-
-// 为每个项目生成随机颜色
-const itemColors = ref<{ [key: string]: string }>({})
-
-// 初始化颜色
-function initializeColors() {
-  initializeItemColors(viewList, item => item.title)
-  viewList.forEach(item => {
-    itemColors.value[item.title] = getItemColor(item.title)
-  })
-}
 
 // 额外的数据源
 const extraRecommendSources = ref<RecommendSource[]>([])
@@ -208,7 +195,6 @@ let timer: ReturnType<typeof setTimeout>
 onBeforeMount(async () => {
   await loadConfig()
   enableMissingBuiltInSources()
-  initializeColors()
 })
 
 onMounted(async () => {
@@ -218,12 +204,6 @@ onMounted(async () => {
   }, 400)
 
   await loadExtraRecommendSources()
-  // 为新增的数据源也生成颜色
-  extraRecommendSources.value.forEach(source => {
-    if (!itemColors.value[source.name]) {
-      itemColors.value[source.name] = getItemColor(source.name)
-    }
-  })
 })
 
 onUnmounted(() => {
@@ -237,6 +217,22 @@ onActivated(async () => {
 
 <template>
   <div class="mp-recommend">
+    <div
+      v-if="!appMode && route.path === '/recommend' && !(isReady && filteredViews.length === 0)"
+      class="mp-page-action-bar"
+    >
+      <VBtn
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        prepend-icon="mdi-tune"
+        data-testid="recommend-settings-btn"
+        @click="openRecommendSettings"
+      >
+        {{ t('recommend.configureContent') }}
+      </VBtn>
+    </div>
+
     <!-- 滚动内容区域 -->
     <div class="recommend-content">
       <TransitionGroup name="fade">
@@ -252,27 +248,14 @@ onActivated(async () => {
       <div v-if="isReady && filteredViews.length === 0" class="empty-category">
         <VIcon icon="mdi-alert-circle-outline" size="large" class="empty-icon" />
         <p class="empty-text">{{ t('recommend.noCategoryContent') }}</p>
-        <VBtn color="primary" variant="tonal" size="small" @click="openRecommendSettings">
+        <VBtn color="primary" variant="tonal" size="small" rounded="lg" @click="openRecommendSettings">
           {{ t('recommend.configureContent') }}
         </VBtn>
       </div>
     </div>
 
-    <!-- 快速滚动到顶部按钮 -->
     <Teleport to="body" v-if="route.path === '/recommend'">
-      <div v-if="!appMode" class="compact-fab-stack">
-        <VFab
-          icon="mdi-tune"
-          color="primary"
-          appear
-          class="compact-fab compact-fab--primary"
-          @click="openRecommendSettings"
-        />
-      </div>
-    </Teleport>
-
-    <Teleport to="body" v-if="route.path === '/recommend'">
-      <VScrollToTopBtn :offset-fab="!appMode" />
+      <VScrollToTopBtn :offset-fab="false" />
     </Teleport>
   </div>
 </template>

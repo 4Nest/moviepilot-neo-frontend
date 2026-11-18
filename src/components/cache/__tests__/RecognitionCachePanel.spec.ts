@@ -6,8 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiDelete: vi.fn(),
+  confirm: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -17,10 +19,15 @@ vi.mock('@/api', () => ({
   },
 }))
 
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
+}))
+
 vi.mock('vue-toastification', () => ({
   useToast: () => ({
     error: mocks.toastError,
     success: mocks.toastSuccess,
+    warning: mocks.toastWarning,
   }),
 }))
 
@@ -42,8 +49,10 @@ describe('RecognitionCachePanel shared recognition statistics', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset()
     mocks.apiDelete.mockReset()
+    mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
+    mocks.toastWarning.mockReset()
   })
 
   it('shows the persisted shared recognition count when sharing is enabled', async () => {
@@ -119,5 +128,44 @@ describe('RecognitionCachePanel shared recognition statistics', () => {
     await fireEvent.update(screen.getAllByRole('textbox')[0], '10 Years')
     await fireEvent.click(screen.getByRole('button', { name: '删除' }))
     await waitFor(() => expect(mocks.apiDelete).toHaveBeenCalledWith(`tmdb/cache/${encodeURIComponent(key)}`))
+  })
+
+  it('过滤变化时清理不可见选中项，批量删除接入 useConfirm 并校验 res.success', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280, writable: true })
+    window.dispatchEvent(new Event('resize'))
+    mocks.apiGet.mockResolvedValue({
+      data: {
+        count: 2,
+        recognized: 1,
+        unrecognized: 1,
+        data: [
+          { key: 'k-alpha', title: 'Alpha Movie', year: '2024', media_type: 'movie', tmdb_id: 100 },
+          { key: 'k-beta', title: '', year: '', media_type: 'unknown', tmdb_id: 0 },
+        ],
+      },
+    })
+
+    const { container } = await renderRecognitionCachePanel()
+    expect(await screen.findByText('Alpha Movie')).toBeInTheDocument()
+
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]')
+    await fireEvent.click(checkboxes[0])
+    expect(screen.getByRole('button', { name: /删除选中/ })).toHaveTextContent('(2)')
+
+    // 过滤关键字只保留 Alpha Movie，selectedItems 自动清理为 1 项
+    await fireEvent.update(screen.getAllByRole('textbox')[0], 'Alpha')
+    await waitFor(() => expect(screen.getByRole('button', { name: /删除选中/ })).toHaveTextContent('(1)'))
+
+    // 取消确认不发起删除
+    mocks.confirm.mockResolvedValueOnce(false)
+    await fireEvent.click(screen.getByRole('button', { name: /删除选中/ }))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(mocks.apiDelete).not.toHaveBeenCalled()
+
+    // 确认后返回 success: false 时报失败提示
+    mocks.confirm.mockResolvedValueOnce(true)
+    mocks.apiDelete.mockResolvedValueOnce({ success: false })
+    await fireEvent.click(screen.getByRole('button', { name: /删除选中/ }))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('删除缓存项失败'))
   })
 })

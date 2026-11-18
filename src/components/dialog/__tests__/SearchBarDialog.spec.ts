@@ -161,11 +161,10 @@ describe('SearchBarDialog media source selection', () => {
     const personItem = getSearchItem('演员')
 
     const mediaGroup = within(mediaItem).getByRole('group', { name: '电影、电视剧搜索数据源' })
-    const collectionGroup = within(collectionItem).getByRole('group', { name: '系列合集搜索数据源' })
     const personGroup = within(personItem).getByRole('group', { name: '演员搜索数据源' })
 
     expect(within(mediaGroup).getAllByRole('button')).toHaveLength(4)
-    expect(within(collectionGroup).getAllByRole('button')).toHaveLength(1)
+    expect(within(collectionItem).queryByRole('group', { name: '系列合集搜索数据源' })).not.toBeInTheDocument()
     expect(within(personGroup).getAllByRole('button')).toHaveLength(2)
     expect(within(mediaGroup).getByRole('button', { name: '使用 TheMovieDb 搜索' })).toHaveClass(
       'media-source-button--active',

@@ -206,13 +206,22 @@ export function getSettingTabs(t: TextTranslator): NavMenuTabItem[] {
 
 /** 返回电影订阅页的业务标签。 */
 export function getSubscribeMovieTabs(t: TextTranslator): NavMenuTabItem[] {
-  return [
+  const userStore = useUserStore()
+  const tabs: NavMenuTabItem[] = [
     {
       title: t('subscribeTabs.movie.mysub'),
       tab: 'mysub',
       icon: 'mdi-bell-check',
     },
   ]
+  if (userStore.superUser) {
+    tabs.push({
+      title: t('subscribeTabs.movie.share'),
+      tab: 'share',
+      icon: 'mdi-share-variant',
+    })
+  }
+  return tabs
 }
 
 /** 返回电视剧订阅页的业务标签。 */

@@ -1,4 +1,4 @@
-import { getCurrentInstance, onMounted, onUnmounted, ref, type Ref } from 'vue'
+import { getCurrentInstance, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { sseManagerSingleton, type SSEManagerOptions } from '@/utils/sseManager'
 import { addBackgroundTimer, removeBackgroundTimer } from '@/utils/backgroundManager'
 
@@ -93,16 +93,36 @@ export function useBackground() {
       skipInitialRun?: boolean
     },
   ) => {
+    let isDeactivated = false
+    let isManuallyRemoved = false
+
     onMounted(() => {
+      if (!isManuallyRemoved) {
+        addBackgroundTimer(id, callback, interval, options)
+      }
+    })
+
+    onDeactivated(() => {
+      isDeactivated = true
+      removeBackgroundTimer(id)
+    })
+
+    onActivated(() => {
+      if (!isDeactivated || isManuallyRemoved) return
+      isDeactivated = false
       addBackgroundTimer(id, callback, interval, options)
     })
 
     onUnmounted(() => {
+      isManuallyRemoved = true
       removeBackgroundTimer(id)
     })
 
     return {
-      remove: () => removeBackgroundTimer(id),
+      remove: () => {
+        isManuallyRemoved = true
+        removeBackgroundTimer(id)
+      },
     }
   }
 
@@ -244,6 +264,8 @@ export function useBackground() {
     immediate: boolean = true,
   ) => {
     const loading = ref(false)
+    let isDeactivated = false
+    let isManuallyStopped = false
 
     const wrappedLoadData = async () => {
       if (loading.value) return
@@ -263,20 +285,47 @@ export function useBackground() {
         await wrappedLoadData()
       }
 
-      addBackgroundTimer(id, wrappedLoadData, interval, {
-        runInBackground: false, // 后台不刷新数据
-        skipInitialRun: true, // 已经手动执行过了
-      })
+      if (!isDeactivated && !isManuallyStopped) {
+        addBackgroundTimer(id, wrappedLoadData, interval, {
+          runInBackground: false, // 后台不刷新数据
+          skipInitialRun: true, // 已经手动执行过了
+        })
+      }
+    })
+
+    onDeactivated(() => {
+      isDeactivated = true
+      removeBackgroundTimer(id)
+    })
+
+    onActivated(async () => {
+      if (!isDeactivated || isManuallyStopped) return
+      isDeactivated = false
+
+      if (immediate) {
+        await wrappedLoadData()
+      }
+
+      if (!isDeactivated && !isManuallyStopped) {
+        addBackgroundTimer(id, wrappedLoadData, interval, {
+          runInBackground: false,
+          skipInitialRun: true,
+        })
+      }
     })
 
     onUnmounted(() => {
+      isManuallyStopped = true
       removeBackgroundTimer(id)
     })
 
     return {
       loading,
       refresh: wrappedLoadData,
-      stop: () => removeBackgroundTimer(id),
+      stop: () => {
+        isManuallyStopped = true
+        removeBackgroundTimer(id)
+      },
     }
   }
 
@@ -297,9 +346,10 @@ export function useBackground() {
   ) => {
     const loading = ref(false)
     const isTimerActive = ref(false)
+    const isComponentActive = ref(true)
 
     const wrappedLoadData = async () => {
-      if (loading.value || !condition.value) return
+      if (loading.value || !condition.value || !isComponentActive.value) return
 
       loading.value = true
       try {
@@ -312,7 +362,7 @@ export function useBackground() {
     }
 
     const startTimer = () => {
-      if (!isTimerActive.value && condition.value) {
+      if (!isTimerActive.value && condition.value && isComponentActive.value) {
         addBackgroundTimer(id, wrappedLoadData, interval, {
           runInBackground: false,
           skipInitialRun: !immediate,
@@ -343,7 +393,21 @@ export function useBackground() {
       })
     })
 
+    onDeactivated(() => {
+      isComponentActive.value = false
+      stopTimer()
+    })
+
+    onActivated(() => {
+      if (isComponentActive.value) return
+      isComponentActive.value = true
+      if (condition.value) {
+        startTimer()
+      }
+    })
+
     onUnmounted(() => {
+      isComponentActive.value = false
       stopTimer()
     })
 

@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import api from '@/api'
 import { Subscribe } from '@/api/types'
+import { useGlobalSettingsStore } from '@/stores'
+import { getDisplayImageUrl } from '@/utils/imageUtils'
 import { formatDateDifference } from '@core/utils/formatters'
+import noImage from '@images/no-image.jpeg'
 import { useDisplay } from 'vuetify'
 import ProgressDialog from './ProgressDialog.vue'
 import { useI18n } from '@/composables/useChineseText'
@@ -12,6 +15,7 @@ import { useToast } from 'vue-toastification'
 const { t } = useI18n()
 
 const $toast = useToast()
+const globalSettingsStore = useGlobalSettingsStore()
 
 // 显示器宽度
 const display = useDisplay()
@@ -150,41 +154,60 @@ function getMediaTypeText(type: string | undefined) {
   if (!type) return ''
   return mediaTypeDict[type]
 }
+
+// 获取订阅历史海报地址，缺失时回退默认占位图
+function getHistoryPoster(item: Subscribe) {
+  if (!item.poster) return noImage
+  return getDisplayImageUrl(item.poster, globalSettingsStore.globalSettings.GLOBAL_IMAGE_CACHE)
+}
 </script>
 
 <template>
-  <VDialog scrollable max-width="50rem" :fullscreen="!display.mdAndUp.value">
-    <VCard class="mx-auto" width="100%">
-      <VCardItem>
+  <VDialog
+    scrollable
+    max-width="50rem"
+    :height="display.mdAndUp.value ? '42rem' : undefined"
+    :fullscreen="!display.mdAndUp.value"
+  >
+    <VCard class="subscribe-history-dialog mx-auto d-flex flex-column" width="100%">
+      <VCardItem class="flex-none">
         <VCardTitle>{{ t('dialog.subscribeHistory.title', { type: getMediaTypeText(props.type) }) }}</VCardTitle>
       </VCardItem>
-      <VDivider />
+      <VDivider class="flex-none" />
       <VDialogCloseBtn @click="emit('close')" />
-      <VList lines="two" class="flex-grow-1 min-h-0 py-0">
-        <VInfiniteScroll mode="intersect" side="end" :items="historyList" class="h-100" @load="loadHistory">
-          <template #loading>
-            <LoadingBanner />
-          </template>
-          <template #error="{ props: retryProps }">
-            <div class="d-flex flex-column align-center ga-2 py-4" role="alert">
-              <span class="text-medium-emphasis">{{ t('subscribe.requestFailed') }}</span>
-              <VBtn v-bind="retryProps" prepend-icon="mdi-refresh" size="small" variant="tonal">
-                {{ t('common.retry') }}
-              </VBtn>
-            </div>
-          </template>
-          <template #empty />
+      <VInfiniteScroll
+        v-if="!isRefreshed || historyList.length > 0"
+        mode="intersect"
+        side="end"
+        :items="historyList"
+        class="subscribe-history-dialog__scroll"
+        @load="loadHistory"
+      >
+        <template #loading>
+          <LoadingBanner />
+        </template>
+        <template #error="{ props: retryProps }">
+          <div class="d-flex flex-column align-center ga-2 py-4" role="alert">
+            <span class="text-medium-emphasis">{{ t('subscribe.requestFailed') }}</span>
+            <VBtn v-bind="retryProps" prepend-icon="mdi-refresh" size="small" variant="tonal">
+              {{ t('common.retry') }}
+            </VBtn>
+          </div>
+        </template>
+        <template #empty />
+        <VList lines="two" class="subscribe-history-dialog__content py-0">
           <VVirtualScroll v-if="historyList.length > 0" renderless :items="historyList" :item-height="104">
             <template #default="{ item, itemRef }">
               <div :ref="itemRef">
-                <VListItem>
+                <VListItem class="subscribe-history-item">
                   <template #prepend>
                     <VImg
                       height="75"
                       width="50"
-                      :src="item.poster"
+                      :max-width="50"
+                      :src="getHistoryPoster(item)"
                       aspect-ratio="2/3"
-                      class="object-cover rounded ring-gray-500 me-3"
+                      class="flex-none rounded object-cover me-3"
                       cover
                     >
                       <template #placeholder>
@@ -201,10 +224,10 @@ function getMediaTypeText(type: string | undefined) {
                   <VListItemTitle v-else>
                     {{ item.name }}
                   </VListItemTitle>
-                  <VListItemSubtitle class="mt-2">{{ formatDateDifference(item.date) }}</VListItemSubtitle>
-                  <VListItemSubtitle class="mt-2">{{ item.description }}</VListItemSubtitle>
+                  <VListItemSubtitle class="mt-1">{{ formatDateDifference(item.date) }}</VListItemSubtitle>
+                  <VListItemSubtitle class="mt-1">{{ item.description }}</VListItemSubtitle>
                   <template #append>
-                    <div class="me-n3">
+                    <div class="me-n2">
                       <IconBtn>
                         <VIcon icon="mdi-dots-vertical" />
                         <VMenu activator="parent" close-on-content-click>
@@ -229,9 +252,9 @@ function getMediaTypeText(type: string | undefined) {
               </div>
             </template>
           </VVirtualScroll>
-        </VInfiniteScroll>
-      </VList>
-      <VCardText v-if="historyList.length === 0 && isRefreshed" class="subscribe-history-empty">
+        </VList>
+      </VInfiniteScroll>
+      <VCardText v-else class="subscribe-history-empty flex-grow-1">
         <VIcon class="subscribe-history-empty__icon" icon="mdi-sync" size="30" />
 
         <div class="subscribe-history-empty__headline">
@@ -248,6 +271,27 @@ function getMediaTypeText(type: string | undefined) {
   </VDialog>
 </template>
 <style scoped>
+.subscribe-history-dialog {
+  overflow: hidden !important;
+  block-size: 100%;
+}
+
+.subscribe-history-dialog__scroll {
+  flex: 1 1 0;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.subscribe-history-dialog__content {
+  overflow: visible !important;
+}
+
+.subscribe-history-item {
+  min-block-size: 6rem;
+  padding-block: 0.5rem !important;
+}
+
 .subscribe-history-empty {
   display: flex;
   flex-direction: column;
@@ -266,15 +310,15 @@ function getMediaTypeText(type: string | undefined) {
 
 .subscribe-history-empty__headline {
   color: rgba(var(--v-theme-on-surface), 0.9);
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.4;
 }
 
 .subscribe-history-empty__description {
   color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.92rem;
-  line-height: 1.65;
-  max-inline-size: 25rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  max-inline-size: 22rem;
 }
 </style>

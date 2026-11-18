@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { debounce } from 'lodash-es'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import { useI18n } from '@/composables/useChineseText'
 
@@ -15,9 +16,11 @@ const filterParams = reactive({
   with_keywords: '',
   with_watch_providers: '',
   vote_average: 0,
-  vote_count: 10,
+  vote_count: 10 as number | string,
   release_date: '',
 })
+
+const voteCountInput = ref<number | string>(filterParams.vote_count)
 
 // TMDB 电影排序字典
 const tmdbSortDict: Record<string, string> = {
@@ -101,125 +104,205 @@ const tmdbLanguageDict = {
 
 // 当前Key
 const currentKey = ref(0)
+let lastCommittedType = type.value
 
-// 类型变化
-watch(type, () => {
+function buildQuerySignature() {
+  return JSON.stringify([type.value, filterParams])
+}
+
+let lastQuerySignature = buildQuerySignature()
+
+const debouncedVoteCountUpdate = debounce((nextValue: number | string) => {
+  filterParams.vote_count = nextValue
+}, 400)
+
+const debouncedSliderKeyupUpdate = debounce((nextValue: number) => {
+  filterParams.vote_average = nextValue
+}, 150)
+
+function handleVoteCountUpdate(nextValue: number | string) {
+  voteCountInput.value = nextValue
+  debouncedVoteCountUpdate(nextValue)
+}
+
+function handleVoteAverageEnd(nextValue: number | [number, number]) {
+  debouncedSliderKeyupUpdate.cancel()
+  const resolved = Array.isArray(nextValue) ? nextValue[0] : nextValue
+  filterParams.vote_average = Number(resolved) || 0
+}
+
+function handleSliderKeyup(event: KeyboardEvent) {
+  const rawNow = (event.target as HTMLElement | null)?.getAttribute('aria-valuenow')
+  if (rawNow == null) return
+  const parsed = Number(rawNow)
+  if (!Number.isFinite(parsed)) return
+  debouncedSliderKeyupUpdate(parsed)
+}
+
+// 合并类型与过滤参数联动归一化，避免同 tick 双次递增 currentKey 频闪
+watch([type, filterParams], () => {
+  if (type.value !== lastCommittedType) {
+    debouncedSliderKeyupUpdate.flush()
+    debouncedVoteCountUpdate.flush()
+  }
   if (!type.value) {
     type.value = 'movies'
+  }
+  if (!filterParams.sort_by) {
+    filterParams.sort_by = 'popularity.desc'
   }
   if (type.value === 'movies') {
     if (!tmdbSortDict[filterParams.sort_by]) {
       filterParams.sort_by = 'popularity.desc'
     }
-    if (!tmdbMovieGenreDict[filterParams.with_genres]) {
+    if (filterParams.with_genres && !tmdbMovieGenreDict[filterParams.with_genres]) {
       filterParams.with_genres = ''
     }
-  }
-  if (type.value === 'tvs') {
+  } else if (type.value === 'tvs') {
     if (!tmdbTvSortDict[filterParams.sort_by]) {
       filterParams.sort_by = 'popularity.desc'
     }
-    if (!tmdbTvGenreDict[filterParams.with_genres]) {
+    if (filterParams.with_genres && !tmdbTvGenreDict[filterParams.with_genres]) {
       filterParams.with_genres = ''
     }
   }
-  currentKey.value++
+  lastCommittedType = type.value
+  const nextSignature = buildQuerySignature()
+  if (nextSignature !== lastQuerySignature) {
+    lastQuerySignature = nextSignature
+    currentKey.value++
+  }
 })
 
-// 过滤参数变化
-watch(filterParams, () => {
-  if (!filterParams.sort_by) {
-    filterParams.sort_by = 'popularity.desc'
-  }
-  currentKey.value++
+onUnmounted(() => {
+  debouncedSliderKeyupUpdate.cancel()
+  debouncedVoteCountUpdate.cancel()
 })
 </script>
 
 <template>
-  <div class="px-3">
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+  <div class="discover-filter-panel">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.type') }}</VLabel>
       </div>
-      <VChipGroup v-model="type">
-        <VChip :color="type == 'movies' ? 'primary' : ''" filter tile value="movies">{{ t('mediaType.movie') }}</VChip>
-        <VChip :color="type == 'tvs' ? 'primary' : ''" filter tile value="tvs">{{ t('mediaType.tv') }}</VChip>
+      <VChipGroup v-model="type" mandatory class="discover-chip-group">
+        <VChip
+          :variant="type == 'movies' ? 'tonal' : 'text'"
+          :color="type == 'movies' ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          value="movies"
+          class="discover-filter-chip"
+        >
+          {{ t('mediaType.movie') }}
+        </VChip>
+        <VChip
+          :variant="type == 'tvs' ? 'tonal' : 'text'"
+          :color="type == 'tvs' ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          value="tvs"
+          class="discover-filter-chip"
+        >
+          {{ t('mediaType.tv') }}
+        </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.sort') }}</VLabel>
       </div>
-      <VChipGroup v-model="filterParams.sort_by">
+      <VChipGroup v-model="filterParams.sort_by" mandatory class="discover-chip-group">
         <VChip
-          :color="filterParams.sort_by == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in type == 'movies' ? tmdbSortDict : tmdbTvSortDict"
           :key="key"
+          :variant="filterParams.sort_by == key ? 'tonal' : 'text'"
+          :color="filterParams.sort_by == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.genre') }}</VLabel>
       </div>
-      <VChipGroup v-model="filterParams.with_genres">
+      <VChipGroup v-model="filterParams.with_genres" class="discover-chip-group">
         <VChip
-          :color="filterParams.with_genres == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in type == 'movies' ? tmdbMovieGenreDict : tmdbTvGenreDict"
           :key="key"
+          :variant="filterParams.with_genres == key ? 'tonal' : 'text'"
+          :color="filterParams.with_genres == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row">
+      <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.language') }}</VLabel>
       </div>
-      <VChipGroup v-model="filterParams.with_original_language">
+      <VChipGroup v-model="filterParams.with_original_language" class="discover-chip-group">
         <VChip
-          :color="filterParams.with_original_language == key ? 'primary' : ''"
-          filter
-          tile
-          :value="key"
           v-for="(value, key) in tmdbLanguageDict"
           :key="key"
+          :variant="filterParams.with_original_language == key ? 'tonal' : 'text'"
+          :color="filterParams.with_original_language == key ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="key"
+          class="discover-filter-chip"
         >
           {{ value }}
         </VChip>
       </VChipGroup>
     </div>
-    <div class="flex justify-start align-center">
-      <div class="mr-5">
+    <div class="discover-filter-row discover-filter-row--slider">
+      <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.rating') }}</VLabel>
       </div>
       <VSlider
-        v-model="filterParams.vote_average"
+        :model-value="filterParams.vote_average"
         thumb-label
         max="10"
         min="0"
         :step="1"
-        class="align-center"
+        color="primary"
+        class="discover-rating-slider align-center"
         hide-details
+        @end="handleVoteAverageEnd"
+        @keyup="handleSliderKeyup"
       >
-        <template v-slot:append>
-          <VTextField
-            variant="outlined"
-            width="5rem"
-            v-model="filterParams.vote_count"
-            density="compact"
-            type="number"
-            hide-details
-            single-line
-          />
+        <template #append>
+          <div class="discover-vote-count" title="最低评价人数">
+            <span class="discover-vote-count__label" aria-hidden="true">
+              <VIcon icon="mdi-account-check-outline" size="13" />
+              <span>人数≥</span>
+            </span>
+            <VTextField
+              :model-value="voteCountInput"
+              aria-label="最低评价人数"
+              variant="outlined"
+              width="4.5rem"
+              density="compact"
+              type="number"
+              min="0"
+              class="discover-vote-input"
+              hide-details
+              single-line
+              @update:model-value="handleVoteCountUpdate"
+            />
+            <VTooltip activator="parent" location="top">最低评价人数</VTooltip>
+          </div>
         </template>
       </VSlider>
     </div>
@@ -229,3 +312,103 @@ watch(filterParams, () => {
     <MediaCardListView :key="currentKey" :apipath="`discover/tmdb_${type}`" :params="filterParams" />
   </div>
 </template>
+
+<style scoped>
+.discover-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-block: 4px 6px;
+  padding-inline: 0;
+}
+
+.discover-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 28px;
+}
+
+.discover-filter-row--slider {
+  padding-block-start: 2px;
+}
+
+.discover-filter-label {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  block-size: 26px;
+  min-inline-size: 44px;
+}
+
+.discover-filter-label :deep(.v-label) {
+  color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.62));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.discover-chip-group {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: 0 !important;
+}
+
+.discover-chip-group :deep(.v-slide-group__content) {
+  gap: 5px;
+  padding-block: 1px !important;
+}
+
+.discover-filter-chip {
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  font-size: 12.5px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin: 0 !important;
+  padding-inline: 9px !important;
+}
+
+.discover-filter-chip:deep(.v-chip--selected),
+.discover-filter-chip.v-chip--selected {
+  font-weight: 600;
+}
+
+.discover-rating-slider {
+  flex: 1 1 auto;
+  max-inline-size: 460px;
+  margin-inline: 0 !important;
+}
+
+.discover-vote-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.discover-vote-count__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.58));
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.discover-vote-input :deep(.v-field) {
+  border-radius: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-block-size: 28px;
+}
+
+.discover-vote-input :deep(.v-field__input) {
+  min-block-size: 28px;
+  padding-block: 2px;
+  padding-inline: 8px;
+}
+</style>

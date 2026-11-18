@@ -25,6 +25,10 @@ const props = defineProps({
     type: String as PropType<'install' | 'update'>,
     default: 'update',
   },
+  updating: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 // 定义触发的自定义事件
@@ -166,6 +170,7 @@ async function loadPluginReleases(plugin: Plugin | null | undefined = resolvedPl
 
 /** 触发插件更新操作。 */
 function handleUpdate(releaseItem?: PluginReleaseVersion) {
+  if (props.updating) return
   emit('update', releaseItem?.is_latest ? undefined : releaseItem?.version, resolvedPlugin.value?.repo_url)
 }
 
@@ -243,7 +248,9 @@ watch(
               min-width="5rem"
               :color="releaseItemByHistoryVersion(version)?.is_latest ? 'primary' : undefined"
               :variant="releaseItemByHistoryVersion(version)?.is_latest ? 'flat' : 'tonal'"
+              :loading="props.updating"
               :disabled="
+                props.updating ||
                 releaseItemByHistoryVersion(version)?.is_current ||
                 (releaseItemByHistoryVersion(version)?.is_latest && resolvedPlugin?.system_version_compatible === false)
               "
@@ -267,7 +274,12 @@ watch(
             class="mb-3"
             :text="resolvedPlugin?.system_version_message || t('plugin.incompatibleSystemVersion')"
           />
-          <VBtn @click="handleUpdate()" block :disabled="resolvedPlugin?.system_version_compatible === false">
+          <VBtn
+            block
+            :loading="props.updating"
+            :disabled="props.updating || resolvedPlugin?.system_version_compatible === false"
+            @click="handleUpdate()"
+          >
             <template #prepend>
               <VIcon icon="mdi-arrow-up-circle-outline" />
             </template>

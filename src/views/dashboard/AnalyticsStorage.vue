@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import api from '@/api'
 import type { Storage } from '@/api/types'
-import storageImage from '@images/misc/storage.png'
 import { formatDashboardFileSize, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
 import { useI18n } from '@/composables/useChineseText'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 // 国际化
 const { t } = useI18n()
@@ -57,20 +57,23 @@ onMounted(() => {
   getStorage()
 })
 
-onActivated(() => {
-  getStorage()
-})
+useKeepAliveRefresh(getStorage)
 </script>
 
 <template>
   <VCard class="dashboard-summary-card dashboard-grid-fill">
-    <VCardItem class="pb-2">
+    <VCardItem class="dashboard-summary-header">
       <VCardTitle>{{ t('dashboard.storage') }}</VCardTitle>
+      <template #append>
+        <div class="storage-badge" aria-hidden="true">
+          <VIcon icon="mdi-harddisk" size="18" />
+        </div>
+      </template>
     </VCardItem>
     <VCardText class="dashboard-summary-content">
-      <h5 class="animated-storage-value">
+      <div class="animated-storage-value">
         {{ animatedStorageText }}
-      </h5>
+      </div>
       <div class="animated-storage-meta">{{ t('storage.usedPercent', { percent: animatedUsedPercentText }) }}</div>
       <div class="animated-storage-progress-wrap">
         <VProgressLinear
@@ -91,19 +94,19 @@ onActivated(() => {
         }}
       </div>
     </VCardText>
-    <VImg :src="storageImage" class="storage-image" />
   </VCard>
 </template>
 
 <style lang="scss" scoped>
-@use '@layouts/styles/mixins' as layoutsMixins;
-
-.v-card .storage-image {
-  position: absolute;
-  filter: hue-rotate(225deg) saturate(0.72);
-  inline-size: clamp(3.6rem, 18%, 4.5rem);
-  inset-block-start: 2.7rem;
-  inset-inline-end: 1.35rem;
+.storage-badge {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 34px;
 }
 
 .dashboard-summary-card {
@@ -112,38 +115,39 @@ onActivated(() => {
   overflow: hidden;
   flex-direction: column;
   block-size: 100%;
-  min-block-size: 160px;
+  min-block-size: 148px;
+}
+
+.dashboard-summary-header {
+  padding: 14px 16px 6px;
 }
 
 .dashboard-summary-content {
   flex: 1 1 auto;
   min-block-size: 0;
-  padding-block: 0 0.7rem;
-}
-
-.animated-storage-value,
-.animated-storage-meta,
-.animated-storage-caption {
-  padding-inline-end: 4.75rem;
+  padding: 2px 16px 14px;
 }
 
 .animated-storage-value {
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: clamp(1.5rem, 1.8vw, 1.75rem);
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 650;
+  letter-spacing: -0.015em;
   line-height: 1.2;
 }
 
 .animated-storage-meta {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.2;
-  margin-block-start: 0.3rem;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-block-start: 6px;
 }
 
 .animated-storage-progress-wrap {
-  margin-block-start: 0.4rem;
+  margin-block-start: 10px;
 }
 
 .animated-storage-progress {
@@ -151,9 +155,13 @@ onActivated(() => {
 }
 
 .animated-storage-caption {
+  overflow: hidden;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.68rem;
-  margin-block-start: 0.35rem;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  margin-block-start: 8px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 </style>

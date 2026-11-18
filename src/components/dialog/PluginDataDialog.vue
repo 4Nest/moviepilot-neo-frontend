@@ -4,10 +4,13 @@ import type { Plugin, RenderProps } from '@/api/types'
 import PageRender from '@/components/render/PageRender.vue'
 import api from '@/api'
 import { loadRemoteComponent } from '@/utils/federationLoader'
-import { usePWA } from '@/composables/usePWA'
 import { useToast } from 'vue-toastification'
+import { useI18n } from '@/composables/useChineseText'
 import { usePluginNativeSubscribe } from '@/composables/usePluginNativeSubscribe'
 import { useRetryableRemoteComponent } from '@/composables/useRetryableRemoteComponent'
+
+// 国际化
+const { t } = useI18n()
 
 // 输入参数
 const props = defineProps({
@@ -25,9 +28,6 @@ const emit = defineEmits(['close', 'save', 'switch'])
 
 // 显示器宽度
 const display = useDisplay()
-// APP
-// PWA模式检测
-const { appMode } = usePWA()
 
 // 向联邦插件提供主应用 Toast，确保通知沿用统一主题和路由逻辑。
 const $toast = useToast()
@@ -132,35 +132,52 @@ onMounted(() => {
 <template>
   <VDialog scrollable max-width="80rem" :fullscreen="!display.mdAndUp.value">
     <!-- Vuetify 渲染模式 -->
-    <VCard v-if="renderMode === 'vuetify'" :title="`${props.plugin?.plugin_name}`">
+    <VCard v-if="renderMode === 'vuetify'" class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-database-eye-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ t('dialog.pluginData.title') }}</VCardTitle>
+        <VCardSubtitle v-if="props.plugin?.plugin_name">{{ props.plugin.plugin_name }}</VCardSubtitle>
+      </VCardItem>
       <VDialogCloseBtn @click="emit('close')" />
-      <LoadingBanner v-if="!isRefreshed" class="mt-5" />
-      <VCardText v-else-if="loadError" class="min-h-40">
-        <VAlert type="error" title="数据加载失败">
+      <VDivider />
+      <LoadingBanner v-if="!isRefreshed" class="my-6" />
+      <VCardText v-else-if="loadError" class="mp-dialog-body min-h-40">
+        <VAlert type="error" variant="tonal" title="数据加载失败">
           <div>插件数据加载失败，请稍后重试</div>
-          <VBtn class="mt-3" color="error" variant="tonal" @click="loadPluginUIData">重试</VBtn>
+          <VBtn class="mt-3" color="error" variant="tonal" size="small" @click="loadPluginUIData">重试</VBtn>
         </VAlert>
       </VCardText>
-      <VCardText v-else class="min-h-40">
-        <div>
+      <VCardText v-else class="mp-dialog-body min-h-40">
+        <div class="plugin-vuetify-page">
           <PageRender @action="handleAction" v-for="(item, index) in pluginPageItems" :key="index" :config="item" />
-          <div v-if="!pluginPageItems || pluginPageItems.length === 0">此插件没有详情页面</div>
+          <div v-if="!pluginPageItems || pluginPageItems.length === 0" class="text-medium-emphasis text-center py-6">
+            此插件没有详情页面
+          </div>
         </div>
       </VCardText>
-      <VFab
-        v-if="show_switch"
-        icon="mdi-cog"
-        location="bottom"
-        size="x-large"
-        fixed
-        app
-        appear
-        @click="emit('switch')"
-        :class="{ 'mb-10': appMode }"
-      />
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
+        <VBtn
+          v-if="show_switch"
+          color="default"
+          variant="outlined"
+          size="small"
+          prepend-icon="mdi-cog-outline"
+          @click="emit('switch')"
+        >
+          切换配置
+        </VBtn>
+        <VSpacer />
+        <VBtn color="default" variant="tonal" size="small" @click="emit('close')">
+          {{ t('dialog.pluginData.close') }}
+        </VBtn>
+      </VCardActions>
     </VCard>
     <!-- Vue 渲染模式 -->
-    <VCard v-else-if="renderMode === 'vue'">
+    <VCard v-else-if="renderMode === 'vue'" class="plugin-vue-card">
+      <VDialogCloseBtn v-if="!display.mdAndUp.value" class="plugin-vue-fallback-close" @click="emit('close')" />
       <VCardText class="pa-0">
         <component
           :is="dynamicComponent"
@@ -175,3 +192,33 @@ onMounted(() => {
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.plugin-vue-card {
+  position: relative;
+}
+
+.plugin-vue-fallback-close {
+  z-index: 10;
+}
+
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

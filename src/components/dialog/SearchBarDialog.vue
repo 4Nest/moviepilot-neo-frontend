@@ -639,7 +639,7 @@ onMounted(() => {
       <!-- 中屏及以上常驻搜索输入框，输入时直接在下方展示同一组选项。 -->
       <div v-else v-bind="activatorProps" class="search-desktop-activator">
         <form class="search-input-wrapper" @submit.prevent="searchMedia('media', $event)">
-          <VIcon icon="mdi-magnify" size="22" class="search-input-icon" />
+          <VIcon icon="mdi-magnify" size="18" class="search-input-icon" />
           <input
             ref="searchWordInput"
             v-model="searchWord"
@@ -666,7 +666,7 @@ onMounted(() => {
       <!-- 弹窗模式保留原有搜索输入区。 -->
       <div v-if="!display.mdAndUp.value" class="search-header">
         <form class="search-input-wrapper" @submit.prevent="searchMedia('media', $event)">
-          <VIcon icon="mdi-text" size="22" class="search-input-icon" />
+          <VIcon icon="mdi-magnify" size="18" class="search-input-icon" />
           <input
             ref="searchWordInput"
             v-model="searchWord"
@@ -684,8 +684,8 @@ onMounted(() => {
             @compositionend="syncSearchWord"
             @keydown.escape.stop="closeSearch"
           />
-          <VBtn type="submit" icon size="small" variant="text" class="search-submit-btn">
-            <VIcon icon="mdi-magnify" size="20" />
+          <VBtn type="submit" icon size="x-small" variant="text" class="search-submit-btn">
+            <VIcon icon="mdi-arrow-right" size="18" />
           </VBtn>
         </form>
       </div>
@@ -693,23 +693,23 @@ onMounted(() => {
       <!-- 主内容区域 -->
       <div class="search-content">
         <!-- 有搜索词时显示搜索入口和匹配结果 -->
-        <VList lines="two" v-if="searchWord" class="search-list pa-0 py-2">
+        <VList lines="two" v-if="searchWord" class="search-list pa-0 py-1.5">
           <!-- 媒体搜索入口 -->
-          <VListSubheader class="font-weight-medium text-uppercase px-4">
+          <VListSubheader class="font-weight-medium text-uppercase px-4 search-subheader">
             {{ t('common.media') }}
           </VListSubheader>
 
           <VListItem
             v-for="action in mediaSearchActions"
             :key="action.type"
-            density="comfortable"
+            density="compact"
             link
-            class="search-result-item search-source-result-item mx-2 my-1"
+            class="search-result-item search-source-result-item mx-2"
             @click="searchMedia(action.type)"
           >
             <template #prepend>
               <div class="result-icon-wrapper">
-                <VIcon :icon="action.icon" size="small" color="medium-emphasis" />
+                <VIcon :icon="action.icon" size="16" color="medium-emphasis" />
               </div>
             </template>
             <VListItemTitle class="font-weight-medium text-body-2">
@@ -719,44 +719,46 @@ onMounted(() => {
               {{ t('common.search') }} <span class="primary-text font-weight-medium">{{ searchWord }}</span>
               {{ action.description }}
             </VListItemSubtitle>
-            <div class="search-item-source-row">
-              <VBtnToggle
-                v-model="selectedMediaSearchSources[action.type]"
-                class="search-item-source-toggle"
-                density="compact"
-                mandatory
-                role="group"
-                selected-class="media-source-button--active"
-                variant="text"
-                :aria-label="t('dialog.searchBar.mediaSourceFor', { type: action.title })"
-                @click.stop
-                @keydown.stop
-              >
-                <VBtn
-                  v-for="source in mediaSearchSourceOptions[action.type]"
-                  :key="source.value"
-                  class="media-source-button"
-                  size="x-small"
-                  :value="source.value"
-                  :aria-label="t('dialog.searchBar.searchWithSource', { source: source.name })"
-                  :title="t('dialog.searchBar.searchWithSource', { source: source.name })"
+            <template v-if="mediaSearchSourceOptions[action.type].length > 1" #append>
+              <div class="search-item-source-row">
+                <VBtnToggle
+                  v-model="selectedMediaSearchSources[action.type]"
+                  class="search-item-source-toggle"
+                  density="compact"
+                  mandatory
+                  role="group"
+                  selected-class="media-source-button--active"
+                  variant="text"
+                  :aria-label="t('dialog.searchBar.mediaSourceFor', { type: action.title })"
+                  @click.stop
+                  @keydown.stop
                 >
-                  {{ source.label }}
-                </VBtn>
-              </VBtnToggle>
-            </div>
+                  <VBtn
+                    v-for="source in mediaSearchSourceOptions[action.type]"
+                    :key="source.value"
+                    class="media-source-button"
+                    size="x-small"
+                    :value="source.value"
+                    :aria-label="t('dialog.searchBar.searchWithSource', { source: source.name })"
+                    :title="t('dialog.searchBar.searchWithSource', { source: source.name })"
+                  >
+                    {{ source.label }}
+                  </VBtn>
+                </VBtnToggle>
+              </div>
+            </template>
           </VListItem>
 
           <VListItem
             v-if="userStore.superUser"
-            density="comfortable"
+            density="compact"
             link
             @click="searchSubscribeShares"
-            class="search-result-item mx-2 my-1"
+            class="search-result-item mx-2"
           >
             <template #prepend>
               <div class="result-icon-wrapper">
-                <VIcon icon="mdi-share-variant" size="small" color="medium-emphasis" />
+                <VIcon icon="mdi-share-variant" size="16" color="medium-emphasis" />
               </div>
             </template>
             <VListItemTitle class="font-weight-medium text-body-2">{{ t('subscribe.searchShares') }}</VListItemTitle>
@@ -768,14 +770,14 @@ onMounted(() => {
 
           <VListItem
             v-if="userStore.superUser"
-            density="comfortable"
+            density="compact"
             link
             @click="searchHistory"
-            class="search-result-item mx-2 my-1"
+            class="search-result-item mx-2"
           >
             <template #prepend>
               <div class="result-icon-wrapper">
-                <VIcon icon="mdi-history" size="small" color="medium-emphasis" />
+                <VIcon icon="mdi-history" size="16" color="medium-emphasis" />
               </div>
             </template>
             <VListItemTitle class="font-weight-medium text-body-2">{{ t('navItems.history') }}</VListItemTitle>
@@ -786,23 +788,23 @@ onMounted(() => {
           </VListItem>
           <!-- 匹配的订阅 -->
           <template v-if="matchedSubscribeItems.length > 0">
-            <VDivider class="mx-4 my-2 search-divider" />
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
+            <VDivider class="mx-4 my-1.5 search-divider" />
+            <VListSubheader class="font-weight-medium text-uppercase px-4 search-subheader">
               {{ t('dialog.searchBar.subscriptions') }}
             </VListSubheader>
             <VListItem
               v-for="subscribe in matchedSubscribeItems"
               :key="subscribe.id"
-              density="comfortable"
+              density="compact"
               link
               @click="goSubscribe(subscribe)"
-              class="search-result-item mx-2 my-1"
+              class="search-result-item mx-2"
             >
               <template #prepend>
                 <div class="result-icon-wrapper">
                   <VIcon
                     :icon="subscribe.type === '电影' ? 'mdi-movie-roll' : 'mdi-television-classic'"
-                    size="small"
+                    size="16"
                     color="medium-emphasis"
                   />
                 </div>
@@ -821,21 +823,21 @@ onMounted(() => {
 
           <!-- 匹配的菜单/功能 -->
           <template v-if="matchedMenuItems.length > 0">
-            <VDivider class="mx-4 my-2 search-divider" />
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
+            <VDivider class="mx-4 my-1.5 search-divider" />
+            <VListSubheader class="font-weight-medium text-uppercase px-4 search-subheader">
               {{ t('dialog.searchBar.functions') }}
             </VListSubheader>
             <VListItem
               v-for="menu in matchedMenuItems"
               :key="menu.title"
-              density="comfortable"
+              density="compact"
               link
               @click="goPage(menu.to as string)"
-              class="search-result-item mx-2 my-1"
+              class="search-result-item mx-2"
             >
               <template #prepend>
                 <div class="result-icon-wrapper">
-                  <VIcon :icon="menu.icon as string" size="small" color="medium-emphasis" />
+                  <VIcon :icon="menu.icon as string" size="16" color="medium-emphasis" />
                 </div>
               </template>
               <VListItemTitle class="font-weight-medium text-body-2">
@@ -849,21 +851,21 @@ onMounted(() => {
 
           <!-- 匹配的插件 -->
           <template v-if="userStore.superUser && matchedPluginItems.length > 0">
-            <VDivider class="mx-4 my-2 search-divider" />
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
+            <VDivider class="mx-4 my-1.5 search-divider" />
+            <VListSubheader class="font-weight-medium text-uppercase px-4 search-subheader">
               {{ t('dialog.searchBar.plugins') }}
             </VListSubheader>
             <VListItem
               v-for="plugin in matchedPluginItems"
               :key="plugin.id"
-              density="comfortable"
+              density="compact"
               link
               @click="showPlugin(plugin.id ?? '')"
-              class="search-result-item mx-2 my-1"
+              class="search-result-item mx-2"
             >
               <template #prepend>
                 <div class="result-icon-wrapper">
-                  <VIcon icon="mdi-puzzle" size="small" color="medium-emphasis" />
+                  <VIcon icon="mdi-puzzle" size="16" color="medium-emphasis" />
                 </div>
               </template>
               <VListItemTitle class="font-weight-medium text-body-2">
@@ -877,15 +879,15 @@ onMounted(() => {
 
           <!-- 站点资源搜索 -->
           <template v-if="userStore.superUser">
-            <VDivider class="mx-4 my-2 search-divider" />
-            <VListSubheader class="font-weight-medium text-uppercase px-4">
+            <VDivider class="mx-4 my-1.5 search-divider" />
+            <VListSubheader class="font-weight-medium text-uppercase px-4 search-subheader">
               {{ t('dialog.searchBar.siteResources') }}
             </VListSubheader>
 
-            <VListItem density="comfortable" link @click="searchTorrent" class="search-result-item mx-2 my-1">
+            <VListItem density="compact" link @click="searchTorrent" class="search-result-item mx-2">
               <template #prepend>
                 <div class="result-icon-wrapper">
-                  <VIcon icon="mdi-file-search" size="small" color="medium-emphasis" />
+                  <VIcon icon="mdi-file-search" size="16" color="medium-emphasis" />
                 </div>
               </template>
               <VListItemTitle class="font-weight-medium text-body-2">{{
@@ -908,10 +910,10 @@ onMounted(() => {
               </template>
             </VListItem>
 
-            <VListItem density="comfortable" link @click="searchSubtitle" class="search-result-item mx-2 my-1">
+            <VListItem density="compact" link @click="searchSubtitle" class="search-result-item mx-2">
               <template #prepend>
                 <div class="result-icon-wrapper">
-                  <VIcon icon="mdi-subtitles-outline" size="small" color="medium-emphasis" />
+                  <VIcon icon="mdi-subtitles-outline" size="16" color="medium-emphasis" />
                 </div>
               </template>
               <VListItemTitle class="font-weight-medium text-body-2">{{
@@ -1008,15 +1010,23 @@ onMounted(() => {
 }
 
 .search-desktop-activator .search-input-wrapper {
-  border-color: rgba(var(--v-theme-on-surface), 0.12);
-  background: rgba(var(--v-theme-surface), 0.72);
-  block-size: 42px;
-  padding-inline: 14px 8px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+  block-size: 34px;
+  padding-inline: 10px;
 }
 
-html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
-.v-theme--transparent .search-desktop-activator .search-input-wrapper {
-  background: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.2));
+.search-desktop-activator .search-input-wrapper:hover {
+  border-color: var(--mp-border-hover);
+}
+
+.search-desktop-activator .search-input-wrapper:focus-within {
+  border-color: rgb(var(--v-theme-primary));
+}
+
+.search-desktop-activator .search-native-input {
+  font-size: 13.5px;
 }
 
 .search-icon-trigger {
@@ -1029,19 +1039,20 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
 
 /* 搜索头部区域 */
 .search-header {
-  padding-block: 16px 12px;
-  padding-inline: 16px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  padding-block: 10px;
+  padding-inline: 12px;
 }
 
 /* 搜索输入框容器 */
 .search-input-wrapper {
   display: flex;
   align-items: center;
-  border: 1.5px solid rgba(var(--v-theme-primary), 0.4);
-  border-radius: var(--app-vuetify-rounded-pill);
-  background-color: rgba(var(--v-theme-surface-variant), 0.04);
-  block-size: 48px;
-  padding-inline: 14px 6px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: var(--app-field-radius);
+  background-color: var(--mp-field-bg);
+  block-size: 38px;
+  padding-inline: 12px 6px;
   transition:
     border-color 0.2s ease,
     border-radius 0.2s ease,
@@ -1055,7 +1066,7 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
 .search-input-icon {
   flex-shrink: 0;
   color: rgba(var(--v-theme-on-surface), 0.45);
-  margin-inline-end: 10px;
+  margin-inline-end: 8px;
 }
 
 .search-native-input {
@@ -1063,8 +1074,8 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
   border: none;
   background: transparent;
   color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.4;
   min-inline-size: 0;
   outline: none;
   appearance: none;
@@ -1080,11 +1091,11 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
 
 .search-submit-btn {
   flex-shrink: 0;
-  border-radius: 50% !important;
+  border-radius: 6px !important;
   background-color: rgba(var(--v-theme-on-surface), 0.06) !important;
-  block-size: 36px !important;
-  color: rgba(var(--v-theme-on-surface), 0.6) !important;
-  inline-size: 36px !important;
+  block-size: 28px !important;
+  color: rgba(var(--v-theme-on-surface), 0.65) !important;
+  inline-size: 28px !important;
   transition: background-color 0.2s ease;
 }
 
@@ -1114,70 +1125,61 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
   background: transparent !important;
 }
 
-.search-item-source-row {
-  display: flex;
-  overflow: hidden;
-  align-items: center;
-  block-size: 0;
-  inline-size: 100%;
-  margin-block-start: 0;
-  min-inline-size: 0;
-  transition:
-    block-size 0.15s ease,
-    margin-block-start 0.15s ease;
+.search-subheader {
+  font-size: 0.72rem;
+  min-block-size: 28px;
 }
 
-.search-source-result-item:hover .search-item-source-row,
-.search-source-result-item:focus-within .search-item-source-row {
-  block-size: 28px;
-  margin-block-start: 6px;
+.search-item-source-row {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 8px;
+  min-inline-size: 0;
 }
 
 .search-item-source-toggle {
-  overflow: auto hidden;
-  border: var(--app-grouped-list-border);
-  border-radius: var(--app-control-radius);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  background: var(--app-grouped-list-background);
-  block-size: 28px;
-  max-inline-size: 100%;
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.98);
-  transform-origin: center left;
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-}
-
-.search-source-result-item:hover .search-item-source-toggle,
-.search-source-result-item:focus-within .search-item-source-toggle {
-  opacity: 1;
-  pointer-events: auto;
-  transform: scale(1);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: var(--mp-tab-groove-bg);
+  block-size: 24px;
+  gap: 1px;
 }
 
 .media-source-button {
-  block-size: 100% !important;
-  color: rgba(var(--v-theme-on-surface), 0.72) !important;
+  border-radius: 5px !important;
+  block-size: 20px !important;
+  color: rgba(var(--v-theme-on-surface), 0.65) !important;
   font-size: 0.6875rem;
+  font-weight: 500;
   letter-spacing: 0;
+  min-block-size: 20px !important;
   min-inline-size: 0 !important;
-  padding-inline: 7px !important;
+  padding-inline: 6px !important;
+  text-transform: none;
   white-space: nowrap;
 }
 
 .media-source-button:hover {
-  background: var(--app-grouped-list-hover-background) !important;
+  background: rgba(var(--v-theme-on-surface), 0.05) !important;
+  color: rgba(var(--v-theme-on-surface), 0.9) !important;
 }
 
 .media-source-button--active {
-  background: var(--app-grouped-list-active-background) !important;
+  background: var(--mp-tab-active-bg) !important;
+  box-shadow: var(--mp-tab-active-shadow);
   color: rgb(var(--v-theme-primary)) !important;
+  font-weight: 600;
 }
 
 .search-result-item {
-  margin-block-end: 2px;
+  border-radius: 8px !important;
+  margin-block: 1px;
+  min-block-size: 44px !important;
+  padding-block: 5px !important;
+  padding-inline: 10px !important;
   transition: background-color 0.15s ease;
 }
 
@@ -1185,28 +1187,16 @@ html[data-theme='transparent'] .search-desktop-activator .search-input-wrapper,
   background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-@media (hover: none) {
-  .search-item-source-row {
-    block-size: 28px;
-    margin-block-start: 6px;
-  }
-
-  .search-item-source-toggle {
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-}
-
 .result-icon-wrapper {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background-color: rgba(var(--v-theme-surface-variant), 0.1);
-  block-size: 32px;
-  inline-size: 32px;
-  margin-inline-end: 12px;
+  border-radius: 7px;
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+  block-size: 28px;
+  inline-size: 28px;
+  margin-inline-end: 10px;
 }
 
 .search-divider {
@@ -1261,13 +1251,13 @@ kbd {
 /* 响应式 */
 @media (width <= 600px) {
   .search-header {
-    padding-block: 12px 10px;
+    padding-block: 10px;
     padding-inline: 12px;
   }
 
   .search-input-wrapper {
-    block-size: 44px;
-    padding-inline: 12px 4px;
+    block-size: 36px;
+    padding-inline: 10px 4px;
   }
 
   .search-native-input {

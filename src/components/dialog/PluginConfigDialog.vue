@@ -34,8 +34,9 @@ const pluginConfigForm = ref<Record<string, unknown>>({})
 // 插件表单配置项
 const pluginFormItems = ref<RenderProps[]>([])
 
-// 进度框
+// 进度框与保存锁
 const progressDialog = ref(false)
+const saving = ref(false)
 
 // 进度文字
 const progressText = ref('')
@@ -149,6 +150,8 @@ function handleVueComponentLayout(layout?: PluginConfigLayout | null) {
 
 // 调用API保存配置数据
 async function savePluginConf() {
+  if (saving.value) return
+  saving.value = true
   // 显示等待提示框
   progressDialog.value = true
   progressText.value = t('dialog.pluginConfig.saving', { name: props.plugin?.plugin_name })
@@ -171,6 +174,7 @@ async function savePluginConf() {
     const message = error instanceof Error ? error.message : String(error)
     $toast.error(t('dialog.pluginConfig.saveFailed', { name: props.plugin?.plugin_name, message }))
   } finally {
+    saving.value = false
     progressDialog.value = false
   }
 }
@@ -182,48 +186,66 @@ onBeforeMount(async () => {
 <template>
   <VDialog scrollable :max-width="dialogMaxWidth" :fullscreen="!display.mdAndUp.value">
     <!-- Vuetify 渲染模式 -->
-    <VCard v-if="renderMode === 'vuetify'" :title="`${props.plugin?.plugin_name} - ${t('dialog.pluginConfig.title')}`">
-      <VDialogCloseBtn @click="emit('close')" />
+    <VCard v-if="renderMode === 'vuetify'" class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-puzzle-edit-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ t('dialog.pluginConfig.title') }}</VCardTitle>
+        <VCardSubtitle v-if="props.plugin?.plugin_name">{{ props.plugin.plugin_name }}</VCardSubtitle>
+      </VCardItem>
+      <VDialogCloseBtn :disabled="saving" @click="emit('close')" />
       <VDivider />
-      <LoadingBanner v-if="!isRefreshed" class="mt-5" />
-      <VCardText v-else-if="loadError">
-        <VAlert type="error" title="配置加载失败">
+      <LoadingBanner v-if="!isRefreshed" class="my-6" />
+      <VCardText v-else-if="loadError" class="mp-dialog-body">
+        <VAlert type="error" variant="tonal" title="配置加载失败">
           <div>插件配置加载失败，请稍后重试</div>
-          <VBtn class="mt-3" color="error" variant="tonal" @click="loadPluginUIData">重试</VBtn>
+          <VBtn class="mt-3" color="error" variant="tonal" size="small" @click="loadPluginUIData">重试</VBtn>
         </VAlert>
       </VCardText>
-      <VCardText v-else>
-        <div>
+      <VCardText v-else class="mp-dialog-body">
+        <div class="plugin-vuetify-form">
           <FormRender v-for="(item, index) in pluginFormItems" :key="index" :config="item" :model="pluginConfigForm" />
-          <div v-if="!pluginFormItems || pluginFormItems.length === 0">此插件没有可配置项</div>
+          <div v-if="!pluginFormItems || pluginFormItems.length === 0" class="text-medium-emphasis text-center py-6">
+            此插件没有可配置项
+          </div>
         </div>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VBtn
           v-if="props.plugin?.has_page"
-          color="info"
-          variant="tonal"
+          color="default"
+          variant="outlined"
+          size="small"
           prepend-icon="mdi-database-eye-outline"
+          :disabled="saving"
           @click="emit('switch')"
         >
           {{ t('dialog.pluginConfig.viewData') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" :disabled="saving" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <!-- 只有Vuetify模式显示默认保存按钮，Vue模式由组件内部控制 -->
         <VBtn
           v-if="isRefreshed && !loadError && renderMode === 'vuetify'"
           color="primary"
           variant="flat"
+          size="small"
+          class="px-4"
+          :loading="saving"
+          :disabled="saving"
           @click="savePluginConf"
-          prepend-icon="mdi-content-save"
-          class="px-5"
         >
           保存
         </VBtn>
       </VCardActions>
     </VCard>
     <!-- Vue 渲染模式 -->
-    <VCard v-else-if="renderMode === 'vue'">
+    <VCard v-else-if="renderMode === 'vue'" class="plugin-vue-card">
+      <VDialogCloseBtn v-if="!display.mdAndUp.value" class="plugin-vue-fallback-close" @click="emit('close')" />
       <VCardText class="pa-0">
         <component
           :is="dynamicComponent"
@@ -242,3 +264,106 @@ onBeforeMount(async () => {
     <ProgressDialog v-if="progressDialog" v-model="progressDialog" :text="progressText" />
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.plugin-vue-card {
+  position: relative;
+}
+
+.plugin-vue-fallback-close {
+  z-index: 10;
+}
+
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.plugin-vuetify-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  :deep(.v-col > :is(.v-switch, .v-checkbox):only-child) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 4px 12px;
+    border: 1px solid var(--mp-border-subtle);
+    border-radius: 8px;
+    background: var(--mp-item-bg);
+    inline-size: 100%;
+    margin: 0;
+    min-block-size: 36px;
+    transition: border-color 0.15s ease;
+
+    &:hover {
+      border-color: var(--mp-border-card);
+    }
+
+    .v-input__control {
+      flex: 1 1 auto;
+      min-inline-size: 0;
+    }
+
+    .v-selection-control {
+      align-items: center;
+      min-block-size: 24px;
+    }
+
+    .v-label {
+      color: rgba(var(--v-theme-on-surface), 0.9);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      opacity: 1;
+    }
+
+    .v-input__details:not(:has(.v-messages__message)) {
+      display: none;
+      min-block-size: 0;
+      padding: 0;
+    }
+
+    .v-input__details:has(.v-messages__message) {
+      flex: 0 0 100%;
+      font-size: 11.5px;
+      line-height: 1.35;
+      min-block-size: 0;
+      padding-block: 2px 0;
+      padding-inline: 0;
+    }
+  }
+
+  :deep(.v-alert:not(.v-alert--density-compact)) {
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding: 10px 12px;
+
+    .v-alert-title {
+      font-size: 13px;
+      line-height: 1.4;
+      margin-block-end: 2px;
+    }
+
+    .v-alert__prepend {
+      margin-inline-end: 10px;
+    }
+  }
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

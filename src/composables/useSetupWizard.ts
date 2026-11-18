@@ -4,7 +4,22 @@ import { useRouter } from 'vue-router'
 import { useChineseText } from '@/composables/useChineseText'
 import api, { getApiErrorMessage } from '@/api'
 import { copyToClipboard } from '@/@core/utils/navigator'
-import type { NotificationChannelType, NotificationConf, NotificationScene } from '@/api/types'
+import type {
+  DownloaderConf,
+  FilterRuleGroup,
+  MediaServerConf,
+  NotificationChannelType,
+  NotificationConf,
+  NotificationScene,
+  StorageConf,
+  TransferDirectoryConf,
+} from '@/api/types'
+
+interface WizardApiEnvelope<T = unknown> {
+  success?: boolean
+  message?: string
+  data?: T
+}
 
 export interface WizardData {
   basic: {
@@ -31,14 +46,14 @@ export interface WizardData {
   downloader: {
     type: string
     name: string
-    config: any
+    config: DownloaderConf['config']
   }
   mediaServer: {
     type: string
     name: string
-    config: any
-    sync_libraries: any[]
-    switchs: any[]
+    config: MediaServerConf['config']
+    sync_libraries: string[]
+    switchs: string[]
   }
   notification: {
     id?: string
@@ -105,6 +120,29 @@ const totalSteps = 7
 
 // 加载状态
 const isLoading = ref(false)
+
+// 当前步骤保存中状态（防双击连跳）
+const isSavingStep = ref(false)
+
+// 已在后端持久化的媒体服务器名称列表
+const savedMediaServerNames = ref<string[]>([])
+
+// 二次进入向导时的存量多实例配置快照，保存时保留索引 >= 1 的其余配置项
+const existingSettings = ref<{
+  storages: StorageConf[]
+  directories: TransferDirectoryConf[]
+  downloaders: DownloaderConf[]
+  mediaServers: MediaServerConf[]
+  notifications: NotificationConf[]
+  userFilterRuleGroups: FilterRuleGroup[]
+}>({
+  storages: [],
+  directories: [],
+  downloaders: [],
+  mediaServers: [],
+  notifications: [],
+  userFilterRuleGroups: [],
+})
 
 // 选中的预设规则
 const selectedPreset = ref('')
@@ -573,29 +611,41 @@ export function useSetupWizard() {
     }
   }
 
+  // 验证基础参数字段
+  function validateBasic(): { isValid: boolean; errors: string[] } {
+    const errors: string[] = []
+    if (!wizardData.value.basic.username) {
+      errors.push(t('setupWizard.basic.usernameRequired'))
+    }
+    // 密码是可选的，但如果输入了密码则需要验证
+    if (wizardData.value.basic.password) {
+      if (wizardData.value.basic.password.length < 6) {
+        errors.push(t('setupWizard.basic.passwordMinLength'))
+      }
+      if (!wizardData.value.basic.confirmPassword) {
+        errors.push(t('setupWizard.basic.confirmPasswordRequired'))
+      } else if (wizardData.value.basic.password !== wizardData.value.basic.confirmPassword) {
+        errors.push(t('setupWizard.basic.passwordMismatch'))
+      }
+    }
+    if (!wizardData.value.basic.apiToken) {
+      errors.push(t('setupWizard.basic.apiTokenRequired'))
+    } else if (wizardData.value.basic.apiToken.length < 16) {
+      errors.push(t('setting.system.apiTokenLength'))
+    }
+    return {
+      isValid: errors.length === 0,
+      errors,
+    }
+  }
+
   // 验证当前步骤的必输项
   function validateCurrentStep(): { isValid: boolean; errors: string[] } {
     const errors: string[] = []
 
     switch (currentStep.value) {
       case 1: // 基础设置
-        if (!wizardData.value.basic.username) {
-          errors.push(t('setupWizard.basic.usernameRequired'))
-        }
-        // 密码是可选的，但如果输入了密码则需要验证
-        if (wizardData.value.basic.password) {
-          if (wizardData.value.basic.password.length < 6) {
-            errors.push(t('setupWizard.basic.passwordMinLength'))
-          }
-          if (!wizardData.value.basic.confirmPassword) {
-            errors.push(t('setupWizard.basic.confirmPasswordRequired'))
-          } else if (wizardData.value.basic.password !== wizardData.value.basic.confirmPassword) {
-            errors.push(t('setupWizard.basic.passwordMismatch'))
-          }
-        }
-        if (!wizardData.value.basic.apiToken) {
-          errors.push(t('setupWizard.basic.apiTokenRequired'))
-        }
+        errors.push(...validateBasic().errors)
         break
 
       case 2: // 存储设置
@@ -738,7 +788,7 @@ export function useSetupWizard() {
       connectivityTest.value.testMessage = t('setupWizard.checkingStorage')
 
       // 调用存储测试API - 使用FileManagerModule
-      const result: { [key: string]: any } = await api.get('system/moduletest/FileManagerModule')
+      const result: WizardApiEnvelope = await api.get('system/moduletest/FileManagerModule')
       connectivityTest.value.testProgress = 100
 
       if (result.success) {
@@ -775,7 +825,7 @@ export function useSetupWizard() {
         return { success: false, message: t('setupWizard.unsupportedDownloaderType', { type: downloaderType }) }
       }
 
-      const result: { [key: string]: any } = await api.get(`system/moduletest/${moduleid}`)
+      const result: WizardApiEnvelope = await api.get(`system/moduletest/${moduleid}`)
       connectivityTest.value.testProgress = 100
 
       if (result.success) {
@@ -812,7 +862,7 @@ export function useSetupWizard() {
         return { success: false, message: t('setupWizard.unsupportedMediaServerType', { type: mediaServerType }) }
       }
 
-      const result: { [key: string]: any } = await api.get(`system/moduletest/${moduleid}`)
+      const result: WizardApiEnvelope = await api.get(`system/moduletest/${moduleid}`)
       connectivityTest.value.testProgress = 100
 
       if (result.success) {
@@ -906,6 +956,8 @@ export function useSetupWizard() {
 
   // 保存当前步骤的设置
   async function saveCurrentStepSettings() {
+    if (isSavingStep.value) return false
+    isSavingStep.value = true
     try {
       switch (currentStep.value) {
         case 1:
@@ -927,6 +979,8 @@ export function useSetupWizard() {
       console.error('Save current step settings failed:', error)
       $toast.error(t('setupWizard.saveStepFailed'))
       return false
+    } finally {
+      isSavingStep.value = false
     }
     return true
   }
@@ -955,9 +1009,14 @@ export function useSetupWizard() {
     if (wizardData.value.basic.username && wizardData.value.basic.password) {
       try {
         // 唯一 admin 账号，直接更新当前用户密码
-        await api.put('user/current', {
+        const result: { success?: boolean; message?: string } = await api.put('user/current', {
           password: wizardData.value.basic.password,
         })
+        if (result && result.success === false) {
+          const message = result.message || t('setupWizard.passwordUpdateFailed')
+          $toast.error(message)
+          throw new Error(message)
+        }
       } catch (error) {
         console.error('Update user password failed:', error)
         throw error
@@ -978,7 +1037,7 @@ export function useSetupWizard() {
       }
 
       // 保存基础设置
-      const response: { [key: string]: any } = await api.post('system/env', basicSettings)
+      const response: WizardApiEnvelope = await api.post('system/env', basicSettings)
       if (!response.success) {
         return false
       }
@@ -990,7 +1049,14 @@ export function useSetupWizard() {
           return false
         }
         // 更新用户密码
-        await updateUserPassword()
+        try {
+          await updateUserPassword()
+        } catch (passwordError) {
+          if (!(passwordError instanceof Error && passwordError.message)) {
+            $toast.error(getApiErrorMessage(passwordError) || t('setupWizard.passwordUpdateFailed'))
+          }
+          return false
+        }
       }
       return true
     } catch (error) {
@@ -1003,38 +1069,49 @@ export function useSetupWizard() {
   // 保存存储配置
   async function saveStorageSettings() {
     try {
-      // 创建本地存储
+      // 创建本地存储，并保留其余非本地存量存储（如网盘）
+      const existingLocal = existingSettings.value.storages.find(item => item?.type === 'local')
       const storage = {
-        name: '本地存储',
+        name: existingLocal?.name || '本地存储',
         type: 'local',
-        config: {},
+        config: existingLocal?.config ? { ...existingLocal.config } : {},
       }
+      const restStorages = existingSettings.value.storages.filter(
+        item => item && item.type !== 'local' && item.name !== storage.name,
+      )
+      const mergedStorages = [storage, ...restStorages]
+      await api.post('system/setting/Storages', mergedStorages)
+      existingSettings.value.storages = mergedStorages
 
-      await api.post('system/setting/Storages', [storage])
-
-      // 创建目录配置
+      // 更新首项目录配置并保留索引 >= 1 的其余目录配置
+      const existingFirstDir = existingSettings.value.directories[0]
       const directory = {
-        name: '默认目录',
-        storage: 'local',
-        library_storage: 'local',
+        name: existingFirstDir?.name || '默认目录',
+        storage: existingFirstDir?.storage || 'local',
+        library_storage: existingFirstDir?.library_storage || 'local',
         download_path: wizardData.value.storage.downloadPath,
         library_path: wizardData.value.storage.libraryPath,
         priority: 0,
-        monitor_type: 'downloader',
-        media_type: '',
-        media_category: '',
-        download_type_folder: true,
-        download_category_folder: true,
+        monitor_type: existingFirstDir?.monitor_type ?? 'downloader',
+        media_type: existingFirstDir?.media_type ?? '',
+        media_category: existingFirstDir?.media_category ?? '',
+        download_type_folder: existingFirstDir?.download_type_folder ?? true,
+        download_category_folder: existingFirstDir?.download_category_folder ?? true,
         transfer_type: wizardData.value.storage.transferType,
         overwrite_mode: wizardData.value.storage.overwriteMode,
-        renaming: true,
-        scraping: true,
-        notify: true,
-        library_type_folder: true,
-        library_category_folder: true,
+        renaming: existingFirstDir?.renaming ?? true,
+        scraping: existingFirstDir?.scraping ?? true,
+        notify: existingFirstDir?.notify ?? true,
+        library_type_folder: existingFirstDir?.library_type_folder ?? true,
+        library_category_folder: existingFirstDir?.library_category_folder ?? true,
       }
+      const restDirectories = existingSettings.value.directories
+        .slice(1)
+        .filter(item => item && item.name !== directory.name)
+      const mergedDirectories = [directory, ...restDirectories]
 
-      await api.post('system/setting/Directories', [directory])
+      await api.post('system/setting/Directories', mergedDirectories)
+      existingSettings.value.directories = mergedDirectories
       return true
     } catch (error) {
       console.error('Save storage settings failed:', error)
@@ -1050,7 +1127,7 @@ export function useSetupWizard() {
         return true
       }
 
-      const response: { [key: string]: any } = await api.post('site/auth', {
+      const response: WizardApiEnvelope = await api.post('site/auth', {
         site: wizardData.value.siteAuth.site,
         params: wizardData.value.siteAuth.params,
       })
@@ -1072,18 +1149,25 @@ export function useSetupWizard() {
   async function saveDownloaderSettings() {
     if (wizardData.value.downloader.type) {
       try {
-        // 只保存当前选中类型的配置
+        // 保存当前选中类型的配置并保留索引 >= 1 的其余下载器
         const config = { ...wizardData.value.downloader.config }
 
         const downloader = {
+          ...(existingSettings.value.downloaders[0] || {}),
           name: wizardData.value.downloader.name,
           type: wizardData.value.downloader.type,
           default: true,
           enabled: true,
           config: config,
         }
+        const restDownloaders = existingSettings.value.downloaders
+          .slice(1)
+          .filter(item => item && item.name !== downloader.name)
+          .map(item => ({ ...item, default: false }))
+        const mergedDownloaders = [downloader, ...restDownloaders]
 
-        await api.post('system/setting/Downloaders', [downloader])
+        await api.post('system/setting/Downloaders', mergedDownloaders)
+        existingSettings.value.downloaders = mergedDownloaders
         return true
       } catch (error) {
         console.error('Save downloader settings failed:', error)
@@ -1091,7 +1175,6 @@ export function useSetupWizard() {
         return false
       }
     } else {
-      // 没有选择下载器时，清空现有配置
       console.log('No downloader selected, skipping save')
       return true
     }
@@ -1101,19 +1184,28 @@ export function useSetupWizard() {
   async function saveMediaServerSettings() {
     if (wizardData.value.mediaServer.type) {
       try {
-        // 只保存当前选中类型的配置
+        // 保存当前选中类型的配置并保留索引 >= 1 的其余媒体服务器
         const config = { ...wizardData.value.mediaServer.config }
         const sync_libraries = [...(wizardData.value.mediaServer.sync_libraries || [])]
 
         const mediaServer = {
+          ...(existingSettings.value.mediaServers[0] || {}),
           name: wizardData.value.mediaServer.name,
           type: wizardData.value.mediaServer.type,
           enabled: true,
           config: config,
           sync_libraries: sync_libraries,
         }
+        const restMediaServers = existingSettings.value.mediaServers
+          .slice(1)
+          .filter(item => item && item.name !== mediaServer.name)
+        const mergedMediaServers = [mediaServer, ...restMediaServers]
 
-        await api.post('system/setting/MediaServers', [mediaServer])
+        await api.post('system/setting/MediaServers', mergedMediaServers)
+        existingSettings.value.mediaServers = mergedMediaServers
+        if (mediaServer.name && !savedMediaServerNames.value.includes(mediaServer.name)) {
+          savedMediaServerNames.value = [...savedMediaServerNames.value, mediaServer.name]
+        }
         return true
       } catch (error) {
         console.error('Save media server settings failed:', error)
@@ -1121,7 +1213,6 @@ export function useSetupWizard() {
         return false
       }
     } else {
-      // 没有选择媒体服务器时，清空现有配置
       console.log('No media server selected, skipping save')
       return true
     }
@@ -1131,20 +1222,31 @@ export function useSetupWizard() {
   async function saveNotificationSettings() {
     if (wizardData.value.notification.type) {
       try {
-        // 只保存当前选中类型的配置
+        // 保存当前选中类型的配置并保留索引 >= 1 的其余通知渠道
         const config = { ...wizardData.value.notification.config }
         const switchs = [...(wizardData.value.notification.switchs || [])]
+        const channelId =
+          wizardData.value.notification.id ||
+          existingSettings.value.notifications[0]?.id ||
+          globalThis.crypto?.randomUUID?.() ||
+          `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
         const notification = {
-          id: wizardData.value.notification.id,
+          id: channelId,
           name: wizardData.value.notification.name,
           type: wizardData.value.notification.type,
           enabled: wizardData.value.notification.enabled,
           config: config,
           switchs: switchs,
         }
+        const restNotifications = existingSettings.value.notifications
+          .slice(1)
+          .filter(item => item && item.name !== notification.name && (!channelId || item.id !== channelId))
+        const mergedNotifications = [notification, ...restNotifications]
 
-        await api.post('system/setting/Notifications', [notification])
+        await api.post('system/setting/Notifications', mergedNotifications)
+        wizardData.value.notification.id = channelId
+        existingSettings.value.notifications = mergedNotifications
         return true
       } catch (error) {
         console.error('Save notification settings failed:', error)
@@ -1152,7 +1254,6 @@ export function useSetupWizard() {
         return false
       }
     } else {
-      // 没有选择通知时，清空现有配置
       console.log('No notification selected, skipping save')
       return true
     }
@@ -1164,14 +1265,27 @@ export function useSetupWizard() {
       // 如果有自定义规则序列，保存到用户过滤规则组
       if (wizardData.value.preferences.ruleSequences && wizardData.value.preferences.ruleSequences.length > 0) {
         try {
-          // 保存当前选中的规则组到 UserFilterRuleGroups
-          const filterResponse: { [key: string]: any } = await api.post(
+          const newRuleSequences = wizardData.value.preferences.ruleSequences
+          const newNames = new Set(newRuleSequences.map(rule => rule.name))
+          const hasMatchingExisting = existingSettings.value.userFilterRuleGroups.some(group =>
+            newNames.has(group?.name),
+          )
+          const restRuleGroups = (
+            hasMatchingExisting
+              ? existingSettings.value.userFilterRuleGroups
+              : existingSettings.value.userFilterRuleGroups.slice(1)
+          ).filter(group => group && !newNames.has(group.name))
+          const mergedRuleGroups = [...newRuleSequences, ...restRuleGroups]
+
+          // 保存当前选中的规则组并保留其余存量规则组到 UserFilterRuleGroups
+          const filterResponse: WizardApiEnvelope = await api.post(
             'system/setting/UserFilterRuleGroups',
-            wizardData.value.preferences.ruleSequences,
+            mergedRuleGroups,
           )
           if (filterResponse.success) {
-            // 保存规则组名称到其他设置
-            const ruleGroupNames = wizardData.value.preferences.ruleSequences.map(rule => [rule.name])
+            existingSettings.value.userFilterRuleGroups = mergedRuleGroups
+            // 保存规则组名称（一维字符串数组）到其他设置
+            const ruleGroupNames = newRuleSequences.map(rule => rule.name)
 
             // 保存到 SubscribeFilterRuleGroups
             await api.post('system/setting/SubscribeFilterRuleGroups', ruleGroupNames)
@@ -1194,7 +1308,7 @@ export function useSetupWizard() {
   // 保存设置向导完成状态
   async function saveSetupWizardState() {
     try {
-      const response: { [key: string]: any } = await api.post('system/setting/SetupWizardState', '1')
+      const response: WizardApiEnvelope = await api.post('system/setting/SetupWizardState', '1')
       if (response.success) {
         console.log('Setup wizard state saved successfully')
       }
@@ -1207,8 +1321,8 @@ export function useSetupWizard() {
   // 加载系统设置
   async function loadSystemSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/env')
-      if (result.success) {
+      const result: WizardApiEnvelope<Record<string, string | undefined>> = await api.get('system/env')
+      if (result.success && result.data) {
         // 加载基础设置
         if (result.data.APP_DOMAIN) {
           wizardData.value.basic.appDomain = result.data.APP_DOMAIN
@@ -1251,7 +1365,8 @@ export function useSetupWizard() {
   // 加载用户站点认证设置
   async function loadSiteAuthSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/setting/UserSiteAuthParams')
+      const result: WizardApiEnvelope<{ value?: { site?: string; params?: Record<string, string | number> } }> =
+        await api.get('system/setting/UserSiteAuthParams')
       if (result.success && result.data?.value) {
         wizardData.value.siteAuth.site = result.data.value.site || ''
         wizardData.value.siteAuth.params = result.data.value.params || {}
@@ -1261,12 +1376,27 @@ export function useSetupWizard() {
     }
   }
 
-  // 加载存储设置
+  // 加载存储与目录设置
   async function loadStorageSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/setting/public/Directories')
-      if (result.success && result.data?.value && result.data.value.length > 0) {
-        const directory = result.data.value[0]
+      const storageResult: WizardApiEnvelope<{ value?: StorageConf[] }> = await api.get(
+        'system/setting/public/Storages',
+      )
+      const storageList = Array.isArray(storageResult?.data?.value) ? storageResult.data.value : []
+      existingSettings.value.storages = storageList
+    } catch (error) {
+      console.log('Load storages failed:', error)
+      existingSettings.value.storages = []
+    }
+
+    try {
+      const result: WizardApiEnvelope<{ value?: TransferDirectoryConf[] }> = await api.get(
+        'system/setting/public/Directories',
+      )
+      const directories = Array.isArray(result?.data?.value) ? result.data.value : []
+      existingSettings.value.directories = directories
+      if (result.success && directories.length > 0) {
+        const directory = directories[0]
         wizardData.value.storage.downloadPath = directory.download_path || ''
         wizardData.value.storage.libraryPath = directory.library_path || ''
         wizardData.value.storage.transferType = directory.transfer_type || 'link'
@@ -1274,30 +1404,37 @@ export function useSetupWizard() {
       }
     } catch (error) {
       console.log('Load storage settings failed:', error)
+      existingSettings.value.directories = []
     }
   }
 
   // 加载下载器设置
   async function loadDownloaderSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/setting/Downloaders')
-      if (result.success && result.data?.value && result.data.value.length > 0) {
-        const downloader = result.data.value[0]
+      const result: WizardApiEnvelope<{ value?: DownloaderConf[] }> = await api.get('system/setting/Downloaders')
+      const downloaders = Array.isArray(result?.data?.value) ? result.data.value : []
+      existingSettings.value.downloaders = downloaders
+      if (result.success && downloaders.length > 0) {
+        const downloader = downloaders[0]
         wizardData.value.downloader.type = downloader.type
         wizardData.value.downloader.name = downloader.name
         wizardData.value.downloader.config = downloader.config || {}
       }
     } catch (error) {
       console.log('Load downloader settings failed:', error)
+      existingSettings.value.downloaders = []
     }
   }
 
   // 加载媒体服务器设置
   async function loadMediaServerSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/setting/MediaServers')
-      if (result.success && result.data?.value && result.data.value.length > 0) {
-        const mediaServer = result.data.value[0]
+      const result: WizardApiEnvelope<{ value?: MediaServerConf[] }> = await api.get('system/setting/MediaServers')
+      const mediaServers = Array.isArray(result?.data?.value) ? result.data.value : []
+      existingSettings.value.mediaServers = mediaServers
+      savedMediaServerNames.value = mediaServers.map((item: MediaServerConf) => item?.name).filter(Boolean)
+      if (result.success && mediaServers.length > 0) {
+        const mediaServer = mediaServers[0]
         wizardData.value.mediaServer.type = mediaServer.type
         wizardData.value.mediaServer.name = mediaServer.name
         wizardData.value.mediaServer.config = mediaServer.config || {}
@@ -1305,15 +1442,19 @@ export function useSetupWizard() {
       }
     } catch (error) {
       console.log('Load media server settings failed:', error)
+      existingSettings.value.mediaServers = []
+      savedMediaServerNames.value = []
     }
   }
 
   // 加载通知设置
   async function loadNotificationSettings() {
     try {
-      const result: { [key: string]: any } = await api.get('system/setting/Notifications')
-      if (result.success && result.data?.value && result.data.value.length > 0) {
-        const notification = result.data.value[0]
+      const result: WizardApiEnvelope<{ value?: NotificationConf[] }> = await api.get('system/setting/Notifications')
+      const notifications = Array.isArray(result?.data?.value) ? result.data.value : []
+      existingSettings.value.notifications = notifications
+      if (result.success && notifications.length > 0) {
+        const notification = notifications[0]
         wizardData.value.notification.id = notification.id
         wizardData.value.notification.type = notification.type
         wizardData.value.notification.name = notification.name
@@ -1323,20 +1464,40 @@ export function useSetupWizard() {
       }
     } catch (error) {
       console.log('Load notification settings failed:', error)
+      existingSettings.value.notifications = []
     }
+  }
+
+  // 加载存量用户过滤规则组
+  async function loadUserFilterRuleGroupsSettings() {
+    try {
+      const result: WizardApiEnvelope<{ value?: FilterRuleGroup[] }> = await api.get(
+        'system/setting/UserFilterRuleGroups',
+      )
+      existingSettings.value.userFilterRuleGroups = Array.isArray(result?.data?.value) ? result.data.value : []
+    } catch (error) {
+      console.log('Load user filter rule groups failed:', error)
+      existingSettings.value.userFilterRuleGroups = []
+    }
+  }
+
+  // 加载全部存量设置
+  async function loadExistingSettings() {
+    await loadSystemSettings()
+    await loadAuthSites()
+    await loadSiteAuthSettings()
+    await loadStorageSettings()
+    await loadDownloaderSettings()
+    await loadMediaServerSettings()
+    await loadNotificationSettings()
+    await loadUserFilterRuleGroupsSettings()
   }
 
   // 初始化
   async function initialize() {
     isLoading.value = true
     try {
-      await loadSystemSettings()
-      await loadAuthSites()
-      await loadSiteAuthSettings()
-      await loadStorageSettings()
-      await loadDownloaderSettings()
-      await loadMediaServerSettings()
-      await loadNotificationSettings()
+      await loadExistingSettings()
     } finally {
       isLoading.value = false
     }
@@ -1354,6 +1515,9 @@ export function useSetupWizard() {
     connectivityTest,
     validationErrors,
     isLoading,
+    isSavingStep,
+    savedMediaServerNames,
+    existingSettings,
 
     // 方法
     createRandomString,
@@ -1363,6 +1527,7 @@ export function useSetupWizard() {
     selectNotification,
     selectPreset,
     updatePreferences,
+    validateBasic,
     validateCurrentStep,
     validateSiteAuthFields,
     validateDownloaderFields,
@@ -1370,9 +1535,11 @@ export function useSetupWizard() {
     validateNotificationFields,
     clearValidationErrors,
     testConnectivity,
+    updateUserPassword,
     nextStep,
     prevStep,
     completeWizard,
+    loadExistingSettings,
     initialize,
   }
 }

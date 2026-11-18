@@ -205,6 +205,24 @@ function removeFilter(key: string, value: string) {
 
 // 滚动条引用
 const filterBarRef = ref<HTMLElement>()
+let initialScrollTimer: ReturnType<typeof setTimeout> | null = null
+let reverseScrollTimer: ReturnType<typeof setTimeout> | null = null
+let activeAnimationFrame: number | null = null
+
+function clearScrollAnimationTimers() {
+  if (initialScrollTimer !== null) {
+    clearTimeout(initialScrollTimer)
+    initialScrollTimer = null
+  }
+  if (reverseScrollTimer !== null) {
+    clearTimeout(reverseScrollTimer)
+    reverseScrollTimer = null
+  }
+  if (activeAnimationFrame !== null) {
+    cancelAnimationFrame(activeAnimationFrame)
+    activeAnimationFrame = null
+  }
+}
 
 /**
  * 自定义平滑滚动
@@ -227,11 +245,13 @@ function smoothScroll(element: HTMLElement, target: number, duration: number) {
     element.scrollLeft = start + change * ease
 
     if (timeElapsed < duration) {
-      requestAnimationFrame(animate)
+      activeAnimationFrame = requestAnimationFrame(animate)
+    } else {
+      activeAnimationFrame = null
     }
   }
 
-  requestAnimationFrame(animate)
+  activeAnimationFrame = requestAnimationFrame(animate)
 }
 
 // 初始滚动动画
@@ -248,7 +268,8 @@ onMounted(() => {
   if (props.enableAnimation === false) return
 
   nextTick(() => {
-    setTimeout(() => {
+    initialScrollTimer = setTimeout(() => {
+      initialScrollTimer = null
       const el = filterBarRef.value
       if (el && el.clientWidth > 0 && el.scrollWidth > el.clientWidth) {
         // 检查当前视口范围内的最后一个元素（即右侧边缘处的元素）
@@ -284,7 +305,8 @@ onMounted(() => {
         // 滚动到底部 (1100ms)
         smoothScroll(el, el.scrollWidth - el.clientWidth, 1100)
         // 短暂停止后滚动回顶部 (1100ms)
-        setTimeout(() => {
+        reverseScrollTimer = setTimeout(() => {
+          reverseScrollTimer = null
           smoothScroll(el, 0, 1100)
         }, 1600)
       }
@@ -293,6 +315,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearScrollAnimationTimers()
   closeAllFilterDialog()
   closeFilterDialog()
 })
@@ -302,28 +325,28 @@ onUnmounted(() => {
   <!-- PC端头部和筛选栏 -->
   <div class="search-header d-none d-sm-block">
     <VCard class="view-header filter-toolbar-card mb-3" elevation="0">
-      <div class="d-flex align-center pa-3">
+      <div class="filter-toolbar-row d-flex align-center">
         <!-- 固定位置：资源数量和排序 -->
         <div class="d-flex align-center flex-shrink-0">
           <VChip
             color="primary"
-            variant="flat"
+            variant="tonal"
             size="small"
-            class="search-count me-3 flex-shrink-0"
+            class="search-count me-2 flex-shrink-0"
             prepend-icon="mdi-magnify"
           >
             {{ totalFilteredCount }} {{ t('torrent.resources') }}
           </VChip>
 
-          <VBtn variant="text" size="small" class="sort-btn" :color="undefined">
+          <VBtn variant="text" size="small" rounded="lg" class="sort-btn" :color="undefined">
             <template #prepend>
-              <VIcon :icon="sortType === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" class="me-1" />
+              <VIcon :icon="sortType === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" size="16" class="me-1" />
             </template>
-            <span class="text-subtitle-2">{{ sortTitles[sortField] }}</span>
-            <VIcon icon="mdi-chevron-down" size="16" class="ms-1" />
+            <span class="sort-btn__label">{{ sortTitles[sortField] }}</span>
+            <VIcon icon="mdi-chevron-down" size="15" class="ms-1" />
 
             <VMenu activator="parent" transition="slide-y-transition">
-              <VList density="compact" min-width="120" class="sort-menu-list">
+              <VList density="compact" min-width="128" class="sort-menu-list">
                 <!-- 升序/降序 选项 -->
                 <VListItem
                   value="asc"
@@ -378,21 +401,27 @@ onUnmounted(() => {
             v-for="(title, key) in filterTitles"
             v-show="filterOptions[key].length > 0"
             :key="key"
-            variant="tonal"
+            variant="outlined"
             size="small"
-            color="primary"
+            :color="filterForm[key].length > 0 ? 'primary' : undefined"
             :prepend-icon="getFilterIcon(key)"
             class="filter-btn"
-            rounded="pill"
+            rounded="lg"
           >
             {{ title }}
-            <VChip v-if="filterForm[key].length > 0" size="small" color="primary" class="ms-1" variant="elevated">
+            <VChip
+              v-if="filterForm[key].length > 0"
+              size="x-small"
+              color="primary"
+              class="filter-count-badge ms-1"
+              variant="tonal"
+            >
               {{ filterForm[key].length }}
             </VChip>
             <VMenu activator="parent" :close-on-content-click="false" scrim>
               <VCard max-width="20rem">
                 <VCardText class="filter-menu-content">
-                  <div class="flex justify-between">
+                  <div class="flex justify-between mb-1">
                     <VBtn variant="text" size="small" color="primary" @click="selectAll(key)">
                       {{ t('torrent.selectAll') }}
                     </VBtn>
@@ -418,8 +447,9 @@ onUnmounted(() => {
                       :key="option"
                       :value="option"
                       filter
-                      variant="elevated"
-                      class="ma-1 filter-chip"
+                      variant="tonal"
+                      rounded="lg"
+                      class="filter-chip"
                       size="small"
                     >
                       {{ option }}
@@ -432,16 +462,22 @@ onUnmounted(() => {
 
           <!-- 全部筛选按钮 -->
           <VBtn
-            variant="tonal"
+            variant="outlined"
             size="small"
-            color="primary"
-            class="filter-btn me-2"
+            :color="getFilterCount > 0 ? 'primary' : undefined"
+            class="filter-btn me-1"
             prepend-icon="mdi-filter-variant"
-            rounded="pill"
+            rounded="lg"
             @click="toggleAllFilterMenu"
           >
             {{ t('torrent.allFilters') }}
-            <VChip v-if="getFilterCount > 0" size="small" color="primary" class="ms-1" variant="elevated">
+            <VChip
+              v-if="getFilterCount > 0"
+              size="x-small"
+              color="primary"
+              class="filter-count-badge ms-1"
+              variant="tonal"
+            >
               {{ getFilterCount }}
             </VChip>
           </VBtn>
@@ -450,7 +486,7 @@ onUnmounted(() => {
 
       <div v-if="getFilterCount > 0" class="selected-filters">
         <div class="d-flex align-center">
-          <div class="d-flex flex-wrap align-center flex-grow-1">
+          <div class="selected-filters__list d-flex flex-wrap align-center flex-grow-1">
             <template v-for="(values, key) in getSelectedFilters" :key="key">
               <VChip
                 v-for="(value, index) in values"
@@ -458,11 +494,12 @@ onUnmounted(() => {
                 color="primary"
                 size="small"
                 closable
-                variant="elevated"
-                class="me-1 mb-1 mt-1 filter-tag"
+                variant="tonal"
+                rounded="lg"
+                class="filter-tag"
                 @click:close="removeFilter(key as string, value)"
               >
-                <VIcon size="small" :icon="getFilterIcon(key as string)" class="me-1"></VIcon>
+                <VIcon size="13" :icon="getFilterIcon(key as string)" class="me-1"></VIcon>
                 <strong>{{ filterTitles[key as string] }}:</strong> {{ value }}
               </VChip>
             </template>
@@ -490,28 +527,22 @@ onUnmounted(() => {
   <!-- 移动端头部和筛选区域 -->
   <VCard class="d-block d-sm-none search-header-mobile filter-toolbar-card mb-3" elevation="0">
     <div class="view-header">
-      <div class="d-flex align-center flex-wrap pa-2">
+      <div class="d-flex align-center flex-wrap pa-2.5">
         <div class="d-flex align-center w-100">
-          <VChip
-            color="primary"
-            variant="elevated"
-            size="small"
-            class="search-count me-auto"
-            prepend-icon="mdi-magnify"
-          >
+          <VChip color="primary" variant="tonal" size="small" class="search-count me-auto" prepend-icon="mdi-magnify">
             {{ totalFilteredCount }} {{ t('torrent.resources') }}
           </VChip>
 
           <!-- 排序选择 -->
-          <VBtn variant="text" size="small" class="sort-btn mobile-sort-btn" :color="undefined">
+          <VBtn variant="text" size="small" rounded="lg" class="sort-btn mobile-sort-btn" :color="undefined">
             <template #prepend>
-              <VIcon :icon="sortType === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" class="me-1" />
+              <VIcon :icon="sortType === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" size="16" class="me-1" />
             </template>
-            <span class="text-subtitle-2">{{ sortTitles[sortField] }}</span>
-            <VIcon icon="mdi-chevron-down" size="16" class="ms-1" />
+            <span class="sort-btn__label">{{ sortTitles[sortField] }}</span>
+            <VIcon icon="mdi-chevron-down" size="15" class="ms-1" />
 
             <VMenu activator="parent" transition="slide-y-transition">
-              <VList density="compact" min-width="120" class="sort-menu-list">
+              <VList density="compact" min-width="128" class="sort-menu-list">
                 <!-- 升序/降序 选项 -->
                 <VListItem
                   value="asc"
@@ -599,6 +630,42 @@ onUnmounted(() => {
           </VBtn>
         </div>
       </div>
+
+      <div v-if="getFilterCount > 0" class="selected-filters">
+        <div class="d-flex align-center">
+          <div class="selected-filters__list d-flex flex-wrap align-center flex-grow-1">
+            <template v-for="(values, key) in getSelectedFilters" :key="key">
+              <VChip
+                v-for="(value, index) in values"
+                :key="`${key}-${index}`"
+                color="primary"
+                size="small"
+                closable
+                variant="tonal"
+                rounded="lg"
+                class="filter-tag"
+                @click:close="removeFilter(key as string, value)"
+              >
+                <VIcon size="13" :icon="getFilterIcon(key as string)" class="me-1"></VIcon>
+                <strong>{{ filterTitles[key as string] }}:</strong> {{ value }}
+              </VChip>
+            </template>
+          </div>
+
+          <VSpacer />
+
+          <VBtn
+            variant="text"
+            size="small"
+            color="error"
+            class="ms-2 flex-shrink-0"
+            prepend-icon="mdi-close-circle-outline"
+            @click="clearAllFilters"
+          >
+            {{ t('torrent.clearFilters') }}
+          </VBtn>
+        </div>
+      </div>
     </div>
   </VCard>
 </template>
@@ -616,17 +683,35 @@ onUnmounted(() => {
 
 .filter-toolbar-card {
   overflow: hidden;
-  background: rgba(var(--v-theme-surface), 0.82);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.filter-toolbar-row {
+  padding-block: 8px;
+  padding-inline: 13px;
 }
 
 .search-count {
-  font-weight: 500;
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding-inline: 8px !important;
 }
 
 .sort-btn {
-  height: 32px !important;
+  border-radius: 7px !important;
+  block-size: 28px !important;
   font-weight: 500;
-  padding-inline: 12px 6px !important;
+  padding-inline: 9px 6px !important;
+}
+
+.sort-btn__label {
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .sort-btn .v-icon {
@@ -663,25 +748,37 @@ onUnmounted(() => {
 }
 
 .filter-divider {
-  background-color: rgba(var(--v-theme-on-surface), 0.12);
-  block-size: 24px;
+  background-color: var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12));
+  block-size: 18px;
   inline-size: 1px;
   margin-block: 0;
   margin-inline: 8px;
 }
 
 .filter-btn {
+  border-radius: 7px !important;
+  block-size: 28px !important;
+  font-size: 12.5px !important;
   min-inline-size: 0;
-  transition: opacity 0.2s;
+  padding-inline: 10px !important;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.filter-btn:hover {
-  opacity: 0.8;
+.filter-count-badge {
+  border-radius: 5px !important;
+  block-size: 18px !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding-inline: 5px !important;
 }
 
 .filter-menu-content {
   max-block-size: 50vh;
   overflow-y: auto;
+  padding: 10px 12px !important;
 }
 
 .filter-options {
@@ -689,46 +786,66 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+.filter-options :deep(.v-slide-group__content) {
+  gap: 5px;
+}
+
 .filter-chip {
-  border: 1px solid rgba(var(--v-theme-primary), 0.2);
-  margin: 4px;
-  background-color: rgba(var(--v-theme-primary), 0.1) !important;
-  color: rgba(var(--v-theme-on-surface), 0.9) !important;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 6px !important;
+  block-size: 26px !important;
+  margin: 0 !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.04) !important;
+  color: rgba(var(--v-theme-on-surface), 0.88) !important;
+  font-size: 12px !important;
   font-weight: 500;
-  transition: all 0.2s ease;
+  padding-inline: 9px !important;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .filter-chip:hover {
-  background-color: rgba(var(--v-theme-primary), 0.15) !important;
+  border-color: var(--mp-border-hover);
+  background-color: rgba(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .filter-chip.v-chip--selected {
-  background-color: rgba(var(--v-theme-primary), 0.85) !important;
-  box-shadow: 0 2px 4px rgba(var(--v-theme-primary), 0.3);
-  color: rgb(var(--v-theme-on-primary)) !important;
+  border-color: rgba(var(--v-theme-primary), 0.35);
+  background-color: rgba(var(--v-theme-primary), 0.14) !important;
+  color: rgb(var(--v-theme-primary)) !important;
   font-weight: 600;
 }
 
+.selected-filters__list {
+  gap: 5px;
+}
+
 .filter-tag {
+  border-radius: 6px !important;
+  block-size: 24px !important;
+  font-size: 12px !important;
   font-weight: 500;
-  transition: all 0.2s;
+  margin: 0 !important;
+  padding-inline: 8px !important;
+  transition: opacity 0.16s ease;
 }
 
 .filter-tag:hover {
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .selected-filters {
   overflow: hidden;
-  border-block-start: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  background-color: rgba(var(--v-theme-surface-variant), 0.05);
-  padding-block: 7px;
-  padding-inline: 12px;
+  border-block-start: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  background-color: rgba(var(--v-theme-on-surface), 0.02);
+  padding-block: 6px;
+  padding-inline: 13px;
 }
 
 .filter-buttons-grid {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -737,10 +854,10 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
   border-radius: 8px;
-  block-size: 56px;
-  min-block-size: 56px;
+  block-size: 46px;
+  min-block-size: 46px;
   min-inline-size: 0;
   padding-block: 4px;
   padding-inline: 4px;
@@ -759,25 +876,19 @@ onUnmounted(() => {
 }
 
 .filter-icon {
-  font-size: 18px;
+  font-size: 16px;
   margin-block-end: 2px;
 }
 
 .filter-label {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 0.8rem;
+  font-size: 12px;
   line-height: 1.15;
   max-inline-size: 100%;
   overflow-wrap: anywhere;
   text-align: center;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-
-@media (width <= 600px) {
-  .filter-buttons-grid {
-    gap: 6px;
-  }
 }
 </style>

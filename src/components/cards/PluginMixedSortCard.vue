@@ -31,11 +31,20 @@ const emit = defineEmits<{
   renameFolder: [oldName: string, newName: string]
   updateFolderConfig: [folderName: string, config: any]
   refreshData: []
+  remove: [pluginId: string]
   rating: [pluginRating: PluginRating]
   actionDone: [pluginId: string]
   removeFromFolder: [pluginId: string]
   dropToFolder: [event: DragEvent, folderName: string]
 }>()
+
+function handlePluginRemove(removedPluginId?: string) {
+  if (removedPluginId) {
+    emit('remove', removedPluginId)
+    return
+  }
+  emit('refreshData')
+}
 
 // 拖拽事件处理
 function handleDragOver(event: DragEvent) {
@@ -108,21 +117,23 @@ function handleDropToFolder(event: DragEvent) {
         :plugin="item.data"
         :action="pluginActions[item.id] || false"
         :sortable="sortable"
-        @remove="$emit('refreshData')"
+        @remove="handlePluginRemove"
         @save="$emit('refreshData')"
         @rating="$emit('rating', $event)"
         @action-done="$emit('actionDone', item.id)"
       />
 
-      <!-- 移出文件夹按钮（仅在文件夹内显示） -->
+      <!-- 移出文件夹按钮（仅在文件夹内显示，置于底栏菜单旁避免遮挡右上角状态/评分角标） -->
       <VBtn
         v-if="showRemoveButton && !sortable"
         icon="mdi-folder-remove"
         variant="text"
         color="warning"
-        size="small"
+        size="x-small"
+        title="移出文件夹"
+        aria-label="移出文件夹"
         class="remove-from-folder-btn"
-        @click="$emit('removeFromFolder', item.id)"
+        @click.stop="$emit('removeFromFolder', item.id)"
       />
     </div>
   </div>
@@ -139,9 +150,9 @@ function handleDropToFolder(event: DragEvent) {
   }
 
   &.sortable-ghost {
-    border: 2px dashed #2196f3;
+    border: 2px dashed rgb(var(--v-theme-primary));
     border-radius: var(--app-surface-radius);
-    background: rgba(33, 150, 243, 10%);
+    background: rgba(var(--v-theme-primary), 0.1);
     opacity: 0.3;
   }
 }
@@ -153,9 +164,9 @@ function handleDropToFolder(event: DragEvent) {
   transition: all 0.3s ease;
 
   &.drag-over {
-    border: 2px dashed #2196f3;
+    border: 2px dashed rgb(var(--v-theme-primary));
     border-radius: var(--app-surface-radius);
-    box-shadow: 0 0 20px rgba(33, 150, 243, 50%);
+    box-shadow: 0 0 20px rgba(var(--v-theme-primary), 0.5);
     transform: scale(1.02);
   }
 }
@@ -167,16 +178,26 @@ function handleDropToFolder(event: DragEvent) {
   .remove-from-folder-btn {
     position: absolute;
     z-index: 10;
-    border-radius: 50%;
-    backdrop-filter: blur(4px);
-    background: rgba(255, 255, 255, 10%);
-    inset-block-start: 4px;
-    inset-inline-end: 4px;
+    border-radius: 6px !important;
+    background: rgba(var(--v-theme-surface), 0.9);
+    block-size: 26px !important;
+    inline-size: 26px !important;
+    inset-block-end: 5px;
+    inset-inline-end: 38px;
+    min-inline-size: 26px !important;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    padding: 0 !important;
+    transition: opacity 0.2s ease;
   }
 
-  &:hover .remove-from-folder-btn {
+  &:hover .remove-from-folder-btn,
+  &:focus-within .remove-from-folder-btn {
+    opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .plugin-item-wrapper .remove-from-folder-btn {
     opacity: 1;
   }
 }

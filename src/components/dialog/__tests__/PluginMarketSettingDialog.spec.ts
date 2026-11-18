@@ -22,7 +22,6 @@ describe('PluginMarketSettingDialog theme surfaces', () => {
     const textareaRule = getStyleRule('.plugin-market-textarea-field')
 
     expect(modeSwitchRule).toContain('border: var(--app-grouped-list-border)')
-    expect(modeSwitchRule).toContain('backdrop-filter: var(--app-grouped-list-backdrop-filter)')
     expect(modeSwitchRule).toContain('background: var(--app-grouped-list-background)')
     expect(dialogSource).toContain('background: var(--app-grouped-list-hover-background)')
     expect(dialogSource).toContain('background: var(--app-grouped-list-active-background)')

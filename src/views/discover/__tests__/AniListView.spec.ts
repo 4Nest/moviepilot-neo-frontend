@@ -70,5 +70,23 @@ describe('AniListView', () => {
         },
       })
     })
+
+    await user.click(screen.getByText('评分优先'))
+    await user.click(screen.getByText('奇幻'))
+
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList)).toEqual({
+        apipath: 'anilist/discover',
+        params: {
+          sort: 'SCORE_DESC',
+          genre: null,
+          format: 'MOVIE',
+          season: 'SUMMER',
+          season_year: 2026,
+          status: 'FINISHED',
+          country: 'JP',
+        },
+      })
+    })
   })
 })

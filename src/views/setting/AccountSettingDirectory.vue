@@ -1,7 +1,7 @@
 <!-- eslint-disable sonarjs/no-duplicate-string -->
 <script lang="ts" setup>
 import { useToast } from 'vue-toastification'
-import api from '@/api'
+import api, { getApiErrorMessage } from '@/api'
 import type { ApiResponse, StorageConf, TransferDirectoryConf } from '@/api/types'
 import DirectoryCard from '@/components/cards/DirectoryCard.vue'
 import StorageCard from '@/components/cards/StorageCard.vue'
@@ -29,8 +29,37 @@ const CategoryEditDialog = defineAsyncComponent(() => import('@/components/dialo
 // 所有下载目录
 const directories = ref<TransferDirectoryConf[]>([])
 
+// 为目录条目提供不随优先级重排或改名漂移的稳定渲染键，避免删除中间目录时后续卡片卸载重挂。
+const directoryKeys = new WeakMap<TransferDirectoryConf, string>()
+let directoryKeySeed = 0
+function getDirectoryKey(directory: TransferDirectoryConf): string {
+  const existing = directoryKeys.get(directory)
+  if (existing) return existing
+  directoryKeySeed += 1
+  const nextKey = `dir-${directoryKeySeed}`
+  directoryKeys.set(directory, nextKey)
+  return nextKey
+}
+
 // 所有存储
 const storages = ref<StorageConf[]>([])
+
+// 为存储条目提供不随改名或拖拽漂移的稳定渲染键
+const storageKeys = new WeakMap<StorageConf, string>()
+let storageKeySeed = 0
+function getStorageKey(storage: StorageConf): string {
+  const existing = storageKeys.get(storage)
+  if (existing) return existing
+  storageKeySeed += 1
+  const nextKey = `storage-${storageKeySeed}`
+  storageKeys.set(storage, nextKey)
+  return nextKey
+}
+
+// 独立的保存按钮加载锁
+const savingStorages = ref(false)
+const savingDirectories = ref(false)
+const savingOrganize = ref(false)
 
 // 二级分类策略
 const mediaCategories = ref<{ [key: string]: any }>({})
@@ -162,12 +191,17 @@ async function loadStorages() {
 
 // 保存存储
 async function saveStorages() {
+  if (savingStorages.value) return
+  savingStorages.value = true
   try {
     const result: { [key: string]: any } = await api.post('system/setting/Storages', storages.value)
     if (result.success) $toast.success(t('setting.directory.storageSaveSuccess'))
-    else $toast.error(t('setting.directory.storageSaveFailed'))
+    else $toast.error(result.message || t('setting.directory.storageSaveFailed'))
   } catch (error) {
     console.log(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.directory.storageSaveFailed'))
+  } finally {
+    savingStorages.value = false
   }
 }
 
@@ -183,7 +217,9 @@ async function loadDirectories() {
 
 // 保存目录
 async function saveDirectories() {
+  if (savingDirectories.value) return
   orderDirectoryCards()
+  savingDirectories.value = true
   try {
     const names = directories.value.map(item => item.name)
     if (new Set(names).size !== names.length) {
@@ -193,9 +229,12 @@ async function saveDirectories() {
     const result: { [key: string]: any } = await api.post('system/setting/Directories', directories.value)
     if (result.success) {
       $toast.success(t('setting.directory.directorySaveSuccess'))
-    } else $toast.error(t('setting.directory.directorySaveFailed'))
+    } else $toast.error(result.message || t('setting.directory.directorySaveFailed'))
   } catch (error) {
     console.log(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.directory.directorySaveFailed'))
+  } finally {
+    savingDirectories.value = false
   }
 }
 
@@ -261,9 +300,6 @@ function addStorage(storageType = 'custom') {
     type: type,
     config: {},
   })
-
-  // 保存存储
-  saveStorages()
 }
 
 // 移除存储
@@ -276,6 +312,8 @@ function removeStorage(storage: StorageConf) {
 
 // 保存设置
 async function saveSystemSettings(value: any) {
+  if (savingOrganize.value) return
+  savingOrganize.value = true
   try {
     // 响应拦截器返回业务响应体，并行组合前需收窄 Axios 的静态返回类型。
     const [envResult, mountedDiskResult] = await Promise.all([
@@ -290,6 +328,9 @@ async function saveSystemSettings(value: any) {
     } else $toast.error(t('setting.directory.organizeSaveFailed'))
   } catch (error) {
     console.log(error)
+    $toast.error(getApiErrorMessage(error) || t('setting.directory.organizeSaveFailed'))
+  } finally {
+    savingOrganize.value = false
   }
 }
 
@@ -308,117 +349,179 @@ onMounted(() => {
   loadPageData()
 })
 
-useSilentSettingRefresh(loadPageData, {
-  active: computed(() => props.active),
-})
+useSilentSettingRefresh(
+  async () => {
+    if (savingStorages.value || savingDirectories.value || savingOrganize.value) return
+    await loadPageData()
+  },
+  {
+    active: computed(() => props.active),
+  },
+)
 </script>
 
 <template>
-  <VRow>
-    <VCol cols="12">
-      <VCard>
-        <VCardItem>
-          <VCardTitle>{{ t('setting.directory.storage') }}</VCardTitle>
-          <VCardSubtitle>{{ t('setting.directory.storageDesc') }}</VCardSubtitle>
-        </VCardItem>
-        <VCardText>
-          <Draggable
-            v-model="storages"
-            handle=".cursor-move"
-            item-key="name"
-            tag="div"
-            :component-data="{ 'class': 'grid gap-3 grid-app-card' }"
+  <div class="mp-setting-stack">
+    <VCard id="sec-dir-storage" class="mp-setting-card">
+      <VCardItem>
+        <template #prepend>
+          <div class="mp-setting-card__icon mp-setting-card__icon--info">
+            <VIcon icon="mdi-harddisk" size="18" />
+          </div>
+        </template>
+        <VCardTitle class="d-flex align-center gap-2">
+          <span>{{ t('setting.directory.storage') }}</span>
+          <span v-if="storages.length > 0" class="mp-count-pill">{{ storages.length }}</span>
+        </VCardTitle>
+        <VCardSubtitle>{{ t('setting.directory.storageDesc') }}</VCardSubtitle>
+        <template #append>
+          <VBtn size="small" color="secondary" variant="outlined" rounded="lg" prepend-icon="mdi-plus">
+            添加存储
+            <VMenu activator="parent" close-on-content-click>
+              <VList>
+                <VListItem v-for="item in storageOptions" :key="item.value" @click="addStorage(item.value)">
+                  <VListItemTitle>{{ item.title }}</VListItemTitle>
+                </VListItem>
+                <VListItem @click="addStorage('custom')">
+                  <VListItemTitle>{{ t('storage.custom') }}</VListItemTitle>
+                </VListItem>
+              </VList>
+            </VMenu>
+          </VBtn>
+        </template>
+      </VCardItem>
+      <VCardText>
+        <Draggable
+          v-if="storages.length"
+          v-model="storages"
+          handle=".cursor-move"
+          :item-key="getStorageKey"
+          tag="div"
+          :component-data="{ 'class': 'grid gap-3 grid-app-card' }"
+        >
+          <template #item="{ element }">
+            <StorageCard :storage="element" @close="removeStorage(element)" @done="loadStorages" />
+          </template>
+        </Draggable>
+        <div v-else class="mp-empty-hint">
+          <VIcon icon="mdi-harddisk" size="16" class="mp-empty-hint__icon" />
+          <span>暂未添加存储，可点击右上角「添加存储」新增配置</span>
+        </div>
+
+        <VForm class="mp-card-footer" @submit.prevent="() => {}">
+          <span class="mp-card-footer__hint">保存存储源连接与排序配置</span>
+          <VBtn
+            type="submit"
+            size="small"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            prepend-icon="mdi-content-save-outline"
+            :loading="savingStorages"
+            :disabled="savingStorages"
+            class="px-4"
+            @click="saveStorages"
           >
-            <template #item="{ element }">
-              <StorageCard :storage="element" @close="removeStorage(element)" @done="loadStorages" />
-            </template>
-          </Draggable>
-        </VCardText>
-        <VCardText>
-          <VForm @submit.prevent="() => {}">
-            <div class="d-flex flex-wrap gap-4 mt-4">
-              <VBtn type="submit" class="me-2" @click="saveStorages" prepend-icon="mdi-content-save">
-                {{ t('common.save') }}
-              </VBtn>
-              <VBtn color="success" variant="tonal">
-                <VIcon icon="mdi-plus" />
-                <VMenu activator="parent" close-on-content-click>
-                  <VList>
-                    <VListItem v-for="item in storageOptions" :key="item.value" @click="addStorage(item.value)">
-                      <VListItemTitle>{{ item.title }}</VListItemTitle>
-                    </VListItem>
-                    <VListItem @click="addStorage('custom')">
-                      <VListItemTitle>{{ t('storage.custom') }}</VListItemTitle>
-                    </VListItem>
-                  </VList>
-                </VMenu>
-              </VBtn>
-            </div>
-          </VForm>
-        </VCardText>
-      </VCard>
-    </VCol>
-  </VRow>
-  <VRow>
-    <VCol cols="12">
-      <VCard>
-        <VCardItem>
-          <VCardTitle>{{ t('setting.directory.directory') }}</VCardTitle>
-          <VCardSubtitle>{{ t('setting.directory.directoryDesc') }}</VCardSubtitle>
-        </VCardItem>
-        <VCardText>
-          <Draggable
-            v-model="directories"
-            handle=".cursor-move"
-            item-key="pri"
-            tag="div"
-            @end="orderDirectoryCards"
-            :component-data="{ 'class': 'grid gap-3 grid-directory-card items-start' }"
+            {{ t('common.save') }}
+          </VBtn>
+        </VForm>
+      </VCardText>
+    </VCard>
+
+    <VCard id="sec-dir-library" class="mp-setting-card">
+      <VCardItem>
+        <template #prepend>
+          <div class="mp-setting-card__icon mp-setting-card__icon--primary">
+            <VIcon icon="mdi-folder-multiple-outline" size="18" />
+          </div>
+        </template>
+        <VCardTitle class="d-flex align-center gap-2">
+          <span>{{ t('setting.directory.directory') }}</span>
+          <span v-if="directories.length > 0" class="mp-count-pill">{{ directories.length }}</span>
+        </VCardTitle>
+        <VCardSubtitle>{{ t('setting.directory.directoryDesc') }}</VCardSubtitle>
+        <template #append>
+          <div class="d-flex flex-wrap align-center justify-end gap-2">
+            <VBtn
+              size="small"
+              color="primary"
+              variant="tonal"
+              rounded="lg"
+              prepend-icon="mdi-shape-plus"
+              @click="openCategoryDialog"
+            >
+              {{ t('setting.category.title') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              color="secondary"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-plus"
+              @click="addDirectory"
+            >
+              添加目录
+            </VBtn>
+          </div>
+        </template>
+      </VCardItem>
+      <VCardText>
+        <Draggable
+          v-if="directories.length"
+          v-model="directories"
+          handle=".cursor-move"
+          :item-key="getDirectoryKey"
+          tag="div"
+          @end="orderDirectoryCards"
+          :component-data="{ 'class': 'directory-card-grid' }"
+        >
+          <template #item="{ element }">
+            <DirectoryCard
+              :directory="element"
+              :categories="mediaCategories"
+              :storages="storages"
+              @close="removeDirectory(element)"
+            />
+          </template>
+        </Draggable>
+        <div v-else class="mp-empty-hint">
+          <VIcon icon="mdi-folder-outline" size="16" class="mp-empty-hint__icon" />
+          <span>暂未添加目录，可点击右上角「添加目录」新增配置</span>
+        </div>
+
+        <VForm class="mp-card-footer" @submit.prevent="() => {}">
+          <span class="mp-card-footer__hint">保存下载目录与媒体库整理映射关系</span>
+          <VBtn
+            type="submit"
+            size="small"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            prepend-icon="mdi-content-save-outline"
+            :loading="savingDirectories"
+            :disabled="savingDirectories"
+            class="px-4"
+            @click="saveDirectories"
           >
-            <template #item="{ element }">
-              <DirectoryCard
-                :directory="element"
-                :categories="mediaCategories"
-                :storages="storages"
-                @update:modelValue="
-                  (value: any) => {
-                    element.download_path = value?.download
-                    element.library_path = value?.library
-                  }
-                "
-                @close="removeDirectory(element)"
-              />
-            </template>
-          </Draggable>
-        </VCardText>
-        <VCardText>
-          <VForm @submit.prevent="() => {}">
-            <div class="d-flex flex-wrap gap-4 mt-4">
-              <VBtn type="submit" @click="saveDirectories" prepend-icon="mdi-content-save">
-                {{ t('common.save') }}
-              </VBtn>
-              <VBtn color="success" variant="tonal" @click="addDirectory" class="me-2">
-                <VIcon icon="mdi-plus" />
-              </VBtn>
-              <VSpacer />
-              <VBtn color="info" variant="tonal" prepend-icon="mdi-shape-plus" @click="openCategoryDialog">
-                {{ t('setting.category.title') }}
-              </VBtn>
-            </div>
-          </VForm>
-        </VCardText>
-      </VCard>
-    </VCol>
-  </VRow>
-  <VRow>
-    <VCol cols="12">
-      <VCard>
-        <VCardItem>
-          <VCardTitle>{{ t('setting.directory.organizeAndScrap') }}</VCardTitle>
-          <VCardSubtitle>{{ t('setting.directory.organizeAndScrapDesc') }}</VCardSubtitle>
-        </VCardItem>
-        <VCardText>
-          <VRow>
+            {{ t('common.save') }}
+          </VBtn>
+        </VForm>
+      </VCardText>
+    </VCard>
+
+    <VCard id="sec-dir-organize" class="mp-setting-card">
+      <VCardItem>
+        <template #prepend>
+          <div class="mp-setting-card__icon mp-setting-card__icon--success">
+            <VIcon icon="mdi-file-tree-outline" size="18" />
+          </div>
+        </template>
+        <VCardTitle>{{ t('setting.directory.organizeAndScrap') }}</VCardTitle>
+        <VCardSubtitle>{{ t('setting.directory.organizeAndScrapDesc') }}</VCardSubtitle>
+      </VCardItem>
+      <VCardText>
+        <VForm @submit.prevent="() => {}">
+          <VRow align="start">
             <VCol cols="12" md="6">
               <VSelect
                 v-model="SystemSettings.Basic.SCRAP_SOURCE"
@@ -430,17 +533,20 @@ useSilentSettingRefresh(loadPageData, {
               />
             </VCol>
             <VCol cols="12" md="6">
-              <VSwitch
-                v-model="mountedLocalDiskDeleteEmptyDirs"
-                :label="t('setting.directory.mountedLocalDiskDeleteEmptyDirs')"
-                :hint="t('setting.directory.mountedLocalDiskDeleteEmptyDirsHint')"
-                color="primary"
-                persistent-hint
-                inset
-              />
+              <div class="mp-switch-card" :title="t('setting.directory.mountedLocalDiskDeleteEmptyDirsHint')">
+                <VSwitch
+                  v-model="mountedLocalDiskDeleteEmptyDirs"
+                  :label="t('setting.directory.mountedLocalDiskDeleteEmptyDirs')"
+                  :hint="t('setting.directory.mountedLocalDiskDeleteEmptyDirsHint')"
+                  color="primary"
+                  density="compact"
+                  persistent-hint
+                  inset
+                />
+              </div>
             </VCol>
             <VCol cols="12">
-              <VDivider class="mb-4" />
+              <VDivider class="my-2" />
               <div class="rename-format-section-head">
                 <div class="rename-format-section-title">{{ t('renameFormat.sectionTitle') }}</div>
                 <div class="rename-format-section-desc">{{ t('renameFormat.sectionDesc') }}</div>
@@ -451,81 +557,114 @@ useSilentSettingRefresh(loadPageData, {
                 :editor-theme="editorTheme"
               >
                 <template #toolbar>
-                  <VBtnToggle
-                    v-model="activeRenameMediaType"
-                    class="rename-format-media-toggle"
-                    color="primary"
-                    density="compact"
-                    mandatory
-                    variant="outlined"
-                    divided
+                  <div
+                    class="mp-segmented rename-format-media-segmented"
+                    role="tablist"
+                    :aria-label="t('renameFormat.sectionTitle')"
                   >
-                    <VBtn value="movie" size="small">
-                      <VIcon icon="mdi-movie-open" size="16" class="me-1" />
-                      {{ t('mediaType.movie') }}
-                    </VBtn>
-                    <VBtn value="tv" size="small">
-                      <VIcon icon="mdi-television" size="16" class="me-1" />
-                      {{ t('mediaType.tv') }}
-                    </VBtn>
-                  </VBtnToggle>
+                    <button
+                      type="button"
+                      role="tab"
+                      :aria-selected="activeRenameMediaType === 'movie'"
+                      class="mp-segmented__btn"
+                      :class="{ 'is-active': activeRenameMediaType === 'movie' }"
+                      @click="activeRenameMediaType = 'movie'"
+                    >
+                      <VIcon icon="mdi-movie-open-outline" size="15" />
+                      <span>{{ t('mediaType.movie') }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      :aria-selected="activeRenameMediaType === 'tv'"
+                      class="mp-segmented__btn"
+                      :class="{ 'is-active': activeRenameMediaType === 'tv' }"
+                      @click="activeRenameMediaType = 'tv'"
+                    >
+                      <VIcon icon="mdi-television" size="15" />
+                      <span>{{ t('mediaType.tv') }}</span>
+                    </button>
+                  </div>
                 </template>
               </RenameFormatEditor>
             </VCol>
           </VRow>
-        </VCardText>
-        <VCardText>
-          <VForm @submit.prevent="() => {}">
-            <div class="d-flex flex-wrap gap-4 mt-4">
-              <VBtn type="submit" @click="saveSystemSettings(SystemSettings.Basic)" prepend-icon="mdi-content-save">
-                {{ t('common.save') }}
-              </VBtn>
-            </div>
-          </VForm>
-        </VCardText>
-      </VCard>
-    </VCol>
-  </VRow>
+        </VForm>
+
+        <VForm class="mp-card-footer" @submit.prevent="() => {}">
+          <span class="mp-card-footer__hint">保存刮削源与电影/剧集重命名模板</span>
+          <VBtn
+            type="submit"
+            size="small"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            prepend-icon="mdi-content-save-outline"
+            :loading="savingOrganize"
+            :disabled="savingOrganize"
+            class="px-4"
+            @click="saveSystemSettings(SystemSettings.Basic)"
+          >
+            {{ t('common.save') }}
+          </VBtn>
+        </VForm>
+      </VCardText>
+    </VCard>
+  </div>
 </template>
 
 <style scoped>
+.directory-card-grid {
+  display: grid;
+  align-items: start;
+  gap: 13px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
+}
+
 .rename-format-section-head {
-  margin-block-end: 0.75rem;
+  margin-block: 10px 13px;
 }
 
 .rename-format-section-title {
-  font-size: 1rem;
-  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .rename-format-section-desc {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-  margin-block-start: 0.125rem;
+  font-size: 12px;
+  margin-block-start: 2px;
 }
 
 @media (width <= 600px) {
-  .rename-format-media-toggle {
+  .rename-format-media-segmented {
     display: flex;
     inline-size: 100%;
   }
 
-  .rename-format-media-toggle :deep(.v-btn) {
+  .rename-format-media-segmented .mp-segmented__btn {
     flex: 1 1 50%;
   }
 }
 
-.rename-format-editor__ace {
-  overflow: hidden;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: var(--app-field-radius);
-  min-block-size: 8rem;
+.mp-empty-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 14px;
+  border: 1px dashed var(--mp-border-card);
+  border-radius: 8px;
+  background: var(--mp-item-bg);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12.5px;
+  gap: 5px;
+  line-height: 1.5;
 }
 
-.rename-format-editor__hint {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  margin-block-start: 0.375rem;
+.mp-empty-hint__icon {
+  color: rgba(var(--v-theme-on-surface), 0.45);
 }
 </style>

@@ -124,7 +124,7 @@ describe('SiteCookieUpdateDialog', () => {
 
   it('emits close from the dialog close button', async () => {
     const { events } = await renderDialog()
-    await fireEvent.click(document.querySelector('.absolute.right-3.top-3')!)
+    await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     expect(events.close).toHaveBeenCalledOnce()
   })
 })

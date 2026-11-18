@@ -8,13 +8,10 @@ type InfiniteScrollStatus = 'ok' | 'empty' | 'loading' | 'error'
  * @param sourceData - 源数据（响应式引用）
  * @param pageSize - 每页显示数量，默认20
  */
-export function useInfiniteScroll<T>(
-  sourceData: Ref<T[]>,
-  pageSize: number = 20
-) {
+export function useInfiniteScroll<T>(sourceData: Ref<T[]>, pageSize: number = 20) {
   // 显示用的数据列表
   const displayDataList = ref<T[]>([])
-  
+
   // 剩余数据列表（用于无限滚动）
   const remainingDataList = ref<T[]>([]) as Ref<T[]>
 
@@ -35,7 +32,13 @@ export function useInfiniteScroll<T>(
   function loadMore({ done }: { done: (status: InfiniteScrollStatus) => void }) {
     // 从 remainingDataList 中获取最前面的 pageSize 个元素
     const itemsToMove = remainingDataList.value.splice(0, pageSize) as T[]
-    ;(displayDataList.value as T[]).push(...itemsToMove)
+    if (itemsToMove.length > 0) {
+      ;(displayDataList.value as T[]).push(...itemsToMove)
+    }
+    if (itemsToMove.length === 0 || remainingDataList.value.length === 0) {
+      done('empty')
+      return
+    }
     done('ok')
   }
 
@@ -46,9 +49,13 @@ export function useInfiniteScroll<T>(
   }
 
   // 监听源数据变化，重新初始化
-  watch(sourceData, () => {
-    initData()
-  }, { deep: true, immediate: true })
+  watch(
+    sourceData,
+    () => {
+      initData()
+    },
+    { deep: true, immediate: true },
+  )
 
   return {
     displayDataList,

@@ -62,7 +62,7 @@ onMounted(() => {
   <template v-if="!nativeChromeActive">
     <VTooltip v-for="item in pinnedShortcuts" :key="item.dialog" :text="item.title" location="top">
       <template #activator="{ props: tooltipProps }">
-        <IconBtn class="ms-2" v-bind="tooltipProps" @click="openShortcutTool(item)">
+        <IconBtn v-bind="tooltipProps" @click="openShortcutTool(item)">
           <VIcon :icon="item.icon" />
         </IconBtn>
       </template>
@@ -74,15 +74,15 @@ onMounted(() => {
     :max-width="menuMaxWidth"
     width="100%"
     max-height="560"
-    location="top end"
-    origin="top end"
+    location="bottom end"
+    offset="8"
     close-on-content-click
     close-on-back
     scrim
   >
     <!-- Menu Activator -->
     <template v-if="!nativeChromeActive" #activator="{ props }">
-      <IconBtn class="ms-2" v-bind="props">
+      <IconBtn v-bind="props">
         <VIcon icon="mdi-card-multiple-outline" />
       </IconBtn>
     </template>

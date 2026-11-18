@@ -36,6 +36,7 @@ interface SubscribeBatchState {
   selectedCount: number
   totalCount: number
   allSelected: boolean
+  operating?: boolean
 }
 
 const SubscribeListViewStub = defineComponent({
@@ -117,6 +118,21 @@ const SubscribeListViewStub = defineComponent({
           },
           'publish all selected batch',
         ),
+        h(
+          'button',
+          {
+            type: 'button',
+            onClick: () =>
+              publishBatchState({
+                enabled: true,
+                selectedCount: 2,
+                totalCount: 3,
+                allSelected: false,
+                operating: true,
+              }),
+          },
+          'publish operating batch',
+        ),
       ])
   },
 })
@@ -127,7 +143,6 @@ const SubscribeShareViewStub = defineComponent({
   setup(props) {
     return () =>
       h('section', { 'aria-label': 'shared subscription stub' }, [
-        h('button', { 'data-menu-activator': 'share-filter-btn', type: 'button' }, 'share filter activator'),
         h('output', { 'aria-label': 'share keyword' }, props.keyword ?? ''),
       ])
   },
@@ -136,6 +151,7 @@ const SubscribeShareViewStub = defineComponent({
 type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 
 interface HeaderButtonConfig {
+  title?: string
   icon: string
   dataAttr?: string
   action?: () => void
@@ -215,7 +231,7 @@ describe('subscribe page', () => {
     const header = getHeaderConfig()
 
     expect(router.currentRoute.value.meta.subType).toBe('电影')
-    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'share'])
     expect(header.modelValue.value).toBe('mysub')
     expect(getListOutput('list type')).toHaveTextContent('电影')
     expect(getListOutput('list subscription id')).toHaveTextContent('42')
@@ -306,7 +322,7 @@ describe('subscribe page', () => {
     expect(getListOutput('last list command')).toHaveTextContent('exit-batch')
     expect(getListOutput('list sort mode')).toHaveTextContent('true')
     expect(getListOutput('list sort by')).toHaveTextContent('custom')
-    expect(unref(batchButton.color)).toBe('gray')
+    expect(unref(batchButton.color)).toBe('')
     expect(unref(getDynamicButtonConfig().show)).toBe(true)
     expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-history')
   })
@@ -374,24 +390,36 @@ describe('subscribe page', () => {
     expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
   })
 
-  it('rejects ?tab=share on the movie subscription page where share is not a visible tab', async () => {
-    await renderSubscribe({
+  it('exposes the share tab on the movie subscription page for superusers and blocks non-superusers', async () => {
+    const { unmount } = await renderSubscribe({
       initialRoute: '/subscribe/movie?tab=share',
       subType: '电影',
       superUser: true,
     })
 
-    const header = getHeaderConfig()
+    let header = getHeaderConfig()
+    expect(unref(header.items).map(item => item.tab)).toEqual(['mysub', 'share'])
+    expect(header.modelValue.value).toBe('share')
+    expect(await screen.findByLabelText('shared subscription stub')).toBeInTheDocument()
+    unmount()
+
+    await renderSubscribe({
+      initialRoute: '/subscribe/movie?tab=share',
+      subType: '电影',
+      superUser: false,
+    })
+
+    header = getHeaderConfig()
     expect(unref(header.items).map(item => item.tab)).toEqual(['mysub'])
     expect(header.modelValue.value).toBe('mysub')
     expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
   })
 
-  it('exposes history and default-rule actions on desktop and PWA', async () => {
+  it('exposes inline history and default-rule actions on desktop and PWA', async () => {
     const { unmount } = await renderSubscribe()
 
-    await waitFor(() => expect(document.querySelectorAll('.compact-fab button')).toHaveLength(2))
-    const [historyButton, defaultRuleButton] = document.querySelectorAll<HTMLButtonElement>('.compact-fab button')
+    const historyButton = (await screen.findByTestId('subscribe-history-btn')) as HTMLButtonElement
+    const defaultRuleButton = screen.getByTestId('subscribe-default-rule-btn') as HTMLButtonElement
 
     await fireEvent.click(historyButton)
     expect(getListOutput('last list command')).toHaveTextContent('open-history')
@@ -414,28 +442,31 @@ describe('subscribe page', () => {
     ])
   })
 
-  it('debounces and trims share search, then cancels pending work on unmount', async () => {
-    const { unmount } = await renderSubscribe({
+  it('omits share header filter button, labels mysub appendButtons, syncs route.query.id, and locks batch actions while operating', async () => {
+    const { router, unmount } = await renderSubscribe({
       initialRoute: '/subscribe/tv?tab=share',
       subType: '电视剧',
     })
-    getHeaderButton(button => button.dataAttr === 'share-filter-btn').action?.()
-    await nextTick()
-    const keywordInput = await screen.findByPlaceholderText('关键词')
+    const header = getHeaderConfig()
+    expect(header.appendButtons.some(button => button.dataAttr === 'share-filter-btn')).toBe(false)
+    expect(header.appendButtons.map(button => button.title)).toEqual(['筛选', '排序模式', '批量管理'])
 
-    vi.useFakeTimers()
-    await fireEvent.update(keywordInput, '  science fiction  ')
-    expect(getListOutput('share keyword')).toHaveTextContent('')
-    vi.advanceTimersByTime(299)
+    await router.push('/subscribe/tv?id=88')
     await nextTick()
-    expect(getListOutput('share keyword')).toHaveTextContent('')
-    vi.advanceTimersByTime(1)
-    await nextTick()
-    expect(getListOutput('share keyword')).toHaveTextContent('science fiction')
+    await waitFor(() => expect(header.modelValue.value).toBe('mysub'))
+    expect(getListOutput('list subscription id')).toHaveTextContent('88')
 
-    await fireEvent.update(keywordInput, 'pending')
-    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    await fireEvent.click(screen.getByRole('button', { name: 'publish operating batch' }))
+    expect(screen.getByRole('button', { name: '批量启用' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '批量暂停' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '批量删除' })).toBeDisabled()
     unmount()
-    expect(vi.getTimerCount()).toBe(0)
+
+    await renderSubscribe({ appMode: true })
+    await fireEvent.click(screen.getByRole('button', { name: 'publish operating batch' }))
+    const dynamicItems = unref(getDynamicButtonConfig().menuItems) ?? []
+    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchEnable')?.disabled).toBe(true)
+    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchPause')?.disabled).toBe(true)
+    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchDelete')?.disabled).toBe(true)
   })
 })

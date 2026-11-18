@@ -61,10 +61,10 @@ function initializeRuleInfo() {
 
 /** 保存规则编辑结果并通知父级刷新。 */
 function saveRuleInfo() {
+  ruleInfo.value.id = ruleInfo.value.id?.trim() ?? ''
+  ruleInfo.value.name = ruleInfo.value.name?.trim() ?? ''
   if (!ruleInfo.value.id || !ruleInfo.value.name) {
-    if (!ruleInfo.value.id && !ruleInfo.value.name) {
-      $toast.error(t('customRule.error.emptyIdName'))
-    }
+    $toast.error(t('customRule.error.emptyIdName'))
     return
   }
   if (innerFilterRules.find(option => option.value === ruleInfo.value.id)) {
@@ -103,22 +103,22 @@ onMounted(() => {
     v-if="ruleInfoDialog"
     v-model="ruleInfoDialog"
     scrollable
-    max-width="40rem"
+    max-width="44rem"
     :fullscreen="!display.mdAndUp.value"
   >
-    <VCard>
-      <VCardItem>
+    <VCard class="mp-dialog-card">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-filter-outline" class="me-2" />
+          <VIcon icon="mdi-filter-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>{{ t('customRule.title', { id: props.rule.id }) }}</VCardTitle>
       </VCardItem>
       <VDialogCloseBtn v-model="ruleInfoDialog" />
       <VDivider />
-      <VCardText>
+      <VCardText class="mp-dialog-body">
         <VForm>
-          <VRow>
-            <VCol cols="12" md="6">
+          <VRow class="mp-form-grid">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="ruleInfo.id"
                 :label="t('customRule.field.ruleId')"
@@ -130,7 +130,7 @@ onMounted(() => {
                 @input="validateRuleId"
               />
             </VCol>
-            <VCol cols="12" md="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="ruleInfo.name"
                 :label="t('customRule.field.ruleName')"
@@ -163,7 +163,7 @@ onMounted(() => {
                 prepend-inner-icon="mdi-minus-circle"
               />
             </VCol>
-            <VCol cols="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="ruleInfo.size_range"
                 :label="t('customRule.field.sizeRange')"
@@ -174,7 +174,7 @@ onMounted(() => {
                 prepend-inner-icon="mdi-harddisk"
               />
             </VCol>
-            <VCol cols="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="ruleInfo.seeders"
                 :label="t('customRule.field.seeders')"
@@ -185,7 +185,7 @@ onMounted(() => {
                 prepend-inner-icon="mdi-account-group"
               />
             </VCol>
-            <VCol cols="6">
+            <VCol cols="12" sm="6">
               <VTextField
                 v-model="ruleInfo.publish_time"
                 :label="t('customRule.field.publishTime')"
@@ -199,12 +199,42 @@ onMounted(() => {
           </VRow>
         </VForm>
       </VCardText>
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VSpacer />
-        <VBtn color="primary" variant="flat" @click="saveRuleInfo" prepend-icon="mdi-content-save" class="px-5">
+        <VBtn color="default" variant="text" size="small" @click="ruleInfoDialog = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="px-4" @click="saveRuleInfo">
           {{ t('customRule.action.confirm') }}
         </VBtn>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
+
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+}
+</style>

@@ -76,13 +76,11 @@ html[data-native-chrome='active'] {
     inset-block-end: 0 !important;
   }
 
-  // 弹窗之外降低亮度并显著模糊，保留弹窗自身文字和控件的清晰度。
+  // 弹窗之外降低亮度，保留弹窗自身文字和控件的清晰度。
   .v-dialog > .v-overlay__scrim,
   .v-menu > .v-overlay__scrim {
-    background: rgba(var(--v-theme-background), 0.74) !important;
+    background: rgba(var(--v-overlay-scrim-background), var(--v-overlay-scrim-opacity)) !important;
     opacity: 1 !important;
-    backdrop-filter: blur(22px) saturate(0.75);
-    -webkit-backdrop-filter: blur(22px) saturate(0.75);
   }
 
   .medal-showcase .medal-showcase__close {
@@ -180,13 +178,11 @@ html[data-native-chrome='active'][data-native-sheet] {
     background: transparent !important;
     transition: none !important;
 
-    // 助手沿用网页侧栏的外框和模糊层；原生 Sheet 接管后只保留内容，避免底部二次采样形成色带。
+    // 助手沿用网页侧栏的外框；原生 Sheet 接管后只保留内容。
     &.agent-assistant-panel {
       border: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
 
       // 输入框紧邻 Sheet 底部安全区，保留填充和细边框，移除会在 WebView 边界截断的大幅外投影。
       .agent-assistant-input {
@@ -239,8 +235,6 @@ html[data-native-chrome='active'][data-native-sheet] {
       border-radius: 0 !important;
       box-shadow: none !important;
       background: transparent !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
       padding-block: 0 !important;
     }
 

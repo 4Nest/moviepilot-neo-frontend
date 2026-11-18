@@ -264,11 +264,10 @@ describe('recommend page', () => {
     server.use(recommendSourcesHandler([], 200, sourcesRequested), saveRecommendConfigHandler(savedConfig))
     await renderRecommend()
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    await waitFor(() => expect(document.querySelector('.compact-fab')).not.toBeNull())
-    const settingsButton = document.querySelector<HTMLButtonElement>('.compact-fab')
+    const settingsButton = await screen.findByTestId('recommend-settings-btn')
 
-    expect(settingsButton).not.toBeNull()
-    await user.click(settingsButton as HTMLButtonElement)
+    expect(settingsButton).toBeInTheDocument()
+    await user.click(settingsButton)
     expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
     const dialogEvents = mocks.openSharedDialog.mock.calls[0][2] as SharedDialogEvents
     const nextConfig = { '流行趋势': false, '正在热映': true }
@@ -287,8 +286,7 @@ describe('recommend page', () => {
     server.use(recommendSourcesHandler([], 200, sourcesRequested))
     await renderRecommend()
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    await waitFor(() => expect(document.querySelector('.compact-fab')).not.toBeNull())
-    const settingsButton = document.querySelector<HTMLButtonElement>('.compact-fab') as HTMLButtonElement
+    const settingsButton = (await screen.findByTestId('recommend-settings-btn')) as HTMLButtonElement
 
     await user.click(settingsButton)
     const dialogProps = mocks.openSharedDialog.mock.calls[0][1] as {

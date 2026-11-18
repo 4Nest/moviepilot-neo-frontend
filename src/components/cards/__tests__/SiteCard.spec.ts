@@ -98,7 +98,9 @@ describe('SiteCard display', () => {
     expect(screen.getByText(site.url)).toBeInTheDocument()
     expect(screen.getByText('2.00 KB')).toBeInTheDocument()
     expect(screen.getByText('1.00 KB')).toBeInTheDocument()
-    expect(container.querySelector('.site-card')).toHaveClass('border-success')
+    expect(container.querySelector('.site-status-indicator')).toBeNull()
+    expect(container.querySelector('.site-card')).not.toHaveClass('border-success')
+    expect(container.querySelector('[data-testid="site-status-dot"]')).toHaveClass('site-status-dot--success')
     expect(container.querySelectorAll('.ml-auto.flex.shrink-0.items-center.gap-2 > div')).toHaveLength(4)
     expect(
       [...container.querySelectorAll('.border-t .v-progress-linear')].map(progress =>
@@ -123,16 +125,17 @@ describe('SiteCard display', () => {
   })
 
   it.each([
-    ['failed', createSiteStatistic({ lst_state: 1 }), 'border-error'],
-    ['slow', createSiteStatistic({ lst_state: 0, seconds: 5 }), 'border-warning'],
-    ['unknown without stats', undefined, null],
-    ['unknown without duration', createSiteStatistic({ lst_state: 0, seconds: 0 }), null],
-  ] as const)('projects %s connection state without inventing status', async (_case, stats, borderClass) => {
+    ['failed', createSiteStatistic({ lst_state: 1 }), 'site-status-dot--error'],
+    ['slow', createSiteStatistic({ lst_state: 0, seconds: 5 }), 'site-status-dot--warning'],
+    ['unknown without stats', undefined, 'site-status-dot--secondary'],
+    ['unknown without duration', createSiteStatistic({ lst_state: 0, seconds: 0 }), 'site-status-dot--secondary'],
+  ] as const)('projects %s connection state without inventing status', async (_case, stats, dotClass) => {
     const { container } = await renderCard({}, stats ? { stats } : {})
     const card = container.querySelector('.site-card')
+    const dot = container.querySelector('[data-testid="site-status-dot"]')
 
-    if (borderClass) expect(card).toHaveClass(borderClass)
-    else expect(card).not.toHaveClass('border-error', 'border-warning', 'border-success')
+    expect(card).not.toHaveClass('border-error', 'border-warning', 'border-success')
+    expect(dot).toHaveClass(dotClass)
   })
 
   it('shows circuit recovery time and the latest error without changing normal health projection', async () => {
@@ -150,7 +153,8 @@ describe('SiteCard display', () => {
       },
     )
 
-    expect(container.querySelector('.site-card')).toHaveClass('border-error')
+    expect(container.querySelector('.site-card')).not.toHaveClass('border-error')
+    expect(container.querySelector('[data-testid="site-status-dot"]')).toHaveClass('site-status-dot--error')
     expect(screen.getByText('熔断保护中')).toBeInTheDocument()
     expect(screen.getByText('恢复时间：2026-11-11 18:30:00')).toBeInTheDocument()
     const errorNode = screen.getByText('最近异常：Cookie 失效')
@@ -235,15 +239,25 @@ describe('SiteCard interactions', () => {
     )
   })
 
-  it('restores connectivity controls after an HTTP failure', async () => {
+  it('restores connectivity controls and toasts error after an HTTP failure, and exposes accessible labels on all 4 action buttons', async () => {
     const requested = vi.fn()
     const { container, emitted, site } = await renderCard()
     server.use(testSiteConnectionHandler(site.id, { message: 'server down', success: false }, 500, requested))
+
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('.site-card-actions > button')]
+    expect(buttons).toHaveLength(4)
+    expect(buttons.map(btn => btn.getAttribute('aria-label'))).toEqual([
+      '测试连通性',
+      '查看用户数据',
+      '更新Cookie',
+      '更多操作',
+    ])
 
     await fireEvent.click(getTestButton(container))
     await waitFor(() => expect(requested).toHaveBeenCalledOnce())
 
     await waitFor(() => expect(getTestButton(container)).not.toBeDisabled())
+    expect(mocks.toastError).toHaveBeenCalledOnce()
     expect(emitted('refresh-stats') ?? []).toHaveLength(0)
   })
 
@@ -264,7 +278,7 @@ describe('SiteCard interactions', () => {
 
     if (confirmed) await waitFor(() => expect(requested).toHaveBeenCalledOnce())
     else expect(requested).not.toHaveBeenCalled()
-    expect(emitted('remove') ?? []).toHaveLength(removed ? 1 : 0)
+    expect(emitted('remove') ?? []).toEqual(removed ? [[site.id]] : [])
     if (expectedMessage) expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining(expectedMessage))
     if (_case === 'HTTP failure') expect(mocks.toastError).toHaveBeenCalledOnce()
   })
@@ -295,7 +309,7 @@ describe('SiteCard interactions', () => {
     getDialogCall(3).events.save()
     getDialogCall(3).events.remove()
     expect(emitted('update')).toHaveLength(1)
-    expect(emitted('remove')).toHaveLength(1)
+    expect(emitted('remove')).toEqual([[site.id]])
   })
 
   it('opens the site URL normally and isolates every card action in sortable mode', async () => {

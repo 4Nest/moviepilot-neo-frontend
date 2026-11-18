@@ -4,6 +4,7 @@ import api from '@/api'
 import { hexToRgb } from '@layouts/utils'
 import { formatDashboardCount, useAnimatedDashboardNumber } from '@/composables/useDashboardMotion'
 import { useI18n } from '@/composables/useChineseText'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 // 国际化
 const { t } = useI18n()
@@ -153,8 +154,7 @@ onMounted(() => {
   })
 })
 
-onActivated(() => {
-  // 使用nextTick确保DOM准备完成后再获取数据
+useKeepAliveRefresh(() => {
   nextTick(() => {
     getWeeklyData()
   })
@@ -163,22 +163,29 @@ onActivated(() => {
 
 <template>
   <VCard class="dashboard-work-card dashboard-grid-fill">
-    <VCardItem>
+    <VCardItem class="dashboard-work-header">
       <VCardTitle>{{ t('dashboard.weeklyOverview') }}</VCardTitle>
+      <template #append>
+        <span class="weekly-badge" aria-hidden="true">
+          <VIcon icon="mdi-chart-bar" size="18" />
+        </span>
+      </template>
     </VCardItem>
 
     <VCardText class="dashboard-work-content">
       <div class="dashboard-work-chart">
         <VApexChart type="bar" :options="options" :series="series" height="100%" />
       </div>
-      <div class="d-flex align-center mb-3">
-        <h5 class="dashboard-weekly-count text-h5 me-4">
+      <div class="dashboard-weekly-summary">
+        <strong class="dashboard-weekly-count">
           {{ animatedTotalCountText }}
-        </h5>
-        <p>{{ t('dashboard.weeklyOverviewDescription', { count: animatedTotalCountText }) }} 😎</p>
+        </strong>
+        <p class="dashboard-weekly-desc">
+          {{ t('dashboard.weeklyOverviewDescription', { count: animatedTotalCountText }) }}
+        </p>
       </div>
       <div>
-        <VBtn block to="/history"> {{ t('common.viewDetails') }} </VBtn>
+        <VBtn block variant="tonal" color="primary" to="/history"> {{ t('common.viewDetails') }} </VBtn>
       </div>
     </VCardText>
   </VCard>
@@ -192,12 +199,28 @@ onActivated(() => {
   min-block-size: 0;
 }
 
+.dashboard-work-header {
+  padding: 14px 16px 6px;
+}
+
+.weekly-badge {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 34px;
+}
+
 .dashboard-work-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-block-size: 0;
   overflow: hidden;
+  padding: 4px 16px 14px;
 }
 
 .dashboard-work-chart {
@@ -205,7 +228,28 @@ onActivated(() => {
   min-block-size: 0;
 }
 
+.dashboard-weekly-summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  margin-block: 8px 13px;
+  padding-block-start: 10px;
+}
+
 .dashboard-weekly-count {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.dashboard-weekly-desc {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  line-height: 1.45;
 }
 </style>

@@ -76,16 +76,15 @@ const horizontalNavGroups = computed(() =>
 
 const navbarExtraHeight = computed(() => {
   const dynamicTabHeight = showDynamicHeaderTab.value ? 2.75 : 0
-  const horizontalNavHeight = showHorizontalThemeNav.value ? 3.25 : 0
+  const horizontalNavHeight = showHorizontalThemeNav.value ? 3 : 0
 
   return `${dynamicTabHeight + horizontalNavHeight}rem`
 })
 
 const mainContentPaddingTop = computed(() => {
-  const dynamicTabPadding = showDynamicHeaderTab.value ? 3.25 : 0
-  const horizontalNavPadding = showHorizontalThemeNav.value ? 3.5 : 0
+  if (!appMode.value) return '0rem'
 
-  return `${dynamicTabPadding + horizontalNavPadding}rem`
+  return showDynamicHeaderTab.value ? '2.75rem' : '0rem'
 })
 
 // 插件快速访问相关状态
@@ -368,8 +367,14 @@ function resolveHeaderButtonLoading(button: DynamicHeaderTabButton) {
   return resolveMaybeRefValue(button.loading, false)
 }
 
+/** 解析动态头部按钮禁用状态。 */
+function resolveHeaderButtonDisabled(button: DynamicHeaderTabButton) {
+  return resolveMaybeRefValue(button.disabled, false)
+}
+
 /** 执行动态头部按钮动作。 */
 function handleHeaderButtonClick(button: DynamicHeaderTabButton) {
+  if (resolveHeaderButtonDisabled(button) || resolveHeaderButtonLoading(button)) return
   button.action?.()
 }
 
@@ -524,7 +529,7 @@ onMounted(async () => {
     <!-- 👉 Navbar -->
     <template #navbar="{ toggleVerticalOverlayNavActive }">
       <div
-        class="theme-navbar-row d-flex h-16 align-center mx-1"
+        class="theme-navbar-row d-flex align-center"
         :class="{ 'theme-navbar-row--horizontal': showHorizontalThemeNav }"
       >
         <RouterLink
@@ -536,12 +541,16 @@ onMounted(async () => {
           <span class="theme-horizontal-logo__text moviepilot-neo-badge moviepilot-neo-badge--solo">NEO</span>
         </RouterLink>
         <!-- 👉 Vertical Nav Toggle -->
-        <IconBtn v-if="!appMode && display.mdAndDown.value" class="ms-n2" @click="toggleVerticalOverlayNavActive(true)">
-          <VIcon icon="mdi-menu" />
+        <IconBtn
+          v-if="!appMode && display.mdAndDown.value"
+          class="ms-n2 me-1"
+          @click="toggleVerticalOverlayNavActive(true)"
+        >
+          <VIcon icon="mdi-menu" size="20" />
         </IconBtn>
         <!-- 👉 Back Button -->
-        <IconBtn v-if="appMode" class="ms-n2" @click="goBack">
-          <VIcon icon="mdi-arrow-left" size="32" />
+        <IconBtn v-if="appMode" class="ms-n2 me-1" @click="goBack">
+          <VIcon icon="mdi-arrow-left" size="24" />
         </IconBtn>
         <!-- 👉 Search Bar -->
         <SearchBar v-if="!showHorizontalThemeNav" />
@@ -566,7 +575,7 @@ onMounted(async () => {
           :key="group.title"
           :model-value="openHorizontalNavGroup === group.title"
           location="bottom start"
-          offset="8"
+          offset="6"
           open-on-hover
           :open-delay="0"
           :close-delay="120"
@@ -578,10 +587,11 @@ onMounted(async () => {
               v-bind="menuProps"
               :prepend-icon="group.icon"
               append-icon="mdi-chevron-down"
-              :variant="isHorizontalNavGroupActive(group) ? 'tonal' : 'text'"
-              :color="isHorizontalNavGroupActive(group) ? 'primary' : 'default'"
-              rounded="pill"
+              variant="text"
+              color="default"
+              size="small"
               class="theme-horizontal-nav__item"
+              :class="{ 'theme-horizontal-nav__item--active': isHorizontalNavGroupActive(group) }"
             >
               {{ group.title }}
             </VBtn>
@@ -645,14 +655,17 @@ onMounted(async () => {
         </VMenu>
         <div v-if="visibleHorizontalHeaderButtons.length" class="theme-horizontal-nav__actions">
           <VBtn
-            v-for="button in visibleHorizontalHeaderButtons"
-            :key="button.icon"
+            v-for="(button, index) in visibleHorizontalHeaderButtons"
+            :key="`${button.icon}-${index}`"
             :icon="button.icon"
             :variant="button.variant || 'text'"
             :color="resolveHeaderButtonColor(button)"
             :size="button.size || 'default'"
             :class="button.class || 'settings-icon-button'"
             :loading="resolveHeaderButtonLoading(button)"
+            :disabled="resolveHeaderButtonDisabled(button)"
+            :aria-label="button.title || button.icon"
+            :title="button.title || undefined"
             :data-menu-activator="button.dataAttr"
             @click="handleHeaderButtonClick(button)"
           />
@@ -700,14 +713,14 @@ onMounted(async () => {
 
     <!-- 👉 Dynamic Header Tab -->
     <template #dynamic-header-tab>
-      <div v-if="showDynamicHeaderTab">
+      <div v-if="showDynamicHeaderTab" class="theme-dynamic-tab-bar">
         <HeaderTab
           :items="visibleDynamicHeaderTabItems"
           :model-value="dynamicHeaderTab!.modelValue"
           @update:model-value="handleTabChange"
         >
           <template #append>
-            <template v-for="button in visibleDynamicHeaderButtons" :key="button.icon">
+            <template v-for="(button, index) in visibleDynamicHeaderButtons" :key="`${button.icon}-${index}`">
               <VBtn
                 :icon="button.icon"
                 :variant="button.variant || 'text'"
@@ -715,6 +728,9 @@ onMounted(async () => {
                 :size="button.size || 'default'"
                 :class="button.class || 'settings-icon-button'"
                 :loading="resolveHeaderButtonLoading(button)"
+                :disabled="resolveHeaderButtonDisabled(button)"
+                :aria-label="button.title || button.icon"
+                :title="button.title || undefined"
                 :data-menu-activator="button.dataAttr"
                 @click="handleHeaderButtonClick(button)"
               />
@@ -738,7 +754,7 @@ onMounted(async () => {
 
     <!-- 👉 Footer -->
     <template #footer>
-      <Footer :show-nav="!showPluginQuickAccess" />
+      <Footer :show-nav="!showPluginQuickAccess && !route.meta?.hideFooter" />
     </template>
   </VerticalNavLayout>
 
@@ -766,40 +782,63 @@ onMounted(async () => {
   will-change: transform;
 }
 
+.theme-navbar-row {
+  block-size: 3.5rem;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
 .theme-navbar-row--horizontal {
   gap: 1rem;
-  margin-inline: 0 !important;
 }
 
 :deep(.layout-dynamic-header-tab) {
-  padding-block-end: 0.25rem;
+  padding: 0;
+  margin: 0;
+}
+
+.theme-dynamic-tab-bar {
+  display: flex;
+  align-items: center;
+  block-size: 2.75rem;
+  inline-size: 100%;
+  padding-block-end: 6px;
+
+  > :deep(.tab-header) {
+    inline-size: 100%;
+  }
 }
 
 .theme-horizontal-logo {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  column-gap: 0.75rem;
+  justify-content: center;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  column-gap: 9px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.08em;
   line-height: 1;
   text-decoration: none;
-}
 
-.theme-horizontal-logo__mark {
-  display: block;
-  block-size: 1.8rem;
-  inline-size: 1.8rem;
+  :deep(.brand-logo-mark) {
+    block-size: 1.5rem;
+    inline-size: 1.5rem;
+  }
 }
 
 .theme-horizontal-logo__text {
-  font-size: 1.125rem;
+  display: block;
+  color: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.theme-navbar-actions--horizontal {
-  gap: 0.85rem;
+.theme-navbar-actions {
+  gap: 6px;
 
   :deep(.ms-2),
   :deep(.ms-3) {
@@ -808,33 +847,49 @@ onMounted(async () => {
 
   :deep(.v-btn.v-btn--icon) {
     flex: 0 0 auto;
-    border-radius: 12px;
-    block-size: 2.75rem;
-    color: rgba(var(--v-theme-on-surface), 0.78);
-    inline-size: 2.75rem;
+    border-radius: 8px !important;
+    block-size: 34px !important;
+    color: rgba(var(--v-theme-on-surface), 0.72);
+    inline-size: 34px !important;
+    min-inline-size: 34px !important;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+
+    &:hover {
+      background-color: rgba(var(--v-theme-on-surface), 0.06);
+      color: rgba(var(--v-theme-on-surface), 0.94);
+      opacity: 1;
+    }
   }
 
   :deep(.v-btn.v-btn--icon .v-icon) {
-    font-size: 1.75rem;
+    block-size: 19px !important;
+    font-size: 19px !important;
+    inline-size: 19px !important;
     line-height: 1;
   }
 
   :deep(.v-avatar.cursor-pointer) {
     flex: 0 0 auto;
-    block-size: 2.75rem !important;
-    inline-size: 2.75rem !important;
-    margin-inline-start: 0 !important;
+    block-size: 32px !important;
+    inline-size: 32px !important;
+    margin-inline-start: 2px !important;
   }
+}
+
+.theme-navbar-actions--horizontal {
+  gap: 6px;
 }
 
 .theme-horizontal-nav {
   display: flex;
   align-items: center;
-  block-size: 3.25rem;
-  gap: 0.25rem;
+  block-size: 3rem;
+  gap: 4px;
   overflow-x: auto;
-  padding-block: 0.25rem 0.5rem;
-  padding-inline: 0.5rem;
+  padding-block: 0 6px;
+  padding-inline: 0;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
@@ -844,12 +899,31 @@ onMounted(async () => {
 
 .theme-horizontal-nav__item {
   flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 8px !important;
+  block-size: 32px !important;
+  color: rgba(var(--v-theme-on-surface), 0.72) !important;
+  font-size: 13px;
+  font-weight: 500;
   letter-spacing: 0;
+  padding-inline: 10px !important;
+
+  &:hover {
+    background-color: rgba(var(--v-theme-on-surface), 0.05);
+    color: rgba(var(--v-theme-on-surface), 0.92) !important;
+  }
+}
+
+.theme-horizontal-nav__item--active {
+  border-color: var(--mp-nav-pill-active-border);
+  background-color: var(--mp-nav-pill-active-bg);
+  color: rgba(var(--v-theme-on-surface), 0.96) !important;
+  font-weight: 600;
 }
 
 .theme-horizontal-nav__menu,
 .theme-horizontal-nav__submenu {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  border: 1px solid var(--mp-border-card);
 }
 
 .theme-horizontal-nav__submenu-activator {
@@ -860,6 +934,7 @@ onMounted(async () => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  gap: 6px;
   margin-inline-start: auto;
 }
 </style>

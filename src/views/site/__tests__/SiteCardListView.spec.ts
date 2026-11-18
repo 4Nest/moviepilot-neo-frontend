@@ -18,10 +18,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   appMode: false,
+  confirm: vi.fn(),
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   useDynamicButton: vi.fn(),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -66,7 +71,7 @@ const SiteCardStub = defineComponent({
         h('output', { 'aria-label': `site-data-${props.site.id}` }, props.data?.username ?? ''),
         h('output', { 'aria-label': `site-state-${props.site.id}` }, JSON.stringify(props.stats ?? {})),
         h('output', { 'aria-label': `site-sortable-${props.site.id}` }, String(props.sortable)),
-        h('button', { onClick: () => emit('remove'), type: 'button' }, `remove-${props.site.id}`),
+        h('button', { onClick: () => emit('remove', props.site.id), type: 'button' }, `remove-${props.site.id}`),
         h('button', { onClick: () => emit('update'), type: 'button' }, `update-${props.site.id}`),
         h(
           'button',
@@ -222,6 +227,9 @@ function readBlob(blob: Blob) {
 describe('SiteCardListView', () => {
   beforeEach(() => {
     mocks.appMode = false
+    mocks.confirm.mockReset().mockResolvedValue(true)
+    mocks.toastError.mockReset()
+    mocks.toastSuccess.mockReset()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -477,6 +485,24 @@ describe('SiteCardListView', () => {
     await waitFor(() => expect(listRequests).toHaveBeenCalledTimes(2))
   })
 
+  it('removes a deleted site card immediately before background list refresh finishes', async () => {
+    const siteA = createSite({ id: 345, name: '待删站点' })
+    const siteB = createSite({ id: 346, name: '保留站点' })
+    let releaseList!: () => void
+    const pendingList = new Promise<void>(resolve => {
+      releaseList = resolve
+    })
+    await renderList({ sites: [siteA, siteB] })
+    expect(await screen.findByText('待删站点')).toBeInTheDocument()
+
+    server.use(siteListHandler([siteB], 200, () => pendingList))
+    await fireEvent.click(screen.getByRole('button', { name: 'remove-345' }))
+
+    expect(screen.queryByText('待删站点')).not.toBeInTheDocument()
+    expect(screen.getByText('保留站点')).toBeInTheDocument()
+    releaseList()
+  })
+
   it('opens add, import and statistics dialogs with their declared event contracts', async () => {
     const site = createSite({ id: 401, name: '弹窗站点' })
     const listRequests = vi.fn()
@@ -538,6 +564,11 @@ describe('SiteCardListView', () => {
 
     await getMenuItem('site.actions.export').action()
 
+    expect(mocks.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.stringMatching(/Cookie|API/i),
+      }),
+    )
     await waitFor(() => expect(createObjectURL).toHaveBeenCalledOnce())
     const blob = createObjectURL.mock.calls[0]?.[0] as Blob
     const body = JSON.parse(await readBlob(blob)) as Array<Record<string, unknown>>
@@ -631,5 +662,21 @@ describe('SiteCardListView', () => {
     await waitFor(() => expect(listRequests).toHaveBeenCalledTimes(2))
     expect(screen.getByText('静默刷新保留站点')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '站点空态' })).not.toBeInTheDocument()
+  })
+
+  it('aborts site export when sensitive credential confirmation is cancelled and exposes sort button aria-label', async () => {
+    const createObjectURL = vi.fn()
+    class TestURL extends URL {}
+    TestURL.createObjectURL = createObjectURL
+    vi.stubGlobal('URL', TestURL)
+    mocks.confirm.mockResolvedValueOnce(false)
+
+    await renderList({ sites: [createSite({ name: '敏感站点' })] })
+    expect(await screen.findByText('敏感站点')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '排序模式' })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: /导出/ }))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    expect(createObjectURL).not.toHaveBeenCalled()
   })
 })

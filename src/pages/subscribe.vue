@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { debounce } from 'lodash-es'
 import SubscribeListView from '@/views/subscribe/SubscribeListView.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
@@ -21,7 +20,7 @@ const SubscribeShareView = defineAsyncComponent(() => import('@/views/subscribe/
 const SubscribeEditDialog = defineAsyncComponent(() => import('@/components/dialog/SubscribeEditDialog.vue'))
 
 const subType = route.meta.subType?.toString()
-const subId = ref(route.query.id as string)
+const subId = ref((route.query.id as string) || '')
 const subscribeListViewRef = ref<InstanceType<typeof SubscribeListView> | null>(null)
 
 // 订阅批量模式状态快照，来源于订阅列表组件。
@@ -30,6 +29,7 @@ interface SubscribeBatchState {
   selectedCount: number
   totalCount: number
   allSelected: boolean
+  operating?: boolean
 }
 
 const subscribeBatchState = ref<SubscribeBatchState>({
@@ -37,6 +37,7 @@ const subscribeBatchState = ref<SubscribeBatchState>({
   selectedCount: 0,
   totalCount: 0,
   allSelected: false,
+  operating: false,
 })
 
 // 获取当前用户可见的标签页白名单
@@ -62,9 +63,6 @@ const activeTab = ref(resolveValidSubscribeTab(route.query.tab))
 
 // 订阅过滤弹窗
 const filterSubscribeDialog = ref(false)
-
-// 搜索订阅分享弹窗
-const searchShareDialog = ref(false)
 
 // 排序模式
 const subscribeSortMode = ref(false)
@@ -123,10 +121,6 @@ function saveSubscribeSortBy(value: SubscribeSortBy | '') {
 
 // 订阅排序方式
 const subscribeSortBy = ref<SubscribeSortBy | ''>(loadSubscribeSortBy())
-
-// 分享搜索词
-const shareKeyword = ref('')
-const shareKeywordInput = ref('')
 
 // 筛选选项
 const filterOptions = computed(() => {
@@ -189,7 +183,7 @@ const filterButtonColor = computed(() => {
   if (subscribeFilter.value || (subscribeStatusFilter.value && subscribeStatusFilter.value !== 'all')) {
     return currentFilter.value?.color || 'primary'
   }
-  return 'gray'
+  return ''
 })
 
 // 选择筛选选项
@@ -212,7 +206,6 @@ function selectSubscribeSort(value: SubscribeSortBy) {
 
 // VMenu activator选择器
 const filterActivator = computed(() => '[data-menu-activator="filter-btn"]')
-const searchActivator = computed(() => '[data-menu-activator="share-filter-btn"]')
 
 const showDefaultRuleAction = computed(() => userStore.superUser && activeTab.value === 'mysub')
 const showSubscribeHistoryAction = computed(() => activeTab.value === 'mysub')
@@ -245,6 +238,7 @@ function resetSubscribeBatchState() {
     selectedCount: 0,
     totalCount: 0,
     allSelected: false,
+    operating: false,
   }
 }
 
@@ -293,18 +287,21 @@ function toggleSubscribeSortMode() {
   subscribeSortMode.value = nextSortMode
 }
 
-const shareKeywordUpdater = debounce((keyword: string) => {
-  shareKeyword.value = keyword.trim()
-}, 300)
-
-watch(shareKeywordInput, newKeyword => {
-  shareKeywordUpdater(newKeyword || '')
-})
-
 watch(
   () => route.query.tab,
   nextQueryTab => {
     activeTab.value = resolveValidSubscribeTab(nextQueryTab)
+  },
+)
+
+watch(
+  () => route.query.id,
+  nextQueryId => {
+    const normalizedId = typeof nextQueryId === 'string' ? nextQueryId : ''
+    subId.value = normalizedId
+    if (normalizedId && activeTab.value !== 'mysub') {
+      activeTab.value = 'mysub'
+    }
   },
 )
 
@@ -322,10 +319,6 @@ watch(activeTab, newTab => {
     return
   }
 
-  if (newTab !== 'share') {
-    searchShareDialog.value = false
-  }
-
   if (newTab !== 'mysub' && subscribeBatchState.value.enabled) {
     exitSubscribeBatchMode()
   }
@@ -335,16 +328,13 @@ watch(subscribeSortBy, newSortBy => {
   saveSubscribeSortBy(newSortBy)
 })
 
-onUnmounted(() => {
-  shareKeywordUpdater.cancel()
-})
-
 const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(() => {
   if (!appMode.value) return undefined
 
   if (activeTab.value === 'mysub') {
     if (subscribeBatchState.value.enabled) {
       const hasSelectedSubscribes = subscribeBatchState.value.selectedCount > 0
+      const isBatchOperating = Boolean(subscribeBatchState.value.operating)
 
       return [
         {
@@ -360,33 +350,34 @@ const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(
         {
           titleKey: subscribeBatchState.value.allSelected ? 'subscribe.batchDeselectAll' : 'subscribe.batchSelectAll',
           icon: subscribeBatchState.value.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked',
-          disabled: subscribeBatchState.value.totalCount === 0,
+          disabled: subscribeBatchState.value.totalCount === 0 || isBatchOperating,
           action: toggleSubscribeBatchSelectAll,
         },
         {
           titleKey: 'subscribe.batchEnable',
           icon: 'mdi-play',
           color: 'success',
-          disabled: !hasSelectedSubscribes,
+          disabled: !hasSelectedSubscribes || isBatchOperating,
           action: batchEnableSelectedSubscribes,
         },
         {
           titleKey: 'subscribe.batchPause',
           icon: 'mdi-pause',
           color: 'info',
-          disabled: !hasSelectedSubscribes,
+          disabled: !hasSelectedSubscribes || isBatchOperating,
           action: batchPauseSelectedSubscribes,
         },
         {
           titleKey: 'subscribe.batchDelete',
           icon: 'mdi-delete',
           color: 'error',
-          disabled: !hasSelectedSubscribes,
+          disabled: !hasSelectedSubscribes || isBatchOperating,
           action: batchDeleteSelectedSubscribes,
         },
         {
           titleKey: 'subscribe.exitBatchMode',
           icon: 'mdi-close',
+          disabled: isBatchOperating,
           action: exitSubscribeBatchMode,
         },
       ]
@@ -458,6 +449,7 @@ registerHeaderTab({
   modelValue: activeTab,
   appendButtons: [
     {
+      title: t('common.filter'),
       icon: 'mdi-filter-multiple-outline',
       variant: 'text',
       color: filterButtonColor,
@@ -469,17 +461,19 @@ registerHeaderTab({
       show: computed(() => activeTab.value === 'mysub'),
     },
     {
+      title: t('common.sortMode'),
       icon: 'mdi-sort-variant',
       variant: 'text',
-      color: computed(() => (subscribeSortMode.value ? 'warning' : 'gray')),
+      color: computed(() => (subscribeSortMode.value ? 'primary' : '')),
       class: 'settings-icon-button',
       action: toggleSubscribeSortMode,
       show: computed(() => activeTab.value === 'mysub'),
     },
     {
+      title: t('subscribe.batchManage'),
       icon: 'mdi-checkbox-multiple-marked-outline',
       variant: 'text',
-      color: computed(() => (subscribeBatchState.value.enabled ? 'primary' : 'gray')),
+      color: computed(() => (subscribeBatchState.value.enabled ? 'primary' : '')),
       class: 'settings-icon-button',
       action: () => {
         if (subscribeBatchState.value.enabled) {
@@ -490,17 +484,6 @@ registerHeaderTab({
         enterSubscribeBatchMode()
       },
       show: computed(() => activeTab.value === 'mysub'),
-    },
-    {
-      icon: 'mdi-filter-multiple-outline',
-      variant: 'text',
-      color: computed(() => (shareKeywordInput.value ? 'primary' : 'gray')),
-      class: 'settings-icon-button',
-      dataAttr: 'share-filter-btn',
-      action: () => {
-        searchShareDialog.value = true
-      },
-      show: computed(() => activeTab.value === 'share'),
     },
   ],
 })
@@ -516,6 +499,103 @@ onMounted(() => {
     <VWindow v-model="activeTab" class="disable-tab-transition content-window" :touch="false">
       <VWindowItem value="mysub">
         <div>
+          <div
+            v-if="
+              !appMode &&
+              route.path.startsWith(`/subscribe/${subType === '电影' ? 'movie' : 'tv'}`) &&
+              (subscribeBatchState.enabled || showSubscribeHistoryAction || showDefaultRuleAction)
+            "
+            class="mp-page-action-bar"
+          >
+            <template v-if="subscribeBatchState.enabled">
+              <VChip size="small" color="primary" variant="tonal" rounded="lg" class="me-auto">
+                {{
+                  t('subscribe.selectedCount', {
+                    count: subscribeBatchState.selectedCount,
+                    total: subscribeBatchState.totalCount,
+                  })
+                }}
+              </VChip>
+              <VBtn
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                :prepend-icon="
+                  subscribeBatchState.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked'
+                "
+                :disabled="subscribeBatchState.totalCount === 0 || Boolean(subscribeBatchState.operating)"
+                @click="toggleSubscribeBatchSelectAll"
+              >
+                {{ subscribeBatchState.allSelected ? t('subscribe.batchDeselectAll') : t('subscribe.batchSelectAll') }}
+              </VBtn>
+              <VBtn
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                prepend-icon="mdi-play"
+                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+                @click="batchEnableSelectedSubscribes"
+              >
+                {{ t('subscribe.batchEnable') }}
+              </VBtn>
+              <VBtn
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                prepend-icon="mdi-pause"
+                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+                @click="batchPauseSelectedSubscribes"
+              >
+                {{ t('subscribe.batchPause') }}
+              </VBtn>
+              <VBtn
+                size="small"
+                variant="outlined"
+                color="error"
+                rounded="lg"
+                prepend-icon="mdi-delete"
+                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+                @click="batchDeleteSelectedSubscribes"
+              >
+                {{ t('subscribe.batchDelete') }}
+              </VBtn>
+              <VBtn
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                prepend-icon="mdi-close"
+                :disabled="Boolean(subscribeBatchState.operating)"
+                @click="exitSubscribeBatchMode"
+              >
+                {{ t('subscribe.exitBatchMode') }}
+              </VBtn>
+            </template>
+            <template v-else>
+              <VBtn
+                v-if="showSubscribeHistoryAction"
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                prepend-icon="mdi-history"
+                data-testid="subscribe-history-btn"
+                @click="openSubscribeHistoryDialog"
+              >
+                {{ t('dialog.subscribeHistory.title', { type: subType }) }}
+              </VBtn>
+              <VBtn
+                v-if="showDefaultRuleAction"
+                size="small"
+                variant="outlined"
+                rounded="lg"
+                prepend-icon="mdi-clipboard-edit-outline"
+                data-testid="subscribe-default-rule-btn"
+                @click="openDefaultRuleDialog"
+              >
+                {{ t('dialog.subscribeEdit.titleDefault') }}
+              </VBtn>
+            </template>
+          </div>
+
           <SubscribeListView
             ref="subscribeListViewRef"
             :type="subType"
@@ -534,7 +614,7 @@ onMounted(() => {
 
       <VWindowItem v-if="hasShareTab" value="share">
         <div>
-          <SubscribeShareView :keyword="shareKeyword" />
+          <SubscribeShareView />
         </div>
       </VWindowItem>
     </VWindow>
@@ -604,101 +684,6 @@ onMounted(() => {
           </VList>
         </VCard>
       </VMenu>
-    </Teleport>
-
-    <!-- 搜索订阅分享弹窗 -->
-    <Teleport to="body" v-if="searchShareDialog">
-      <VMenu
-        v-model="searchShareDialog"
-        :close-on-content-click="false"
-        :activator="searchActivator"
-        location="bottom end"
-      >
-        <VCard min-width="260" max-width="320">
-          <div class="pa-3">
-            <VTextField
-              v-model="shareKeywordInput"
-              :placeholder="t('subscribe.keyword')"
-              prepend-inner-icon="mdi-magnify"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-            />
-          </div>
-        </VCard>
-      </VMenu>
-    </Teleport>
-
-    <Teleport to="body" v-if="!appMode && route.path.startsWith(`/subscribe/${subType === '电影' ? 'movie' : 'tv'}`)">
-      <div class="compact-fab-stack">
-        <VFab
-          v-if="subscribeBatchState.enabled"
-          icon="mdi-close"
-          color="secondary"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          @click="exitSubscribeBatchMode"
-        />
-        <VFab
-          v-if="subscribeBatchState.enabled"
-          :icon="subscribeBatchState.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked'"
-          color="primary"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          :disabled="subscribeBatchState.totalCount === 0"
-          @click="toggleSubscribeBatchSelectAll"
-        />
-        <VFab
-          v-if="subscribeBatchState.enabled"
-          icon="mdi-delete"
-          color="error"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          :disabled="subscribeBatchState.selectedCount === 0"
-          @click="batchDeleteSelectedSubscribes"
-        />
-        <VFab
-          v-if="subscribeBatchState.enabled"
-          icon="mdi-pause"
-          color="info"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          :disabled="subscribeBatchState.selectedCount === 0"
-          @click="batchPauseSelectedSubscribes"
-        />
-        <VFab
-          v-if="subscribeBatchState.enabled"
-          icon="mdi-play"
-          color="success"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          :disabled="subscribeBatchState.selectedCount === 0"
-          @click="batchEnableSelectedSubscribes"
-        />
-        <VFab
-          v-if="!subscribeBatchState.enabled && showSubscribeHistoryAction"
-          icon="mdi-history"
-          color="info"
-          variant="tonal"
-          appear
-          class="compact-fab compact-fab--secondary"
-          @click="openSubscribeHistoryDialog"
-        />
-        <VFab
-          v-if="!subscribeBatchState.enabled && showDefaultRuleAction"
-          icon="mdi-clipboard-edit-outline"
-          color="primary"
-          appear
-          class="compact-fab compact-fab--primary"
-          @click="openDefaultRuleDialog"
-        />
-      </div>
     </Teleport>
   </div>
 </template>

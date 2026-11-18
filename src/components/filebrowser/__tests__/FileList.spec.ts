@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   progressStop: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -28,7 +29,7 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('vue-toastification', () => ({
-  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
+  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess, warning: mocks.toastWarning }),
 }))
 
 vi.mock('@/composables/useConfirm', () => ({
@@ -381,6 +382,13 @@ describe('FileList list state', () => {
     expect(document.querySelector('[data-icon="mdi-folder-arrow-right"]')).toBeNull()
   })
 
+  it('renders clean empty states without legacy grey--text classes and shows selected count badge', async () => {
+    const { container } = await renderList(() => Promise.resolve([]))
+    await screen.findByText('空目录')
+    expect(container.querySelector('.grey--text')).toBeNull()
+    expect(container.querySelector('.file-list-empty')).not.toBeNull()
+  })
+
   it('synchronizes selected entries to the newest file objects after refresh', async () => {
     const original = createItem({ name: 'selected.mkv', path: '/media/selected.mkv', size: 10 })
     const refreshed = createItem({ name: 'selected.mkv', path: '/media/selected.mkv', size: 20 })
@@ -396,6 +404,48 @@ describe('FileList list state', () => {
     expect(mocks.openSharedDialog.mock.calls.at(-1)?.[1]).toMatchObject({
       items: [expect.objectContaining({ size: 20 })],
     })
+  })
+
+  it('keeps case-sensitivity toggle visible in select mode and selects/deselects all currently filtered items', async () => {
+    const alpha = createItem({ name: 'Alpha.mkv', path: '/media/Alpha.mkv' })
+    const beta = createItem({ name: 'beta.mkv', path: '/media/beta.mkv' })
+    await renderList(() => Promise.resolve([alpha, beta]))
+    await screen.findByText('Alpha.mkv')
+
+    await fireEvent.click(getIconButton('mdi-select'))
+    // 多选模式下大小写按钮依然可见可用
+    expect(getIconButton('mdi-format-letter-case')).toBeInTheDocument()
+
+    // 过滤只剩 Alpha.mkv 后点「全选」，只应选中当前可见的 Alpha.mkv
+    const filterInput = screen.getByPlaceholderText(/搜索/)
+    await fireEvent.update(filterInput, 'alpha')
+    await fireEvent.click(screen.getByRole('button', { name: /全选/ }))
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+
+    // 变为「取消全选」，再次点击取消全选
+    await fireEvent.click(screen.getByRole('button', { name: /取消全选/ }))
+    expect(screen.queryByText(/已选 \d+ 项/)).not.toBeInTheDocument()
+  })
+
+  it('shows warning toast when recognize finds no media and handles download errors cleanly', async () => {
+    mocks.apiGet.mockResolvedValueOnce({ meta_info: {} })
+    const request = vi.fn((config: AxiosRequestConfig) =>
+      config.url === '/storage/download'
+        ? Promise.reject(new Error('download broken'))
+        : Promise.resolve([createItem({ name: 'sample.mkv', path: '/media/sample.mkv' })]),
+    )
+    const { emitted } = await renderList(request, {
+      item: createItem({ name: 'sample.mkv', path: '/media/sample.mkv', type: 'file' }),
+    })
+    await waitFor(() => expect(request).toHaveBeenCalled())
+
+    await fireEvent.click(getSlotIconButton('mdi-text-recognition'))
+    await waitFor(() => expect(mocks.toastWarning).toHaveBeenCalledWith('未识别到媒体'))
+
+    const loadingCountBefore = emitted().loading?.length ?? 0
+    await fireEvent.click(getSlotIconButton('mdi-download'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('download broken'))
+    expect(emitted().loading?.slice(loadingCountBefore)).toEqual([[true], [false]])
   })
 })
 

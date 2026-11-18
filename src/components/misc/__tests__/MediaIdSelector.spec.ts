@@ -56,4 +56,35 @@ describe('MediaIdSelector layout', () => {
     const results = container.querySelector('.media-id-selector__results')
     expect(results).toBeInstanceOf(HTMLElement)
   })
+
+  it('renders external overview as plain text instead of injecting HTML via v-html', async () => {
+    mocks.apiGet.mockResolvedValue([
+      {
+        media_id: 'tmdb-xss',
+        overview: '<img src="x" onerror="window.__xss=1">恶意简介',
+        poster_path: '',
+        title: 'XSS 测试',
+        type: '电影',
+        year: '2026',
+      },
+    ])
+
+    const { container } = await renderWithProviders(MediaIdSelector, {
+      global: {
+        stubs: {
+          VDialogCloseBtn: {
+            props: ['innerClass'],
+            template: '<button type="button" :class="innerClass"><slot /></button>',
+          },
+        },
+      },
+    })
+
+    const input = screen.getByPlaceholderText('输入媒体名称')
+    await fireEvent.update(input, 'xss')
+    await fireEvent.keyDown(input, { key: 'Enter' })
+    expect(await screen.findByText('XSS 测试（2026）')).toBeInTheDocument()
+    expect(screen.getByText(/<img src="x" onerror="window.__xss=1">恶意简介/)).toBeInTheDocument()
+    expect(container.querySelector('.v-list-item-subtitle img')).toBeNull()
+  })
 })

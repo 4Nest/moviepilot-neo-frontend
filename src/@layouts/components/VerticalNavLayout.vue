@@ -1,17 +1,15 @@
 <script lang="ts">
 import { useDisplay } from 'vuetify'
 import VerticalNav from '@layouts/components/VerticalNav.vue'
-import GlassFixedShellBackplate from '@/components/theme/GlassFixedShellBackplate.vue'
 import {
   readThemeCustomizerSettings,
   THEME_CUSTOMIZER_CHANGE_EVENT,
   type ThemeCustomizerSettings,
 } from '@/composables/useThemeCustomizer'
-import { useGlassFixedShellBackplate } from '@/composables/useGlassFixedShellBackplate'
 import { usePWA } from '@/composables/usePWA'
 
 export default defineComponent({
-  setup(props, { slots }) {
+  setup(_props, { slots }) {
     const isOverlayNavActive = ref(false)
     const isLayoutOverlayVisible = ref(false)
     const toggleIsOverlayNavActive = useToggle(isOverlayNavActive)
@@ -19,14 +17,11 @@ export default defineComponent({
     const route = useRoute()
     const { mdAndDown } = useDisplay()
     const { appMode } = usePWA()
-    const fixedShellBackplate = useGlassFixedShellBackplate()
     const themeLayout = ref(readThemeCustomizerSettings().layout)
     const canUseDesktopLayout = computed(() => !mdAndDown.value && !appMode.value)
     const isCollapsedLayout = computed(() => canUseDesktopLayout.value && themeLayout.value === 'collapsed')
     const isHorizontalLayout = computed(() => canUseDesktopLayout.value && themeLayout.value === 'horizontal')
 
-    // ℹ️ This is alternative to below two commented watcher
-    // We want to show overlay if overlay nav is visible and want to hide overlay if overlay is hidden and vice versa.
     syncRef(isOverlayNavActive, isLayoutOverlayVisible)
 
     const scrollDistance = ref(window.scrollY)
@@ -47,7 +42,6 @@ export default defineComponent({
       const wasDialogOpen = isDialogOpen.value
       isDialogOpen.value = document.documentElement.classList.contains('v-overlay-scroll-blocked')
 
-      // 当弹窗刚打开时，记录当前的滚动状态
       if (!wasDialogOpen && isDialogOpen.value) {
         wasScrolledBeforeDialog.value = scrollDistance.value > 10
       }
@@ -57,10 +51,8 @@ export default defineComponent({
       window.addEventListener('scroll', handleScroll)
       window.addEventListener(THEME_CUSTOMIZER_CHANGE_EVENT, handleThemeCustomizerChange)
 
-      // 初始检查弹窗状态
       checkDialogState()
 
-      // 监听 DOM 变化以检测弹窗状态
       dialogObserver = new MutationObserver(checkDialogState)
       dialogObserver.observe(document.documentElement, {
         attributes: true,
@@ -76,8 +68,6 @@ export default defineComponent({
     })
 
     return () => {
-      const hasFixedShellBackplate = fixedShellBackplate.layers.value.length > 0
-
       // 👉 Vertical nav
       const verticalNav = h(
         VerticalNav,
@@ -90,19 +80,10 @@ export default defineComponent({
         },
       )
 
-      const fixedShellBackplateNode = hasFixedShellBackplate
-        ? h(GlassFixedShellBackplate, {
-            isOverlayNav: mdAndDown.value,
-            isOverlayNavActive: isOverlayNavActive.value,
-            layers: fixedShellBackplate.layers.value,
-            transitionDurationMs: fixedShellBackplate.transitionDurationMs,
-          })
-        : null
-
-      // 👉 Navbar
+      // 👉 Navbar (L0 solid shell)
       const navbar = h(
         'header',
-        { class: ['layout-navbar navbar-blur'] },
+        { class: ['layout-navbar'] },
         [
           h(
             'div',
@@ -155,21 +136,16 @@ export default defineComponent({
           class: [
             'layout-wrapper layout-nav-type-vertical layout-navbar-static layout-footer-static layout-content-width-fluid',
             'layout-navbar-fixed',
+            appMode.value && 'layout-app-mode',
             mdAndDown.value && 'layout-overlay-nav',
             isCollapsedLayout.value && 'layout-vertical-nav-collapsed',
             isHorizontalLayout.value && 'layout-horizontal-nav-active',
             isHorizontalLayout.value && isNavbarScrolled && 'layout-horizontal-nav-scrolled',
-            hasFixedShellBackplate && 'layout-fixed-shell-backplate-active',
             route.meta.layoutWrapperClasses,
             !isHorizontalLayout.value && isNavbarScrolled && 'window-scrolled',
           ],
         },
-        [
-          fixedShellBackplateNode,
-          verticalNav,
-          h('div', { class: 'layout-content-wrapper' }, [navbar, main, footer]),
-          layoutOverlay,
-        ],
+        [verticalNav, h('div', { class: 'layout-content-wrapper' }, [navbar, main, footer]), layoutOverlay],
       )
     }
   },
@@ -191,10 +167,9 @@ export default defineComponent({
 
 .layout-wrapper.layout-nav-type-vertical {
   --layout-navbar-block-size: calc(
-    env(safe-area-inset-top, 0px) + #{variables.$layout-vertical-nav-navbar-height} + var(--navbar-tab-height)
+    env(safe-area-inset-top, 0px) + #{variables.$layout-vertical-nav-navbar-height} + var(--navbar-tab-height, 0rem)
   );
 
-  // TODO(v2): Check why we need height in vertical nav & min-height in horizontal nav
   min-block-size: 100%;
 
   .layout-content-wrapper {
@@ -210,26 +185,27 @@ export default defineComponent({
   .layout-navbar {
     position: fixed;
     z-index: variables.$layout-vertical-nav-layout-navbar-z-index;
-    // iOS Safari 在地址栏收起和惯性滚动时可能把 fixed 顶栏和页面滚动层合成到一起，
-    // 单独提升顶栏图层可避免导航栏短暂上移到安全区下方。
     backface-visibility: hidden;
+    background-color: var(--mp-canvas-bg);
+    border-block-end: 1px solid var(--mp-border-subtle);
     block-size: var(--layout-navbar-block-size);
+    box-shadow: none;
     inline-size: calc(100% - variables.$layout-vertical-nav-width);
     inset-block-start: 0;
+    inset-inline-end: 0;
+    margin-inline: 0;
+    max-inline-size: none;
+    padding-inline: 0;
     transform: translate3d(0, 0, 0);
 
     .navbar-content-container {
+      background-color: transparent;
       block-size: var(--layout-navbar-block-size);
-    }
-
-    @at-root {
-      .layout-wrapper.layout-nav-type-vertical {
-        .layout-navbar {
-          @if variables.$layout-vertical-nav-navbar-is-contained {
-            @include mixins.boxed-content;
-          }
-        }
-      }
+      box-shadow: none;
+      margin-inline: 0;
+      max-inline-size: none;
+      padding-block-start: env(safe-area-inset-top, 0px);
+      padding-inline: 20px;
     }
   }
 
@@ -271,10 +247,6 @@ export default defineComponent({
   // Adjust right column pl when vertical nav is collapsed
   &.layout-vertical-nav-collapsed .layout-content-wrapper {
     padding-inline-start: variables.$layout-vertical-nav-collapsed-width;
-
-    .page-content-container > div:first-child {
-      inline-size: calc(100vw - variables.$layout-vertical-nav-collapsed-width - 1rem);
-    }
   }
 
   &.layout-vertical-nav-collapsed .layout-navbar {
@@ -283,20 +255,26 @@ export default defineComponent({
 
   &.layout-vertical-nav-collapsed .layout-vertical-nav:not(.overlay-nav) {
     .nav-header {
+      display: flex;
+      align-items: center;
       justify-content: center;
-      margin-inline: 0;
-      padding-inline: 0;
+      margin-inline: 0 !important;
+      padding-inline: 0 !important;
     }
 
     .app-logo {
+      display: inline-flex;
+      align-items: center;
       justify-content: center;
-      inline-size: 100%;
+      gap: 0;
+      inline-size: auto;
+      margin: 0;
       transform: none !important;
     }
 
     .app-logo .brand-logo-mark {
-      block-size: 2.5rem;
-      inline-size: 2.5rem;
+      block-size: 25px;
+      inline-size: 25px;
     }
 
     .app-logo h1,
@@ -307,9 +285,9 @@ export default defineComponent({
 
     .nav-link > a {
       justify-content: center;
-      border-radius: 0.75rem !important;
-      block-size: 2.75rem;
-      margin-inline: 0.75rem;
+      border-radius: 8px !important;
+      block-size: 2.25rem;
+      margin-inline: 10px;
       padding-inline: 0;
     }
 
@@ -330,9 +308,10 @@ export default defineComponent({
     }
 
     .layout-navbar {
-      background: rgb(var(--v-theme-background));
-      border-block-end: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+      background: var(--mp-canvas-bg);
+      border-block-end: 1px solid var(--mp-border-subtle);
       inline-size: 100%;
+      inset-inline: 0;
       max-inline-size: none;
       padding-inline: 0;
     }
@@ -344,14 +323,14 @@ export default defineComponent({
       inline-size: 100%;
       margin-inline: auto;
       max-inline-size: variables.$layout-boxed-content-width;
-      padding-inline: 1.5rem;
+      padding-inline: 20px;
     }
 
     .layout-page-content {
       inline-size: 100%;
       margin-inline: auto;
       max-inline-size: variables.$layout-boxed-content-width;
-      padding-inline: 1rem;
+      padding-inline: 20px;
     }
 
     .page-content-container > div:first-child {
@@ -359,83 +338,54 @@ export default defineComponent({
     }
   }
 
+  // 非 App 模式统一由 --layout-navbar-block-size 承接固定顶栏偏移，彻底杜绝顶部截断与双倍空白
+  &:not(.layout-app-mode).layout-navbar-fixed .layout-page-content {
+    padding-block-start: var(--layout-navbar-block-size);
+  }
+
+  // 桌面端一体化正交工作区画布（width >= 960px 且非 appMode）
+  @media (width >= 960px) {
+    &:not(.layout-app-mode) {
+      .layout-content-wrapper {
+        background-color: var(--mp-canvas-bg);
+      }
+
+      .layout-page-content {
+        margin-inline: 0;
+        max-inline-size: none;
+        padding-block: var(--layout-navbar-block-size) 0;
+        padding-inline: 20px;
+      }
+
+      &.layout-horizontal-nav-active .layout-page-content {
+        margin-inline: auto;
+        max-inline-size: variables.$layout-boxed-content-width;
+        padding-inline: 20px;
+      }
+
+      .page-content-container {
+        border: 0;
+        border-radius: 0;
+        background-color: transparent;
+        padding-block: 18px 24px;
+        padding-inline: 0;
+      }
+    }
+  }
+
   @at-root {
     .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed .layout-navbar {
-      backdrop-filter: blur(12px) saturate(1.2);
-      background: rgb(var(--v-theme-surface)) !important;
-      box-shadow:
-        0 1px 3px rgba(0, 0, 0, 4%),
-        0 1px 2px rgba(0, 0, 0, 2%);
+      background: var(--mp-canvas-bg) !important;
+      border-block-end: 1px solid var(--mp-border-subtle);
+      box-shadow: none !important;
     }
 
     .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed
       .navbar-content-container {
-      backdrop-filter: none !important;
       background: transparent !important;
       background-color: transparent !important;
       box-shadow: none !important;
-      filter: none !important;
-      padding-inline: 1.5rem !important;
-
-      &::before {
-        display: none !important;
-        backdrop-filter: none !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        content: none !important;
-        filter: none !important;
-      }
-    }
-
-    html[data-theme='transparent'] .layout-wrapper.layout-horizontal-nav-active .layout-navbar,
-    .v-theme--transparent .layout-wrapper.layout-horizontal-nav-active .layout-navbar {
-      backdrop-filter: none !important;
-      background: transparent !important;
-      border-block-end-color: rgba(var(--v-theme-on-surface), 0.04);
-      box-shadow: none !important;
-    }
-
-    html[data-theme='transparent'] .layout-wrapper.layout-horizontal-nav-active .navbar-content-container,
-    .v-theme--transparent .layout-wrapper.layout-horizontal-nav-active .navbar-content-container {
-      backdrop-filter: none !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
-
-    // 透明主题的水平导航不叠加滚动磨砂层，避免中间区域出现一块更深的背景。
-    html[data-theme='transparent']
-      .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed
-      .layout-navbar,
-    .v-theme--transparent
-      .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed
-      .layout-navbar {
-      backdrop-filter: blur(var(--transparent-blur-light, 6px)) !important;
-      background: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.2)) !important;
-      box-shadow: none !important;
-    }
-
-    // 透明主题滚动时只让外层导航栏承载整屏背景，避免内部最大宽度容器单独变深。
-    html[data-theme='transparent']
-      .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed
-      .navbar-content-container,
-    .v-theme--transparent
-      .layout-wrapper.layout-horizontal-nav-active.layout-horizontal-nav-scrolled.layout-navbar-fixed
-      .navbar-content-container {
-      backdrop-filter: none !important;
-      background: transparent !important;
-      background-color: transparent !important;
-      box-shadow: none !important;
-      filter: none !important;
-      padding-inline: 1.5rem !important;
-
-      &::before {
-        display: none !important;
-        backdrop-filter: none !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        content: none !important;
-        filter: none !important;
-      }
+      padding-inline: 20px !important;
     }
 
     html[data-theme='light'][data-theme-semi-dark-menu='true'][data-theme-layout='vertical']
@@ -444,26 +394,29 @@ export default defineComponent({
     html[data-theme='light'][data-theme-semi-dark-menu='true'][data-theme-layout='collapsed']
       .layout-wrapper.layout-nav-type-vertical:not(.layout-horizontal-nav-active)
       .layout-vertical-nav:not(.overlay-nav) {
-      background: #2f3349;
-      color: #e7e3fc;
+      background: #16171d;
+      color: #ecedf2;
 
       .app-logo h1,
       .nav-section-title,
       .nav-link > a,
       .nav-item-icon {
-        color: rgba(231, 227, 252, 78%) !important;
+        color: rgba(236, 237, 242, 0.68) !important;
       }
 
       .nav-link > a:hover {
-        background-color: rgba(231, 227, 252, 6%);
+        background-color: rgba(236, 237, 242, 0.05);
       }
 
-      .nav-link > .router-link-exact-active {
-        color: #fff !important;
+      .nav-link > .router-link-exact-active,
+      .nav-link > .router-link-active:not([href='/']) {
+        border-color: rgba(255, 255, 255, 0.06) !important;
+        background: rgba(255, 255, 255, 0.085) !important;
+        color: rgba(236, 237, 242, 0.96) !important;
 
         .nav-item-icon,
         .nav-item-title {
-          color: #fff !important;
+          color: rgba(236, 237, 242, 0.96) !important;
         }
       }
     }
@@ -476,7 +429,6 @@ export default defineComponent({
     }
 
     .layout-page-content {
-      // display: flex;
       overflow: auto;
 
       .page-content-container {
@@ -494,7 +446,12 @@ export default defineComponent({
 .layout-wrapper.layout-nav-type-vertical.layout-overlay-nav {
   .layout-navbar {
     inline-size: 100%;
+    inset-inline: 0;
     padding-inline: 0;
+
+    .navbar-content-container {
+      padding-inline: 16px;
+    }
   }
 }
 </style>

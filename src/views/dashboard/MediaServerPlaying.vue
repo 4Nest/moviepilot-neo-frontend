@@ -15,7 +15,7 @@ const { t } = useI18n()
 const display = useDisplay()
 
 const PLAYING_CARD_MIN_WIDTH = 240
-const MEDIA_GRID_HORIZONTAL_PADDING = 40
+const MEDIA_GRID_HORIZONTAL_PADDING = 36
 
 interface DashboardPlayingItem extends MediaServerPlayItem {
   /** 媒体项所属的配置服务器名称，用于跨服务器稳定去重。 */
@@ -110,7 +110,9 @@ async function loadData() {
   const serverItems = await Promise.all(enabledServers.map(server => loadPlayingList(server.name, count)))
 
   if (loadId !== playingLoadId) return
-  if (serverItems.some(items => items === undefined)) {
+  const hasServerFailure = serverItems.some(items => items === undefined)
+  const hasServerSuccess = enabledServers.length === 0 || serverItems.some(items => items !== undefined)
+  if (!hasServerSuccess) {
     loadFailed.value = true
     isLoading.value = false
     return
@@ -128,6 +130,16 @@ async function loadData() {
     })
 
   const nextPlayingList = Array.from(itemMap.values()).slice(0, count)
+  if (hasServerFailure) {
+    if (nextPlayingList.length > 0 || !hasSnapshot.value) {
+      playingList.value = nextPlayingList
+      hasSnapshot.value = true
+    }
+    loadFailed.value = true
+    isLoading.value = false
+    return
+  }
+
   playingList.value = nextPlayingList
   writeSnapshot(nextPlayingList)
   hasSnapshot.value = true
@@ -173,7 +185,7 @@ onActivated(() => {
       </template>
     </DashboardMediaState>
 
-    <VCard v-if="displayedPlayingList.length > 0" class="dashboard-media-card" data-glass-optical-boundary>
+    <VCard v-if="displayedPlayingList.length > 0" class="dashboard-media-card">
       <VCardItem class="dashboard-media-header">
         <VCardTitle>{{ t('dashboard.playing') }}</VCardTitle>
         <template v-if="loadFailed" #append>
@@ -181,7 +193,7 @@ onActivated(() => {
         </template>
       </VCardItem>
 
-      <div class="dashboard-media-content px-5 pb-3">
+      <div class="dashboard-media-content">
         <ProgressiveCardGrid
           class="dashboard-media-grid"
           :items="displayedPlayingList"
@@ -220,7 +232,13 @@ onActivated(() => {
 }
 
 .dashboard-media-header {
-  padding-block-end: 0.375rem;
+  padding: 16px 18px 10px !important;
+}
+
+.dashboard-media-header :deep(.v-card-title) {
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .dashboard-media-content {
@@ -229,7 +247,13 @@ onActivated(() => {
   flex-direction: column;
   min-block-size: 0;
   overflow: auto;
+  padding: 6px 18px 16px;
   scrollbar-width: none;
+}
+
+.dashboard-media-content :deep(.v-card),
+.dashboard-media-content :deep(.playing-backdrop-card) {
+  border-radius: 9px;
 }
 
 @supports not (scrollbar-width: none) {

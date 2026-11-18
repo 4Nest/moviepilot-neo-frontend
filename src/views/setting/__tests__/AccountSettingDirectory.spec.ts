@@ -13,12 +13,16 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
 }))
 
-vi.mock('@/api', () => ({
-  default: {
-    get: mocks.apiGet,
-    post: mocks.apiPost,
-  },
-}))
+vi.mock('@/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    default: {
+      get: mocks.apiGet,
+      post: mocks.apiPost,
+    },
+  }
+})
 
 vi.mock('vue-toastification', () => ({
   useToast: () => ({
@@ -171,6 +175,20 @@ describe('mounted local disk empty directory cleanup setting', () => {
       )
     })
   })
+
+  it('shows .mp-empty-hint when storages/directories are empty and does not auto-save when adding a storage', async () => {
+    mockSettings(true)
+    const { container } = await renderDirectorySettings()
+    await screen.findByRole('checkbox', { name: '挂载盘删除空目录' })
+
+    expect(container.querySelectorAll('.mp-empty-hint').length).toBeGreaterThanOrEqual(2)
+    mocks.apiPost.mockClear()
+
+    await fireEvent.click(screen.getByRole('button', { name: /添加存储/ }))
+    await fireEvent.click(await screen.findByText('阿里云盘'))
+
+    expect(mocks.apiPost).not.toHaveBeenCalledWith('system/setting/Storages', expect.anything())
+  })
 })
 
 describe('分类策略弹窗关闭行为', () => {
@@ -223,5 +241,53 @@ describe('分类策略弹窗关闭行为', () => {
       expect(screen.queryByTestId('category-edit-dialog-stub')).not.toBeInTheDocument()
     })
     expect(mocks.apiGet).toHaveBeenCalledWith('media/category')
+  })
+})
+
+describe('DirectoryCard 宽卡结构与分组表单', () => {
+  it('渲染文件夹图标底座、中性头部操作按钮及双小节宽敞表单', async () => {
+    const actualModule = await vi.importActual<{ default: ReturnType<typeof defineComponent> }>(
+      '@/components/cards/DirectoryCard.vue',
+    )
+    mocks.apiGet.mockResolvedValue({ transtype: { link: '硬链接', move: '移动' } })
+
+    const directory = {
+      name: '电影下载目录',
+      storage: 'local',
+      download_path: '/downloads/movies',
+      priority: 0,
+      monitor_type: 'downloader',
+      library_storage: 'local',
+      library_path: '/media/movies',
+      media_type: '',
+      media_category: '',
+      transfer_type: 'link',
+      overwrite_mode: 'never',
+    }
+
+    const { container } = await renderWithProviders(actualModule.default, {
+      props: {
+        directory,
+        categories: {},
+        storages: [{ name: '本地存储', type: 'local', config: {} }],
+      },
+      global: {
+        stubs: {
+          VPathField: {
+            props: ['label', 'modelValue'],
+            template: '<input :aria-label="label" :value="modelValue" />',
+          },
+        },
+      },
+    })
+
+    expect(container.querySelector('.directory-card__icon-badge')).not.toBeNull()
+    expect(container.querySelector('.directory-card__footer')).toBeNull()
+
+    const expandBtn = screen.getByRole('button', { name: /展开/ })
+    await fireEvent.click(expandBtn)
+
+    expect(await screen.findByText('资源下载目录')).toBeInTheDocument()
+    expect(screen.getByText('媒体库入库与整理')).toBeInTheDocument()
   })
 })

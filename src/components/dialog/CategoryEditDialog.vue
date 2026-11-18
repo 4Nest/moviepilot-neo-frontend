@@ -231,7 +231,33 @@ const removeTvItem = (index: number) => {
   tvList.value.splice(index, 1)
 }
 
+function validateCategoryList(list: CategoryItem[]): string | null {
+  const seen = new Set<string>()
+  for (const item of list) {
+    const trimmed = item.name?.trim() || ''
+    if (!trimmed) {
+      return t('common.nameRequired')
+    }
+    if (seen.has(trimmed)) {
+      return t('common.nameExists', { name: trimmed })
+    }
+    seen.add(trimmed)
+  }
+  return null
+}
+
 const saveConfig = async () => {
+  const movieValidationError = validateCategoryList(movieList.value)
+  if (movieValidationError) {
+    toast.error(movieValidationError)
+    return
+  }
+  const tvValidationError = validateCategoryList(tvList.value)
+  if (tvValidationError) {
+    toast.error(tvValidationError)
+    return
+  }
+
   saving.value = true
   try {
     // 将数组转换回对象
@@ -241,7 +267,8 @@ const saveConfig = async () => {
     }
 
     movieList.value.forEach(item => {
-      if (!item.name) return
+      const name = item.name.trim()
+      if (!name) return
       const rule: CategoryRule = {
         genre_ids: item.rule.genre_ids.length ? item.rule.genre_ids.join(',') : undefined,
         original_language: item.rule.original_language.length ? item.rule.original_language.join(',') : undefined,
@@ -250,18 +277,19 @@ const saveConfig = async () => {
           : undefined,
         release_year: item.rule.release_year || undefined,
       }
-      payload.movie![item.name] = rule
+      payload.movie![name] = rule
     })
 
     tvList.value.forEach(item => {
-      if (!item.name) return
+      const name = item.name.trim()
+      if (!name) return
       const rule: CategoryRule = {
         genre_ids: item.rule.genre_ids.length ? item.rule.genre_ids.join(',') : undefined,
         original_language: item.rule.original_language.length ? item.rule.original_language.join(',') : undefined,
         origin_country: item.rule.origin_country?.length ? item.rule.origin_country.join(',') : undefined,
         release_year: item.rule.release_year || undefined,
       }
-      payload.tv![item.name] = rule
+      payload.tv![name] = rule
     })
 
     const res = (await api.post('media/category/config', payload)) as ApiResponse<unknown>
@@ -402,12 +430,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <VDialog :model-value="modelValue" max-width="1000" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard>
+  <VDialog :model-value="modelValue" max-width="62rem" scrollable :fullscreen="!display.mdAndUp.value">
+    <VCard class="mp-dialog-card">
       <VDialogCloseBtn @click="emit('close')" />
-      <VCardItem class="py-3">
+      <VCardItem class="mp-dialog-header">
         <template #prepend>
-          <VIcon icon="mdi-shape-outline" class="me-2" />
+          <VIcon icon="mdi-shape-outline" size="20" class="me-2 text-primary" />
         </template>
         <VCardTitle>
           {{ t('setting.category.title') }}
@@ -416,52 +444,47 @@ onMounted(() => {
           {{ t('setting.category.subtitle') }}
         </VCardSubtitle>
       </VCardItem>
-
-      <VCardText>
-        <VTabs v-model="activeTab" show-arrows class="mb-4">
-          <VTab value="movie">
-            <VIcon icon="mdi-movie-outline" class="me-2" />
-            {{ t('setting.category.movie') }}
-          </VTab>
-          <VTab value="tv">
-            <VIcon icon="mdi-television" class="me-2" />
-            {{ t('setting.category.tv') }}
-          </VTab>
-          <VTab value="advanced">
-            <VIcon icon="mdi-file-code-outline" class="me-2" />
-            {{ t('setting.category.advanced') }}
-            <span v-if="rawDirty" class="ms-1">●</span>
-          </VTab>
-        </VTabs>
+      <VDivider />
+      <VCardText class="mp-dialog-body">
+        <div class="mp-segmented-bar mb-4">
+          <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs">
+            <VTab value="movie" :ripple="false">
+              <VIcon icon="mdi-movie-outline" size="16" class="me-1" />
+              {{ t('setting.category.movie') }}
+            </VTab>
+            <VTab value="tv" :ripple="false">
+              <VIcon icon="mdi-television" size="16" class="me-1" />
+              {{ t('setting.category.tv') }}
+            </VTab>
+            <VTab value="advanced" :ripple="false">
+              <VIcon icon="mdi-file-code-outline" size="16" class="me-1" />
+              {{ t('setting.category.advanced') }}
+              <span v-if="rawDirty" class="ms-1 text-primary">●</span>
+            </VTab>
+          </VTabs>
+        </div>
 
         <div v-if="loading" class="d-flex justify-center align-center" style="min-block-size: 300px">
-          <VProgressCircular indeterminate color="primary" size="64" />
+          <VProgressCircular indeterminate color="primary" size="48" />
         </div>
 
         <VWindow v-else v-model="activeTab" class="disable-tab-transition" :touch="false">
           <VWindowItem value="movie">
             <draggable v-model="movieList" handle=".drag-handle" item-key="id" animation="200">
               <template #item="{ element, index }">
-                <VCard variant="tonal" class="mb-4 category-item">
-                  <VCardText class="pa-4">
-                    <div class="d-flex align-center mb-5">
-                      <VTextField
-                        v-model="element.name"
-                        :label="t('setting.category.name')"
-                        density="comfortable"
-                        hide-details
-                        variant="plain"
-                        class="font-bold"
-                        prepend-inner-icon="mdi-tag-outline"
-                      />
-                      <VSpacer />
-                      <VBtn
-                        icon="mdi-drag-vertical"
-                        variant="text"
-                        size="small"
-                        class="drag-handle me-2"
-                        color="primary"
-                      />
+                <div class="category-item mb-3">
+                  <div class="category-item__header">
+                    <VTextField
+                      v-model="element.name"
+                      :label="t('setting.category.name')"
+                      density="compact"
+                      hide-details
+                      variant="outlined"
+                      class="category-item__name"
+                      prepend-inner-icon="mdi-tag-outline"
+                    />
+                    <div class="d-flex align-center gap-1">
+                      <VBtn icon="mdi-drag-vertical" variant="text" size="small" class="drag-handle" color="default" />
                       <VBtn
                         icon="mdi-delete-outline"
                         color="error"
@@ -470,78 +493,79 @@ onMounted(() => {
                         @click="removeMovieItem(index)"
                       />
                     </div>
+                  </div>
 
-                    <VRow>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.genre_ids"
-                          :items="genreOptions"
-                          :label="t('setting.category.genre')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-movie-filter-outline"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.production_countries"
-                          :items="countryOptions"
-                          :label="t('setting.category.country')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-earth"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.original_language"
-                          :items="languageOptions"
-                          :label="t('setting.category.language')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-translate"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VTextField
-                          v-model="element.rule.release_year"
-                          :label="t('setting.category.year')"
-                          :placeholder="t('setting.category.yearPlaceholder')"
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-calendar-range"
-                        />
-                      </VCol>
-                    </VRow>
-                  </VCardText>
-                </VCard>
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.genre_ids"
+                        :items="genreOptions"
+                        :label="t('setting.category.genre')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-movie-filter-outline"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.production_countries"
+                        :items="countryOptions"
+                        :label="t('setting.category.country')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-earth"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.original_language"
+                        :items="languageOptions"
+                        :label="t('setting.category.language')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-translate"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="element.rule.release_year"
+                        :label="t('setting.category.year')"
+                        :placeholder="t('setting.category.yearPlaceholder')"
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-calendar-range"
+                      />
+                    </VCol>
+                  </VRow>
+                </div>
               </template>
             </draggable>
 
             <VBtn
               block
+              color="default"
               variant="outlined"
-              size="large"
-              prepend-icon="mdi-plus-circle-outline"
+              size="small"
+              prepend-icon="mdi-plus"
               class="mt-2 add-category-btn"
               @click="addMovieItem"
             >
@@ -552,26 +576,19 @@ onMounted(() => {
           <VWindowItem value="tv">
             <draggable v-model="tvList" handle=".drag-handle" item-key="id" animation="200">
               <template #item="{ element, index }">
-                <VCard variant="tonal" class="mb-4 category-item">
-                  <VCardText class="pa-4">
-                    <div class="d-flex align-center mb-5">
-                      <VTextField
-                        v-model="element.name"
-                        :label="t('setting.category.name')"
-                        density="comfortable"
-                        hide-details
-                        variant="plain"
-                        class="font-bold"
-                        prepend-inner-icon="mdi-tag-outline"
-                      />
-                      <VSpacer />
-                      <VBtn
-                        icon="mdi-drag-vertical"
-                        variant="text"
-                        size="small"
-                        class="drag-handle me-2"
-                        color="primary"
-                      />
+                <div class="category-item mb-3">
+                  <div class="category-item__header">
+                    <VTextField
+                      v-model="element.name"
+                      :label="t('setting.category.name')"
+                      density="compact"
+                      hide-details
+                      variant="outlined"
+                      class="category-item__name"
+                      prepend-inner-icon="mdi-tag-outline"
+                    />
+                    <div class="d-flex align-center gap-1">
+                      <VBtn icon="mdi-drag-vertical" variant="text" size="small" class="drag-handle" color="default" />
                       <VBtn
                         icon="mdi-delete-outline"
                         color="error"
@@ -580,78 +597,79 @@ onMounted(() => {
                         @click="removeTvItem(index)"
                       />
                     </div>
+                  </div>
 
-                    <VRow>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.genre_ids"
-                          :items="genreOptions"
-                          :label="t('setting.category.genre')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-movie-filter-outline"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.origin_country"
-                          :items="countryOptions"
-                          :label="t('setting.category.country')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-earth"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VAutocomplete
-                          v-model="element.rule.original_language"
-                          :items="languageOptions"
-                          :label="t('setting.category.language')"
-                          item-title="title"
-                          item-value="value"
-                          multiple
-                          chips
-                          closable-chips
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-translate"
-                        />
-                      </VCol>
-                      <VCol cols="12" md="6">
-                        <VTextField
-                          v-model="element.rule.release_year"
-                          :label="t('setting.category.year')"
-                          :placeholder="t('setting.category.yearPlaceholder')"
-                          density="comfortable"
-                          variant="outlined"
-                          persistent-hint
-                          prepend-inner-icon="mdi-calendar-range"
-                        />
-                      </VCol>
-                    </VRow>
-                  </VCardText>
-                </VCard>
+                  <VRow class="mp-form-grid">
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.genre_ids"
+                        :items="genreOptions"
+                        :label="t('setting.category.genre')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-movie-filter-outline"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.origin_country"
+                        :items="countryOptions"
+                        :label="t('setting.category.country')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-earth"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VAutocomplete
+                        v-model="element.rule.original_language"
+                        :items="languageOptions"
+                        :label="t('setting.category.language')"
+                        item-title="title"
+                        item-value="value"
+                        multiple
+                        chips
+                        closable-chips
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-translate"
+                      />
+                    </VCol>
+                    <VCol cols="12" sm="6">
+                      <VTextField
+                        v-model="element.rule.release_year"
+                        :label="t('setting.category.year')"
+                        :placeholder="t('setting.category.yearPlaceholder')"
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        prepend-inner-icon="mdi-calendar-range"
+                      />
+                    </VCol>
+                  </VRow>
+                </div>
               </template>
             </draggable>
 
             <VBtn
               block
+              color="default"
               variant="outlined"
-              size="large"
-              prepend-icon="mdi-plus-circle-outline"
+              size="small"
+              prepend-icon="mdi-plus"
               class="mt-2 add-category-btn"
               @click="addTvItem"
             >
@@ -660,28 +678,28 @@ onMounted(() => {
           </VWindowItem>
 
           <VWindowItem value="advanced">
-            <VAlert type="info" variant="tonal" density="compact" class="mb-4">
+            <VAlert type="info" variant="tonal" density="compact" class="mb-3">
               {{ t('setting.category.advancedHint') }}
             </VAlert>
 
             <div v-if="rawLoading" class="d-flex justify-center align-center" style="min-block-size: 300px">
-              <VProgressCircular indeterminate color="primary" size="64" />
+              <VProgressCircular indeterminate color="primary" size="48" />
             </div>
             <template v-else>
-              <div class="position-relative">
+              <div class="position-relative mp-editor-shell">
                 <VAceEditor
                   v-model:value="rawContent"
                   lang="yaml"
                   theme="monokai"
-                  class="rounded min-h-[30rem]"
+                  class="min-h-[28rem]"
                   @init="configureAceEditorPadding"
                   @update:value="rawDirty = true"
                 />
                 <VOverlay :model-value="restoring" contained persistent class="align-center justify-center">
-                  <VProgressCircular indeterminate color="primary" size="64" />
+                  <VProgressCircular indeterminate color="primary" size="48" />
                 </VOverlay>
               </div>
-              <VAlert v-if="rawError" type="error" variant="tonal" density="compact" class="mt-4">
+              <VAlert v-if="rawError" type="error" variant="tonal" density="compact" class="mt-3">
                 {{ rawError }}
               </VAlert>
             </template>
@@ -689,11 +707,14 @@ onMounted(() => {
         </VWindow>
       </VCardText>
 
-      <VCardActions class="app-dialog-actions">
+      <VDivider />
+
+      <VCardActions class="app-dialog-actions mp-dialog-footer">
         <VBtn
           v-if="activeTab === 'advanced'"
-          color="error"
-          variant="tonal"
+          color="default"
+          variant="outlined"
+          size="small"
           prepend-icon="mdi-restore"
           :disabled="rawLoading || restoring || saving"
           @click="restoreTemplate"
@@ -701,13 +722,16 @@ onMounted(() => {
           {{ t('setting.category.restoreTemplate') }}
         </VBtn>
         <VSpacer />
+        <VBtn color="default" variant="text" size="small" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </VBtn>
         <VBtn
           color="primary"
           variant="flat"
+          size="small"
           :loading="saving"
           :disabled="activeTab === 'advanced' && (rawLoading || restoring || !rawLoaded || saving)"
-          prepend-icon="mdi-content-save"
-          class="px-5"
+          class="px-4"
           @click="onSave"
         >
           {{ t('common.save') }}
@@ -717,7 +741,102 @@ onMounted(() => {
   </VDialog>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
+.mp-dialog-header {
+  padding-block: 14px;
+  padding-inline: 22px 48px;
+}
+
+.mp-dialog-body {
+  padding: 18px 22px !important;
+}
+
+.mp-dialog-footer {
+  gap: 8px;
+  padding: 10px 20px !important;
+}
+
+.mp-form-grid {
+  row-gap: 6px;
+}
+
+.mp-segmented-bar {
+  display: flex;
+  align-items: center;
+}
+
+.mp-segmented-tabs {
+  display: inline-flex;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 8px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
+  block-size: 36px !important;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-block-size: 36px !important;
+  padding: 3px;
+
+  :deep(.v-slide-group__container),
+  :deep(.v-slide-group__content) {
+    align-items: center;
+    gap: 2px;
+  }
+
+  :deep(.v-tab__slider) {
+    display: none !important;
+  }
+
+  :deep(.v-tab) {
+    border-radius: 6px !important;
+    block-size: 28px !important;
+    color: rgba(var(--v-theme-on-surface), 0.64);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    min-block-size: 28px !important;
+    padding-inline: 14px;
+    text-transform: none;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  :deep(.v-tab--selected) {
+    background: rgb(var(--v-theme-surface));
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+    color: rgb(var(--v-theme-on-surface)) !important;
+    font-weight: 600;
+  }
+}
+
+.category-item {
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
+  border-radius: 10px;
+  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
+  padding: 14px 16px;
+}
+
+.category-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 14px;
+}
+
+.category-item__name {
+  max-inline-size: 20rem;
+}
+
+.mp-editor-shell {
+  overflow: hidden;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12));
+  border-radius: 10px;
+}
+
 .drag-handle {
   cursor: grab;
   opacity: 0.6;
@@ -733,16 +852,26 @@ onMounted(() => {
 }
 
 .add-category-btn {
+  border-radius: 10px;
   border-style: dashed !important;
   transition: all 0.2s ease;
 }
 
 .add-category-btn:hover {
   border-style: solid !important;
-  transform: translateY(-1px);
 }
 
 .disable-tab-transition > * {
   transition: none !important;
+}
+
+@media (max-width: 599.98px) {
+  .mp-dialog-body {
+    padding: 16px !important;
+  }
+
+  .category-item__name {
+    max-inline-size: none;
+  }
 }
 </style>

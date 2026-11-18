@@ -1,5 +1,4 @@
-import { usePluginCardAccent } from '@/composables/usePluginCardAccent'
-import { normalizePluginAccentColor } from '@/utils/glassColor'
+import { normalizePluginAccentColor, usePluginCardAccent } from '@/composables/usePluginCardAccent'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

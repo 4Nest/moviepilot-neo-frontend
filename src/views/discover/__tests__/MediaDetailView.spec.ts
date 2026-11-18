@@ -1,6 +1,5 @@
 import type { MediaInfo, NotExistMediaInfo, Site, Subscribe, TmdbEpisode } from '@/api/types'
 import { getMediaSubscribeId } from '@/composables/useMediaSubscribe'
-import vuetify from '@/plugins/vuetify'
 import MediaDetailView from '@/views/discover/MediaDetailView.vue'
 import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { flushPromises } from '@vue/test-utils'
@@ -246,19 +245,12 @@ describe('MediaDetailView detail and actions', () => {
     })
   })
 
-  it('applies the glass backdrop fade treatment in the glass theme', async () => {
-    const previousTheme = vuetify.theme.global.name.value
+  it('renders backdrop image and gradient overlay cleanly in solid themes', async () => {
+    const { container } = await renderDetail()
 
-    try {
-      vuetify.theme.global.name.value = 'glass'
-      const { container } = await renderDetail()
-
-      expect(await screen.findByRole('heading', { name: /详情测试电影/ })).toBeInTheDocument()
-      expect(container.querySelector('.media-detail-glass')).toBeInTheDocument()
-      expect(container.querySelector('.media-detail-transparent')).not.toBeInTheDocument()
-    } finally {
-      vuetify.theme.global.name.value = previousTheme
-    }
+    expect(await screen.findByRole('heading', { name: /详情测试电影/ })).toBeInTheDocument()
+    expect(container.querySelector('.vue-media-back-image')).toBeInTheDocument()
+    expect(container.querySelector('.vue-media-back-overlay')).toBeInTheDocument()
   })
 
   it('renders legal empty media separately from loading', async () => {
@@ -374,6 +366,54 @@ describe('MediaDetailView detail and actions', () => {
 
     await fireEvent.click(screen.getByText('豆瓣'))
     expect(mocks.openDoubanApp).toHaveBeenCalledWith('db-8402', '电影', '豆瓣独立电影', '2026')
+  })
+
+  it('localizes known TMDB status values, sorts crew roles canonically, and merges Douban crew members', async () => {
+    const tmdbMedia = createMediaInfo({
+      directors: [
+        { id: 101, job: 'Producer', name: 'Colin Wilson' },
+        { id: 102, job: 'Editor', name: 'Peter Honess' },
+        { id: 103, job: 'Director', name: '沃尔夫冈·彼得森' },
+        { id: 104, job: 'Screenplay', name: '戴维·贝尼奥夫' },
+      ] as unknown as never,
+      status: 'Returning Series',
+      tagline: '违抗神明，逆天而行。',
+      title: '状态本地化剧集',
+      tmdb_id: 8499,
+      type: '电视剧',
+    })
+    const tmdbView = await renderDetail({ media: tmdbMedia, mediaId: 'tmdb:8499', type: '电视剧' })
+
+    expect(await screen.findByText('连载中')).toBeInTheDocument()
+    expect(screen.queryByText('Returning Series')).not.toBeInTheDocument()
+    const tmdbCrewRoles = Array.from(tmdbView.container.querySelectorAll('ul.media-crew .crew-role')).map(node =>
+      node.textContent?.trim(),
+    )
+    expect(tmdbCrewRoles).toEqual(['导演', '编剧', '制片人', '剪辑'])
+    expect(tmdbView.container.querySelector('.media-hero-stage .tagline')?.textContent?.trim()).toBe(
+      '违抗神明，逆天而行。',
+    )
+    expect(tmdbView.container.querySelector('.media-detail-card')).toBeInTheDocument()
+    tmdbView.unmount()
+
+    const doubanMedia = createMediaInfo({
+      directors: [
+        { id: 'd1', name: '张艺谋', roles: ['导演'], url: 'https://movie.douban.com/celebrity/1' },
+        { id: 'd2', name: '张末', roles: ['导演'], url: 'https://movie.douban.com/celebrity/2' },
+        { id: 'w1', name: '陈宇', roles: ['编剧'], url: 'https://movie.douban.com/celebrity/3' },
+      ] as unknown as never,
+      douban_id: 'db-8499',
+      title: '豆瓣同职主创电影',
+      tmdb_id: undefined,
+      type: '电影',
+    })
+    const { container } = await renderDetail({ media: doubanMedia, mediaId: 'douban:db-8499', type: '电影' })
+
+    expect(await screen.findByRole('heading', { name: /豆瓣同职主创电影/ })).toBeInTheDocument()
+    expect(container.querySelectorAll('ul.media-crew > li')).toHaveLength(2)
+    expect(screen.getByRole('link', { name: '张艺谋' })).toHaveAttribute('href', 'https://movie.douban.com/celebrity/1')
+    expect(screen.getByRole('link', { name: '张末' })).toHaveAttribute('href', 'https://movie.douban.com/celebrity/2')
+    expect(screen.getByRole('link', { name: '陈宇' })).toHaveAttribute('href', 'https://movie.douban.com/celebrity/3')
   })
 
   it('renders Bangumi-only facts, external link, credits, and recommendations', async () => {
@@ -865,6 +905,108 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
     expect(screen.getByText(/45 分钟/)).toBeInTheDocument()
     expect(container.querySelector('.v-expansion-panel')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^订阅$/ })).toBeInTheDocument()
+  })
+
+  it('renders without crashing when both runtime and episode_run_time are undefined, includes source=themoviedb on director links, and refreshes when props change', async () => {
+    const firstMedia = createMediaInfo({
+      directors: [{ id: 525, job: 'Director', name: 'Christopher Nolan' }] as unknown as never,
+      episode_run_time: undefined as unknown as string[],
+      genres: ['科幻'] as unknown as never,
+      runtime: undefined,
+      title: '星际穿越',
+      tmdb_id: 8801,
+      type: '电影',
+      year: '2014',
+    })
+    const view = await renderDetail({ media: firstMedia, mediaId: 'tmdb:8801', type: '电影' })
+
+    expect(await screen.findByRole('heading', { name: /星际穿越/ })).toBeInTheDocument()
+    expect(screen.getByText('科幻')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Christopher Nolan' })).toHaveAttribute(
+      'href',
+      '/person?personid=525&source=themoviedb',
+    )
+
+    const secondMedia = createMediaInfo({
+      episode_run_time: undefined as unknown as string[],
+      runtime: 148,
+      title: '盗梦空间',
+      tmdb_id: 8802,
+      type: '电影',
+      year: '2010',
+    })
+    server.use(
+      mediaDetailsHandler('tmdb:8802', secondMedia),
+      mediaExistsHandler({ data: { item: {} }, success: false }),
+      querySubscribeByMediaHandler('tmdb:8802', {}),
+      mediaEpisodeGroupsHandler(8802, []),
+    )
+
+    await view.rerender({
+      mediaid: 'tmdb:8802',
+      title: '盗梦空间',
+      type: '电影',
+      year: '2010',
+    })
+
+    expect(await screen.findByRole('heading', { name: /盗梦空间/ })).toBeInTheDocument()
+    expect(screen.getByText(/148 分钟/)).toBeInTheDocument()
+  })
+
+  it('disables search, subscribe, and play buttons while in-flight requests are pending', async () => {
+    const playGate = createDeferred<{ data: Record<string, string>; success: boolean }>()
+    const siteGate = createDeferred<Site[]>()
+    const subscribeGate = createDeferred<{ data: { id: number }; success: boolean }>()
+
+    const media = createMediaInfo({ title: '防连点测试片', tmdb_id: 8803, type: '电影' })
+    await renderDetail({
+      existsResponse: { data: { item: { id: 'lib-8803' } }, success: true },
+      media,
+      mediaId: 'tmdb:8803',
+    })
+
+    server.use(
+      http.get(siteListUrl, () => siteGate.promise.then(list => HttpResponse.json(list))),
+      http.post(new URL('subscribe/', API_BASE_URL).href, () =>
+        subscribeGate.promise.then(res => HttpResponse.json(res)),
+      ),
+      http.get(new URL('mediaserver/play/lib-8803', API_BASE_URL).href, () =>
+        playGate.promise.then(res => HttpResponse.json(res)),
+      ),
+    )
+
+    const subtitleBtn = await screen.findByRole('button', { name: /搜索字幕/ })
+    const resourceBtn = screen.getByRole('button', { name: /搜索资源/ })
+    await fireEvent.click(subtitleBtn)
+    await waitFor(() => expect(subtitleBtn).toBeDisabled())
+    expect(resourceBtn).toBeDisabled()
+    siteGate.resolve([])
+    await waitFor(() => expect(subtitleBtn).not.toBeDisabled())
+
+    const playBtn = screen.getByRole('button', { name: /在线播放/ })
+    await fireEvent.click(playBtn)
+    await waitFor(() => expect(playBtn).toBeDisabled())
+    playGate.resolve({
+      data: { item_id: 'i1', server_id: 's1', server_type: 'emby', url: 'https://example.com' },
+      success: true,
+    })
+    await waitFor(() => expect(playBtn).not.toBeDisabled())
+
+    // 已入库电影默认走模式选择弹窗，验证无入库电影主订阅按钮防连点
+    const freshMedia = createMediaInfo({ title: '未入库防连点', tmdb_id: 8804, type: '电影' })
+    const view2 = await renderDetail({ media: freshMedia, mediaId: 'tmdb:8804' })
+    server.use(
+      http.post(new URL('subscribe/', API_BASE_URL).href, () =>
+        subscribeGate.promise.then(res => HttpResponse.json(res)),
+      ),
+      defaultSubscribeConfigHandler('电影', { show_edit_dialog: false }),
+    )
+    const subBtns = view2.getAllByRole('button', { name: /^订阅$/ })
+    const subBtn = subBtns[subBtns.length - 1]
+    await fireEvent.click(subBtn)
+    await waitFor(() => expect(subBtn).toBeDisabled())
+    subscribeGate.resolve({ data: { id: 99 }, success: true })
+    await waitFor(() => expect(subBtn).not.toBeDisabled())
   })
 
   it('switches episode groups and sends the selected group in missing-state requests', async () => {

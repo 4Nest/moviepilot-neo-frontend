@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import api from '@/api'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
-import { SubscribeShare } from '@/api/types'
-
+import type { SubscribeShare } from '@/api/types'
+import router from '@/router'
+import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from 'vue-toastification'
-import { VBtn } from 'vuetify/lib/components/index.mjs'
 import { useI18n } from '@/composables/useChineseText'
-import { useGlobalSettingsStore } from '@/stores'
+import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
+import { canDeleteSubscribeShare, resolveShareMediaId } from '@/utils/sharePermissions'
 
 // 国际化
 const { t } = useI18n()
@@ -20,10 +21,10 @@ const props = defineProps({
 // 定义事件
 const emit = defineEmits(['fork', 'delete', 'close'])
 
-// 从 provide 中获取全局设置
-// 全局设置
+// 全局设置与用户权限
 const globalSettingsStore = useGlobalSettingsStore()
-const globalSettings = globalSettingsStore.globalSettings
+const userStore = useUserStore()
+const createConfirm = useConfirm()
 
 // 提示框
 const $toast = useToast()
@@ -37,6 +38,32 @@ const deleting = ref(false)
 // 是否折叠
 const isExpanded = ref(false)
 
+// 统一可删权限判断：仅超级管理员且为本人分享或中心端分享管理员时允许取消分享
+const canDeleteShare = computed(() =>
+  canDeleteSubscribeShare(props.media, {
+    superUser: userStore.superUser,
+    userUniqueId: globalSettingsStore.globalSettings.USER_UNIQUE_ID,
+    canManageAll: Boolean(globalSettingsStore.globalSettings.SUBSCRIBE_SHARE_MANAGE),
+  }),
+)
+
+// 关联媒体详情路由 ID
+const mediaDetailId = computed(() => resolveShareMediaId(props.media))
+
+function viewMediaDetail() {
+  if (!mediaDetailId.value) return
+  emit('close')
+  router.push({
+    path: '/media',
+    query: {
+      mediaid: mediaDetailId.value,
+      title: props.media?.name || props.media?.share_title,
+      year: props.media?.year,
+      type: props.media?.type,
+    },
+  })
+}
+
 // 只展示分享记录实际设置的参数，正则表达式保留原文便于核对。
 const sharedParameters = computed(() =>
   [
@@ -49,8 +76,9 @@ const sharedParameters = computed(() =>
   ].filter(parameter => parameter.value?.trim()),
 )
 
-// follow用户列表
+// follow用户列表与防连点锁
 const followUsers = ref<string[]>([])
+const followLoading = ref(false)
 
 // 当前用户是否已follow
 const isFollowed = computed(() => followUsers.value.includes(props.media?.share_uid || ''))
@@ -73,19 +101,27 @@ async function queryFollowUsers() {
 
 // follow用户
 async function followUser() {
+  if (followLoading.value || !props.media?.share_uid) return
+  followLoading.value = true
   try {
     const result: { [key: string]: any } = await api.post(`subscribe/follow?share_uid=${props.media?.share_uid}`)
     if (result.success) {
-      queryFollowUsers()
+      await queryFollowUsers()
+    } else if (result?.message) {
+      $toast.error(result.message)
     }
   } catch (error) {
     console.error(error)
     $toast.error(t('subscribe.requestFailed'))
+  } finally {
+    followLoading.value = false
   }
 }
 
 // unfollow用户
 async function unfollowUser() {
+  if (followLoading.value || !props.media?.share_uid) return
+  followLoading.value = true
   try {
     const result: { [key: string]: any } = await api.delete('subscribe/follow', {
       params: {
@@ -93,18 +129,22 @@ async function unfollowUser() {
       },
     })
     if (result.success) {
-      queryFollowUsers()
+      await queryFollowUsers()
+    } else if (result?.message) {
+      $toast.error(result.message)
     }
   } catch (error) {
     console.error(error)
     $toast.error(t('subscribe.requestFailed'))
+  } finally {
+    followLoading.value = false
   }
 }
 
 // 计算海报图片地址
 const posterUrl = computed(() => {
   const url = props.media?.poster
-  return getDisplayImageUrl(url || '', globalSettings.GLOBAL_IMAGE_CACHE)
+  return getDisplayImageUrl(url || '', globalSettingsStore.globalSettings.GLOBAL_IMAGE_CACHE)
 })
 
 // 复用订阅
@@ -139,14 +179,22 @@ async function doFork() {
 
 // 删除订阅分享
 async function doDelete() {
+  if (!props.media?.id || !canDeleteShare.value) return
+
+  const isConfirmed = await createConfirm({
+    title: t('common.confirm'),
+    content: t('subscribe.confirmCancelShare', { name: props.media?.share_title || props.media?.name || '' }),
+  })
+  if (!isConfirmed) return
+
   // 开始处理
   startNProgress()
   try {
     deleting.value = true
-    // 请求API
-    const result: { [key: string]: any } = await api.delete(`subscribe/share/${props.media?.id}`, {
+    // 携带被删记录自身的 share_uid 配合中心端管理员权限校验
+    const result: { [key: string]: any } = await api.delete(`subscribe/share/${props.media.id}`, {
       params: {
-        share_uid: globalSettings.USER_UNIQUE_ID,
+        share_uid: props.media.share_uid || globalSettingsStore.globalSettings.USER_UNIQUE_ID,
       },
     })
     // 订阅状态
@@ -175,7 +223,16 @@ onMounted(() => {
     <VCard class="share-detail-card">
       <!-- 顶部：海报 + 标题区 -->
       <div class="share-hero">
-        <div class="share-hero__poster">
+        <div
+          class="share-hero__poster"
+          :class="{ 'share-hero__poster--clickable': Boolean(mediaDetailId) }"
+          :role="mediaDetailId ? 'button' : undefined"
+          :tabindex="mediaDetailId ? 0 : undefined"
+          :aria-label="mediaDetailId ? t('subscribe.mediaDetail') : undefined"
+          :title="mediaDetailId ? t('subscribe.mediaDetail') : undefined"
+          @click="mediaDetailId && viewMediaDetail()"
+          @keydown.enter.prevent="mediaDetailId && viewMediaDetail()"
+        >
           <VImg :src="posterUrl" aspect-ratio="2/3" cover>
             <template #placeholder>
               <VSkeletonLoader class="h-100 w-100" />
@@ -191,18 +248,26 @@ onMounted(() => {
           <div class="share-hero__meta">
             <span
               class="share-hero__meta-item"
-              :class="{ 'share-hero__meta-item--clickable': props.media?.share_uid }"
+              :class="{
+                'share-hero__meta-item--clickable': props.media?.share_uid && !followLoading,
+                'opacity-60 pointer-events-none': followLoading,
+              }"
               :role="props.media?.share_uid ? 'button' : undefined"
+              :aria-busy="followLoading || undefined"
+              :aria-disabled="followLoading || undefined"
               :aria-label="
                 props.media?.share_uid ? (isFollowed ? t('subscribe.unfollow') : t('subscribe.follow')) : undefined
               "
-              :tabindex="props.media?.share_uid ? 0 : undefined"
-              @click.stop="props.media?.share_uid && (isFollowed ? unfollowUser() : followUser())"
-              @keydown.enter.stop="props.media?.share_uid && (isFollowed ? unfollowUser() : followUser())"
+              :tabindex="props.media?.share_uid && !followLoading ? 0 : undefined"
+              @click.stop="props.media?.share_uid && !followLoading && (isFollowed ? unfollowUser() : followUser())"
+              @keydown.enter.stop="
+                props.media?.share_uid && !followLoading && (isFollowed ? unfollowUser() : followUser())
+              "
             >
               <!-- 图标即关注状态：点击标签任意位置切换 -->
+              <VProgressCircular v-if="followLoading" indeterminate size="14" width="2" color="primary" />
               <VIcon
-                v-if="props.media?.share_uid"
+                v-else-if="props.media?.share_uid"
                 :icon="isFollowed ? 'mdi-account-check' : 'mdi-account-plus-outline'"
                 :color="isFollowed ? 'warning' : 'info'"
                 size="16"
@@ -231,10 +296,7 @@ onMounted(() => {
               {{ t('subscribe.normalSub') }}
             </VBtn>
             <VBtn
-              v-if="
-                (props.media?.share_uid && props.media?.share_uid === globalSettings.USER_UNIQUE_ID) ||
-                globalSettings.SUBSCRIBE_SHARE_MANAGE
-              "
+              v-if="canDeleteShare"
               color="error"
               variant="tonal"
               size="small"
@@ -301,6 +363,15 @@ onMounted(() => {
   inline-size: 8.75rem;
 }
 
+.share-hero__poster--clickable {
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+
+.share-hero__poster--clickable:hover {
+  transform: translateY(-2px);
+}
+
 .share-hero__info {
   display: flex;
   flex: 1;
@@ -311,10 +382,12 @@ onMounted(() => {
 
 .share-hero__title {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  padding-inline-end: 2.25rem;
 }
 
 .share-hero__comment {
@@ -477,7 +550,12 @@ onMounted(() => {
   .share-hero {
     flex-direction: column;
     align-items: center;
+    padding-block-start: 2rem;
     text-align: center;
+  }
+
+  .share-hero__title {
+    padding-inline-end: 0;
   }
 
   .share-hero__info {

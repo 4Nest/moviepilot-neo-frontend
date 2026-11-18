@@ -290,7 +290,7 @@ onBeforeUnmount(() => {
 
       <div class="dashboard-recommend-topbar">
         <div class="dashboard-recommend-label">
-          <VIcon icon="mdi-creation" size="20" color="primary" />
+          <VIcon icon="mdi-creation" size="16" color="primary" />
           <span>{{ t('dashboard.recommendedMedia') }}</span>
         </div>
 
@@ -303,11 +303,10 @@ onBeforeUnmount(() => {
                 class="dashboard-recommend-source"
                 variant="tonal"
                 color="white"
-                rounded="pill"
                 append-icon="mdi-chevron-down"
                 :aria-label="t('dashboard.selectRecommendSource')"
               >
-                <VIcon :icon="getSourceIcon(selectedSource)" color="primary" size="20" start />
+                <VIcon :icon="getSourceIcon(selectedSource)" color="primary" size="16" start />
                 <span class="dashboard-recommend-source-title">{{ selectedSource.title }}</span>
               </VBtn>
             </template>
@@ -341,7 +340,6 @@ onBeforeUnmount(() => {
         class="dashboard-recommend-detail"
         variant="outlined"
         color="primary"
-        rounded="pill"
         append-icon="mdi-chevron-right"
         @click.stop="goToMediaDetail"
       >
@@ -395,7 +393,7 @@ onBeforeUnmount(() => {
         :label="hasSnapshot ? t('dashboard.staleData') : t('dashboard.recommendLoadFailed')"
         @retry="loadMedia()"
       />
-      <VIcon icon="mdi-image-off-outline" size="38" />
+      <VIcon icon="mdi-image-off-outline" size="34" />
       <span>{{
         loadFailed && !hasSnapshot ? t('dashboard.recommendLoadFailed') : t('dashboard.noRecommendations')
       }}</span>
@@ -442,8 +440,8 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 1;
   background:
-    linear-gradient(180deg, rgba(3, 8, 14, 0.08) 0%, rgba(5, 12, 19, 0.04) 42%, rgba(5, 14, 22, 0.72) 100%),
-    linear-gradient(90deg, rgba(5, 14, 22, 0.42) 0%, rgba(5, 14, 22, 0.12) 46%, transparent 68%);
+    linear-gradient(180deg, rgba(3, 8, 14, 0.08) 0%, rgba(5, 12, 19, 0.04) 42%, rgba(5, 14, 22, 0.78) 100%),
+    linear-gradient(90deg, rgba(5, 14, 22, 0.48) 0%, rgba(5, 14, 22, 0.14) 46%, transparent 68%);
   inset: 0;
   pointer-events: none;
 }
@@ -454,35 +452,38 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  inset-block-start: 1.25rem;
-  inset-inline: 1.4rem;
+  gap: 13px;
+  inset-block-start: 16px;
+  inset-inline: 18px;
 }
 
 .dashboard-recommend-label {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(8, 18, 28, 0.56);
-  backdrop-filter: blur(10px);
-  font-size: 0.84rem;
-  font-weight: 650;
-  gap: 0.45rem;
-  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(22, 23, 29, 0.86);
+  block-size: 32px;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  padding-inline: 12px;
 }
 
 .dashboard-recommend-actions {
   display: flex;
   align-items: center;
   min-inline-size: 0;
-  gap: 0.35rem;
+  gap: 6px;
 }
 
 .dashboard-recommend-source {
-  max-inline-size: min(320px, 45vw);
-  background: rgba(8, 18, 28, 0.55) !important;
-  backdrop-filter: blur(12px);
+  max-inline-size: min(300px, 45vw);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px !important;
+  background: rgba(22, 23, 29, 0.86) !important;
+  block-size: 32px;
+  font-size: 12.5px;
   text-transform: none;
 }
 
@@ -495,54 +496,59 @@ onBeforeUnmount(() => {
 .dashboard-recommend-content {
   position: absolute;
   z-index: 2;
-  max-inline-size: min(640px, 56%);
+  max-inline-size: min(600px, 58%);
   cursor: pointer;
-  inset-block-end: 4.8rem;
-  inset-inline-start: 1.9rem;
+  inset-block-end: 58px;
+  inset-inline-start: 21px;
   outline: none;
 }
 
 .dashboard-recommend-content:focus-visible {
-  border-radius: 10px;
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.48);
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.56);
 }
 
 .dashboard-recommend-title {
   margin: 0;
   color: rgb(255, 255, 255);
-  font-size: clamp(1.6rem, 2.5vw, 2.45rem);
-  font-weight: 750;
+  font-size: clamp(1.3125rem, 2vw, 1.625rem);
+  font-weight: 650;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.2;
   text-shadow:
-    0 3px 20px rgba(0, 0, 0, 0.82),
+    0 2px 16px rgba(0, 0, 0, 0.82),
     0 1px 2px rgba(0, 0, 0, 0.72);
 }
 
 .dashboard-recommend-meta {
-  margin-block-start: 0.55rem;
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 0.86rem;
+  margin-block-start: 6px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .dashboard-recommend-overview {
   display: -webkit-box;
   overflow: hidden;
-  margin: 0.75rem 0 0;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.85rem;
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  line-height: 1.65;
+  line-height: 1.55;
   text-overflow: ellipsis;
 }
 
 .dashboard-recommend-detail {
   position: absolute;
   z-index: 3;
-  min-inline-size: 148px;
-  inset-block-end: 4.9rem;
-  inset-inline-end: 1.9rem;
+  border-radius: 8px !important;
+  background: rgba(22, 23, 29, 0.72) !important;
+  block-size: 32px;
+  font-size: 13px;
+  inset-block-end: 58px;
+  inset-inline-end: 21px;
+  min-inline-size: 118px;
   text-transform: none;
 }
 
@@ -550,18 +556,19 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 3;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(8, 18, 28, 0.52) !important;
-  block-size: 40px;
-  inline-size: 40px;
-  inset-block-end: 1.15rem;
+  border-radius: 9px !important;
+  background: rgba(22, 23, 29, 0.78) !important;
+  block-size: 34px !important;
+  inline-size: 34px !important;
+  inset-block-end: 13px;
 }
 
 .dashboard-recommend-arrow--previous {
-  inset-inline-start: 1.4rem;
+  inset-inline-start: 18px;
 }
 
 .dashboard-recommend-arrow--next {
-  inset-inline-end: 1.4rem;
+  inset-inline-end: 18px;
 }
 
 .dashboard-recommend-pagination {
@@ -570,8 +577,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  inset-block-end: 1.8rem;
+  gap: 8px;
+  inset-block-end: 26px;
   inset-inline: 25%;
 }
 
@@ -579,10 +586,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.24);
-  block-size: 4px;
+  background: rgba(255, 255, 255, 0.26);
+  block-size: 3px;
   cursor: pointer;
-  inline-size: 54px;
+  inline-size: 34px;
   padding: 0;
   transition:
     background-color 0.2s ease,
@@ -591,7 +598,7 @@ onBeforeUnmount(() => {
 
 .dashboard-recommend-page.is-active {
   background: rgb(var(--v-theme-primary));
-  inline-size: 72px;
+  inline-size: 55px;
 }
 
 .dashboard-recommend-empty {
@@ -602,13 +609,14 @@ onBeforeUnmount(() => {
   justify-content: center;
   color: rgba(255, 255, 255, 0.68);
   flex-direction: column;
-  gap: 0.75rem;
+  font-size: 13px;
+  gap: 10px;
 }
 
 .dashboard-recommend-retry {
   position: absolute;
-  inset-block-start: 1rem;
-  inset-inline-end: 1rem;
+  inset-block-start: 14px;
+  inset-inline-end: 14px;
 }
 
 @media (min-width: 741px) and (hover: hover) {
@@ -667,11 +675,10 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-recommend-source {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     max-inline-size: none;
     min-inline-size: 40px;
-    background: rgba(8, 18, 28, 0.24) !important;
-    backdrop-filter: blur(8px);
+    background: rgba(22, 23, 29, 0.8) !important;
     block-size: 40px;
     inline-size: 40px;
     padding: 0;

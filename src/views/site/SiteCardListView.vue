@@ -5,6 +5,7 @@ import SiteCard from '@/components/cards/SiteCard.vue'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
+import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/composables/useChineseText'
 import { usePWA } from '@/composables/usePWA'
 import { useToast } from 'vue-toastification'
@@ -16,6 +17,9 @@ const { t } = useI18n()
 
 // 提示框
 const $toast = useToast()
+
+// 确认框
+const createConfirm = useConfirm()
 
 // 路由
 const route = useRoute()
@@ -54,6 +58,7 @@ const sortMode = ref(false)
 
 // 排序保存期间锁定拖拽，确保一次请求只确认它实际提交的顺序快照。
 const savingPriority = ref(false)
+const exporting = ref(false)
 
 // 筛选相关
 const filterMenu = ref(false)
@@ -121,7 +126,10 @@ const currentFilter = computed(() => {
 })
 
 // 获取站点列表数据
+let fetchGeneration = 0
+
 async function fetchData(context: KeepAliveRefreshContext = {}) {
+  const generation = ++fetchGeneration
   const showLoading = !context.silent || !isRefreshed.value
 
   try {
@@ -135,11 +143,13 @@ async function fetchData(context: KeepAliveRefreshContext = {}) {
       // 站点统计在列表请求期间并行预取，减少刷新时卡片分两轮明显重绘。
       fetchSiteStats(),
     ])
+    if (generation !== fetchGeneration) return
     siteList.value = sites
     confirmedSiteList.value = [...sites]
     isRefreshed.value = true
     loadError.value = false
   } catch (error) {
+    if (generation !== fetchGeneration) return
     console.error(error)
     if (!isRefreshed.value) {
       loadError.value = true
@@ -149,6 +159,16 @@ async function fetchData(context: KeepAliveRefreshContext = {}) {
       loading.value = false
     }
   }
+}
+
+// 删除站点后立即从本地列表移除并触发后方卡片弹性补位，后台静默同步最新列表与统计
+function handleRemoveSite(removedId?: number) {
+  if (typeof removedId === 'number' && Number.isFinite(removedId)) {
+    ++fetchGeneration
+    siteList.value = siteList.value.filter(site => site.id !== removedId)
+    confirmedSiteList.value = confirmedSiteList.value.filter(site => site.id !== removedId)
+  }
+  void fetchData({ silent: true })
 }
 
 // 获取站点最新数据
@@ -286,6 +306,15 @@ function openSiteStatisticsDialog() {
 
 // 导出站点数据
 async function exportSites() {
+  if (exporting.value) return
+
+  const isConfirmed = await createConfirm({
+    title: t('common.confirm'),
+    content: '导出的 JSON 文件包含站点 Cookie、API Key、Token 等敏感凭据，请妥善保管切勿泄露。是否确认导出？',
+  })
+  if (!isConfirmed) return
+
+  exporting.value = true
   try {
     // 获取所有站点数据
     const sites: Site[] = await api.get('site/')
@@ -332,6 +361,8 @@ async function exportSites() {
   } catch (error) {
     console.error('Export sites failed:', error)
     $toast.error(t('site.messages.exportFailed'))
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -374,6 +405,7 @@ const siteDynamicMenuItems = computed<DynamicButtonMenuItem[]>(() => [
   {
     titleKey: 'site.actions.export',
     icon: 'mdi-export',
+    disabled: exporting.value,
     action: exportSites,
   },
   {
@@ -394,50 +426,107 @@ useDynamicButton({
 
 <template>
   <div class="card-list-container">
-    <!-- 页面标题和筛选/排序按钮 -->
-    <div class="d-flex justify-space-between align-center mb-3">
-      <VPageContentTitle :title="t('navItems.siteManager')" class="my-0" style="margin-block: 0" />
-      <!-- 右侧按钮组：保留筛选和排序，其他页面动作移到 FAB -->
-      <div class="d-flex align-center gap-1">
+    <!-- 页面标题、筛选排序与站点管理操作 -->
+    <div class="site-page-header d-flex flex-wrap justify-space-between align-center gap-2 mb-3">
+      <VPageContentTitle
+        :title="t('navItems.siteManager')"
+        class="site-page-header__title my-0"
+        style="margin-block: 0"
+      />
+      <div class="site-page-header__actions d-flex flex-wrap align-center gap-1.5">
         <!-- 筛选按钮 -->
         <VMenu v-model="filterMenu" offset-y :close-on-content-click="false" location="bottom end">
           <template #activator="{ props }">
-            <IconBtn v-bind="props" :variant="filterOption === 'all' ? 'text' : 'tonal'" :color="currentFilter?.color">
-              <VIcon :icon="currentFilter?.icon || 'mdi-filter'" />
+            <IconBtn
+              v-bind="props"
+              size="small"
+              class="site-toolbar-icon-btn"
+              :aria-label="t('common.filter')"
+              :variant="filterOption === 'all' ? 'text' : 'tonal'"
+              :color="currentFilter?.color"
+            >
+              <VIcon :icon="currentFilter?.icon || 'mdi-filter'" size="18" />
+              <VTooltip activator="parent" location="bottom">{{ t('common.filter') }}</VTooltip>
             </IconBtn>
           </template>
           <!-- 筛选菜单 -->
           <VCard min-width="200">
-            <VList class="px-2">
+            <VList density="compact" class="px-2 py-1">
               <VListSubheader>{{ t('common.filter') }}</VListSubheader>
               <VListItem
                 v-for="option in filterOptions"
                 :key="option.value"
                 :active="filterOption === option.value"
+                density="compact"
                 @click="selectFilter(option.value)"
               >
                 <template #prepend>
-                  <VIcon :icon="option.icon" :color="option.color" />
+                  <VIcon :icon="option.icon" :color="option.color" size="18" />
                 </template>
                 <VListItemTitle>{{ option.label }}</VListItemTitle>
                 <template #append>
-                  <VIcon v-if="filterOption === option.value" icon="mdi-check" color="primary" />
+                  <VIcon v-if="filterOption === option.value" icon="mdi-check" color="primary" size="16" />
                 </template>
               </VListItem>
             </VList>
           </VCard>
         </VMenu>
         <!-- 排序按钮 -->
-        <IconBtn variant="text" :color="sortMode ? 'warning' : 'gray'" @click="toggleSortMode">
-          <VIcon icon="mdi-sort-variant" />
+        <IconBtn
+          size="small"
+          variant="text"
+          class="site-toolbar-icon-btn"
+          :aria-label="t('common.sortMode')"
+          :color="sortMode ? 'primary' : undefined"
+          @click="toggleSortMode"
+        >
+          <VIcon icon="mdi-sort-variant" size="18" />
+          <VTooltip activator="parent" location="bottom">{{ t('common.sortMode') }}</VTooltip>
         </IconBtn>
+
+        <template v-if="shouldShowFloatingActions && !appMode">
+          <span class="mp-page-action-divider" />
+          <VBtn
+            size="small"
+            variant="outlined"
+            rounded="lg"
+            prepend-icon="mdi-chart-line"
+            @click="openSiteStatisticsDialog"
+          >
+            {{ t('site.statistics') }}
+          </VBtn>
+          <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-import" @click="openSiteImportDialog">
+            {{ t('site.actions.import') }}
+          </VBtn>
+          <VBtn
+            size="small"
+            variant="outlined"
+            rounded="lg"
+            prepend-icon="mdi-export"
+            :loading="exporting"
+            :disabled="exporting"
+            @click="exportSites"
+          >
+            {{ t('site.actions.export') }}
+          </VBtn>
+          <VBtn
+            size="small"
+            variant="flat"
+            color="primary"
+            rounded="lg"
+            prepend-icon="mdi-web-plus"
+            @click="openSiteAddDialog"
+          >
+            {{ t('site.actions.add') }}
+          </VBtn>
+        </template>
       </div>
     </div>
 
-    <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-4 py-0 app-surface-static">
-      <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-5">
-        <span>{{ t('common.sortModeHint') }}</span>
-        <VBtn variant="tonal" color="error" @click="sortMode = false">
+    <VAlert v-if="sortMode" color="warning" variant="tonal" class="mb-3 py-0 app-surface-static">
+      <div class="d-flex flex-wrap align-center justify-space-between gap-2 py-2">
+        <span class="text-body-2">{{ t('common.sortModeHint') }}</span>
+        <VBtn size="small" rounded="lg" variant="tonal" color="error" @click="sortMode = false">
           {{ t('common.exit') }}
         </VBtn>
       </div>
@@ -451,7 +540,7 @@ useDynamicButton({
       @end="savaSitesPriority"
       item-key="id"
       tag="div"
-      :component-data="{ 'class': 'grid gap-4 grid-site-card px-2' }"
+      :component-data="{ 'class': 'grid gap-3.5 grid-site-card' }"
     >
       <template #item="{ element }">
         <SiteCard
@@ -459,7 +548,7 @@ useDynamicButton({
           :data="siteUserDataMap[element.domain]"
           :stats="siteStatsList[element.domain] || {}"
           :sortable="true"
-          @remove="fetchData"
+          @remove="handleRemoveSite"
           @update="fetchData"
           @refresh-stats="handleRefreshStats"
         />
@@ -470,8 +559,7 @@ useDynamicButton({
       :items="draggableSiteList"
       :get-item-key="item => item.id"
       :min-item-width="256"
-      :estimated-item-height="168"
-      class="px-2"
+      :estimated-item-height="156"
     >
       <template #default="{ item }">
         <SiteCard
@@ -479,7 +567,7 @@ useDynamicButton({
           :data="siteUserDataMap[item.domain]"
           :stats="siteStatsList[item.domain] || {}"
           :sortable="false"
-          @remove="fetchData"
+          @remove="handleRemoveSite"
           @update="fetchData"
           @refresh-stats="handleRefreshStats"
         />
@@ -493,7 +581,7 @@ useDynamicButton({
     :error-description="t('common.troubleshooting')"
   >
     <template #button>
-      <VBtn color="primary" variant="tonal" @click="fetchData()">
+      <VBtn color="primary" variant="tonal" rounded="lg" size="small" @click="fetchData()">
         {{ t('common.retry') }}
       </VBtn>
     </template>
@@ -504,40 +592,30 @@ useDynamicButton({
     :error-title="filterOption === 'all' ? t('site.noSites') : t('common.noMatchingData')"
     :error-description="filterOption === 'all' ? t('site.sitesWillBeShownHere') : t('common.tryChangingFilters')"
   />
-  <!-- 新增站点按钮 -->
-  <Teleport to="body" v-if="route.path === '/site'">
-    <div v-if="shouldShowFloatingActions && !appMode" class="compact-fab-stack">
-      <VFab
-        icon="mdi-chart-line"
-        color="info"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="openSiteStatisticsDialog"
-      />
-      <VFab
-        icon="mdi-export"
-        color="warning"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="exportSites"
-      />
-      <VFab
-        icon="mdi-import"
-        color="success"
-        variant="tonal"
-        appear
-        class="compact-fab compact-fab--secondary"
-        @click="openSiteImportDialog"
-      />
-      <VFab
-        icon="mdi-web-plus"
-        color="primary"
-        appear
-        class="compact-fab compact-fab--primary"
-        @click="openSiteAddDialog"
-      />
-    </div>
-  </Teleport>
 </template>
+
+<style scoped>
+.site-page-header {
+  min-block-size: 32px;
+  padding-inline: 8px;
+}
+
+.site-page-header__title,
+.site-page-header__title :deep(*) {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  line-height: 1.35 !important;
+}
+
+.site-page-header__actions {
+  align-items: center;
+}
+
+.site-toolbar-icon-btn {
+  border-radius: 7px !important;
+  block-size: 28px !important;
+  inline-size: 28px !important;
+  min-inline-size: 28px !important;
+}
+</style>

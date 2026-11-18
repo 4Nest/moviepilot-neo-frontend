@@ -128,11 +128,29 @@ describe('RenameFormatEditor layout', () => {
     expect(groups).toHaveLength(1)
     expect(within(groups[0] as HTMLElement).getByText('有年份时')).toBeTruthy()
     expect(container.querySelectorAll('.rename-format-editor__token--separator')).toHaveLength(1)
+    expect(container.querySelectorAll('.rename-format-editor__level-row')).toHaveLength(2)
 
     const segments = [...container.querySelectorAll('.rename-format-editor__preview-segment')].map(el =>
       el.textContent?.trim(),
     )
     expect(segments).toEqual(['流浪地球 (2019)', '流浪地球.mkv'])
+  })
+
+  it('splits multi-directory tv formats into distinct directory and filename tracks', async () => {
+    localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
+    const { container } = await renderWithProviders(RenameFormatEditor, {
+      props: {
+        modelValue:
+          '{{title}}{% if year %} ({{year}}){% endif %}/Season {{season}}/{{title}} - {{season_episode}}{{fileExt}}',
+        mediaType: 'tv',
+      },
+    })
+
+    const levelBadges = [...container.querySelectorAll('.rename-format-editor__level-badge')].map(el =>
+      el.textContent?.trim(),
+    )
+    expect(levelBadges).toEqual(['目录 1', '目录 2', '文件名'])
+    expect(container.querySelectorAll('.rename-format-editor__token--separator')).toHaveLength(2)
   })
 
   it('inserts a quick text token with one click', async () => {
@@ -146,5 +164,35 @@ describe('RenameFormatEditor layout', () => {
 
     const updates = emitted()['update:modelValue'] as string[][]
     expect(updates.at(-1)?.[0]).toBe('{{title}} - ')
+  })
+
+  it('maps en_title to localized label and applies preset templates', async () => {
+    localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
+    const { emitted, container } = await renderWithProviders(RenameFormatEditor, {
+      props: { modelValue: '{{title}}{% if en_title %}.{{en_title}}{% endif %}{{fileExt}}', mediaType: 'movie' },
+    })
+
+    const tokenArea = container.querySelector<HTMLElement>('.rename-format-editor__token-area')!
+    expect(within(tokenArea).getByText('英文标题')).toBeTruthy()
+
+    await fireEvent.click(screen.getByText('预设模板'))
+    await fireEvent.click(await screen.findByText('媒体库推荐'))
+
+    const updates = emitted()['update:modelValue'] as string[][]
+    expect(updates.at(-1)?.[0]).toContain('{tmdbid={{tmdbid}}}')
+  })
+
+  it('inserts fields from the compact variable popover', async () => {
+    localStorage.setItem('MP_RENAME_FORMAT_MODE', 'simple')
+    const { emitted } = await renderWithProviders(RenameFormatEditor, {
+      props: { modelValue: '{{title}}', mediaType: 'movie' },
+    })
+
+    await fireEvent.click(screen.getByText('插入变量'))
+    const resolutionBtn = await screen.findByRole('button', { name: '分辨率' })
+    await fireEvent.click(resolutionBtn)
+
+    const updates = emitted()['update:modelValue'] as string[][]
+    expect(updates.at(-1)?.[0]).toBe('{{title}}{{videoFormat}}')
   })
 })

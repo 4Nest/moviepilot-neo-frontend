@@ -20,6 +20,7 @@ const componentLoaded = ref(false)
 
 // 是否已尝试加载
 const hasTriedLoading = ref(false)
+const loadingStarted = ref(false)
 
 // 数据列表
 const dataList = shallowRef<Person[]>([])
@@ -29,14 +30,21 @@ const containerRef = ref<HTMLElement | null>(null)
 
 // 获取订阅列表数据
 async function fetchData() {
+  if (loadingStarted.value) return
+  loadingStarted.value = true
   try {
-    if (!props.apipath) return
+    if (!props.apipath) {
+      componentLoaded.value = true
+      return
+    }
 
     dataList.value = await api.get(props.apipath)
     componentLoaded.value = true
   } catch (error) {
     console.error(error)
+    componentLoaded.value = true
   } finally {
+    loadingStarted.value = false
     hasTriedLoading.value = true
   }
 }

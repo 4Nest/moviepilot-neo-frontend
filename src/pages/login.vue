@@ -191,7 +191,7 @@ async function loadAuthProviders() {
 
 // 打开插件认证联邦页面。
 async function openPluginAuth(provider: LoginAuthProvider) {
-  if (!provider.remote) return
+  if (!provider.remote || loading.value || passkeyLoading.value) return
   selectedAuthProvider.value = provider
   RemoteAuthView.value = null
   pluginAuthError.value = ''
@@ -450,6 +450,7 @@ async function handlePassKeyAuth(
 
 // 使用PassKey登录 (支持 Conditional UI)
 async function loginWithPassKey(isConditional = false) {
+  if (!isConditional && (loading.value || pluginAuthLoading.value)) return
   await handlePassKeyAuth(
     { isConditional },
     val => (passkeyLoading.value = val),
@@ -660,32 +661,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- 登录页面容器 -->
+  <!-- 登录工作台容器 -->
   <div class="login-root" :data-login-visual-profile="loginVisualProfile">
-    <svg class="login-glass-filter-defs" aria-hidden="true">
-      <defs>
-        <filter id="login-glass-static-refraction" x="-12%" y="-12%" width="124%" height="124%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.014" numOctaves="2" seed="8" result="noise" />
-          <feGaussianBlur in="noise" stdDeviation="0.35" result="softNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="11" xChannelSelector="R" yChannelSelector="G" />
-        </filter>
-      </defs>
-    </svg>
-
-    <!-- 经典主题保留一层低频品牌环境光；透明与玻璃 profile 不挂载该装饰。 -->
-    <div v-if="loginVisualProfile === 'classic'" class="login-ambient-light" aria-hidden="true">
-      <span class="login-ambient-light__wash" />
-    </div>
+    <div class="login-workbench-grid" aria-hidden="true" />
 
     <!-- 登录表单 -->
     <div class="auth-wrapper d-flex align-center justify-center">
-      <VCard
-        class="auth-card login-card glass-effect no-blur pa-6 pa-sm-7 w-full h-full login-card--enter"
-        max-width="24rem"
-        flat
-      >
-        <div class="login-card__surface" aria-hidden="true" />
-
+      <VCard class="auth-card login-card pa-6 pa-sm-7 w-full h-full login-card--enter" max-width="24rem" flat>
         <!-- NEO 品牌标识 -->
         <div class="login-brand" aria-label="MoviePilot NEO">
           <div class="login-brand__mark-row">
@@ -799,6 +781,7 @@ onUnmounted(() => {
                   class="passkey-btn"
                   prepend-icon="material-symbols:passkey"
                   :loading="passkeyLoading"
+                  :disabled="loading || pluginAuthLoading"
                   @click="loginWithPassKey(false)"
                 >
                   {{ t('login.loginWithPasskey') }}
@@ -812,6 +795,7 @@ onUnmounted(() => {
                   class="mt-3 plugin-auth-btn"
                   :prepend-icon="provider.icon || 'mdi-login-variant'"
                   :loading="pluginAuthLoading && selectedAuthProvider?.id === provider.id"
+                  :disabled="loading || passkeyLoading || pluginAuthLoading"
                   rounded="lg"
                   @click="openPluginAuth(provider)"
                 >
@@ -860,7 +844,7 @@ onUnmounted(() => {
 
 @use '@core/scss/pages/page-auth';
 
-/* ===================== 布局根容器 ===================== */
+/* ===================== 极简哑光 IDE 登录工作台 ===================== */
 .login-root {
   position: relative;
   display: flex;
@@ -869,36 +853,23 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  background-color: var(--mp-shell-bg);
   isolation: isolate;
   min-block-size: 100vh;
   min-block-size: 100dvh;
   padding-block: calc(env(safe-area-inset-top, 0px) + 24px) calc(env(safe-area-inset-bottom, 0px) + 24px);
 }
 
-/* 经典 profile 只保留一层覆盖视口的低频品牌环境光。 */
-.login-ambient-light {
+/* 微妙径向点阵纹理 */
+.login-workbench-grid {
   position: absolute;
   z-index: 0;
-  overflow: hidden;
+  background-image: radial-gradient(rgba(var(--v-theme-on-surface), 0.08) 1px, transparent 1px);
+  background-position: center;
+  background-size: 22px 22px;
   inset: 0;
+  mask-image: radial-gradient(ellipse 68% 60% at 50% 48%, #000 32%, transparent 100%);
   pointer-events: none;
-}
-
-.login-ambient-light__wash {
-  position: absolute;
-  animation: ambient-drift 18s ease-in-out infinite alternate;
-  background:
-    radial-gradient(ellipse at 78% 18%, rgba(var(--v-theme-primary), 0.18), transparent 48%),
-    linear-gradient(145deg, transparent 28%, rgba(var(--v-theme-primary), 0.07) 72%, transparent);
-  filter: blur(40px);
-  inset: -12%;
-  transform: translate3d(1.5%, -1%, 0) scale(1.04);
-}
-
-@keyframes ambient-drift {
-  to {
-    transform: translate3d(-1.5%, 1%, 0) scale(1);
-  }
 }
 
 /* ===================== 表单容器 ===================== */
@@ -912,58 +883,15 @@ onUnmounted(() => {
   padding-inline: 16px;
 }
 
-.login-glass-filter-defs {
-  position: absolute;
-  overflow: hidden;
-  block-size: 0;
-  inline-size: 0;
-  pointer-events: none;
-}
-
-/* ===================== 玻璃卡片 ===================== */
-.login-root[data-login-visual-profile] .login-card {
+/* ===================== 实色 IDE 登录卡片 ===================== */
+.login-card {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  border: none !important;
-  border-radius: var(--app-surface-radius, 20px) !important;
-  box-shadow: 0 12px 32px rgba(var(--app-shadow-rgb, 0, 0, 0), 0.1) !important;
-
-  > :not(.login-card__surface) {
-    position: relative;
-    z-index: 2;
-  }
-}
-
-/* 登录卡片拥有独立光学表面，不跟随透明主题的全局模糊开关。 */
-.glass-effect {
-  backdrop-filter: none !important;
-  background: transparent !important;
-}
-
-.login-card__surface {
-  position: absolute;
-  z-index: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  inset: 0;
-  pointer-events: none;
-  transform: translateZ(0);
-}
-
-.login-root[data-login-visual-profile='classic'] .login-card__surface {
-  backdrop-filter: blur(22px) saturate(105%);
-  background: rgba(var(--v-theme-surface), 0.62);
-}
-
-.login-root[data-login-visual-profile='transparent'] .login-card__surface {
-  backdrop-filter: blur(var(--optical-glass-blur)) saturate(var(--optical-glass-saturate))
-    contrast(var(--optical-glass-contrast));
-  background: rgba(var(--v-theme-surface), 0.56);
-}
-
-.login-root[data-login-visual-profile='glass'] .login-card .login-card__surface {
-  background: rgba(var(--v-theme-surface), 0.18) !important;
+  border: 1px solid var(--mp-border-card) !important;
+  border-radius: 14px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+  box-shadow: none !important;
 }
 
 .login-brand {
@@ -982,10 +910,9 @@ onUnmounted(() => {
 }
 
 .login-brand__mark {
-  block-size: 3.2rem;
-  inline-size: 3.2rem;
-  filter: drop-shadow(0 0 6px rgba(var(--v-theme-primary), 0.42))
-    drop-shadow(0 0 14px rgba(var(--v-theme-primary), 0.2));
+  block-size: 3rem;
+  inline-size: 3rem;
+  filter: drop-shadow(0 0 6px rgba(var(--v-theme-primary), 0.24));
 }
 
 .login-brand__name {
@@ -1017,11 +944,10 @@ onUnmounted(() => {
   block-size: 100%;
   inline-size: 24px;
   inset-block-start: 0;
-  inset-inline-start: 14px;
+  inset-inline-start: 12px;
   pointer-events: none;
 }
 
-/* 保留 NEO Logo 的轻量霓虹识别度，卡片和表单本身保持克制。 */
 .login-remember {
   position: relative;
   display: inline-flex;
@@ -1036,7 +962,7 @@ onUnmounted(() => {
 }
 
 .login-remember:hover {
-  color: rgba(var(--v-theme-on-surface), 0.9);
+  color: rgba(var(--v-theme-on-surface), 0.92);
 }
 
 .login-remember__label {
@@ -1058,15 +984,14 @@ onUnmounted(() => {
   flex: 0 0 18px;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.24);
   border-radius: 5px;
-  background: rgba(var(--v-theme-surface), 0.12);
+  background: var(--mp-canvas-bg);
   block-size: 18px;
   color: transparent;
   inline-size: 18px;
   transition:
     background 160ms ease,
     border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
+    color 160ms ease;
 }
 
 .login-remember__input:checked + .login-remember__check {
@@ -1088,27 +1013,25 @@ onUnmounted(() => {
 
 .login-submit {
   border: 0;
-  border-radius: 13px !important;
+  border-radius: 8px !important;
   background: rgb(var(--v-theme-primary)) !important;
-  block-size: 46px !important;
-  inline-size: min(100%, 14rem);
-  box-shadow: 0 5px 14px rgba(var(--v-theme-primary), 0.18);
+  block-size: 42px !important;
+  inline-size: 100%;
+  box-shadow: none !important;
   color: rgb(var(--v-theme-on-primary)) !important;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease;
+    opacity 150ms ease,
+    transform 150ms ease;
 }
 
 .login-submit:not(.v-btn--disabled):not(.v-btn--loading):hover {
-  box-shadow: 0 5px 14px rgba(var(--v-theme-primary), 0.22);
-  transform: translateY(-1px);
+  opacity: 0.94;
 }
 
 .login-submit:not(.v-btn--disabled):not(.v-btn--loading):active {
-  box-shadow: 0 2px 6px rgba(var(--v-theme-primary), 0.14);
-  transform: translateY(0);
+  transform: translateY(1px);
 }
 
 .login-submit :deep(.v-btn__content) {
@@ -1121,38 +1044,35 @@ onUnmounted(() => {
   line-height: 1;
 }
 
-.login-submit.v-btn--disabled {
-  box-shadow: none;
-  transform: none;
-}
 /* ===================== 卡片主体 ===================== */
 .login-body {
   padding-inline: 0 !important;
   padding-block: 10px !important;
 }
 
-/* 原生登录输入框：保留标准 input DOM，便于密码管理器识别。 */
-.login-root[data-login-visual-profile] .native-login-field {
+/* 原生登录输入框：保留标准 input DOM，实色哑光边框。 */
+.native-login-field {
   position: relative;
   display: flex;
   overflow: hidden;
   align-items: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.16);
-  block-size: 56px;
-  border-radius: 13px;
-  background: rgba(var(--v-theme-surface), 0.12);
-  backdrop-filter: blur(10px) saturate(105%);
+  border: 1px solid var(--mp-border-card);
+  border-radius: 8px;
+  background: var(--mp-canvas-bg);
+  block-size: 46px;
   box-shadow: none;
   transition:
     border-color 150ms ease,
-    box-shadow 150ms ease,
-    background 220ms ease;
+    box-shadow 150ms ease;
 }
 
-.login-root[data-login-visual-profile] .native-login-field:focus-within {
-  border-color: rgba(var(--v-theme-primary), 0.5);
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.06);
-  background: rgba(var(--v-theme-surface), 0.1);
+.native-login-field:hover {
+  border-color: var(--mp-border-hover);
+}
+
+.native-login-field:focus-within {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.14);
 }
 
 .native-login-field__icon {
@@ -1166,14 +1086,15 @@ onUnmounted(() => {
   border: 0;
   appearance: none;
   background: transparent;
-  block-size: 54px;
+  block-size: 44px;
   color: rgb(var(--v-theme-on-surface));
   font: inherit;
+  font-size: 0.925rem;
   inline-size: 100%;
   line-height: 1.5;
   outline: none;
   padding-block: 0;
-  padding-inline: 50px 16px;
+  padding-inline: 44px 14px;
 }
 
 .native-login-field__input::placeholder {
@@ -1182,7 +1103,7 @@ onUnmounted(() => {
 }
 
 .native-login-field--password .native-login-field__input {
-  padding-inline-end: 52px;
+  padding-inline-end: 46px;
 }
 
 .native-login-field__input:-webkit-autofill,
@@ -1200,14 +1121,14 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 50%;
+  border-radius: 6px;
   background: transparent;
-  block-size: 40px;
+  block-size: 34px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: pointer;
-  inline-size: 40px;
-  inset-block-start: 4px;
-  inset-inline-end: 4px;
+  inline-size: 34px;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
   padding: 0;
   transition:
     background 150ms ease,
@@ -1216,37 +1137,21 @@ onUnmounted(() => {
 
 .native-login-field__toggle:hover,
 .native-login-field__toggle:focus-visible {
-  background: rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-on-surface), 0.06);
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   outline: none;
 }
 
 /* Passkey 按钮 */
 .passkey-btn {
-  border-radius: 12px;
+  border-radius: 8px;
   font-weight: 500;
-  transition:
-    background 200ms ease,
-    border-color 200ms ease,
-    transform 150ms ease;
-
-  &:hover {
-    transform: translateY(-1px);
-  }
 }
 
 /* 插件认证按钮 */
 .plugin-auth-btn {
-  border-radius: 12px;
+  border-radius: 8px !important;
   font-weight: 500;
-  transition:
-    background 200ms ease,
-    border-color 200ms ease,
-    transform 150ms ease;
-
-  &:hover {
-    transform: translateY(-1px);
-  }
 }
 
 /* or 分隔线 */
@@ -1259,7 +1164,7 @@ onUnmounted(() => {
   &::before,
   &::after {
     flex: 1;
-    border-block-end: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.7));
+    border-block-end: 1px solid var(--mp-border-card);
     content: '';
   }
 
@@ -1276,28 +1181,28 @@ onUnmounted(() => {
 
 /* 错误提示 */
 .login-alert {
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 /* 浅色主题下 passkey 按钮保持绿色辨识度 */
 :deep(.v-theme--light) .passkey-btn.v-btn--variant-outlined {
-  color: rgb(86, 170, 0) !important;
+  color: rgb(var(--v-theme-success)) !important;
 }
 
 /* ===================== 入场动画 ===================== */
 .login-card--enter {
-  animation: login-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: login-enter 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @keyframes login-enter {
   0% {
     opacity: 0;
-    transform: translateY(12px) scale(0.985);
+    transform: translateY(8px);
   }
 
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -1310,35 +1215,11 @@ onUnmounted(() => {
   .login-submit {
     transition: none !important;
   }
-
-  .login-ambient-light__wash {
-    animation: none !important;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .login-root[data-login-visual-profile] .login-card .login-card__surface,
-  .login-root[data-login-visual-profile] .native-login-field {
-    backdrop-filter: none !important;
-    background: rgb(var(--v-theme-surface)) !important;
-    filter: none !important;
-  }
 }
 
 @media (prefers-contrast: more) {
-  .login-root[data-login-visual-profile] .login-card .login-card__surface {
-    background: rgba(var(--v-theme-surface), 0.94) !important;
-  }
-
-  .login-root[data-login-visual-profile] .native-login-field {
+  .native-login-field {
     border-color: rgba(var(--v-theme-on-surface), 0.68);
-  }
-}
-
-@supports not (backdrop-filter: blur(1px)) {
-  .login-root[data-login-visual-profile] .login-card .login-card__surface,
-  .login-root[data-login-visual-profile] .native-login-field {
-    background: rgba(var(--v-theme-surface), 0.96) !important;
   }
 }
 
@@ -1348,14 +1229,13 @@ onUnmounted(() => {
     padding-inline: 12px;
   }
 
-  .login-root[data-login-visual-profile] .login-card {
+  .login-card {
     padding: 1.5rem !important;
-    border-radius: 16px !important;
   }
 }
 
 @media (width <= 480px) and (height <= 600px) {
-  .login-root[data-login-visual-profile] .login-card {
+  .login-card {
     padding-block: 0.75rem !important;
   }
 }

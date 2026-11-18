@@ -59,20 +59,46 @@ function openVersionDetails() {
 
 useDataRefresh('dashboard-system-info', loadSystemInfo, 60000, true)
 
-onMounted(() => {
+function startRuntimeTimer() {
+  if (runtimeTimer !== null) return
+  runtimeNow.value = Date.now()
   runtimeTimer = setInterval(() => {
     runtimeNow.value = Date.now()
   }, 60000)
+}
+
+function stopRuntimeTimer() {
+  if (runtimeTimer !== null) {
+    clearInterval(runtimeTimer)
+    runtimeTimer = null
+  }
+}
+
+onMounted(() => {
+  startRuntimeTimer()
+})
+
+onActivated(() => {
+  startRuntimeTimer()
+})
+
+onDeactivated(() => {
+  stopRuntimeTimer()
 })
 
 onBeforeUnmount(() => {
-  if (runtimeTimer) clearInterval(runtimeTimer)
+  stopRuntimeTimer()
 })
 </script>
 
 <template>
   <VCard class="dashboard-system-card dashboard-grid-fill">
     <VCardItem class="dashboard-system-heading">
+      <template #prepend>
+        <span class="dashboard-system-icon" aria-hidden="true">
+          <VIcon icon="mdi-server-outline" size="18" />
+        </span>
+      </template>
       <VCardTitle>{{ t('dashboard.systemInfo.title') }}</VCardTitle>
     </VCardItem>
     <VCardText class="dashboard-system-content">
@@ -109,46 +135,66 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-system-heading {
-  padding-block: 0.8rem 0.2rem;
+  padding: 14px 16px 8px;
+}
+
+.dashboard-system-icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  block-size: 34px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 34px;
+  margin-inline-end: 10px;
 }
 
 .dashboard-system-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  padding-block: 0.35rem 0.7rem;
+  padding: 4px 16px 12px;
 }
 
 .dashboard-system-grid {
   display: grid;
-  grid-template-columns: 0.8fr 1.25fr 1fr;
+  grid-template-columns: 0.85fr 1.2fr 1fr;
   margin: 0;
 }
 
 .dashboard-system-grid > div {
   min-inline-size: 0;
-  padding-inline: 0.75rem;
+  padding-inline: 13px;
 }
 
 .dashboard-system-grid > div:first-child {
   padding-inline-start: 0;
 }
 
+.dashboard-system-grid > div:last-child {
+  padding-inline-end: 0;
+}
+
 .dashboard-system-grid > div + div {
-  border-inline-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-inline-start: 1px solid var(--mp-border-subtle);
 }
 
 .dashboard-system-grid dt,
 .dashboard-system-footer > span {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.7rem;
+  font-size: 11.5px;
+  line-height: 1.3;
 }
 
 .dashboard-system-grid dd {
   overflow: hidden;
-  margin: 0.2rem 0 0;
-  font-size: 0.76rem;
+  margin: 4px 0 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -157,20 +203,23 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  border-block-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  gap: 0.6rem;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 8px;
   margin-block-start: auto;
-  padding-block-start: 0.5rem;
+  padding-block-start: 8px;
 }
 
 .dashboard-system-footer strong {
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 @media (max-width: 740px) {
   .dashboard-system-grid {
     grid-template-columns: 1fr;
-    gap: 0.6rem;
+    gap: 8px;
   }
 
   .dashboard-system-grid > div {

@@ -10,9 +10,13 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
 }))
 
-vi.mock('@/api', () => ({
-  default: { get: mocks.apiGet, post: mocks.apiPost },
-}))
+vi.mock('@/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    default: { get: mocks.apiGet, post: mocks.apiPost },
+  }
+})
 vi.mock('vue-toastification', () => ({
   useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
 }))
@@ -49,9 +53,11 @@ describe('AccountSettingSearch', () => {
   })
 
   it('defaults SEARCH_RESOURCE_PAGES to 3 in search settings and saves updated or fallback value', async () => {
-    await renderWithProviders(AccountSettingSearch)
+    const { container } = await renderWithProviders(AccountSettingSearch)
 
     expect(screen.queryByLabelText('远程搜索自动下载用户')).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.mp-switch-card')).toHaveLength(2)
+    expect(container.querySelectorAll('.mp-card-footer')).toHaveLength(2)
     const pagesInput = (await screen.findByLabelText('搜索资源获取页数')) as HTMLInputElement
     await waitFor(() => expect(pagesInput.value).toBe('3'))
 
@@ -79,5 +85,26 @@ describe('AccountSettingSearch', () => {
       ),
     )
     expect(mocks.toastSuccess).toHaveBeenCalledWith('搜索基础设置保存成功')
+  })
+
+  it('safely splits empty or null SEARCH_SOURCE into an empty array without empty-string chips', async () => {
+    mocks.apiGet.mockImplementation((path: string) => {
+      if (path === 'site/') return Promise.resolve([])
+      if (path === 'system/setting/SEARCH_SOURCE') return Promise.resolve({ success: true, data: { value: '' } })
+      if (path === 'system/setting/SearchFilterRuleGroups')
+        return Promise.resolve({ success: true, data: { value: null } })
+      if (path === 'system/env') return Promise.resolve({ success: true, data: {} })
+      return Promise.resolve({ success: true, data: { value: [] } })
+    })
+
+    const { container } = await renderWithProviders(AccountSettingSearch)
+    await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('system/setting/SEARCH_SOURCE'))
+    expect(container.querySelectorAll('.v-chip')).toHaveLength(0)
+
+    await fireEvent.click(screen.getAllByRole('button', { name: '保存' })[0])
+    await waitFor(() => {
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/SEARCH_SOURCE', '')
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/SearchFilterRuleGroups', [])
+    })
   })
 })

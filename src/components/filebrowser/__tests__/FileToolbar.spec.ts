@@ -8,11 +8,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   openSharedDialog: vi.fn(),
+  toastError: vi.fn(),
   updateProps: vi.fn(),
 }))
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
+}))
+
+vi.mock('vue-toastification', () => ({
+  useToast: () => ({ error: mocks.toastError }),
 }))
 
 vi.mock('vuetify', async importOriginal => {
@@ -118,10 +123,11 @@ describe('FileToolbar mkdir', () => {
 
     expect(wrapper.emitted('loading')).toEqual([[true], [false]])
     expect(wrapper.emitted('foldercreated')).toBeUndefined()
+    expect(mocks.toastError).toHaveBeenCalledWith('目录已存在')
     expect(mocks.close).not.toHaveBeenCalled()
   })
 
-  it('does not report creation when the request rejects and always finishes loading', async () => {
+  it('does not report creation when the request rejects and always finishes loading with error toast', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const request = vi.fn().mockRejectedValue(new Error('network failed'))
     const wrapper = mountToolbar(request)
@@ -131,7 +137,34 @@ describe('FileToolbar mkdir', () => {
 
     expect(wrapper.emitted('loading')).toEqual([[true], [false]])
     expect(wrapper.emitted('foldercreated')).toBeUndefined()
+    expect(mocks.toastError).toHaveBeenCalledWith('network failed')
     expect(mocks.close).not.toHaveBeenCalled()
+  })
+
+  it('prevents duplicate mkdir requests while creatingFolder lock is active', async () => {
+    let resolveRequest!: (value: { success: boolean }) => void
+    const request = vi.fn(
+      () =>
+        new Promise<{ success: boolean }>(resolve => {
+          resolveRequest = resolve
+        }),
+    )
+    const wrapper = mountToolbar(request)
+    ;(wrapper.vm as unknown as { openNewFolderDialog: () => void }).openNewFolderDialog()
+    const events = mocks.openSharedDialog.mock.calls[0][2] as {
+      create: () => Promise<void>
+      'update:name': (value: string) => void
+    }
+    events['update:name']('locked-folder')
+
+    const firstCall = events.create()
+    const secondCall = events.create()
+    expect(request).toHaveBeenCalledOnce()
+
+    resolveRequest({ success: true })
+    await Promise.all([firstCall, secondCall])
+    await flushPromises()
+    expect(wrapper.emitted('foldercreated')).toEqual([[]])
   })
 
   it('submits the current directory and closes only after a successful creation', async () => {
@@ -226,5 +259,21 @@ describe('FileToolbar navigation and sorting', () => {
     await wrapper.findAll('.toolbar-button')[1].trigger('click')
 
     expect(wrapper.emitted('pathchanged')).toEqual([[root]])
+  })
+
+  it('falls back to synthesized parent and intermediate breadcrumbs when itemstack is incomplete', async () => {
+    const deepItem: FileItem = { name: 'Season 01', path: '/downloads/tv/Season 01/', storage: 'local', type: 'dir' }
+    const incompleteStack: FileItem[] = [{ name: '/', path: '/', storage: 'local', type: 'dir' }, deepItem]
+    const wrapper = mountToolbar(vi.fn(), 'name', deepItem, incompleteStack)
+
+    // 点击返回上级按钮：应回退到 /downloads/tv/ 而不是传出 undefined
+    await wrapper.findAll('.icon-btn')[1].trigger('click')
+    // 点击中间面包屑 downloads（toolbar-button[2]）
+    await wrapper.findAll('.toolbar-button')[2].trigger('click')
+
+    expect(wrapper.emitted('pathchanged')).toEqual([
+      [{ name: 'tv', path: '/downloads/tv/', storage: 'local', type: 'dir' }],
+      [{ name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' }],
+    ])
   })
 })

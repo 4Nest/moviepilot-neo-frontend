@@ -11,16 +11,12 @@ const personProps = defineProps({
   height: String,
 })
 
-// 从 provide 中获取全局设置
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
 
-// 当前人物
-const personInfo = ref(personProps.person)
-
-// 人物图片是否加载
-const isImageLoaded = ref(false)
+// 当前人物（响应式跟随 props.person 变化）
+const personInfo = computed(() => personProps.person)
 
 // 人物图片地址
 function getPersonImage() {
@@ -83,35 +79,24 @@ function goPersonDetail() {
         <VCard
           :height="personProps.height"
           :width="personProps.width"
-          class="app-hover-lift-card"
+          variant="flat"
+          class="person-card app-hover-lift-card cursor-pointer overflow-hidden"
           :class="{
             'app-hover-lift-card--hovering': hover.isHovering,
           }"
           @click.stop="goPersonDetail"
         >
-        <div class="person-card relative cursor-pointer ring-gray-700">
-          <div style="padding-block-end: 150%">
-            <div class="absolute inset-0 flex h-full w-full flex-col items-center p-2">
-              <div class="relative mt-2 mb-4 flex h-1/2 w-full justify-center">
-                <VAvatar
-                  size="100"
-                  :class="{
-                    'ring-1 ring-gray-700': isImageLoaded,
-                  }"
-                >
-                  <VImg :src="getPersonImage()" cover @load="isImageLoaded = true" />
-                </VAvatar>
-              </div>
-              <div class="w-full truncate text-center font-bold">
-                {{ getPersonName() }}
-              </div>
-              <div class="overflow-hidden whitespace-normal text-center text-sm text-ellipsis line-clamp-2">
-                {{ getPersonCharacter() }}
-              </div>
-              <div class="absolute bottom-0 left-0 right-0 h-12 rounded-b" />
+          <div class="person-card__portrait">
+            <VImg :src="getPersonImage()" aspect-ratio="2/3" cover class="w-full h-full" />
+          </div>
+          <div class="person-card__meta">
+            <div class="person-card__name" :title="getPersonName()">
+              {{ getPersonName() }}
+            </div>
+            <div v-if="getPersonCharacter()" class="person-card__role" :title="getPersonCharacter()">
+              {{ getPersonCharacter() }}
             </div>
           </div>
-        </div>
         </VCard>
       </div>
     </template>
@@ -124,18 +109,56 @@ function goPersonDetail() {
 }
 
 .person-card {
-  background-image: linear-gradient(
-    45deg,
-    rgb工(var(--v-theme-background), 0.3),
-    rgba(var(--v-theme-surface), 0.3) 60%
-  );
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background-color: rgb(var(--v-theme-surface));
+  transition:
+    border-color 0.16s ease,
+    transform 0.18s ease;
 }
 
-.person-card:hover {
-  background-image: linear-gradient(
-    45deg,
-    rgba(var(--v-theme-background), 0.3),
-    rgba(var(--v-custom-background), 0.3) 60%
-  );
+.person-card-hover-area:hover .person-card {
+  border-color: var(--mp-border-hover);
+}
+
+.person-card__portrait {
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  background: var(--mp-item-bg);
+  inline-size: 100%;
+}
+
+.person-card__meta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: 46px;
+  padding: 7px 8px 8px;
+  text-align: center;
+}
+
+.person-card__name {
+  overflow: hidden;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-card__role {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  font-size: 11.5px;
+  line-height: 1.35;
+  margin-block-start: 2px;
+  text-overflow: ellipsis;
+  word-break: break-all;
 }
 </style>

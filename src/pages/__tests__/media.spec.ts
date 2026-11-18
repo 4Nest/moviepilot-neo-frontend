@@ -49,9 +49,21 @@ describe('media page', () => {
     })
   })
 
-  it('keeps missing query values undefined', async () => {
-    await renderPage({})
+  it('keeps missing query values undefined and reacts to route query updates', async () => {
+    const { router } = await renderPage({})
 
     expect(projectedProps()).toEqual({})
+
+    await router.push({
+      path: '/media',
+      query: { mediaid: 'tmdb:202', title: '新电影', type: '电影', year: '2025' },
+    })
+
+    expect(projectedProps()).toEqual({
+      mediaid: 'tmdb:202',
+      title: '新电影',
+      type: '电影',
+      year: '2025',
+    })
   })
 })

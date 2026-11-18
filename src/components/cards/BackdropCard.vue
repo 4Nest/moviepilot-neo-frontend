@@ -43,7 +43,7 @@ const getImgUrl = computed(() => {
   let url = `${import.meta.env.VITE_API_BASE_URL}system/img/0?imgurl=${encodeURIComponent(image)}`
   const use_cookies = props.media?.use_cookies
   if (use_cookies) {
-   url += `&use_cookies=${encodeURIComponent(use_cookies)}`
+    url += `&use_cookies=${encodeURIComponent(use_cookies)}`
   }
   return url
 })
@@ -63,43 +63,41 @@ const getImgUrl = computed(() => {
           }"
           @click="goPlay"
         >
-        <template #image>
-          <VImg
-            :src="getImgUrl"
-            aspect-ratio="2/3"
-            class="backdrop-card-image"
-            :class="{ 'backdrop-card-image--loaded': imageLoaded }"
-            cover
-            @load="imageLoadHandler"
-            @error="imageErrorHandler"
-          >
-            <template #placeholder>
-              <div class="backdrop-card-placeholder">
-                <VSkeletonLoader class="backdrop-card-skeleton" />
-              </div>
-            </template>
-            <template #default>
-              <VCardText
-                class="w-full flex flex-col flex-wrap justify-end align-left text-white absolute bottom-0 cursor-pointer pa-2"
-              >
-                <h1
-                  class="mb-1 text-white text-shadow font-bold text-lg line-clamp-2 overflow-hidden text-ellipsis ..."
+          <template #image>
+            <VImg
+              :src="getImgUrl"
+              aspect-ratio="3/2"
+              class="backdrop-card-image"
+              :class="{ 'backdrop-card-image--loaded': imageLoaded }"
+              cover
+              @load="imageLoadHandler"
+              @error="imageErrorHandler"
+            >
+              <template #placeholder>
+                <div class="backdrop-card-placeholder">
+                  <VSkeletonLoader class="backdrop-card-skeleton" />
+                </div>
+              </template>
+              <template #default>
+                <VCardText
+                  class="backdrop-card-scrim w-full flex flex-col flex-wrap justify-end align-left text-white absolute bottom-0 cursor-pointer pa-2"
                 >
-                  {{ props.media?.title }}
-                </h1>
-                <span class="text-shadow text-sm">{{ props.media?.subtitle }}</span>
-              </VCardText>
-            </template>
-          </VImg>
-        </template>
-        <div class="w-full absolute bottom-0">
-          <VProgressLinear
-            v-if="props.media?.percent"
-            :model-value="props.media?.percent"
-            bg-color="success"
-            color="success"
-          />
-        </div>
+                  <h1 class="mb-1 text-white text-shadow font-bold text-lg line-clamp-2 overflow-hidden text-ellipsis">
+                    {{ props.media?.title }}
+                  </h1>
+                  <span class="text-shadow text-sm">{{ props.media?.subtitle }}</span>
+                </VCardText>
+              </template>
+            </VImg>
+          </template>
+          <div class="w-full absolute bottom-0">
+            <VProgressLinear
+              v-if="props.media?.percent"
+              :model-value="props.media?.percent"
+              bg-color="success"
+              color="success"
+            />
+          </div>
         </VCard>
       </div>
     </template>
@@ -132,6 +130,11 @@ const getImgUrl = computed(() => {
 
 .backdrop-card-image--loaded :deep(.v-img__img) {
   opacity: 1;
+}
+
+.backdrop-card-scrim {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.54) 48%, rgba(15, 23, 42, 0.9) 100%);
+  padding-block-start: 2rem !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

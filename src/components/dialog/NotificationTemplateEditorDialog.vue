@@ -96,7 +96,10 @@ function submitTemplate() {
       </div>
       <VCardActions class="app-dialog-actions template-editor-actions">
         <VSpacer />
-        <VBtn color="primary" variant="flat" prepend-icon="mdi-content-save" class="px-5" @click="submitTemplate">
+        <VBtn color="default" variant="text" size="small" @click="visible = false">
+          {{ t('common.cancel') }}
+        </VBtn>
+        <VBtn color="primary" variant="flat" size="small" class="px-4" @click="submitTemplate">
           {{ t('common.save') }}
         </VBtn>
       </VCardActions>
@@ -114,7 +117,9 @@ function submitTemplate() {
 
 .template-editor-header {
   flex: 0 0 auto;
-  border-block-end: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  border-block-end: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  padding-block: 14px;
+  padding-inline: 22px 48px;
 }
 
 .template-editor-body {
@@ -131,9 +136,9 @@ function submitTemplate() {
 
 .template-editor-actions {
   flex: 0 0 auto;
-  border-block-start: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-  padding-block: 0.875rem;
-  padding-inline: 1rem;
+  border-block-start: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  gap: 8px;
+  padding: 10px 20px !important;
 }
 
 @media (width <= 960px) {

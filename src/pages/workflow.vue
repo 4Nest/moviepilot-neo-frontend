@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { debounce } from 'lodash-es'
 import WorkflowListView from '@/views/workflow/WorkflowListView.vue'
 import WorkflowShareView from '@/views/workflow/WorkflowShareView.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
-import { useDynamicButton } from '@/composables/useDynamicButton'
+import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { usePWA } from '@/composables/usePWA'
 import { getWorkflowTabs } from '@/router/i18n-menu'
 
@@ -22,45 +21,57 @@ const workflowTabs = computed(() => {
   return getWorkflowTabs(t)
 })
 
-// 分享搜索词
-const shareKeyword = ref('')
-const shareKeywordInput = ref('')
-
-// 搜索分享对话框
-const searchShareDialog = ref(false)
-
-// 搜索分享激活器
-const searchActivator = computed(() => '[data-menu-activator="share-filter-btn"]')
-
 function openAddWorkflowDialog() {
   workflowListViewRef.value?.openAddDialog()
+}
+
+function openTemplateWorkflowDialog() {
+  workflowListViewRef.value?.openTemplateDialog()
+}
+
+function openImportJsonWorkflowDialog() {
+  workflowListViewRef.value?.openImportJsonDialog()
 }
 
 function refreshWorkflowList() {
   workflowListViewRef.value?.refresh()
 }
 
-const shareKeywordUpdater = debounce((keyword: string) => {
-  shareKeyword.value = keyword.trim()
-}, 300)
+watch(
+  () => route.query.tab,
+  nextTab => {
+    if (typeof nextTab === 'string' && workflowTabs.value.some(item => item.tab === nextTab)) {
+      activeTab.value = nextTab
+    }
+  },
+)
 
-watch(shareKeywordInput, newKeyword => {
-  shareKeywordUpdater(newKeyword || '')
-})
+const workflowDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(() => {
+  if (!appMode.value || activeTab.value !== 'list') return undefined
 
-watch(activeTab, newTab => {
-  if (newTab !== 'share') {
-    searchShareDialog.value = false
-  }
-})
-
-onUnmounted(() => {
-  shareKeywordUpdater.cancel()
+  return [
+    {
+      titleKey: 'workflow.quickActions.createWorkflow',
+      icon: 'mdi-plus',
+      action: openAddWorkflowDialog,
+    },
+    {
+      titleKey: 'workflow.quickActions.createFromTemplate',
+      icon: 'mdi-auto-fix',
+      action: openTemplateWorkflowDialog,
+    },
+    {
+      titleKey: 'workflow.quickActions.importJsonCreate',
+      icon: 'mdi-code-json',
+      action: openImportJsonWorkflowDialog,
+    },
+  ]
 })
 
 useDynamicButton({
   icon: 'mdi-plus',
   onClick: openAddWorkflowDialog,
+  menuItems: workflowDynamicMenuItems,
   show: computed(() => appMode.value && activeTab.value === 'list'),
 })
 
@@ -71,19 +82,6 @@ const { registerHeaderTab } = useDynamicHeaderTab()
 registerHeaderTab({
   items: workflowTabs,
   modelValue: activeTab,
-  appendButtons: [
-    {
-      icon: 'mdi-filter-multiple-outline',
-      variant: 'text',
-      color: computed(() => (shareKeywordInput.value ? 'primary' : 'gray')),
-      class: 'settings-icon-button',
-      dataAttr: 'share-filter-btn',
-      show: computed(() => activeTab.value === 'share'),
-      action: () => {
-        searchShareDialog.value = true
-      },
-    },
-  ],
 })
 
 // 注册动态标签页
@@ -105,46 +103,10 @@ onMounted(() => {
       </VWindowItem>
       <VWindowItem value="share">
         <div>
-          <WorkflowShareView :keyword="shareKeyword" @update="refreshWorkflowList" />
+          <WorkflowShareView @update="refreshWorkflowList" />
         </div>
       </VWindowItem>
     </VWindow>
-
-    <!-- 搜索工作流分享弹窗 -->
-    <Teleport to="body" v-if="searchShareDialog">
-      <VMenu
-        v-model="searchShareDialog"
-        :close-on-content-click="false"
-        :activator="searchActivator"
-        location="bottom end"
-      >
-        <VCard min-width="260" max-width="320">
-          <div class="pa-3">
-            <VTextField
-              v-model="shareKeywordInput"
-              :placeholder="t('workflow.searchShares')"
-              prepend-inner-icon="mdi-magnify"
-              density="compact"
-              variant="outlined"
-              hide-details
-              clearable
-            />
-          </div>
-        </VCard>
-      </VMenu>
-    </Teleport>
-
-    <Teleport to="body" v-if="!appMode && route.path === '/workflow' && activeTab === 'list'">
-      <div class="compact-fab-stack">
-        <VFab
-          icon="mdi-plus"
-          color="primary"
-          appear
-          class="compact-fab compact-fab--primary"
-          @click="openAddWorkflowDialog"
-        />
-      </div>
-    </Teleport>
   </div>
 </template>
 

@@ -225,86 +225,86 @@ async function saveCustomWords() {
   <div class="shortcut-workbench">
     <section class="shortcut-panel shortcut-input-panel">
       <VForm validate-on="submit lazy" @submit.prevent="nameTest">
-        <VRow class="shortcut-form">
-          <VCol cols="12" class="shortcut-form-col">
-            <VTextarea
-              v-model="nameTestForm.title"
-              :label="t('nameTest.title')"
-              :hint="t('nameTest.titleHint')"
-              persistent-hint
-              :rules="[requiredValidator]"
-              rows="2"
-              auto-grow
-              prepend-inner-icon="mdi-movie-open"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VTextarea
-              v-model="nameTestForm.subtitle"
-              :label="t('nameTest.subtitle')"
-              :hint="t('nameTest.subtitleHint')"
-              persistent-hint
-              rows="2"
-              auto-grow
-              prepend-inner-icon="mdi-subtitles"
-            />
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
+        <div class="shortcut-form-stack">
+          <VTextarea
+            v-model="nameTestForm.title"
+            :label="t('nameTest.title')"
+            :hint="t('nameTest.titleHint')"
+            persistent-hint
+            density="compact"
+            variant="outlined"
+            :rules="[requiredValidator]"
+            rows="2"
+            auto-grow
+            prepend-inner-icon="mdi-movie-open"
+          />
+          <VTextarea
+            v-model="nameTestForm.subtitle"
+            :label="t('nameTest.subtitle')"
+            :hint="t('nameTest.subtitleHint')"
+            persistent-hint
+            density="compact"
+            variant="outlined"
+            rows="2"
+            auto-grow
+            prepend-inner-icon="mdi-subtitles"
+          />
+          <div>
             <VTextarea
               v-model="nameTestForm.customWords"
               :label="t('nameTest.customWords')"
               :placeholder="t('nameTest.customWordsPlaceholder')"
               :hint="t('nameTest.customWordsHint')"
               persistent-hint
-              rows="3"
+              density="compact"
+              variant="outlined"
+              rows="2"
               auto-grow
               prepend-inner-icon="mdi-tag-text-outline"
             />
-            <div class="custom-words-toolbar">
-              <VBtn
-                type="button"
-                size="small"
-                variant="text"
-                color="primary"
-                class="me-auto"
-                @click="openWordsShortcut"
-              >
-                <template #prepend>
-                  <VIcon icon="mdi-format-list-bulleted" />
-                </template>
-                {{ t('nameTest.openWords') }}
-              </VBtn>
-              <VBtn
-                type="button"
-                size="small"
-                variant="tonal"
-                color="primary"
-                :disabled="!nameTestForm.customWords?.trim()"
-                :loading="savingCustomWords"
-                @click="saveCustomWords"
-              >
-                <template #prepend>
-                  <VIcon icon="mdi-content-save-outline" />
-                </template>
-                {{ t('nameTest.saveWords') }}
-              </VBtn>
-            </div>
-          </VCol>
-          <VCol cols="12" class="shortcut-form-col">
-            <VBtn block type="submit" :disabled="nameTestLoading" :loading="nameTestLoading">
+          </div>
+
+          <div class="shortcut-action-bar">
+            <VBtn type="button" size="small" variant="text" color="primary" class="me-auto" @click="openWordsShortcut">
               <template #prepend>
-                <VIcon icon="mdi-movie-search-outline" />
+                <VIcon icon="mdi-format-list-bulleted" size="16" />
+              </template>
+              {{ t('nameTest.openWords') }}
+            </VBtn>
+            <VBtn
+              type="button"
+              variant="tonal"
+              color="primary"
+              :disabled="!nameTestForm.customWords?.trim()"
+              :loading="savingCustomWords"
+              @click="saveCustomWords"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-content-save-outline" size="16" />
+              </template>
+              {{ t('nameTest.saveWords') }}
+            </VBtn>
+            <VBtn
+              type="submit"
+              color="primary"
+              variant="flat"
+              class="shortcut-submit-btn"
+              :disabled="nameTestLoading"
+              :loading="nameTestLoading"
+            >
+              <template #prepend>
+                <VIcon icon="mdi-movie-search-outline" size="16" />
               </template>
               {{ nameTestText }}
             </VBtn>
-          </VCol>
-        </VRow>
+          </div>
+        </div>
       </VForm>
 
       <VAlert
         v-if="nameTestError"
-        class="mt-4"
-        density="comfortable"
+        class="mt-3"
+        density="compact"
         icon="mdi-alert-circle-outline"
         type="error"
         variant="tonal"
@@ -324,21 +324,21 @@ async function saveCustomWords() {
             </VImg>
           </div>
           <div v-else class="hero-poster hero-poster--empty">
-            <VIcon :icon="isRecognized ? 'mdi-movie-open-check' : 'mdi-movie-open-remove'" size="32" />
+            <VIcon :icon="isRecognized ? 'mdi-movie-open-check' : 'mdi-movie-open-remove'" size="26" />
           </div>
 
           <div class="min-w-0 hero-body">
             <div class="hero-heading">
-              <VIcon v-if="!isRecognized" icon="mdi-alert-circle-outline" color="primary" size="20" />
-              <span class="hero-title-text text-h6 font-weight-bold">{{ resultTitle }}</span>
+              <VIcon v-if="!isRecognized" icon="mdi-alert-circle-outline" color="error" size="18" />
+              <span class="hero-title-text">{{ resultTitle }}</span>
             </div>
             <div v-if="metaInfo?.season_episode" class="hero-episode">
               {{ metaInfo.season_episode }}
             </div>
-            <div v-if="mediaClassification" class="text-body-2 text-medium-emphasis mt-1">
+            <div v-if="mediaClassification" class="hero-classification">
               {{ mediaClassification }}
             </div>
-            <div v-if="resourceChips.length || canViewMediaDetail" class="hero-chips mt-3">
+            <div v-if="resourceChips.length || canViewMediaDetail" class="hero-chips">
               <VChip
                 v-for="chip in resourceChips"
                 :key="chip"
@@ -371,14 +371,14 @@ async function saveCustomWords() {
         <div class="pipeline">
           <div v-for="(step, idx) in pipelineSteps" :key="step.title" class="pipeline-step">
             <div class="pipeline-marker">
-              <VIcon :icon="step.icon" color="primary" size="18" />
+              <VIcon :icon="step.icon" color="primary" size="16" />
               <span v-if="idx < pipelineSteps.length - 1" class="pipeline-connector" />
             </div>
             <div class="pipeline-body">
-              <div class="text-caption text-medium-emphasis pipeline-label">
+              <div class="pipeline-label">
                 {{ step.title }}
               </div>
-              <div class="text-body-2 font-weight-medium pipeline-value">
+              <div class="pipeline-value">
                 {{ step.value }}
               </div>
             </div>
@@ -386,7 +386,7 @@ async function saveCustomWords() {
         </div>
 
         <div v-if="metaInfo?.apply_words?.length" class="applied-words">
-          <div class="text-caption text-medium-emphasis applied-words-label">
+          <div class="applied-words-label">
             {{ t('nameTest.steps.words.title') }}
           </div>
           <div class="words-chips">
@@ -403,8 +403,10 @@ async function saveCustomWords() {
         </div>
       </div>
       <div v-else class="empty-state">
-        <VIcon icon="mdi-movie-search-outline" size="36" />
-        <div class="text-body-2 text-medium-emphasis">
+        <span class="empty-state__icon">
+          <VIcon icon="mdi-movie-search-outline" size="22" />
+        </span>
+        <div class="empty-state__text">
           {{ t('nameTest.waitingResult') }}
         </div>
       </div>
@@ -413,50 +415,54 @@ async function saveCustomWords() {
 </template>
 
 <style scoped>
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
 .shortcut-workbench {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  padding-block-start: 0.5rem;
+  gap: 13px;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  padding-block-start: 6px;
   inline-size: 100%;
   min-inline-size: 0;
 }
 
 .shortcut-panel {
-  padding: 1rem;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  backdrop-filter: var(--app-grouped-list-backdrop-filter);
-  background: var(--app-grouped-list-background);
-  box-shadow: var(--app-surface-shadow);
+  padding: 14px 16px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
   min-inline-size: 0;
 }
 
-.shortcut-form {
-  margin: 0;
-}
-
-.shortcut-form-col {
-  padding-inline: 0;
-}
-
-.shortcut-form-col:first-child {
-  padding-block-start: 0;
-}
-
-.shortcut-form-col:last-child {
-  padding-block-end: 0;
-}
-
-.custom-words-toolbar {
+.shortcut-form-stack {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shortcut-form-stack :deep(.v-field) {
+  border-radius: 8px;
+  background: var(--mp-field-bg);
+}
+
+.shortcut-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
-  margin-block-start: 0.5rem;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  gap: 8px;
+  margin-block-start: 2px;
+  padding-block-start: 10px;
+}
+
+.shortcut-submit-btn {
+  min-inline-size: 88px;
 }
 
 .result-stack {
   display: grid;
-  gap: 1rem;
+  gap: 10px;
   grid-template-columns: minmax(0, 1fr);
   min-inline-size: 0;
 }
@@ -468,31 +474,33 @@ async function saveCustomWords() {
 .result-hero {
   display: grid;
   align-items: center;
-  padding: 0.75rem;
-  border: var(--app-surface-border);
-  border-radius: var(--app-surface-radius);
-  background: rgba(var(--v-theme-primary), 0.08);
-  gap: 1rem;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+  padding: 12px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  gap: 13px;
+  grid-template-columns: 68px minmax(0, 1fr);
   inline-size: 100%;
   min-inline-size: 0;
 }
 
 .result-hero--failed {
-  background: rgba(var(--v-theme-error), 0.08);
+  border-color: rgba(var(--v-theme-error), 0.28);
+  background: rgba(var(--v-theme-error), 0.05);
 }
 
 .hero-poster {
   overflow: hidden;
-  border: var(--app-surface-border);
-  border-radius: var(--app-control-radius);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
   aspect-ratio: 2 / 3;
-  background: rgba(var(--v-theme-surface-variant), 0.35);
+  background: var(--mp-item-bg);
 }
 
 .hero-poster--empty {
   display: grid;
   place-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.45);
 }
 
 .hero-body {
@@ -503,36 +511,51 @@ async function saveCustomWords() {
 .hero-heading {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
 }
 
 .hero-title-text {
   min-inline-size: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 15.5px;
+  font-weight: 650;
+  line-height: 1.3;
 }
 
 /* 季集突出显示 */
 .hero-episode {
   color: rgb(var(--v-theme-primary));
-  font-size: 1.05rem;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  margin-block-start: 0.25rem;
+  letter-spacing: 0.02em;
+  margin-block-start: 3px;
+}
+
+.hero-classification {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  margin-block-start: 3px;
 }
 
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 5px;
+  margin-block-start: 8px;
   min-inline-size: 0;
 }
 
-.hero-chip {
+.hero-chip,
+.media-id-badge {
+  block-size: 22px;
+  font-size: 11.5px;
   max-inline-size: 100%;
 }
 
 /* 媒体 ID 标签：沿用资源标签样式，同时保留官方详情页链接。 */
 .media-id-badge {
-  max-inline-size: 100%;
+  font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
 
@@ -540,6 +563,10 @@ async function saveCustomWords() {
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
+  padding: 12px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
   inline-size: 100%;
 }
 
@@ -549,8 +576,8 @@ async function saveCustomWords() {
 
 .pipeline-step {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: 1.75rem minmax(0, 1fr);
+  gap: 10px;
+  grid-template-columns: 20px minmax(0, 1fr);
   min-inline-size: 0;
 }
 
@@ -559,18 +586,19 @@ async function saveCustomWords() {
   flex-direction: column;
   align-items: center;
   min-block-size: 100%;
+  padding-block-start: 2px;
 }
 
 .pipeline-connector {
   flex: 1;
-  background: rgba(var(--v-theme-primary), 0.25);
-  inline-size: 2px;
-  margin-block-start: 0.3rem;
+  background: var(--mp-border-subtle);
+  inline-size: 1px;
+  margin-block-start: 4px;
 }
 
 .pipeline-body {
   min-inline-size: 0;
-  padding-block-end: 0.9rem;
+  padding-block-end: 10px;
 }
 
 .pipeline-step:last-child .pipeline-body {
@@ -578,39 +606,50 @@ async function saveCustomWords() {
 }
 
 .pipeline-label {
-  letter-spacing: 0.02em;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  line-height: 1.3;
 }
 
 .pipeline-value {
-  margin-block-start: 0.2rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin-block-start: 3px;
   overflow-wrap: anywhere;
   word-break: break-all;
 }
 
 .applied-words {
   display: grid;
-  border-block-start: var(--app-surface-border);
-  gap: 0.5rem;
-  padding-block: 0.4rem;
+  padding: 10px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  gap: 8px;
 }
 
 .applied-words-label {
-  letter-spacing: 0.02em;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
 }
 
 .words-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 6px;
   min-inline-size: 0;
 }
 
 .applied-word-chip {
   block-size: auto;
   max-inline-size: 100%;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  line-height: 1.5;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
   white-space: normal;
 }
 
@@ -623,11 +662,30 @@ async function saveCustomWords() {
 .empty-state {
   display: grid;
   align-content: center;
+  padding: 24px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  gap: 0.75rem;
+  gap: 10px;
   min-block-size: 14rem;
   place-items: center;
   text-align: center;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 9px;
+  background: rgba(var(--v-theme-primary), 0.1);
+  block-size: 36px;
+  color: rgb(var(--v-theme-primary));
+  inline-size: 36px;
+}
+
+.empty-state__text {
+  font-size: 12.5px;
 }
 
 @media (width <= 760px) {
@@ -648,11 +706,11 @@ async function saveCustomWords() {
 
 @media (width <= 420px) {
   .shortcut-panel {
-    padding: 0.8rem;
+    padding: 12px;
   }
 
   .result-hero {
-    grid-template-columns: 5.5rem minmax(0, 1fr);
+    grid-template-columns: 60px minmax(0, 1fr);
   }
 }
 </style>

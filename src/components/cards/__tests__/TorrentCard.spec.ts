@@ -323,10 +323,10 @@ describe('TorrentCard display and interactions', () => {
     expect(options).toEqual({ closeOn: ['close', 'done', 'error'] })
 
     events.done('')
-    expect(container.querySelectorAll('.torrent-card.border-success')).toHaveLength(0)
+    expect(screen.queryAllByText('已下载')).toHaveLength(0)
 
     events.done(context.torrent_info.enclosure)
-    await waitFor(() => expect(container.querySelectorAll('.torrent-card.border-success')).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByText('已下载')).toHaveLength(2))
 
     events.error('下载失败')
     expect(console.error).toHaveBeenCalledWith('下载失败')

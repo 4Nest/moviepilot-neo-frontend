@@ -1942,7 +1942,13 @@ export interface SiteCategory {
 }
 
 // 工作流模拟场景
-export type WorkflowSimulationScenario = 'normal' | 'empty_source' | 'empty_filter'
+export type WorkflowSimulationScenario = 'live_dry_run' | 'normal' | 'empty_source' | 'empty_filter'
+
+// 工作流模拟预览条目
+export interface WorkflowSimulationPreviewItem {
+  title: string
+  subtitle?: string
+}
 
 // 工作流模拟节点结果
 export interface WorkflowSimulationNodeResult {
@@ -1953,6 +1959,8 @@ export interface WorkflowSimulationNodeResult {
   message: string
   outputs_summary: Record<string, number>
   step?: number
+  preview_items?: WorkflowSimulationPreviewItem[]
+  dry_run_intercepted?: boolean
 }
 
 // 工作流模拟连线结果

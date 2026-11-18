@@ -1,8 +1,5 @@
-@use "./placeholders";
-@use "@configured-variables" as variables;
-@use "./mixins" as mixins;
-@use "vuetify/lib/styles/tools/states" as vuetifyStates;
-@use "vuetify/lib/styles/tools/elevation" as elevation;
+@use './placeholders';
+@use '@configured-variables' as variables;
 
 .layout-nav-type-vertical {
   // 👉 Layout Vertical nav
@@ -12,23 +9,28 @@
     @extend %nav;
 
     background-color: variables.$vertical-nav-background-color;
+    border-inline-end: 1px solid var(--mp-border-subtle);
 
-    // 👉 Nav header
+    // 👉 Nav header (56px / 3.5rem, orthogonal alignment & dual-axis absolute center)
     .nav-header {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
       overflow: hidden;
-      padding: variables.$vertical-nav-header-padding;
-      margin-inline: variables.$vertical-nav-header-inline-spacing;
+      block-size: variables.$vertical-nav-header-height;
+      margin-inline: 0 !important;
       min-block-size: variables.$vertical-nav-header-height;
+      padding-block: 0;
+      padding-inline: 0 !important;
 
-      // TEMPLATE: Check if we need to move this to master
       .app-logo {
         flex-shrink: 0;
         transition: transform 0.25s ease-in-out;
 
         @at-root {
-          // Move logo a bit to align center with the icons in vertical nav mini variant
           .layout-vertical-nav-collapsed#{$sl-layout-nav-type-vertical}:not(.hovered) .nav-header .app-logo {
-            transform: translateX(variables.$vertical-nav-header-logo-translate-x-when-vertical-nav-mini);
+            transform: none;
           }
         }
       }
@@ -38,32 +40,9 @@
       }
     }
 
-    // 👉 Nav items shadow
+    // 👉 Nav items shadow (removed in IDE flat shell)
     .vertical-nav-items-shadow {
-      position: absolute;
-      z-index: 1;
-      background:
-        linear-gradient(
-          rgb(#{variables.$vertical-nav-background-color-rgb}) 5%,
-          rgba(#{variables.$vertical-nav-background-color-rgb}, 85%) 30%,
-          rgba(#{variables.$vertical-nav-background-color-rgb}, 50%) 65%,
-          rgba(#{variables.$vertical-nav-background-color-rgb}, 30%) 75%,
-          transparent
-        );
-      block-size: calc(env(safe-area-inset-top) + 4rem);
-      inline-size: 100%;
-      inset-block-start: calc(#{variables.$vertical-nav-header-height} - 2px);
-      opacity: 0;
-      pointer-events: none;
-      transform: translateX(-8px);
-      transition: opacity 0.15s ease-in-out;
-      will-change: opacity;
-    }
-
-    &.scrolled {
-      .vertical-nav-items-shadow {
-        opacity: 1;
-      }
+      display: none;
     }
 
     // 👉 Nav section title
@@ -71,12 +50,11 @@
       @extend %vertical-nav-item;
       @extend %vertical-nav-section-title;
 
-      // ℹ️ Update the margin-inline-end when vertical nav is in mini state. We done same for link & group.
       @at-root {
-          .layout-nav-type-vertical.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-section-title {
-            margin-inline: 4px 0;
-          }
+        .layout-nav-type-vertical.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-section-title {
+          margin-inline: 4px 0;
         }
+      }
 
       margin-block-end: variables.$vertical-nav-section-title-mb;
 
@@ -94,19 +72,21 @@
       @extend %vertical-nav-item-badge;
     }
 
-    // 👉 Nav Link
+    // 👉 Nav Link (pure neutral hover & active pill, zero pseudo-bar)
     .nav-link {
-      // 交互项已预留下边距承接激活阴影，父级不能再次裁切这段视觉溢出。
       overflow: visible;
 
       > :first-child {
         @extend %vertical-nav-item;
         @extend %vertical-nav-item-interactive;
-        
-        // ℹ️ Update the margin-inline-end when vertical nav is in mini state. We done same for section title.
+
         @at-root {
-          .layout-nav-type-vertical.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-link > :first-child, .layout-nav-type-vertical .layout-vertical-nav .nav-group > :first-child {
-            margin-inline: 0 5px;
+          .layout-nav-type-vertical.layout-vertical-nav-collapsed
+            .layout-vertical-nav:not(.hovered)
+            .nav-link
+            > :first-child,
+          .layout-nav-type-vertical .layout-vertical-nav .nav-group > :first-child {
+            margin-inline: 10px;
           }
         }
       }
@@ -120,16 +100,23 @@
         pointer-events: none;
       }
 
-      > .router-link-exact-active {
-        @extend %nav-link-active;
+      > a {
+        position: relative;
+
+        &::before {
+          display: none !important;
+          content: none !important;
+        }
+
+        &:hover:not(.router-link-exact-active):not(.router-link-active) {
+          background-color: rgba(var(--v-theme-on-surface), 0.05);
+          color: rgba(var(--v-theme-on-surface), 0.88);
+        }
       }
 
-      > a {
-        // Adds before psudo element to style hover state
-        @include mixins.before-pseudo;
-
-        // Adds vuetify states
-        @include vuetifyStates.states($active: false);
+      > .router-link-exact-active,
+      > .router-link-active:not([href='/']) {
+        @extend %nav-link-active;
       }
     }
   }

@@ -17,6 +17,7 @@ import {
   type SubscribeMediaType,
 } from '@tests/support/msw/handlers/subscribe'
 import { server } from '@tests/support/msw/server'
+import { HttpResponse, http } from 'msw'
 import { renderWithProviders } from '@tests/support/render'
 import { flushPromises } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref, watch, type PropType } from 'vue'
@@ -76,7 +77,7 @@ const SubscribeCardStub = defineComponent({
           h('button', { 'aria-label': `save-${props.media.id}`, onClick: () => emit('save'), type: 'button' }, 'save'),
           h(
             'button',
-            { 'aria-label': `remove-${props.media.id}`, onClick: () => emit('remove'), type: 'button' },
+            { 'aria-label': `remove-${props.media.id}`, onClick: () => emit('remove', props.media.id), type: 'button' },
             'remove',
           ),
         ],
@@ -141,6 +142,7 @@ const NoDataFoundStub = defineComponent({
 interface BatchState {
   allSelected: boolean
   enabled: boolean
+  operating?: boolean
   selectedCount: number
   totalCount: number
 }
@@ -567,6 +569,24 @@ describe('SubscribeListView sorting and refresh boundaries', () => {
     await waitFor(() => expect(listRequested).toHaveBeenCalledTimes(4))
   })
 
+  it('removes a deleted card optimistically before the background silent refresh resolves', async () => {
+    let releaseRefresh!: () => void
+    const refreshPending = new Promise<void>(resolve => {
+      releaseRefresh = resolve
+    })
+    await renderList({ listResponse: [movie(1, 'First'), movie(2, 'Second')] })
+    await screen.findByText('First')
+
+    server.use(subscribeListHandler([movie(2, 'Second')], 200, () => refreshPending))
+    await fireEvent.click(screen.getByRole('button', { name: 'remove-1' }))
+
+    // 在后台 GET subscribe/ 尚未返回前，卡片 1 已立即释放网格槽位
+    expect(screen.queryByText('First')).not.toBeInTheDocument()
+    expect(screen.getByText('Second')).toBeInTheDocument()
+    releaseRefresh()
+    await flushPromises()
+  })
+
   it('commits a custom order only after a successful response', async () => {
     const saved = vi.fn()
     server.use(saveSubscribeOrderConfigHandler('电影', { success: true }, 200, saved))
@@ -765,5 +785,39 @@ describe('SubscribeListView batch operations', () => {
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('成功启用 1 个订阅'))
     expect(mocks.toastError).toHaveBeenCalledWith('启用失败 1 个订阅')
     await waitFor(() => expect(batchState()).toMatchObject({ enabled: false, selectedCount: 0 }))
+  })
+
+  it('opens target subscribe when subid prop updates after initial load and locks batch operating state in flight', async () => {
+    let resolveEnable: ((value: { success: boolean }) => void) | undefined
+    server.use(
+      http.put(subscribeApiUrls.statusById(2), async () => {
+        const payload = await new Promise<{ success: boolean }>(resolve => {
+          resolveEnable = resolve
+        })
+        return HttpResponse.json(payload)
+      }),
+    )
+
+    const { rerender } = await renderList({
+      listResponse: [movie(1, 'Alpha'), movie(2, 'Beta')],
+    })
+    await screen.findByText('Alpha')
+    expect(card(2)).toHaveAttribute('data-page-open', 'false')
+
+    await rerender({ subid: '2' })
+    await waitFor(() => expect(card(2)).toHaveAttribute('data-page-open', 'true'))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'host-enter-batch' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'select-2' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'host-batch-enable' }))
+
+    await waitFor(() => expect(batchState().operating).toBe(true))
+    await waitFor(() => expect(resolveEnable).toBeTypeOf('function'))
+    // 飞行期间再次触发不会重入弹二次确认
+    await fireEvent.click(screen.getByRole('button', { name: 'host-batch-delete' }))
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+
+    resolveEnable?.({ success: true })
+    await waitFor(() => expect(batchState().operating).toBe(false))
   })
 })
