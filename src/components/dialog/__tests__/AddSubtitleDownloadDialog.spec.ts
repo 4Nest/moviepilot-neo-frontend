@@ -269,13 +269,80 @@ describe('AddSubtitleDownloadDialog submissions', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
 
-  it('emits close from the dialog close button', async () => {
+  it('emits close from close and cancel buttons, renders subtitle description, and tolerates directory load error', async () => {
+    server.use(
+      http.get(new URL('system/setting/public/Directories', API_BASE_URL).href, () =>
+        HttpResponse.json({ message: '加载失败', success: false }, { status: 500 }),
+      ),
+    )
     const user = userEvent.setup()
-    const { events } = await renderDialog()
+    const events = { close: vi.fn(), done: vi.fn(), error: vi.fn() }
+    await renderWithProviders(AddSubtitleDownloadDialog, {
+      global: {
+        stubs: {
+          AppCombobox: DirectoryComboboxStub,
+          AppTextField: TextFieldStub,
+          MediaIdSelector: MediaIdSelectorStub,
+          VCombobox: DirectoryComboboxStub,
+          VDialog: DialogStub,
+          VDialogCloseBtn: DialogCloseButtonStub,
+          VTextField: TextFieldStub,
+        },
+      },
+      props: {
+        modelValue: true,
+        onClose: events.close,
+        onDone: events.done,
+        onError: events.error,
+        subtitle: createSubtitle({ description: '中日双语特效字幕' }),
+        title: '测试电影',
+      },
+    })
 
+    expect(screen.getByText('中日双语特效字幕')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '关闭' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
 
-    expect(events.close).toHaveBeenCalledOnce()
+    expect(events.close).toHaveBeenCalledTimes(2)
+  })
+
+  it('blocks subtitle download when media ID is non-numeric and expands advanced options', async () => {
+    const submitted = vi.fn()
+    server.use(directoriesHandler([]), subtitleDownloadHandler({ data: null, success: true }, 200, submitted))
+    const user = userEvent.setup()
+    await renderWithProviders(AddSubtitleDownloadDialog, {
+      global: {
+        stubs: {
+          AppCombobox: DirectoryComboboxStub,
+          MediaIdSelector: MediaIdSelectorStub,
+          VCombobox: DirectoryComboboxStub,
+          VDialog: DialogStub,
+          VDialogCloseBtn: DialogCloseButtonStub,
+        },
+      },
+      initialState: {
+        globalSettings: {
+          data: {
+            RECOGNIZE_SOURCE: 'unknown-source',
+          },
+        },
+      },
+      props: {
+        modelValue: true,
+        subtitle: createSubtitle(),
+        title: '测试电影',
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: '显示高级选项' }))
+    await user.type(screen.getByLabelText('TheMovieDb编号'), 'abc')
+    await user.click(screen.getByRole('button', { name: '隐藏高级选项' }))
+    document.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    await user.click(screen.getByRole('button', { name: '下载字幕' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '隐藏高级选项' })).toBeInTheDocument())
+    expect(submitted).not.toHaveBeenCalled()
   })
 
   it('submits a directly entered media ID through v-model', async () => {

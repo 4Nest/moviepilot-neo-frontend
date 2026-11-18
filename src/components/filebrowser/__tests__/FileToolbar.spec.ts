@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  mdAndUp: { value: true },
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
   updateProps: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('vuetify', async importOriginal => {
   const actual = await importOriginal<typeof import('vuetify')>()
   return {
     ...actual,
-    useDisplay: () => ({ mdAndUp: { value: true } }),
+    useDisplay: () => ({ mdAndUp: mocks.mdAndUp }),
   }
 })
 
@@ -44,6 +45,11 @@ function mountToolbar(
     { name: '/', path: '/', storage: 'local', type: 'dir' },
     { name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' },
   ],
+  options: {
+    mkdirMethod?: string
+    showNewFolderButton?: boolean
+    storages?: Array<{ icon: string; title: string; value: string }>
+  } = {},
 ) {
   const axios = Object.assign(vi.fn(), { request }) as unknown as AxiosInstance
   const endpoint = { method: 'post', url: '/unused' }
@@ -53,7 +59,7 @@ function mountToolbar(
     image: endpoint,
     list: endpoint,
     mkdir: {
-      method: 'post',
+      method: options.mkdirMethod ?? 'post',
       url: '/storage/mkdir?name={name}',
     },
     rename: endpoint,
@@ -65,8 +71,9 @@ function mountToolbar(
       endpoints,
       item,
       itemstack,
+      showNewFolderButton: options.showNewFolderButton ?? true,
       sort,
-      storages: [
+      storages: options.storages ?? [
         { icon: 'mdi-harddisk', title: '本地', value: 'local' },
         { icon: 'mdi-cloud', title: '网盘', value: 'rclone' },
       ],
@@ -107,6 +114,7 @@ function openDialogAndCreate(wrapper: ReturnType<typeof mountToolbar>, name = 'n
 describe('FileToolbar mkdir', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.mdAndUp.value = true
     mocks.openSharedDialog.mockReturnValue({
       close: mocks.close,
       id: 1,
@@ -198,6 +206,7 @@ describe('FileToolbar mkdir', () => {
 describe('FileToolbar navigation and sorting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.mdAndUp.value = true
     mocks.openSharedDialog.mockReturnValue({
       close: mocks.close,
       id: 1,
@@ -274,6 +283,72 @@ describe('FileToolbar navigation and sorting', () => {
     expect(wrapper.emitted('pathchanged')).toEqual([
       [{ name: 'tv', path: '/downloads/tv/', storage: 'local', type: 'dir' }],
       [{ name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' }],
+    ])
+  })
+
+  it('falls back to default error messages and default post method when mkdir omits message or rejects non-Error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const request = vi.fn().mockResolvedValueOnce({ success: false }).mockRejectedValueOnce('plain-failure')
+    const wrapper = mountToolbar(request, 'name', undefined, undefined, { mkdirMethod: '' })
+
+    await wrapper.findAll('.icon-btn')[2].trigger('click')
+    const events = mocks.openSharedDialog.mock.calls[0][2] as {
+      create: () => Promise<void>
+      'update:name': (value: string) => void
+    }
+    events['update:name']('fallback-dir')
+
+    await events.create()
+    await flushPromises()
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'post' }))
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+
+    await events.create()
+    await flushPromises()
+    expect(mocks.toastError).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders static storage pill with fallback icon/name for single or unmatched storage and respects showNewFolderButton=false', () => {
+    const unmatchedItem: FileItem = { name: 'downloads', path: '/downloads/', storage: 'custom-s3', type: 'dir' }
+    const wrapper = mountToolbar(vi.fn(), 'name', unmatchedItem, undefined, {
+      showNewFolderButton: false,
+      storages: [{ icon: '', title: '', value: 'other' }],
+    })
+
+    expect(wrapper.find('.file-toolbar__storage-pill--static').exists()).toBe(true)
+    expect(wrapper.find('.file-toolbar__storage-name').text()).toBe('custom-s3')
+    expect(wrapper.findAll('.icon-btn')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('renders only the leaf breadcrumb on small screens and synthesizes file and empty-stack root breadcrumbs', async () => {
+    mocks.mdAndUp.value = false
+    const fileItem: FileItem = {
+      name: 'episode01.mkv',
+      path: '/downloads/tv/episode01.mkv',
+      storage: 'unmatched',
+      type: 'file',
+    }
+    const wrapper = mountToolbar(vi.fn(), 'name', fileItem, [], {
+      storages: [
+        { icon: '', title: '', value: 'local' },
+        { icon: 'mdi-cloud', title: '网盘', value: 'rclone' },
+      ],
+    })
+
+    const navButtons = wrapper.findAll('.toolbar-button')
+    // [0] storage activator, [1] root crumb, [2] leaf crumb (intermediate crumbs hidden when mdAndUp=false)
+    expect(navButtons).toHaveLength(3)
+    expect(navButtons[2].text()).toBe('episode01.mkv')
+
+    await navButtons[1].trigger('click')
+    await navButtons[2].trigger('click')
+    await wrapper.findAll('.icon-btn')[1].trigger('click')
+
+    expect(wrapper.emitted('pathchanged')).toEqual([
+      [{ fileid: 'root', name: '/', path: '/', storage: 'unmatched', type: 'dir' }],
+      [{ name: 'episode01.mkv', path: '/downloads/tv/episode01.mkv', storage: 'unmatched', type: 'file' }],
+      [{ name: 'tv', path: '/downloads/tv/', storage: 'unmatched', type: 'dir' }],
     ])
   })
 })

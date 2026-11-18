@@ -122,9 +122,36 @@ describe('SiteCookieUpdateDialog', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '开始更新' })).toBeEnabled())
   })
 
-  it('emits close from the dialog close button', async () => {
+  it('emits close from the dialog close button and cancel button', async () => {
     const { events } = await renderDialog()
     await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
-    expect(events.close).toHaveBeenCalledOnce()
+    await fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(events.close).toHaveBeenCalledTimes(2)
+  })
+
+  it('submits on password Enter key, ignores native form submit, and falls back to default error messages', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let callCount = 0
+    server.use(
+      http.post('http://localhost/api/v1/site/cookie/701', () => {
+        callCount += 1
+        if (callCount === 1) return HttpResponse.json({ success: false })
+        return HttpResponse.json({}, { status: 500 })
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDialog()
+    await fillCredentials(user)
+
+    await fireEvent.submit(document.querySelector('form')!)
+    expect(callCount).toBe(0)
+
+    await fireEvent.keyDown(screen.getByLabelText('密码'), { key: 'Enter' })
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Cookie 站点 更新失败：请求失败，请稍后重试'))
+
+    await fireEvent.keyDown(screen.getByLabelText('密码'), { key: 'Enter' })
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('Cookie 站点 更新失败：Request failed with status code 500'),
+    )
   })
 })

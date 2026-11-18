@@ -205,6 +205,7 @@ function setHasScroll(hasScroll: boolean) {
 interface RenderShareOptions {
   canManage?: boolean
   keyword?: string
+  stubs?: Record<string, unknown>
   superUser?: boolean
   userUniqueId?: string
 }
@@ -237,6 +238,7 @@ async function renderShare(keywordOrOptions: string | RenderShareOptions = '') {
         SubscribeShareCard: SubscribeShareCardStub,
         VInfiniteScroll: InfiniteScrollStub,
         VPageContentTitle: PageContentTitleStub,
+        ...opts.stubs,
       },
     },
   })
@@ -503,4 +505,258 @@ describe('SubscribeShareView', () => {
       expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('没有删除权限'))
     },
   )
+
+  it('debounces inline search input, ignores whitespace-identical queries, and resets immediately on clear', async () => {
+    const requests: URL[] = []
+    server.use(
+      subscribeSharesHandler([createSubscribeShare({ id: 5101, share_title: '搜索测试分享' })], 200, url => {
+        requests.push(url)
+      }),
+    )
+
+    await renderShare()
+    expect(await screen.findByText('搜索测试分享')).toBeInTheDocument()
+    expect(requests).toHaveLength(1)
+
+    const input = screen.getByPlaceholderText('搜索标题、说明或分享人...')
+    await fireEvent.update(input, '  葬送的芙莉莲  ')
+    await new Promise(resolve => setTimeout(resolve, 350))
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('name')).toBe('葬送的芙莉莲'))
+    const countAfterSearch = requests.length
+
+    // 仅改变前后空白不重复触发重置请求
+    await fireEvent.update(input, '葬送的芙莉莲')
+    await new Promise(resolve => setTimeout(resolve, 350))
+    expect(requests).toHaveLength(countAfterSearch)
+
+    // 点击清空图标或清空文本时立即取消防抖并重置为空查询
+    const clearIcon = document.querySelector<HTMLElement>('.v-field__clearable .v-icon, .v-field__clearable button')
+    if (clearIcon) {
+      await fireEvent.click(clearIcon)
+    } else {
+      await fireEvent.update(input, '')
+    }
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('name') ?? '').toBe(''))
+  })
+
+  it('applies and resets genre and minimum rating filters from the filter menu', async () => {
+    const requests: URL[] = []
+    server.use(
+      subscribeSharesHandler([createSubscribeShare({ id: 5201, share_title: '高级筛选卡片' })], 200, url => {
+        requests.push(url)
+      }),
+    )
+    const SliderStub = defineComponent({
+      name: 'VSlider',
+      props: { modelValue: Number },
+      emits: ['end'],
+      setup(props, { emit }) {
+        return () =>
+          h(
+            'button',
+            {
+              'aria-label': '设置最低评分8',
+              'data-rating': String(props.modelValue ?? 0),
+              type: 'button',
+              onClick: () => emit('end', 8),
+            },
+            '设置评分',
+          )
+      },
+    })
+    const user = userEvent.setup()
+
+    await renderShare({ stubs: { VSlider: SliderStub } })
+    expect(await screen.findByText('高级筛选卡片')).toBeInTheDocument()
+
+    // 打开筛选菜单，选择“动画”（ID 16）并设置最低评分 8
+    await user.click(screen.getByRole('button', { name: /筛选/ }))
+    const animationChip = await screen.findByText('动画')
+    await user.click(animationChip)
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('genre_id')).toBe('16'))
+    const countAfterGenre = requests.length
+
+    // 重复点击同一流派与同一评分不重复请求
+    await user.click(await screen.findByText('动画'))
+    expect(requests).toHaveLength(countAfterGenre)
+
+    await fireEvent.click(screen.getByRole('button', { name: '设置最低评分8' }))
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('min_rating')).toBe('8'))
+    const countAfterRating = requests.length
+    await fireEvent.click(screen.getByRole('button', { name: '设置最低评分8' }))
+    expect(requests).toHaveLength(countAfterRating)
+
+    expect(screen.getByRole('button', { name: /筛选.*\(2\)/ })).toBeInTheDocument()
+
+    // 点击“重置筛选”清空所有高级筛选条件
+    await user.click(screen.getAllByRole('button', { name: /重置筛选/ })[0])
+    await waitFor(() => {
+      const last = requests.at(-1)!
+      expect(last.searchParams.get('genre_id')).toBeNull()
+      expect(last.searchParams.get('min_rating')).toBeNull()
+    })
+  })
+
+  it('handles single-card toggle/delete, deselect-all, scope selection cleanup, cancel confirm, and fallback error toast', async () => {
+    const share1 = createSubscribeShare({ id: 5301, share_title: '可删甲', share_uid: 'my-uid' })
+    const share2 = createSubscribeShare({ id: 5302, share_title: '可删乙', share_uid: 'other-uid' })
+    const share3 = createSubscribeShare({
+      id: undefined,
+      share_title: '无ID分享',
+      share_user: 'NoIdUser',
+      tmdbid: 9988,
+    })
+    const requestedPages: string[] = []
+    server.use(
+      http.get(subscribeApiUrls.shares, ({ request }) => {
+        const p = new URL(request.url).searchParams.get('page') ?? '1'
+        requestedPages.push(p)
+        if (p === '1') return HttpResponse.json([share1, share2, share3])
+        return HttpResponse.json([])
+      }),
+      http.delete('/api/v1/subscribe/share/:id', () => HttpResponse.json({ success: false })),
+    )
+    const user = userEvent.setup()
+
+    await renderShare({ canManage: true, superUser: true, userUniqueId: 'my-uid' })
+    expect(await screen.findByText('可删甲')).toBeInTheDocument()
+    // 验证无 id 条目的 getItemKey 回退分支
+    expect(screen.getByRole('status', { name: '订阅分享渐进网格键' })).toHaveTextContent('5301|5302|9988-NoIdUser')
+
+    await user.click(screen.getByRole('button', { name: '批量管理' }))
+
+    // 单卡勾选与反选
+    const selectBtn1 = screen.getByRole('button', { name: '选择分享 5301' })
+    await user.click(selectBtn1)
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+    await user.click(selectBtn1)
+    expect(screen.getByText('已选 0 项')).toBeInTheDocument()
+
+    // 全选可删项（5301 + 5302）与取消全选
+    await user.click(screen.getByRole('button', { name: '全选可删项' }))
+    expect(screen.getByText('已选 2 项')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '取消全选' }))
+    expect(screen.getByText('已选 0 项')).toBeInTheDocument()
+
+    // 再次全选后切换到“我的分享”，自动剔除不在可见集合中的 5302
+    await user.click(screen.getByRole('button', { name: '全选可删项' }))
+    await user.click(screen.getByText('我的分享'))
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+    await user.click(screen.getByText('全部'))
+
+    // 二次确认取消时不发送删除请求
+    mocks.confirm.mockResolvedValueOnce(false)
+    await user.click(screen.getByRole('button', { name: '删除选中' }))
+    expect(screen.getByText('可删甲')).toBeInTheDocument()
+
+    // 服务端返回无 message 的失败响应时展示兜底批量失败提示
+    mocks.confirm.mockResolvedValueOnce(true)
+    await user.click(screen.getByRole('button', { name: '删除选中' }))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('取消失败 1 个分享'))
+
+    // 单卡删除后不足一屏自动触发补页扫描，并清理其选中状态
+    setHasScroll(false)
+    await user.click(screen.getByRole('button', { name: '删除分享 5301' }))
+    await waitFor(() => expect(screen.queryByText('可删甲')).not.toBeInTheDocument())
+    expect(screen.getByText('已选 0 项')).toBeInTheDocument()
+    await waitFor(() => expect(requestedPages).toContain('2'))
+
+    // 点击“退出管理”退出批量模式
+    await user.click(screen.getByRole('button', { name: '退出管理' }))
+    expect(screen.queryByRole('button', { name: '退出管理' })).not.toBeInTheDocument()
+  })
+
+  it('pauses mine-scope auto-scanning after 5 pages and resumes manually via scanMorePagesForMine', async () => {
+    setHasScroll(false)
+    let failOnPage7 = true
+    server.use(
+      http.get(subscribeApiUrls.shares, ({ request }) => {
+        const p = Number(new URL(request.url).searchParams.get('page') ?? '1')
+        if (p <= 6) {
+          return HttpResponse.json([
+            createSubscribeShare({ id: 5400 + p, share_title: `路人分享 ${p}`, share_uid: 'other-uid' }),
+          ])
+        }
+        if (p === 7 && failOnPage7) {
+          failOnPage7 = false
+          return HttpResponse.json({ detail: 'scan error' }, { status: 500 })
+        }
+        if (p === 7) {
+          return HttpResponse.json([
+            createSubscribeShare({ id: 5499, share_title: '第七页我的分享', share_uid: 'my-uid' }),
+          ])
+        }
+        return HttpResponse.json([])
+      }),
+    )
+    const user = userEvent.setup()
+
+    await renderShare({ userUniqueId: 'my-uid' })
+    // 首屏无滚动条但全量范围会连拉到空页吗？注意切到“我的分享”测试分段扫描，我们重置关键词在“我的分享”下重新从第 1 页扫描
+    await user.click(screen.getByText('我的分享'))
+    const input = screen.getByPlaceholderText('搜索标题、说明或分享人...')
+    await fireEvent.update(input, '第')
+    await new Promise(resolve => setTimeout(resolve, 350))
+
+    // 自动连扫 5 页后暂停并出现继续查找提示条
+    expect(await screen.findByText('已扫描当前加载范围，可继续向后查找我的分享')).toBeInTheDocument()
+    const loadMoreBtn = screen.getByRole('button', { name: '继续查找更多页' })
+
+    // 第一次点击遇到第 7 页临时异常被安全捕获，再次点击成功加载出第 7 页本人分享并探底
+    await user.click(loadMoreBtn)
+    await flushPromises()
+    await fireEvent.click(screen.queryByRole('button', { name: '继续查找更多页' }) ?? loadMoreBtn)
+    // 若异常后 mineScanPaused 已置 false，通过切换范围再切回触发继续扫描第 7 页
+    await user.click(screen.getByText('全部'))
+    await user.click(screen.getByText('我的分享'))
+    expect(await screen.findByText('第七页我的分享')).toBeInTheDocument()
+  })
+
+  it('handles empty share list, rank dialog empty/error states, blank user guard, mine-to-all reset, and close button', async () => {
+    const requests: URL[] = []
+    let rankFail = true
+    server.use(
+      subscribeSharesHandler([], 200, url => {
+        requests.push(url)
+      }),
+      http.get(subscribeApiUrls.shareStatistics, () => {
+        if (rankFail) {
+          rankFail = false
+          return HttpResponse.json({ message: 'stats err' }, { status: 500 })
+        }
+        return HttpResponse.json([])
+      }),
+    )
+    const user = userEvent.setup()
+
+    await renderShare({ userUniqueId: 'my-uid' })
+    expect(await screen.findByLabelText('订阅分享空态')).toBeInTheDocument()
+
+    // 1. 达人榜请求失败弹出错误提示并显示空统计文案，随后点击关闭按钮关闭弹窗
+    await user.click(screen.getByRole('button', { name: '分享达人榜' }))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
+    expect(await screen.findByText('暂无分享统计数据')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '关闭达人榜' }))
+
+    // 2. 达人榜返回匿名项与有效用户：点击匿名项不触发查询，在“我的分享”下点击有效用户自动切回“全部”并查询
+    server.use(
+      subscribeShareStatisticsHandler([
+        createSubscribeShareStatistics({
+          share_count: undefined,
+          share_user: '',
+          total_reuse_count: undefined,
+        }),
+        createSubscribeShareStatistics({ share_count: 5, share_user: '压制组大佬', total_reuse_count: 99 }),
+      ]),
+    )
+    await user.click(screen.getByText('我的分享'))
+    await user.click(screen.getByRole('button', { name: '分享达人榜' }))
+    const unknownItem = await screen.findByText('未知')
+    const countBeforeBlank = requests.length
+    await user.click(unknownItem)
+    expect(requests).toHaveLength(countBeforeBlank)
+
+    await user.click(screen.getByText('压制组大佬'))
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('name')).toBe('压制组大佬'))
+  })
 })

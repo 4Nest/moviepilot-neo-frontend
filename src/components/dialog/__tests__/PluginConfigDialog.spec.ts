@@ -205,8 +205,65 @@ describe('PluginConfigDialog', () => {
     expect(await screen.findByTestId('form-render')).toHaveTextContent('VSwitch:true')
     await fireEvent.click(screen.getByRole('button', { name: '查看数据' }))
     await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    await fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(result.emitted().switch).toHaveLength(1)
-    expect(result.emitted().close).toHaveLength(1)
+    expect(result.emitted().close).toHaveLength(2)
+  })
+
+  it('treats an invalid render_mode response as a load failure', async () => {
+    mocks.apiGet.mockResolvedValue({ render_mode: 'invalid' })
+
+    await renderDialog()
+
+    expect(await screen.findByText('插件配置加载失败，请稍后重试')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
+  })
+
+  it('renders the mobile fallback close button in Vue mode and handles missing plugin id or empty layout', async () => {
+    const previousWidth = window.innerWidth
+    window.innerWidth = 500
+    window.dispatchEvent(new Event('resize'))
+    try {
+      const RemoteWithResetLayout = defineComponent({
+        name: 'RemoteWithResetLayout',
+        emits: ['layout'],
+        setup(_, { emit }) {
+          return () =>
+            h('div', { 'data-testid': 'mobile-remote' }, [
+              h('button', { onClick: () => emit('layout', null), type: 'button' }, '重置布局'),
+            ])
+        },
+      })
+      mocks.apiGet.mockResolvedValue({ model: null, render_mode: 'vue' })
+      mocks.loadRemoteComponent.mockResolvedValue(RemoteWithResetLayout)
+
+      const result = await renderDialog()
+
+      expect(await screen.findByTestId('mobile-remote')).toBeInTheDocument()
+      await fireEvent.click(screen.getByRole('button', { name: '重置布局' }))
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', '60rem')
+      await fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+      expect(result.emitted().close).toHaveLength(1)
+      result.unmount()
+
+      mocks.apiGet.mockResolvedValue({ model: {}, render_mode: 'vue' })
+      await renderWithProviders(PluginConfigDialog, {
+        props: { modelValue: true, plugin: { plugin_name: '无ID插件' } as Plugin },
+        global: {
+          stubs: {
+            FormRender: FormRenderStub,
+            LoadingBanner: LoadingBannerStub,
+            ProgressDialog: ProgressDialogStub,
+            VDialog: DialogStub,
+            VDialogCloseBtn: CloseButtonStub,
+          },
+        },
+      })
+      expect(await screen.findByText('无法加载组件，请稍后再试')).toBeInTheDocument()
+    } finally {
+      window.innerWidth = previousWidth
+      window.dispatchEvent(new Event('resize'))
+    }
   })
 
   it('passes the same host capabilities through props and provide and forwards remote events', async () => {

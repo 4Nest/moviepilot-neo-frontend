@@ -251,4 +251,47 @@ describe('SiteImportDialog', () => {
     expect(partialEvents.importSuccess).toHaveBeenCalledOnce()
     expect(partialEvents.update).toHaveBeenCalledWith(false)
   })
+
+  it('cancels from the preview stage without emitting import-success', async () => {
+    const { events } = await renderDialog()
+    await chooseFile(jsonFile([createSite({ name: '预览站点' })]))
+    expect(await screen.findByText('预览站点')).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: '取消' }))
+
+    expect(events.importSuccess).not.toHaveBeenCalled()
+    expect(events.update).toHaveBeenCalledWith(false)
+  })
+
+  it('ignores close requests while importing and aborts cleanly on unmount', async () => {
+    let resolveFirst!: () => void
+    const firstPending = new Promise<void>(resolve => {
+      resolveFirst = resolve
+    })
+    let requests = 0
+    server.use(
+      http.post(siteApiUrls.list, async () => {
+        requests += 1
+        await firstPending
+        return HttpResponse.json({ success: true })
+      }),
+    )
+    const { events, unmount } = await renderDialog()
+    await chooseFile(jsonFile([createSite({ name: '导入中一' }), createSite({ name: '导入中二' })]))
+
+    await fireEvent.click(await screen.findByRole('button', { name: '开始导入' }))
+    expect(await screen.findByText('0%')).toBeInTheDocument()
+
+    const closeBtn = screen.getByRole('button', { name: '关闭' })
+    expect(closeBtn).toBeDisabled()
+    closeBtn.removeAttribute('disabled')
+    await fireEvent.click(closeBtn)
+    expect(events.update).not.toHaveBeenCalled()
+
+    unmount()
+    resolveFirst()
+    await waitFor(() => expect(requests).toBe(1))
+    expect(events.importSuccess).not.toHaveBeenCalled()
+    expect(mocks.done).toHaveBeenCalled()
+  })
 })

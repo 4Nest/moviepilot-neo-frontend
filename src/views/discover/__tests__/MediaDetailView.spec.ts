@@ -36,12 +36,17 @@ import { defineComponent, h, type PropType } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
   openDoubanApp: vi.fn(),
   openMediaServerItem: vi.fn(),
   openSharedDialog: vi.fn(),
   routerPush: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => mocks.confirm,
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -1328,5 +1333,238 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
 
     expect(screen.queryByText('A 组旧响应')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '1 - B 组第一集' })).toBeInTheDocument()
+  })
+
+  it('renders empty state when mediaid or type is missing and ignores obsolete detail responses or errors', async () => {
+    const missingPropView = await renderWithProviders(MediaDetailView, {
+      props: { mediaid: '', title: '空ID', type: '电影', year: '2026' },
+    })
+    expect(await screen.findByText('未识别到媒体信息。')).toBeInTheDocument()
+    missingPropView.unmount()
+
+    // 1. 过期成功响应被代际锁忽略
+    const staleDetail = createDeferred<MediaInfo>()
+    const staleReturned = createDeferred<void>()
+    server.use(
+      http.get(new URL('media/tmdb:8901', API_BASE_URL).href, async () => {
+        const res = await staleDetail.promise
+        staleReturned.resolve()
+        return HttpResponse.json(res)
+      }),
+      mediaDetailsHandler('tmdb:8902', createMediaInfo({ title: '最新目标电影', tmdb_id: 8902, type: '电影' })),
+      mediaExistsHandler({ data: { item: {} }, success: false }),
+      querySubscribeByMediaHandler('tmdb:8902', {}),
+    )
+
+    const raceView = await renderWithProviders(MediaDetailView, {
+      props: { mediaid: 'tmdb:8901', title: '过期电影', type: '电影', year: '2026' },
+      global: {
+        stubs: {
+          MediaCardSlideView: MediaCardSlideViewStub,
+          PersonCardSlideView: PersonCardSlideViewStub,
+          SearchSiteDialog: SearchSiteDialogStub,
+          VImg: VImgStub,
+        },
+      },
+    })
+    await raceView.rerender({ mediaid: 'tmdb:8902', title: '最新目标电影', type: '电影', year: '2026' })
+    expect(await screen.findByRole('heading', { name: /最新目标电影/ })).toBeInTheDocument()
+
+    staleDetail.resolve(createMediaInfo({ title: '不该显示的过期电影', tmdb_id: 8901, type: '电影' }))
+    await staleReturned.promise
+    await flushPromises()
+    expect(screen.queryByText('不该显示的过期电影')).not.toBeInTheDocument()
+
+    // 2. 过期失败响应被代际锁忽略
+    const staleErrorGate = createDeferred<void>()
+    const staleErrorReturned = createDeferred<void>()
+    server.use(
+      http.get(new URL('media/tmdb:8903', API_BASE_URL).href, async () => {
+        await staleErrorGate.promise
+        staleErrorReturned.resolve()
+        return HttpResponse.json({ message: 'failed' }, { status: 500 })
+      }),
+      mediaDetailsHandler('tmdb:8904', createMediaInfo({ title: '错误竞态目标片', tmdb_id: 8904, type: '电影' })),
+      querySubscribeByMediaHandler('tmdb:8904', {}),
+    )
+    await raceView.rerender({ mediaid: 'tmdb:8903', title: '将失败的旧片', type: '电影', year: '2026' })
+    await raceView.rerender({ mediaid: 'tmdb:8904', title: '错误竞态目标片', type: '电影', year: '2026' })
+    expect(await screen.findByRole('heading', { name: /错误竞态目标片/ })).toBeInTheDocument()
+
+    staleErrorGate.resolve()
+    await staleErrorReturned.promise
+    await flushPromises()
+    expect(screen.queryByText('无法获取到媒体信息，请检查网络连接。')).not.toBeInTheDocument()
+  })
+
+  it('unsubscribes movies and TV seasons, opens mode dialog for in-library anime, and matches multi-source subscribes', async () => {
+    mocks.confirm.mockResolvedValue(true)
+
+    // 1. 已订阅电影点击主按钮执行取消订阅
+    const subMovie = createMediaInfo({ title: '待取消电影', tmdb_id: 8911, type: '电影' })
+    const deleteMovieReq = vi.fn()
+    server.use(
+      http.delete(new URL('subscribe/media/tmdb:8911', API_BASE_URL).href, () => {
+        deleteMovieReq()
+        return HttpResponse.json({ success: true })
+      }),
+    )
+    const movieView = await renderDetail({
+      media: subMovie,
+      movieSubscribe: createSubscribe({ id: 28911, tmdbid: 8911, type: '电影' }),
+    })
+    await fireEvent.click(await screen.findByRole('button', { name: /已订阅/ }))
+    await waitFor(() => expect(deleteMovieReq).toHaveBeenCalledOnce())
+    movieView.unmount()
+
+    // 2. 已入库非电影/非电视剧媒体（如“动漫”）点击主订阅按钮触发 isExists 与 primarySeason 打开模式选择弹窗
+    mocks.openSharedDialog.mockClear()
+    const inLibAnime = createMediaInfo({ season: 1, title: '已入库剧场动漫', tmdb_id: 8912, type: '动漫' })
+    server.use(
+      mediaDetailsHandler('tmdb:8912', inLibAnime),
+      mediaExistsHandler({ data: { item: { id: 'lib-8912' } }, success: true }),
+    )
+    const animeView = await renderWithProviders(MediaDetailView, {
+      props: { mediaid: 'tmdb:8912', title: inLibAnime.title, type: '动漫', year: inLibAnime.year },
+      global: {
+        stubs: {
+          MediaCardSlideView: MediaCardSlideViewStub,
+          PersonCardSlideView: PersonCardSlideViewStub,
+          SearchSiteDialog: SearchSiteDialogStub,
+          VImg: VImgStub,
+        },
+      },
+    })
+    expect(await screen.findByText('已入库')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('button', { name: /^订阅$/ }))
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    animeView.unmount()
+
+    // 3. 结构化 themoviedb / mediaid / anilistid 订阅匹配 + 单季取消订阅
+    const deleteSeasonReq = vi.fn()
+    const tvMedia = createSubscribeTv({
+      season_info: [createMediaSeason({ season_number: 1 }), createMediaSeason({ season_number: 2 })],
+      title: '多源季订阅匹配剧',
+      tmdb_id: 8913,
+    })
+    server.use(
+      http.delete(new URL('subscribe/media/tmdb:8913', API_BASE_URL).href, () => {
+        deleteSeasonReq()
+        return HttpResponse.json({ success: true })
+      }),
+    )
+    const tvView = await renderDetail({
+      media: tvMedia,
+      subscribes: [
+        createSubscribe({ media_id: '8913', media_source: 'themoviedb', season: 1, tmdbid: undefined, type: '电视剧' }),
+        createSubscribe({ mediaid: 'tmdb:8913', season: 2, tmdbid: undefined, type: '电视剧' }),
+      ],
+      type: '电视剧',
+    })
+    expect(await screen.findByRole('button', { name: /已全部订阅/ })).toBeInTheDocument()
+    const firstSeasonBtn = tvView.container.querySelector('.v-expansion-panel .v-btn') as HTMLElement
+    await fireEvent.click(firstSeasonBtn)
+    await waitFor(() => expect(deleteSeasonReq).toHaveBeenCalledOnce())
+    tvView.unmount()
+
+    // 4. AniList 季订阅列表匹配
+    const anilistTv = createSubscribeTv({
+      anilist_id: 199001,
+      season_info: [createMediaSeason({ season_number: 1 })],
+      source: 'anilist',
+      title: 'AniList 季匹配剧',
+      tmdb_id: undefined,
+    })
+    await renderDetail({
+      media: anilistTv,
+      mediaId: 'anilist:199001',
+      subscribes: [createSubscribe({ anilistid: 199001, season: 1, tmdbid: undefined, type: '电视剧' })],
+      type: '电视剧',
+    })
+    expect(await screen.findByRole('button', { name: /已全部订阅/ })).toBeInTheDocument()
+  })
+
+  it('covers crew deduplication/fallback roles, no-backdrop stage, standalone blocks, and episode API errors', async () => {
+    // 1. TMDB 无海报背景、无简介、无年份、零评分、未知状态、original_name/first_air_date/original_language 与主创去重/分隔符
+    const sparseTmdb = createSubscribeTv({
+      backdrop_path: '',
+      directors: [
+        { id: 1, job: 'Director', name: '' },
+        { id: 2, job: undefined, name: '主创甲' },
+        { id: 2, job: undefined, name: '主创甲' },
+        { id: 3, job: undefined, name: '主创乙' },
+        { id: 4, job: 'VFX Supervisor', name: '视效丙' },
+      ] as unknown as never,
+      first_air_date: '2026-01-15',
+      original_language: 'ja',
+      original_name: 'Sparse Original TV',
+      original_title: undefined,
+      overview: '',
+      poster_path: '',
+      season_info: [createMediaSeason({ season_number: undefined as unknown as number })],
+      status: 'Special Edition',
+      title: '极简无背景剧集',
+      tmdb_id: 8921,
+      vote_average: 0,
+      year: '',
+    })
+    const group = { episode_count: 6, group_count: 1, id: 'err-group', name: '异常组' }
+    const sparseView = await renderDetail({
+      episodeGroups: [group],
+      media: sparseTmdb,
+      setupHandlers: () => {
+        server.use(
+          http.get(new URL('tmdb/8921/0', API_BASE_URL).href, () =>
+            HttpResponse.json({ message: 'episode err' }, { status: 500 }),
+          ),
+          http.post(mediaApiUrls.existsRemote, () => HttpResponse.json({ message: 'remote err' }, { status: 500 })),
+          http.get(mediaApiUrls.groupSeasons('err-group'), () =>
+            HttpResponse.json({ message: 'group err' }, { status: 500 }),
+          ),
+        )
+      },
+      type: '电视剧',
+    })
+
+    expect(await screen.findByRole('heading', { name: '极简无背景剧集' })).toBeInTheDocument()
+    expect(sparseView.container.querySelector('.media-hero-stage--no-backdrop')).not.toBeNull()
+    expect(sparseView.container.querySelector('ul.media-crew.media-crew--standalone')).not.toBeNull()
+    expect(sparseView.container.querySelector('.crew-sep')).not.toBeNull()
+    expect(screen.getByText('Special Edition')).toBeInTheDocument()
+    expect(screen.getByText('Sparse Original TV')).toBeInTheDocument()
+    expect(screen.getByText('ja')).toBeInTheDocument()
+    expect(screen.getByText('2026-01-15')).toBeInTheDocument()
+
+    // 展开季面板触发季集与远程存在接口 500 容错分支，再切换到加载失败的剧集组
+    await fireEvent.click(sparseView.container.querySelector('.v-expansion-panel-title') as HTMLElement)
+    await flushPromises()
+    await fireEvent.click(screen.getByRole('button', { name: /异常组/ }))
+    await flushPromises()
+    sparseView.unmount()
+
+    // 2. 豆瓣无简介主创去重、无 roles 默认“主创”、模糊职位优先级（“联合导演”）与无 url 回退
+    const doubanCrewMedia = createMediaInfo({
+      backdrop_path: '',
+      directors: [
+        { id: '0', name: '' },
+        { id: '1', name: '独立主创', roles: [], url: undefined },
+        { id: '1', name: '独立主创', roles: [], url: undefined },
+        { id: '2', name: '甲导演', roles: ['联合导演'], url: 'https://movie.douban.com/celebrity/10' },
+      ] as unknown as never,
+      douban_id: 'db-8922',
+      overview: '',
+      poster_path: '',
+      title: '豆瓣极简主创片',
+      tmdb_id: undefined,
+      type: '电影',
+      vote_average: 8.8,
+    })
+    const doubanView = await renderDetail({ media: doubanCrewMedia, mediaId: 'douban:db-8922', type: '电影' })
+    expect(await screen.findByRole('heading', { name: /豆瓣极简主创片/ })).toBeInTheDocument()
+    const roles = Array.from(doubanView.container.querySelectorAll('ul.media-crew .crew-role')).map(el =>
+      el.textContent?.trim(),
+    )
+    expect(roles).toEqual(['联合导演', '主创'])
+    expect(screen.getByText('独立主创').closest('a')).toHaveAttribute('href', '')
   })
 })

@@ -380,13 +380,54 @@ describe('AddDownloadDialog submissions', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
 
-  it('emits close from the dialog close button', async () => {
+  it('emits close from the dialog close button and cancel button and renders torrent description', async () => {
     const user = userEvent.setup()
-    const { events } = await renderDialog()
+    const { events } = await renderDialog({
+      torrent: createTorrent({ description: '4K HDR 内封双语字幕' }),
+    })
 
+    expect(screen.getByText('4K HDR 内封双语字幕')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '关闭' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
 
-    expect(events.close).toHaveBeenCalledOnce()
+    expect(events.close).toHaveBeenCalledTimes(2)
+  })
+
+  it('blocks download when media ID is non-numeric and expands advanced options', async () => {
+    const submitted = vi.fn()
+    server.use(
+      directoriesHandler([]),
+      downloadersHandler([]),
+      downloadHandler('download/add', { data: null, success: true }, 200, submitted),
+    )
+    const user = userEvent.setup()
+    await renderWithProviders(AddDownloadDialog, {
+      global: {
+        stubs: {
+          AppCombobox: DirectoryComboboxStub,
+          AppSelect: SelectStub,
+          MediaIdSelector: MediaIdSelectorStub,
+          VCombobox: DirectoryComboboxStub,
+          VDialog: DialogStub,
+          VDialogCloseBtn: DialogCloseButtonStub,
+          VSelect: SelectStub,
+        },
+      },
+      props: {
+        modelValue: true,
+        torrent: createTorrent(),
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: '显示高级选项' }))
+    await user.type(screen.getByLabelText('TheMovieDb编号'), 'invalid-id')
+    await user.click(screen.getByRole('button', { name: '隐藏高级选项' }))
+    document.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '隐藏高级选项' })).toBeInTheDocument())
+    expect(submitted).not.toHaveBeenCalled()
   })
 
   it('submits a directly entered media ID through v-model', async () => {
@@ -676,6 +717,45 @@ describe('AddDownloadDialog manual torrent input', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('请填写磁力/种子链接或选择 .torrent 文件')
     expect(submitted).not.toHaveBeenCalled()
     expect(mocks.startNProgress).not.toHaveBeenCalled()
+  })
+
+  it('triggers hidden file input click, submits custom manual title, and reports manual download or FileReader failure', async () => {
+    const submitted = vi.fn()
+    server.use(downloadHandler('download/add', { message: '磁力无效', success: false }, 200, submitted))
+    const user = userEvent.setup()
+    const { container, events } = await renderDialog({ manual: true })
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const clickSpy = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
+
+    await user.click(screen.getByRole('button', { name: '选择种子文件（可多选）' }))
+    expect(clickSpy).toHaveBeenCalledOnce()
+
+    const magnet = 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567'
+    await user.type(screen.getByLabelText('磁力或种子链接（每行一个）'), magnet)
+    await user.type(screen.getByLabelText('自定义识别标题（可选）'), '自定义剧名 S01E01')
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({
+      torrent_in: {
+        enclosure: magnet,
+        title: '自定义剧名 S01E01',
+      },
+    })
+    expect(events.error).toHaveBeenCalledWith('磁力无效')
+    expect(mocks.toastError).toHaveBeenCalledWith('添加下载失败：磁力无效！')
+
+    const originalReadAsDataURL = FileReader.prototype.readAsDataURL
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      this.onerror?.(new ProgressEvent('error') as ProgressEvent<FileReader>)
+    })
+    try {
+      const brokenFile = new File(['bad'], 'broken.torrent', { type: 'application/x-bittorrent' })
+      await user.upload(fileInput, brokenFile)
+      await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('种子文件读取失败，请重新选择'))
+    } finally {
+      FileReader.prototype.readAsDataURL = originalReadAsDataURL
+    }
   })
 })
 

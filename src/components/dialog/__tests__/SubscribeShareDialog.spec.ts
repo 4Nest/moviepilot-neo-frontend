@@ -1,5 +1,5 @@
 import SubscribeShareDialog from '@/components/dialog/SubscribeShareDialog.vue'
-import { screen, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createSubscribe } from '@tests/support/factories/subscribe'
 import { shareSubscribeHandler } from '@tests/support/msw/handlers/subscribe'
@@ -159,12 +159,63 @@ describe('SubscribeShareDialog', () => {
     expect(submit).not.toBeDisabled()
   })
 
-  it('emits close from the dialog close control', async () => {
+  it('emits close from the dialog close control and cancel button', async () => {
     const user = userEvent.setup()
     const { close } = await renderDialog()
 
     await user.click(screen.getByRole('button', { name: '关闭' }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
 
-    expect(close).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledTimes(2)
+  })
+
+  it('omits season text for movie subscriptions without season and syncs title updates', async () => {
+    const close = vi.fn()
+    const movieSub = createSubscribe({
+      id: undefined as unknown as number,
+      name: '测试电影',
+      season: undefined,
+      tmdbid: 99001,
+      type: '电影',
+    })
+    const CustomTitleFieldStub = defineComponent({
+      name: 'VTextField',
+      props: {
+        label: String,
+        modelValue: { type: String, default: '' },
+        readonly: Boolean,
+      },
+      emits: ['update:modelValue'],
+      setup(props, { emit }) {
+        return () =>
+          h('input', {
+            'aria-label': props.label,
+            'value': props.modelValue,
+            'onInput': (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value),
+          })
+      },
+    })
+    await renderWithProviders(SubscribeShareDialog, {
+      props: {
+        modelValue: true,
+        onClose: close,
+        sub: movieSub,
+      },
+      global: {
+        components: {
+          VDialogCloseBtn: DialogCloseButtonStub,
+        },
+        stubs: {
+          AppTextField: CustomTitleFieldStub,
+          VTextField: CustomTitleFieldStub,
+        },
+      },
+    })
+
+    expect(document.querySelector('.v-card-subtitle')).toHaveTextContent('测试电影')
+    expect(document.querySelector('.v-card-subtitle')).not.toHaveTextContent('季')
+    const titleInput = screen.getByLabelText('标题')
+    await fireEvent.update(titleInput, '更新后的分享标题')
+    expect(titleInput).toHaveValue('更新后的分享标题')
   })
 })

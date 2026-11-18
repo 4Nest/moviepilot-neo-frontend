@@ -770,4 +770,170 @@ describe('MediaCard', () => {
     await fireEvent.click(getCard(container))
     await waitFor(() => expect(mocks.routerPush).toHaveBeenCalledWith(expect.objectContaining({ path: '/media' })))
   })
+
+  it('renders overview, 100-scale rating, fallback type dot, non-superuser actions, and tolerates status API errors', async () => {
+    server.use(
+      http.get(new URL('subscribe/media/tmdb:9801', API_BASE_URL).href, () =>
+        HttpResponse.json({ message: 'err' }, { status: 500 }),
+      ),
+      http.get(new URL('mediaserver/exists', API_BASE_URL).href, () =>
+        HttpResponse.json({ message: 'err' }, { status: 500 }),
+      ),
+    )
+    const requests: ControlledImageRequest[] = []
+    const media = createMediaInfo({
+      overview: '这是一段完整的卡片悬停剧情摘要',
+      poster_path: '/original/overview.jpg',
+      title: '摘要与百分制卡片',
+      tmdb_id: 9801,
+      type: '动漫',
+      vote_average: 86,
+      year: '',
+    })
+    const { container, rerender } = await renderWithProviders(MediaCard, {
+      initialState: {
+        user: { superUser: false },
+      },
+      props: { media, width: '9rem' },
+      global: { stubs: { VImg: createControlledImageStub(requests) } },
+    })
+
+    getStatusObservers()[0]?.trigger(false)
+    getStatusObservers()[0]?.trigger(true)
+    requests[0].load()
+
+    await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
+    expect(container.querySelector('.media-card__type-dot--other')).not.toBeNull()
+    expect(container).toHaveTextContent('这是一段完整的卡片悬停剧情摘要')
+    expect(container).toHaveTextContent('86')
+    // 非超管仅渲染订阅按钮，不渲染资源搜索按钮
+    expect(getActionButtons(container)).toHaveLength(1)
+
+    // 切换为无类型、无评分媒体，覆盖空类型与零分分支
+    const untypedMedia = createMediaInfo({
+      poster_path: '/original/untyped.jpg',
+      title: '无类型卡片',
+      tmdb_id: 9802,
+      type: undefined,
+      vote_average: 0,
+      year: undefined,
+    })
+    await rerender({ media: untypedMedia, width: '9rem' })
+    const latestReq = requests.at(-1)
+    latestReq?.load()
+    await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
+    expect(container.querySelector('.media-card__badge--score')).toBeNull()
+  })
+
+  it('opens mode dialog when subscribing an in-library movie, handles TV season unsubscribe reset, and matches non-TMDB structured source', async () => {
+    // 1. 已入库未订阅电影点击爱心按钮：触发 isExists() 打开订阅模式选择弹窗
+    const inLibMovie = createMediaInfo({ title: '已入库电影', tmdb_id: 9811, type: '电影' })
+    server.use(
+      querySubscribeByMediaHandler('tmdb:9811', {}),
+      mediaExistsHandler({ data: { item: { id: 'lib-9811' } }, success: true }),
+    )
+    const movieView = await renderCard(inLibMovie)
+    getStatusObservers()[0]?.trigger()
+    await waitFor(() => expect(movieView.container.querySelector('.media-card')).not.toBeNull())
+    await waitFor(() => expect(mocks.openSharedDialog).not.toHaveBeenCalled())
+
+    await fireEvent.mouseEnter(getHoverArea(movieView.container))
+    // 等待入库检查完成后点击订阅按钮
+    await waitFor(async () => {
+      mocks.openSharedDialog.mockClear()
+      await fireEvent.click(getActionButtons(movieView.container).at(-1) as HTMLButtonElement)
+      expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
+    })
+    movieView.unmount()
+
+    // 2. Bangumi 结构化订阅源匹配 + subscribe/ 列表异常容错 + 取消订阅重置季缓存
+    mocks.openSharedDialog.mockClear()
+    intersectionObservers = []
+    const bgmTv = createMediaInfo({
+      bangumi_id: 9812,
+      media_id: '9812',
+      source: 'bangumi',
+      title: 'Bangumi 结构化剧集',
+      tmdb_id: undefined,
+      type: '电视剧',
+    })
+    let failListOnce = true
+    server.use(
+      querySubscribeByMediaHandler('bangumi:9812', { id: 188, season: 1 }),
+      mediaExistsHandler({ data: { item: {} }, success: false }),
+      http.get(new URL('subscribe/', API_BASE_URL).href, () => {
+        if (failListOnce) {
+          failListOnce = false
+          return HttpResponse.json({ message: 'list error' }, { status: 500 })
+        }
+        return HttpResponse.json([
+          { best_version: 1, id: 188, media_id: '9812', media_source: 'bangumi', season: 1, type: '电视剧' },
+        ])
+      }),
+      http.delete(new URL('subscribe/media/bangumi:9812', API_BASE_URL).href, () =>
+        HttpResponse.json({ success: true }),
+      ),
+    )
+
+    const tvView = await renderCard(bgmTv)
+    getStatusObservers()[0]?.trigger()
+    await waitFor(() => expect(getActionButtons(tvView.container).at(-1)).toHaveClass('text-error'))
+
+    // 第一次悬停触发 subscribe/ 500 容错分支，等待请求结束后再次点击成功收集结构化 bangumi 季
+    await fireEvent.mouseEnter(getHoverArea(tvView.container))
+    await waitFor(() => expect(failListOnce).toBe(false))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await fireEvent.click(getActionButtons(tvView.container).at(-1) as HTMLButtonElement)
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    const [, dialogProps, dialogEvents] = mocks.openSharedDialog.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+      {
+        subscribe: (
+          seasons: unknown[],
+          states: Record<number, number>,
+          group: string,
+          mode: string,
+          visible: number[],
+        ) => void
+      },
+    ]
+    expect(dialogProps).toMatchObject({
+      subscribedSeasonModes: { 1: 'best_version' },
+      subscribedSeasons: [1],
+    })
+    // 在季弹窗中取消勾选第 1 季，触发 removeSubscribe 将 isSubscribed 置为 false，覆盖 watch(isSubscribed) 清空分支
+    dialogEvents.subscribe([], {}, '', 'normal', [1])
+    await waitFor(() => expect(getActionButtons(tvView.container).at(-1)).not.toHaveClass('text-error'))
+  })
+
+  it('keeps touch detail open on inside pointerdown and ignores duplicate fallback image errors', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      ...window.matchMedia(''),
+      matches: true,
+    })
+    const requests: ControlledImageRequest[] = []
+    const media = createMediaInfo({ poster_path: '/original/touch-err.jpg', title: '触摸内点与容错', tmdb_id: 9821 })
+    const { container } = await renderWithProviders(MediaCard, {
+      props: { media, width: '9rem' },
+      global: { stubs: { VImg: createControlledImageStub(requests) } },
+    })
+    const detail = container.querySelector<HTMLElement>('.media-card-title')?.parentElement as HTMLElement
+
+    // 未激活触摸态时触发外部 pointerdown 直接返回
+    await fireEvent.pointerDown(document.body)
+
+    // 点击卡片激活触摸详情层，在卡片内部触发 pointerdown 不收起详情层
+    await fireEvent.click(getCard(container))
+    expect(detail).not.toHaveStyle({ display: 'none' })
+    await fireEvent.pointerDown(getCard(container))
+    expect(detail).not.toHaveStyle({ display: 'none' })
+
+    // 触发旧图片多次失败及 fallback 失败，验证重入保护分支
+    requests[0].fail()
+    requests[0].fail()
+    await waitFor(() => expect(requests.length).toBeGreaterThan(1))
+    requests.at(-1)?.fail()
+    expect(requests.at(-1)?.src).toContain('no-image')
+  })
 })
