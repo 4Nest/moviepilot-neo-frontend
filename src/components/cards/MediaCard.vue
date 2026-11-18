@@ -526,15 +526,16 @@ onBeforeUnmount(() => {
           <!-- 悬停/触摸展开详情层（直接包含 .media-card-title 以保持测试 parentElement 契约） -->
           <VCardText v-show="isMediaCardDetailVisible(hover.isHovering)" class="media-card__overlay">
             <div class="media-card__overlay-meta">
-              <span class="media-card__overlay-year">
-                <template v-if="props.media?.year">{{ props.media.year }}</template>
-                <template v-if="props.media?.year && getMediaTypeText(props.media?.type)"> · </template>
-                <template v-if="getMediaTypeText(props.media?.type)">{{
-                  getMediaTypeText(props.media?.type)
-                }}</template>
+              <span
+                v-if="props.media?.year || getMediaTypeText(props.media?.type)"
+                class="media-card__overlay-pill media-card__overlay-year"
+              >
+                <span class="media-card__type-dot" :class="getTypeDotClass(props.media?.type)" />
+                <span>{{ props.media?.year || getMediaTypeText(props.media?.type) }}</span>
               </span>
-              <span v-if="props.media?.vote_average" class="media-card__overlay-score">
-                <VIcon icon="mdi-star" size="11" />
+              <span v-else />
+              <span v-if="props.media?.vote_average" class="media-card__overlay-pill media-card__overlay-score">
+                <VIcon icon="mdi-star" size="11" class="media-card__score-star" />
                 <span>{{ formatCardScore(props.media.vote_average) }}</span>
               </span>
             </div>
@@ -544,9 +545,6 @@ onBeforeUnmount(() => {
             <h1 class="media-card-title">
               {{ props.media?.title }}
             </h1>
-            <p v-if="props.media?.overview" class="media-card-overview">
-              {{ props.media?.overview }}
-            </p>
 
             <div v-if="props.media?.collection_id" class="media-card__collection-spacer" @click.stop="" />
             <div v-else class="media-card__actions">
@@ -608,6 +606,8 @@ onBeforeUnmount(() => {
   </VHover>
 </template>
 <style scoped lang="scss">
+/* stylelint-disable selector-pseudo-class-no-unknown */
+
 .media-card-hover-area {
   inline-size: 100%;
 }
@@ -616,18 +616,26 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--mp-border-card);
-  border-radius: 10px !important;
+  border-radius: 11px !important;
   background: rgb(var(--v-theme-surface));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14) !important;
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s ease;
+}
+
+.media-card__poster :deep(.v-img__img) {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .media-card.app-hover-lift-card--hovering {
   border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34) !important;
+
+  .media-card__poster :deep(.v-img__img) {
+    transform: scale(1.035);
+  }
 }
 
 /* 常态磨砂微胶囊角标 */
@@ -712,21 +720,22 @@ onBeforeUnmount(() => {
   inline-size: 14px;
 }
 
-/* 悬停详情遮罩层 */
+/* 悬停详情遮罩层：通透电影暗角渐变，保留海报主体画面 */
 .media-card__overlay {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: flex;
   flex-direction: column;
-  padding: 9px 10px 9px !important;
+  padding: 7px 10px 10px !important;
   background: linear-gradient(
     180deg,
-    rgba(10, 13, 21, 0.56) 0%,
-    rgba(10, 13, 21, 0.76) 38%,
-    rgba(10, 13, 21, 0.96) 100%
+    rgba(8, 11, 18, 0.44) 0%,
+    rgba(8, 11, 18, 0.04) 26%,
+    rgba(8, 11, 18, 0.16) 52%,
+    rgba(8, 11, 18, 0.84) 78%,
+    rgba(8, 11, 18, 0.96) 100%
   );
-  backdrop-filter: blur(2.5px);
   color: #f8fafc;
   cursor: pointer;
 }
@@ -735,31 +744,40 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  min-block-size: 18px;
+  gap: 5px;
+  min-block-size: 20px;
 }
 
-.media-card__overlay-year {
-  overflow: hidden;
-  color: rgba(226, 232, 240, 0.76);
+.media-card__overlay-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(12, 15, 24, 0.74);
+  backdrop-filter: blur(8px);
+  block-size: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  line-height: 1.2;
-  text-overflow: ellipsis;
+  gap: 4px;
+  line-height: 1;
+  padding-inline: 6.5px;
   white-space: nowrap;
 }
 
+.media-card__overlay-year {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.94);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
 .media-card__overlay-score {
-  display: inline-flex;
   flex-shrink: 0;
-  align-items: center;
-  color: #fbbf24;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  color: rgba(248, 250, 252, 0.96);
   font-weight: 700;
-  gap: 2px;
-  line-height: 1;
+  gap: 3px;
 }
 
 .media-card__overlay-spacer {
@@ -769,60 +787,56 @@ onBeforeUnmount(() => {
 .media-card-title {
   display: -webkit-box;
   overflow: hidden;
-  margin: 0 0 4px;
+  margin: 0 0 8px;
   -webkit-box-orient: vertical;
   color: #fff;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
   -webkit-line-clamp: 2;
-  line-height: 1.3;
+  line-height: 1.32;
   text-overflow: ellipsis;
-}
-
-.media-card-overview {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 0 0 8px;
-  -webkit-box-orient: vertical;
-  color: rgba(226, 232, 240, 0.76);
-  font-size: 11.5px;
-  -webkit-line-clamp: 3;
-  line-height: 1.45;
-  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.68);
 }
 
 .media-card__collection-spacer {
-  block-size: 4px;
+  block-size: 2px;
 }
 
 .media-card__actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-block-start: 1px solid rgba(255, 255, 255, 0.1);
-  padding-block-start: 6px;
 }
 
 .media-card__action-btn {
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
-  border-radius: 7px !important;
-  background: rgba(255, 255, 255, 0.08) !important;
-  block-size: 26px !important;
-  inline-size: 26px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(10px);
+  block-size: 28px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+  inline-size: 28px !important;
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
 
   &:hover {
-    border-color: rgba(255, 255, 255, 0.34) !important;
-    background: rgba(255, 255, 255, 0.18) !important;
+    border-color: rgba(255, 255, 255, 0.38) !important;
+    background: rgba(255, 255, 255, 0.22) !important;
+    transform: translateY(-1px);
   }
 }
 
 .media-card__action-btn--subscribed {
-  border-color: rgba(239, 68, 68, 0.4) !important;
-  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(248, 113, 113, 0.5) !important;
+  background: rgba(239, 68, 68, 0.22) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-card__poster :deep(.v-img__img) {
+    transition: none;
+  }
 }
 </style>

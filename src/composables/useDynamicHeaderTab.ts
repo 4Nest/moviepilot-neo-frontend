@@ -15,6 +15,7 @@ interface DynamicHeaderMenuItem {
 
 interface DynamicHeaderTabButton {
   title?: string
+  label?: string | ComputedRef<string>
   icon: string
   color?: string | ComputedRef<string>
   variant?: 'flat' | 'text' | 'elevated' | 'tonal' | 'outlined' | 'plain'
@@ -27,6 +28,7 @@ interface DynamicHeaderTabButton {
   loading?: boolean | ComputedRef<boolean>
   disabled?: boolean | ComputedRef<boolean>
   dataAttr?: string // 用于VMenu定位的data属性
+  testId?: string
 }
 
 interface DynamicHeaderTabItem {

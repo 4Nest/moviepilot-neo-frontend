@@ -152,8 +152,10 @@ type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 
 interface HeaderButtonConfig {
   title?: string
+  label?: MaybeRef<string>
   icon: string
   dataAttr?: string
+  testId?: string
   action?: () => void
   color?: MaybeRef<string>
   show?: MaybeRef<boolean>
@@ -415,15 +417,23 @@ describe('subscribe page', () => {
     expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
   })
 
-  it('exposes inline history and default-rule actions on desktop and PWA', async () => {
-    const { unmount } = await renderSubscribe()
+  it('registers history and default-rule actions in header appendButtons on desktop and dynamic button on PWA', async () => {
+    const { container, unmount } = await renderSubscribe()
 
-    const historyButton = (await screen.findByTestId('subscribe-history-btn')) as HTMLButtonElement
-    const defaultRuleButton = screen.getByTestId('subscribe-default-rule-btn') as HTMLButtonElement
+    // 常态下不额外渲染占空行的 .mp-page-action-bar
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
 
-    await fireEvent.click(historyButton)
+    const historyButton = getHeaderButton(button => button.testId === 'subscribe-history-btn')
+    const defaultRuleButton = getHeaderButton(button => button.testId === 'subscribe-default-rule-btn')
+    expect(unref(historyButton.show)).toBe(true)
+    expect(unref(defaultRuleButton.show)).toBe(true)
+    expect(unref(historyButton.label)).toContain('订阅历史')
+    expect(unref(defaultRuleButton.label)).toContain('默认订阅规则')
+
+    historyButton.action?.()
+    await nextTick()
     expect(getListOutput('last list command')).toHaveTextContent('open-history')
-    await fireEvent.click(defaultRuleButton)
+    defaultRuleButton.action?.()
     expect(mocks.openSharedDialog).toHaveBeenCalledWith(
       expect.any(Object),
       { default: true, type: '电影' },
@@ -433,6 +443,8 @@ describe('subscribe page', () => {
     unmount()
 
     await renderSubscribe({ appMode: true })
+    expect(unref(getHeaderButton(button => button.testId === 'subscribe-history-btn').show)).toBe(false)
+    expect(unref(getHeaderButton(button => button.testId === 'subscribe-default-rule-btn').show)).toBe(false)
     const dynamicButton = getDynamicButtonConfig()
     expect(unref(dynamicButton.show)).toBe(true)
     expect(unref(dynamicButton.icon)).toBe('mdi-history')
@@ -449,7 +461,13 @@ describe('subscribe page', () => {
     })
     const header = getHeaderConfig()
     expect(header.appendButtons.some(button => button.dataAttr === 'share-filter-btn')).toBe(false)
-    expect(header.appendButtons.map(button => button.title)).toEqual(['筛选', '排序模式', '批量管理'])
+    expect(header.appendButtons.map(button => button.title)).toEqual([
+      '电视剧订阅历史',
+      '默认订阅规则',
+      '筛选',
+      '排序模式',
+      '批量管理',
+    ])
 
     await router.push('/subscribe/tv?id=88')
     await nextTick()

@@ -187,6 +187,32 @@ onUnmounted(() => {
       min-inline-size: 32px !important;
     }
 
+    &.header-tab-labeled-btn {
+      border-color: var(--mp-border-subtle) !important;
+      background-color: rgba(var(--v-theme-surface), 0.6);
+      color: rgba(var(--v-theme-on-surface), 0.84);
+      font-size: 0.78125rem;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      padding-inline: 10px !important;
+
+      .v-btn__prepend {
+        margin-inline: -2px 5px;
+      }
+
+      .v-icon {
+        block-size: 15px !important;
+        font-size: 15px !important;
+        inline-size: 15px !important;
+      }
+
+      &:hover {
+        border-color: rgba(var(--v-theme-primary), 0.32) !important;
+        background-color: rgba(var(--v-theme-on-surface), 0.05);
+        color: rgba(var(--v-theme-on-surface), 0.96);
+      }
+    }
+
     &:hover {
       background-color: rgba(var(--v-theme-on-surface), 0.06);
       color: rgba(var(--v-theme-on-surface), 0.94);

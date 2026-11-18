@@ -97,6 +97,7 @@ const { isOffline } = useGlobalOfflineStatus()
 // 定义动态标签页类型
 interface DynamicHeaderTabButton {
   title?: string
+  label?: string | ComputedRef<string>
   icon: string
   color?: string | ComputedRef<string>
   variant?: 'flat' | 'text' | 'elevated' | 'tonal' | 'outlined' | 'plain'
@@ -117,6 +118,7 @@ interface DynamicHeaderTabButton {
   loading?: boolean | ComputedRef<boolean>
   disabled?: boolean | ComputedRef<boolean>
   dataAttr?: string
+  testId?: string
 }
 
 interface DynamicHeaderTabItem {
@@ -360,6 +362,11 @@ function resolveMaybeRefValue<T>(value: T | ComputedRef<T> | undefined, fallback
 /** 解析动态头部按钮颜色。 */
 function resolveHeaderButtonColor(button: DynamicHeaderTabButton) {
   return resolveMaybeRefValue(button.color, 'gray')
+}
+
+/** 解析动态头部按钮内联文本标签。 */
+function resolveHeaderButtonLabel(button: DynamicHeaderTabButton) {
+  return resolveMaybeRefValue(button.label, '')
 }
 
 /** 解析动态头部按钮加载状态。 */
@@ -722,8 +729,27 @@ onMounted(async () => {
           <template #append>
             <template v-for="(button, index) in visibleDynamicHeaderButtons" :key="`${button.icon}-${index}`">
               <VBtn
+                v-if="resolveHeaderButtonLabel(button) && !display.xs?.value"
+                :prepend-icon="button.icon"
+                :variant="button.variant || 'outlined'"
+                :color="button.color ? resolveHeaderButtonColor(button) : undefined"
+                size="small"
+                rounded="lg"
+                :class="['header-tab-labeled-btn', button.class]"
+                :loading="resolveHeaderButtonLoading(button)"
+                :disabled="resolveHeaderButtonDisabled(button)"
+                :aria-label="button.title || resolveHeaderButtonLabel(button)"
+                :title="button.title || undefined"
+                :data-menu-activator="button.dataAttr"
+                v-bind="button.testId ? { 'data-testid': button.testId } : undefined"
+                @click="handleHeaderButtonClick(button)"
+              >
+                {{ resolveHeaderButtonLabel(button) }}
+              </VBtn>
+              <VBtn
+                v-else
                 :icon="button.icon"
-                :variant="button.variant || 'text'"
+                :variant="button.color || !button.variant || button.variant === 'outlined' ? 'text' : button.variant"
                 :color="resolveHeaderButtonColor(button)"
                 :size="button.size || 'default'"
                 :class="button.class || 'settings-icon-button'"
@@ -732,6 +758,7 @@ onMounted(async () => {
                 :aria-label="button.title || button.icon"
                 :title="button.title || undefined"
                 :data-menu-activator="button.dataAttr"
+                v-bind="button.testId ? { 'data-testid': button.testId } : undefined"
                 @click="handleHeaderButtonClick(button)"
               />
             </template>

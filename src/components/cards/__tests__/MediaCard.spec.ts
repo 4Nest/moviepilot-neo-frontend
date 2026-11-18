@@ -771,7 +771,7 @@ describe('MediaCard', () => {
     await waitFor(() => expect(mocks.routerPush).toHaveBeenCalledWith(expect.objectContaining({ path: '/media' })))
   })
 
-  it('renders overview, 100-scale rating, fallback type dot, non-superuser actions, and tolerates status API errors', async () => {
+  it('omits overview on hover, renders 100-scale rating, fallback type dot, non-superuser actions, and tolerates status API errors', async () => {
     server.use(
       http.get(new URL('subscribe/media/tmdb:9801', API_BASE_URL).href, () =>
         HttpResponse.json({ message: 'err' }, { status: 500 }),
@@ -782,9 +782,9 @@ describe('MediaCard', () => {
     )
     const requests: ControlledImageRequest[] = []
     const media = createMediaInfo({
-      overview: '这是一段完整的卡片悬停剧情摘要',
+      overview: '这是一段不应在卡片上展示的剧情摘要',
       poster_path: '/original/overview.jpg',
-      title: '摘要与百分制卡片',
+      title: '无简介百分制卡片',
       tmdb_id: 9801,
       type: '动漫',
       vote_average: 86,
@@ -804,7 +804,8 @@ describe('MediaCard', () => {
 
     await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
     expect(container.querySelector('.media-card__type-dot--other')).not.toBeNull()
-    expect(container).toHaveTextContent('这是一段完整的卡片悬停剧情摘要')
+    expect(container).toHaveTextContent('无简介百分制卡片')
+    expect(container).not.toHaveTextContent('这是一段不应在卡片上展示的剧情摘要')
     expect(container).toHaveTextContent('86')
     // 非超管仅渲染订阅按钮，不渲染资源搜索按钮
     expect(getActionButtons(container)).toHaveLength(1)

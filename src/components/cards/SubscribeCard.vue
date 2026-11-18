@@ -733,58 +733,44 @@ function handleCardClick() {
                     </div>
                   </div>
                 </VCardText>
-                <VCardText
-                  class="subscribe-card-desktop-foot flex min-w-0 justify-space-between align-center flex-wrap mt-auto"
-                >
-                  <div class="flex min-w-0 max-w-full align-center">
-                    <VIcon
-                      v-if="props.media?.total_episode"
-                      icon="mdi-progress-download"
-                      size="15"
-                      color="white"
-                      class="flex-shrink-0 me-1"
-                    />
+                <VCardText class="subscribe-card-desktop-foot mt-auto">
+                  <div class="subscribe-card-foot-left">
                     <!-- 守卫改用 total_episode：电视剧订阅可能不带 season 字段（旧数据或自定义来源），仍应展示集数进度 -->
-                    <div v-if="props.media?.total_episode" class="subscribe-card-metric flex-shrink-0 me-2 text-white">
-                      {{ subscribeProgressText }}
+                    <div v-if="props.media?.total_episode" class="subscribe-card-stat">
+                      <VIcon icon="mdi-progress-download" size="14" color="white" class="flex-shrink-0" />
+                      <span class="subscribe-card-metric text-white">{{ subscribeProgressText }}</span>
                       <VTooltip v-if="subscribeProgressTooltip" activator="parent" location="top">
                         {{ subscribeProgressTooltip }}
                       </VTooltip>
                     </div>
                     <!-- 多版本提示套用进度项模式：图标 + 已完成版本数/总版本数 -->
-                    <template v-if="hasMultipleVersions">
-                      <VIcon icon="mdi-layers-triple-outline" size="15" color="white" class="flex-shrink-0 me-1" />
-                      <div class="subscribe-card-metric flex-shrink-0 me-2 text-white">
+                    <div v-if="hasMultipleVersions" class="subscribe-card-stat">
+                      <VIcon icon="mdi-layers-triple-outline" size="14" color="white" class="flex-shrink-0" />
+                      <span class="subscribe-card-metric text-white">
                         {{ completedVersionCount }} / {{ versionCount }}
-                      </div>
-                    </template>
+                      </span>
+                    </div>
                     <span
                       v-if="isSuperUser && subscriberName"
                       class="subscribe-card-owner"
                       data-testid="subscribe-card-owner"
                     >
-                      <VIcon icon="mdi-account-outline" size="12" class="me-1" />
-                      {{ subscriberName }}
+                      <VIcon icon="mdi-account-outline" size="11" class="flex-shrink-0" />
+                      <span class="subscribe-card-owner__name">{{ subscriberName }}</span>
                     </span>
                     <VTooltip v-if="decisionSummaryText" activator="parent" location="top">
                       {{ decisionSummaryText }}
                     </VTooltip>
                   </div>
-                </VCardText>
-                <!-- 右下角元数据：暂停 / 待定时替换"x 天前"为状态文案 -->
-                <VCardText
-                  v-if="rightBottomStateDisplay"
-                  class="subscribe-card-corner-meta absolute right-0 bottom-0 d-flex align-center text-gray-300"
-                >
-                  <VIcon :icon="rightBottomStateDisplay.icon" size="14" class="me-1" />
-                  {{ rightBottomStateDisplay.label }}
-                </VCardText>
-                <VCardText
-                  v-else-if="lastUpdateText"
-                  class="subscribe-card-corner-meta absolute right-0 bottom-0 d-flex align-center text-gray-300"
-                >
-                  <VIcon icon="mdi-download" size="14" class="me-1" />
-                  {{ lastUpdateText }}
+                  <!-- 右下角元数据：与左侧指标同行弹性排布，避免多版本或长集数时重叠 -->
+                  <div v-if="rightBottomStateDisplay" class="subscribe-card-corner-meta text-gray-300">
+                    <VIcon :icon="rightBottomStateDisplay.icon" size="13" class="flex-shrink-0" />
+                    <span>{{ rightBottomStateDisplay.label }}</span>
+                  </div>
+                  <div v-else-if="lastUpdateText" class="subscribe-card-corner-meta text-gray-300">
+                    <VIcon icon="mdi-download" size="13" class="flex-shrink-0" />
+                    <span>{{ lastUpdateText }}</span>
+                  </div>
                 </VCardText>
                 <div class="w-full absolute bottom-0">
                   <!--
@@ -873,7 +859,29 @@ function handleCardClick() {
 }
 
 .subscribe-card-desktop-foot {
-  padding: 6px 14px 10px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-inline-size: 0;
+  padding: 6px 12px 11px !important;
+}
+
+.subscribe-card-foot-left {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.subscribe-card-stat {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
 }
 
 .subscribe-card-inline-icon {
@@ -889,13 +897,20 @@ function handleCardClick() {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .subscribe-card-corner-meta {
-  font-size: 12px;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
-  padding: 10px 14px !important;
+  margin-inline-start: auto;
+  padding: 0 !important;
+  white-space: nowrap;
 }
 
 .subscribe-card-mobile-media {
@@ -1138,18 +1153,28 @@ function handleCardClick() {
 
 .subscribe-card-owner {
   display: inline-flex;
-  flex-shrink: 0;
+  flex: 0 1 auto;
   align-items: center;
+  gap: 3px;
   border: 1px solid rgba(255, 255, 255, 14%);
-  border-radius: 6px;
-  background: rgba(22, 23, 29, 78%);
-  block-size: 20px;
-  color: rgba(255, 255, 255, 92%);
-  font-size: 11.5px;
+  border-radius: 5px;
+  background: rgba(15, 20, 30, 74%);
+  block-size: 19px;
+  color: rgba(255, 255, 255, 90%);
+  font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  margin-inline-end: 0.5rem;
-  padding-inline: 7px;
+  max-inline-size: 88px;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding-inline: 6px;
+}
+
+.subscribe-card-owner__name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subscribe-card-mobile-owner {

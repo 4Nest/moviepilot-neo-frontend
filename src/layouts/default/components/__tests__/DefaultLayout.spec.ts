@@ -298,7 +298,7 @@ describe('DefaultLayout', () => {
       props: ['icon', 'disabled', 'loading', 'title'],
       emits: ['click'],
       template:
-        '<button type="button" data-testid="dyn-btn" :disabled="disabled" :title="title" @click="$emit(`click`)">{{ icon }}</button>',
+        '<button type="button" data-testid="dyn-btn" :disabled="disabled" :title="title" @click="$emit(`click`)"><slot>{{ icon }}</slot></button>',
     }
 
     const wrapper = shallowMount(DefaultLayout, {
@@ -326,6 +326,8 @@ describe('DefaultLayout', () => {
           modelValue: string
           appendButtons?: Array<{
             title?: string
+            label?: string
+            testId?: string
             icon: string
             disabled?: boolean
             action?: () => void
@@ -334,12 +336,20 @@ describe('DefaultLayout', () => {
       }
     ).__VUE_INJECT_DYNAMIC_HEADER_TAB__
 
+    const labeledAction = vi.fn()
     injectRegister?.({
       items: [{ title: 'TMDB', tab: 'themoviedb' }],
       modelValue: 'themoviedb',
       appendButtons: [
         { title: '禁用刷新', icon: 'mdi-refresh', disabled: true, action: disabledAction },
         { title: '可用刷新', icon: 'mdi-refresh', disabled: false, action: enabledAction },
+        {
+          title: '订阅历史',
+          label: '订阅历史',
+          testId: 'labeled-history-btn',
+          icon: 'mdi-history',
+          action: labeledAction,
+        },
       ],
     })
     await nextTick()
@@ -349,6 +359,11 @@ describe('DefaultLayout', () => {
     expect(buttons[0].attributes('aria-label')).toBe('禁用刷新')
     expect(buttons[0].attributes('title')).toBe('禁用刷新')
     expect(buttons[0].attributes('disabled')).toBeDefined()
+
+    const labeledBtn = wrapper.get('[data-testid="labeled-history-btn"]')
+    expect(labeledBtn.text()).toContain('订阅历史')
+    await labeledBtn.trigger('click')
+    expect(labeledAction).toHaveBeenCalledOnce()
 
     // 即使直接触发组件 click 事件，handleHeaderButtonClick 守卫也应阻止禁用按钮执行 action
     wrapper.findAllComponents(BtnStub)[0].vm.$emit('click')

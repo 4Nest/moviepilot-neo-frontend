@@ -449,6 +449,24 @@ registerHeaderTab({
   modelValue: activeTab,
   appendButtons: [
     {
+      title: t('dialog.subscribeHistory.title', { type: subType }),
+      label: t('dialog.subscribeHistory.title', { type: subType }),
+      icon: 'mdi-history',
+      variant: 'outlined',
+      testId: 'subscribe-history-btn',
+      action: openSubscribeHistoryDialog,
+      show: computed(() => !appMode.value && showSubscribeHistoryAction.value),
+    },
+    {
+      title: t('dialog.subscribeEdit.titleDefault'),
+      label: t('dialog.subscribeEdit.titleDefault'),
+      icon: 'mdi-clipboard-edit-outline',
+      variant: 'outlined',
+      testId: 'subscribe-default-rule-btn',
+      action: openDefaultRuleDialog,
+      show: computed(() => !appMode.value && showDefaultRuleAction.value),
+    },
+    {
       title: t('common.filter'),
       icon: 'mdi-filter-multiple-outline',
       variant: 'text',
@@ -503,97 +521,71 @@ onMounted(() => {
             v-if="
               !appMode &&
               route.path.startsWith(`/subscribe/${subType === '电影' ? 'movie' : 'tv'}`) &&
-              (subscribeBatchState.enabled || showSubscribeHistoryAction || showDefaultRuleAction)
+              subscribeBatchState.enabled
             "
             class="mp-page-action-bar"
           >
-            <template v-if="subscribeBatchState.enabled">
-              <VChip size="small" color="primary" variant="tonal" rounded="lg" class="me-auto">
-                {{
-                  t('subscribe.selectedCount', {
-                    count: subscribeBatchState.selectedCount,
-                    total: subscribeBatchState.totalCount,
-                  })
-                }}
-              </VChip>
-              <VBtn
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                :prepend-icon="
-                  subscribeBatchState.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked'
-                "
-                :disabled="subscribeBatchState.totalCount === 0 || Boolean(subscribeBatchState.operating)"
-                @click="toggleSubscribeBatchSelectAll"
-              >
-                {{ subscribeBatchState.allSelected ? t('subscribe.batchDeselectAll') : t('subscribe.batchSelectAll') }}
-              </VBtn>
-              <VBtn
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                prepend-icon="mdi-play"
-                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
-                @click="batchEnableSelectedSubscribes"
-              >
-                {{ t('subscribe.batchEnable') }}
-              </VBtn>
-              <VBtn
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                prepend-icon="mdi-pause"
-                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
-                @click="batchPauseSelectedSubscribes"
-              >
-                {{ t('subscribe.batchPause') }}
-              </VBtn>
-              <VBtn
-                size="small"
-                variant="outlined"
-                color="error"
-                rounded="lg"
-                prepend-icon="mdi-delete"
-                :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
-                @click="batchDeleteSelectedSubscribes"
-              >
-                {{ t('subscribe.batchDelete') }}
-              </VBtn>
-              <VBtn
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                prepend-icon="mdi-close"
-                :disabled="Boolean(subscribeBatchState.operating)"
-                @click="exitSubscribeBatchMode"
-              >
-                {{ t('subscribe.exitBatchMode') }}
-              </VBtn>
-            </template>
-            <template v-else>
-              <VBtn
-                v-if="showSubscribeHistoryAction"
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                prepend-icon="mdi-history"
-                data-testid="subscribe-history-btn"
-                @click="openSubscribeHistoryDialog"
-              >
-                {{ t('dialog.subscribeHistory.title', { type: subType }) }}
-              </VBtn>
-              <VBtn
-                v-if="showDefaultRuleAction"
-                size="small"
-                variant="outlined"
-                rounded="lg"
-                prepend-icon="mdi-clipboard-edit-outline"
-                data-testid="subscribe-default-rule-btn"
-                @click="openDefaultRuleDialog"
-              >
-                {{ t('dialog.subscribeEdit.titleDefault') }}
-              </VBtn>
-            </template>
+            <VChip size="small" color="primary" variant="tonal" rounded="lg" class="me-auto">
+              {{
+                t('subscribe.selectedCount', {
+                  count: subscribeBatchState.selectedCount,
+                  total: subscribeBatchState.totalCount,
+                })
+              }}
+            </VChip>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              :prepend-icon="
+                subscribeBatchState.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked'
+              "
+              :disabled="subscribeBatchState.totalCount === 0 || Boolean(subscribeBatchState.operating)"
+              @click="toggleSubscribeBatchSelectAll"
+            >
+              {{ subscribeBatchState.allSelected ? t('subscribe.batchDeselectAll') : t('subscribe.batchSelectAll') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-play"
+              :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+              @click="batchEnableSelectedSubscribes"
+            >
+              {{ t('subscribe.batchEnable') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-pause"
+              :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+              @click="batchPauseSelectedSubscribes"
+            >
+              {{ t('subscribe.batchPause') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              color="error"
+              rounded="lg"
+              prepend-icon="mdi-delete"
+              :disabled="subscribeBatchState.selectedCount === 0 || Boolean(subscribeBatchState.operating)"
+              @click="batchDeleteSelectedSubscribes"
+            >
+              {{ t('subscribe.batchDelete') }}
+            </VBtn>
+            <VBtn
+              size="small"
+              variant="outlined"
+              rounded="lg"
+              prepend-icon="mdi-close"
+              :disabled="Boolean(subscribeBatchState.operating)"
+              @click="exitSubscribeBatchMode"
+            >
+              {{ t('subscribe.exitBatchMode') }}
+            </VBtn>
           </div>
 
           <SubscribeListView
