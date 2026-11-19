@@ -3,17 +3,15 @@ import TransferHistoryView from '@/views/reorganize/TransferHistoryView.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { flushPromises } from '@vue/test-utils'
-import { computed, defineComponent, h, nextTick, ref, unref, type PropType } from 'vue'
+import { computed, defineComponent, h, nextTick, ref, type PropType } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiDelete: vi.fn(),
   apiGet: vi.fn(),
   apiPost: vi.fn(),
-  appMode: false,
   createConfirm: vi.fn(),
   desktop: true,
-  dynamicButtonConfig: undefined as Record<string, unknown> | undefined,
   openSharedDialog: vi.fn(),
   progressCallback: undefined as ((event: MessageEvent) => unknown) | undefined,
   progressStart: vi.fn(),
@@ -52,10 +50,6 @@ vi.mock('vuetify', async importOriginal => {
   }
 })
 
-vi.mock('@/composables/usePWA', () => ({
-  usePWA: () => ({ appMode: computed(() => mocks.appMode) }),
-}))
-
 vi.mock('@/composables/useAvailableHeight', () => ({
   useAvailableHeight: () => ({ availableHeight: ref(600) }),
 }))
@@ -74,12 +68,6 @@ vi.mock('@/composables/useBackground', () => ({
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
-}))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (config: Record<string, unknown>) => {
-    mocks.dynamicButtonConfig = config
-  },
 }))
 
 /** 替身表格的显示顺序，用于模拟排序和分组后的可见记录。 */
@@ -373,23 +361,6 @@ async function renderHistory(initialRoute = '/history') {
   })
 }
 
-function getDynamicMenuItems() {
-  const menuItems = mocks.dynamicButtonConfig?.menuItems
-  return unref(menuItems) as
-    | Array<{
-        action: () => unknown
-        titleParams?: Record<string, unknown>
-        titleKey: string
-      }>
-    | undefined
-}
-
-function runDynamicAction(titleKey: string) {
-  const item = getDynamicMenuItems()?.find(menu => menu.titleKey === titleKey)
-  if (!item) throw new Error(`未注册动态按钮操作: ${titleKey}`)
-  return item.action()
-}
-
 function getDialogCall(index = 0) {
   const [component, props, events, options] = mocks.openSharedDialog.mock.calls[index] as [
     { __name?: string; name?: string },
@@ -406,10 +377,8 @@ describe('TransferHistoryView', () => {
     renderTitleSlot = false
     renderSrcSlot = false
     renderDetailSlots = false
-    mocks.appMode = true
     mocks.desktop = true
     mocks.width = 1600
-    mocks.dynamicButtonConfig = undefined
     mocks.progressCallback = undefined
     mocks.apiDelete.mockResolvedValue({ success: true })
     mocks.apiGet.mockImplementation((path: string) => {
@@ -614,10 +583,10 @@ describe('TransferHistoryView', () => {
     const record = container.querySelector('.transfer-history-mobile-record') as HTMLElement
     await fireEvent.click(record)
     expect(record).toHaveClass('transfer-history-mobile-record--selected')
-    runDynamicAction('transferHistory.actions.deselectAll')
+    await fireEvent.click(screen.getByRole('button', { name: '取消全选' }))
     await nextTick()
     expect(record).not.toHaveClass('transfer-history-mobile-record--selected')
-    runDynamicAction('transferHistory.actions.exitBatchMode')
+    await fireEvent.click(screen.getByRole('button', { name: '退出批量操作' }))
     await nextTick()
     expect(screen.getByRole('button', { name: '批量选择' })).toBeInTheDocument()
   })
@@ -675,7 +644,7 @@ describe('TransferHistoryView', () => {
     expect(await screen.findByText('成功项')).toBeInTheDocument()
     await fireEvent.click(screen.getByRole('button', { name: '选择当前页' }))
     await nextTick()
-    runDynamicAction('transferHistory.actions.batchDelete')
+    await fireEvent.click(screen.getByRole('button', { name: '批量删除' }))
 
     const deleteDialog = getDialogCall()
     await deleteDialog.events.delete(false, false)
@@ -693,7 +662,7 @@ describe('TransferHistoryView', () => {
         }),
     ).toBe(true)
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('2'))
-    expect(getDynamicMenuItems()?.some(item => item.titleKey === 'transferHistory.actions.batchDelete')).toBe(true)
+    expect(screen.getByRole('button', { name: '批量删除' })).toBeInTheDocument()
   })
 
   it('shows the existing toast-style feedback when a single deletion request throws', async () => {
@@ -770,28 +739,24 @@ describe('TransferHistoryView', () => {
     await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
     expect(await screen.findByText('删除成功')).toBeInTheDocument()
     await fireEvent.click(screen.getByRole('button', { name: '批量选择' }))
-    runDynamicAction('transferHistory.actions.selectAll')
+    await fireEvent.click(screen.getByRole('button', { name: '全部选中' }))
     await nextTick()
-    runDynamicAction('transferHistory.actions.batchDelete')
+    await fireEvent.click(screen.getByRole('button', { name: '批量删除' }))
     await getDialogCall().events.delete(false, false)
 
     expect(screen.getByRole('button', { name: '退出批量选择' })).toBeInTheDocument()
-    expect(getDynamicMenuItems()?.find(item => item.titleKey === 'transferHistory.selectedCount')?.titleParams).toEqual(
-      { count: 0, total: 0 },
-    )
+    expect(screen.getByText('已选择 0/0 项')).toBeInTheDocument()
     expect(mocks.toastError).toHaveBeenCalledWith('删除失败：2/3')
 
     await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
     expect(await screen.findByText('保留甲')).toBeInTheDocument()
-    expect(getDynamicMenuItems()?.find(item => item.titleKey === 'transferHistory.selectedCount')?.titleParams).toEqual(
-      { count: 2, total: 2 },
-    )
+    expect(screen.getByText('已选择 2/2 项')).toBeInTheDocument()
   })
 
   it('opens the transfer queue as an isolated shared-dialog boundary', async () => {
     await renderHistory()
-    const onClick = mocks.dynamicButtonConfig?.onClick as (() => unknown) | undefined
-    onClick?.()
+    const queueBtn = await screen.findByRole('button', { name: '整理队列' })
+    await fireEvent.click(queueBtn)
 
     const dialog = getDialogCall()
     expect(dialog.component.__name || dialog.component.name).toContain('TransferQueueDialog')
@@ -811,14 +776,14 @@ describe('TransferHistoryView', () => {
     expect(await screen.findByText('重整甲')).toBeInTheDocument()
     await fireEvent.click(screen.getByRole('button', { name: '选择当前页' }))
     await nextTick()
-    runDynamicAction('transferHistory.actions.batchRedo')
+    await fireEvent.click(screen.getByRole('button', { name: '批量重新整理' }))
 
     const dialog = getDialogCall()
     expect(dialog.props).toMatchObject({ logids: [10, 11] })
     expect(dialog.options).toEqual({ closeOn: ['close', 'done'] })
     await dialog.events.done()
     expect(historyCalls).toBeGreaterThan(1)
-    expect(getDynamicMenuItems()?.map(item => item.titleKey)).toEqual(['transferHistory.actions.clearAll'])
+    expect(screen.queryByRole('button', { name: '批量重新整理' })).not.toBeInTheDocument()
   })
 
   it('renders a clear-all button that stays disabled while the list is empty', async () => {
@@ -901,20 +866,20 @@ describe('TransferHistoryView', () => {
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
   })
 
-  it('registers the clear-all action in every appMode dynamic menu branch', async () => {
+  it('renders mobile header queue, clear-all, and batch-mode inline toolbar actions', async () => {
     mocks.desktop = false
 
     await renderHistory()
+    await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
 
-    expect(getDynamicMenuItems()?.map(item => item.titleKey)).toEqual(['transferHistory.actions.clearAll'])
+    expect(await screen.findByRole('button', { name: '整理队列' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '清空记录' })).toBeInTheDocument()
 
     await fireEvent.click(screen.getByRole('button', { name: '批量选择' }))
-    const batchKeys = getDynamicMenuItems()?.map(item => item.titleKey) ?? []
-    expect(batchKeys).toContain('transferHistory.actions.clearAll')
-    expect(batchKeys.indexOf('transferHistory.actions.clearAll')).toBeLessThan(
-      batchKeys.indexOf('transferHistory.actions.exitBatchMode'),
-    )
-    expect(screen.getByRole('button', { name: '清空记录' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全部选中' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '批量重新整理' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '批量删除' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '退出批量操作' })).toBeInTheDocument()
   })
 
   it('renders movie titles in grouped desktop mode instead of leaving the primary label blank', async () => {
@@ -1042,7 +1007,6 @@ describe('TransferHistoryView', () => {
   })
 
   it('clears desktop selection on pagination or search change, removes single-deleted item from selection, and provides toolbar deselect-all', async () => {
-    mocks.appMode = false
     let page1List = [createHistory(1, '第一页甲'), createHistory(2, '第一页乙')]
     const page2List = [createHistory(3, '第二页丙')]
     mocks.apiGet.mockImplementation((path: string, config?: { params?: { page?: number; title?: string } }) => {
@@ -1085,7 +1049,6 @@ describe('TransferHistoryView', () => {
   })
 
   it('resets redoTargetStorage when launching batch reorganize after a single-item redo', async () => {
-    mocks.appMode = false
     const histories = [
       createHistory(10, '单条重整项', { dest_storage: 'rclone' }),
       createHistory(11, '批量重整项', { dest_storage: 'library' }),

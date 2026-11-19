@@ -10,6 +10,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { canDeleteWorkflowShare, isOwnShare, runConcurrentBatches } from '@/utils/sharePermissions'
 import { useToast } from 'vue-toastification'
+import { useDisplay } from 'vuetify'
 
 type WorkflowSortType = 'time' | 'count'
 type ShareScope = 'all' | 'mine'
@@ -21,8 +22,12 @@ const BATCH_DELETE_CONCURRENCY = 4
 const { t } = useI18n()
 const $toast = useToast()
 const createConfirm = useConfirm()
+const display = useDisplay()
 const globalSettingsStore = useGlobalSettingsStore()
 const userStore = useUserStore()
+
+const workflowShareGridMinItemWidth = computed(() => (display.xs.value ? 260 : 288))
+const workflowShareGridGap = computed(() => (display.xs.value ? 10 : 16))
 
 // 输入参数
 const props = defineProps({
@@ -570,7 +575,8 @@ onUnmounted(() => {
       v-if="displayedShareList.length > 0"
       :items="displayedShareList"
       :get-item-key="item => item.id || `${item.name}-${item.share_user}`"
-      :min-item-width="288"
+      :min-item-width="workflowShareGridMinItemWidth"
+      :gap="workflowShareGridGap"
       :estimated-item-height="176"
       tabindex="0"
     >
@@ -693,13 +699,51 @@ onUnmounted(() => {
 }
 
 @media (width <= 680px) {
+  .workflow-share-toolbar__main {
+    gap: 8px;
+  }
+
   .workflow-share-toolbar__search {
     flex: 1 1 100%;
     max-inline-size: none;
   }
 
+  .workflow-share-toolbar__pill {
+    border-radius: 7px !important;
+    font-size: 12px !important;
+    padding-inline: 8px !important;
+  }
+
   .workflow-share-toolbar__actions {
+    inline-size: 100%;
+    gap: 6px;
     margin-inline-start: 0;
+  }
+
+  .workflow-share-toolbar__actions :deep(.v-btn) {
+    border-radius: 7px !important;
+    font-size: 12px;
+  }
+
+  .workflow-share-batch-bar {
+    gap: 6px;
+    padding-block: 8px;
+    padding-inline: 10px;
+  }
+
+  .workflow-share-batch-bar__count {
+    font-size: 12.5px;
+  }
+
+  .workflow-share-batch-bar__actions {
+    inline-size: 100%;
+    gap: 6px;
+  }
+
+  .workflow-share-search-heading,
+  .workflow-share-search-heading :deep(*) {
+    font-size: 17px !important;
+    padding-inline: 2px;
   }
 }
 </style>

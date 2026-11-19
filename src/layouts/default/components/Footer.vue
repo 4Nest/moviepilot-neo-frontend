@@ -11,7 +11,6 @@ import {
   type DynamicButtonRegister,
   type DynamicButtonUnregister,
 } from '@/composables/dynamicButtonRegistry'
-import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { nativeChromeActive } from '@/native/layout'
 const { register: registerSharedDynamicButton, unregister: unregisterSharedDynamicButton } = dynamicButtonRegistry
 // 是否显示的输入参数
@@ -149,75 +148,16 @@ onUnmounted(() => {
     delete window.__VUE_UNINJECT_DYNAMIC_BUTTON__
   }
 })
-// 显示动态按钮
-const showDynamicButton = computed(() => {
-  return (
-    dynamicButton.value &&
-    dynamicButton.value.show &&
-    // 确保只在注册的路由路径下显示按钮
-    (!dynamicButton.value.routePath || dynamicButton.value.routePath === route.path)
-  )
-})
-
-const visibleDynamicButtonMenuItems = computed(() => {
-  return dynamicButton.value?.menuItems ?? []
-})
-
-const hasDynamicButtonMenu = computed(() => visibleDynamicButtonMenuItems.value.length > 0)
-const dynamicButtonAriaLabel = computed(() => {
-  if (dynamicButton.value?.title) return dynamicButton.value.title
-  if (hasDynamicButtonMenu.value) return t('common.moreActions')
-  return t('common.add')
-})
 const shouldRenderFooterNav = computed(() => appMode.value && props.showNav && !nativeChromeActive.value)
 const shouldRevealFooterNav = computed(() => shouldRenderFooterNav.value && !isLaunchLoading.value)
-
-const legacyDynamicMenuTitleKeyMap: Record<string, string> = {
-  'components.subscribeHistory.title': 'dialog.subscribeHistory.title',
-  'components.subscribeEdit.titleDefault': 'dialog.subscribeEdit.titleDefault',
-  'components.transferQueue.title': 'dialog.transferQueue.title',
-  'components.pluginMarketSetting.title': 'dialog.pluginMarketSetting.title',
-}
-
-// 解析动态按钮菜单项标题，兼容旧版直接传入 i18n key 的写法。
-function resolveDynamicMenuItemTitle(item: DynamicButtonMenuItem) {
-  if (item.titleKey) {
-    return t(item.titleKey, item.titleParams as any)
-  }
-
-  if (!item.title) {
-    return ''
-  }
-
-  const normalizedTitleKey = legacyDynamicMenuTitleKeyMap[item.title] || item.title
-  const looksLikeI18nKey = /^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$/i.test(normalizedTitleKey)
-
-  return looksLikeI18nKey ? t(normalizedTitleKey, item.titleParams as any) : item.title
-}
-
-// 处理页面注册的动态按钮主操作点击。
-function handleDynamicButtonClick() {
-  if (!dynamicButton.value) return
-
-  dynamicButton.value.action()
-}
-
-// 处理页面注册的动态按钮菜单项点击。
-function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
-  if (item.disabled) return
-
-  item.action()
-}
 </script>
 
 <template>
   <Teleport v-if="shouldRenderFooterNav" to="body">
     <div v-show="shouldRevealFooterNav" class="footer-nav-container">
       <TransitionGroup name="footer-nav" tag="div" class="footer-nav-group">
-        <VCard key="main-nav" elevation="3" class="footer-nav-card border" rounded="pill">
+        <VCard key="main-nav" elevation="0" class="footer-nav-card">
           <VCardText class="footer-card-content">
-            <!-- 添加指示器 -->
-            <div ref="indicator" class="nav-indicator"></div>
             <VBtnToggle class="footer-btn-group" :mandatory="true" variant="plain" v-model="currentMenu">
               <!-- 遍历底部菜单项 -->
               <VBtn
@@ -228,13 +168,12 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
                 color="primary"
                 :ripple="false"
                 class="footer-nav-btn"
-                rounded="pill"
                 :class="{ 'footer-nav-btn-active': currentMenu === menu.to }"
                 :value="menu.to"
               >
                 <div class="btn-content">
-                  <VIcon :icon="menu.icon as string" size="32"></VIcon>
-                  <span class="text-xs">{{ menu.title }}</span>
+                  <VIcon :icon="menu.icon as string" size="22" class="footer-nav-btn__icon"></VIcon>
+                  <span class="footer-nav-btn__label">{{ menu.title }}</span>
                 </div>
               </VBtn>
 
@@ -245,61 +184,16 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
                 color="primary"
                 :ripple="false"
                 to="/apps"
-                rounded="pill"
                 class="footer-nav-btn"
                 :class="{ 'footer-nav-btn-active': currentMenu === '/apps' }"
                 value="/apps"
               >
                 <div class="btn-content">
-                  <VIcon icon="mdi-dots-horizontal" size="32"></VIcon>
-                  <span class="text-xs">{{ t('nav.more') }}</span>
+                  <VIcon icon="mdi-dots-horizontal" size="22" class="footer-nav-btn__icon"></VIcon>
+                  <span class="footer-nav-btn__label">{{ t('nav.more') }}</span>
                 </div>
               </VBtn>
             </VBtnToggle>
-          </VCardText>
-        </VCard>
-        <VCard
-          v-if="showDynamicButton"
-          key="dynamic-btn"
-          elevation="3"
-          class="footer-nav-card dynamic-btn-card border"
-          rounded="pill"
-        >
-          <VCardText class="footer-card-content">
-            <!-- 各页面的动态按钮 -->
-            <div class="dynamic-btn-activator">
-              <VBtn
-                icon
-                variant="text"
-                :ripple="false"
-                :aria-label="dynamicButtonAriaLabel"
-                @click="!hasDynamicButtonMenu && handleDynamicButtonClick()"
-                rounded="pill"
-                class="footer-nav-btn"
-              >
-                <VIcon
-                  color="secondary"
-                  :icon="hasDynamicButtonMenu ? 'mdi-chevron-up' : dynamicButton?.icon || 'mdi-plus'"
-                  size="28"
-                ></VIcon>
-              </VBtn>
-              <VMenu v-if="hasDynamicButtonMenu" activator="parent" location="top end" close-on-content-click>
-                <VList>
-                  <VListItem
-                    v-for="(item, index) in visibleDynamicButtonMenuItems"
-                    :key="item.titleKey || item.title || index"
-                    :base-color="item.color"
-                    :disabled="item.disabled"
-                    @click="handleDynamicMenuItemClick(item)"
-                  >
-                    <template #prepend>
-                      <VIcon v-if="item.icon" :icon="item.icon" />
-                    </template>
-                    <VListItemTitle>{{ resolveDynamicMenuItemTitle(item) }}</VListItemTitle>
-                  </VListItem>
-                </VList>
-              </VMenu>
-            </div>
           </VCardText>
         </VCard>
       </TransitionGroup>
@@ -314,53 +208,55 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
   display: flex;
   align-items: center;
   justify-content: center;
+  border-block-start: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
+  background-color: rgb(var(--v-theme-surface));
   inset-block-end: 0;
   inset-inline: 0;
-  padding-block-end: calc(6px + env(safe-area-inset-bottom, 0px));
-  pointer-events: none;
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+  padding-inline: 0;
+  pointer-events: auto;
 
   .footer-nav-group {
     display: flex;
     align-items: center;
     justify-content: center;
-
-    // 按钮卡片之间的间距
-    > .v-card + .v-card {
-      margin-inline-start: 2px;
-    }
+    gap: 6px;
+    inline-size: 100%;
+    max-inline-size: min(100%, 640px);
+    padding-block: 6px;
+    padding-inline: 8px;
   }
 
   .footer-nav-card {
     position: relative;
+    flex: 1 1 auto;
     overflow: hidden;
-    border: 1px solid var(--mp-border-card) !important;
-    border-radius: 9999px !important;
-    background-color: rgb(var(--v-theme-surface)) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    min-inline-size: 0;
     pointer-events: auto;
-    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-    will-change: transform, max-inline-size, opacity;
-
-    --app-control-radius: var(--app-vuetify-rounded-pill);
-    --app-surface-radius: var(--app-vuetify-rounded-pill);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
 
     .v-btn-toggle {
       block-size: auto;
-      min-block-size: 56px;
+      min-block-size: 46px;
     }
   }
 
   .footer-card-content {
     position: relative;
-    padding-block: 4px;
-    padding-inline: 6px;
+    padding: 0;
   }
 
   .footer-nav-card .footer-btn-group.v-btn-group {
     position: relative;
     display: flex;
-    justify-content: space-around;
+    align-items: center;
+    gap: 4px;
     border: none;
-    border-radius: 9999px !important;
+    border-radius: 0 !important;
     background-color: transparent;
     box-shadow: none !important;
     inline-size: 100%;
@@ -373,19 +269,41 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
   .footer-nav-btn {
     position: relative;
     display: flex;
+    flex: 1 1 0;
     flex-direction: column;
-    flex-grow: 1;
     align-items: center;
     justify-content: center;
-    border-radius: 9999px !important;
+    border: 1px solid transparent;
+    border-radius: 10px !important;
     background-color: transparent;
-    block-size: 48px;
+    block-size: 46px;
     box-shadow: none !important;
+    color: rgba(var(--v-theme-on-surface), 0.58) !important;
+    min-inline-size: 0;
+    opacity: 1 !important;
+    padding-block: 4px;
+    padding-inline: 6px;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease;
 
-    &:hover,
-    &.v-btn--active {
-      background-color: transparent;
+    &:hover {
+      background-color: rgba(var(--v-theme-on-surface), 0.04);
       box-shadow: none !important;
+      color: rgba(var(--v-theme-on-surface), 0.86) !important;
+    }
+
+    &.footer-nav-btn-active,
+    &.v-btn--active {
+      border-color: rgba(var(--v-theme-primary), 0.18);
+      background-color: rgba(var(--v-theme-primary), 0.12);
+      box-shadow: none !important;
+      color: rgb(var(--v-theme-primary)) !important;
+
+      .footer-nav-btn__label {
+        font-weight: 600;
+      }
     }
 
     .btn-content {
@@ -393,49 +311,31 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 2px;
       inline-size: 100%;
-
-      span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        transform-origin: center;
-        white-space: nowrap;
-      }
     }
   }
 
-  // 动态按钮卡片样式
-  .dynamic-btn-card {
-    block-size: auto;
-    inline-size: auto;
-    max-inline-size: 60px;
-    min-block-size: 0;
+  .footer-nav-btn__icon {
+    flex-shrink: 0;
+    line-height: 1;
+  }
 
-    .footer-card-content {
-      padding: 3px;
-    }
-
-    .footer-nav-btn {
-      padding: 0;
-      block-size: 40px;
-      inline-size: 40px;
-      min-inline-size: 40px;
-
-      .btn-content {
-        margin: 0;
-      }
-
-      .v-icon {
-        margin-block-end: 0;
-      }
-    }
+  .footer-nav-btn__label {
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    max-inline-size: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   // 底部导航动画
   .footer-nav-enter-active,
   .footer-nav-leave-active {
     overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
   .footer-nav-enter-from,
@@ -445,11 +345,11 @@ function handleDynamicMenuItemClick(item: DynamicButtonMenuItem) {
     margin-inline-start: 0 !important;
     max-inline-size: 0 !important;
     opacity: 0;
-    transform: translateX(20px);
+    transform: translateX(12px);
   }
 
   .footer-nav-move {
-    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
   }
 }
 

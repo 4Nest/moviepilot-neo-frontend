@@ -4,10 +4,9 @@ import { RecommendSource } from '@/api/types'
 import MediaCardSlideView from '@/views/discover/MediaCardSlideView.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
-import { useDynamicButton } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { getRecommendTabs } from '@/router/i18n-menu'
+import { useToast } from 'vue-toastification'
 
 import {
   createBuiltInRecommendSources,
@@ -19,13 +18,15 @@ const ContentToggleSettingsDialog = defineAsyncComponent(
   () => import('@/components/dialog/ContentToggleSettingsDialog.vue'),
 )
 
-const { appMode } = usePWA()
-
 // 国际化
 const { t } = useI18n()
+const $toast = useToast()
 
 // 路由
 const route = useRoute()
+
+// 本地存储键值
+const localConfigKey = 'MP_RECOMMEND'
 
 // 当前选择的分类
 const currentCategory = ref(t('recommend.all'))
@@ -38,7 +39,11 @@ let settingsDialogController: ReturnType<typeof openSharedDialog> | null = null
 // 打开推荐内容共享设置弹窗。
 function openRecommendSettings() {
   settingsDialogController?.close()
-  settingsDialogController = openSharedDialog(
+  const releaseController = () => {
+    if (settingsDialogController === controller) settingsDialogController = null
+  }
+
+  const controller = openSharedDialog(
     ContentToggleSettingsDialog,
     {
       enabled: enableConfig.value,
@@ -51,16 +56,22 @@ function openRecommendSettings() {
       valueGetter: (item: { title: string }) => item.title,
     },
     {
-      close: () => {
-        settingsDialogController = null
-      },
-      save: saveConfig,
+      close: releaseController,
+      save: (payload?: { enabled?: Record<string, boolean> }) => saveConfig(payload, controller),
       'update:modelValue': (value: boolean) => {
-        if (!value) settingsDialogController = null
+        if (!value) releaseController()
       },
     },
     { closeOn: ['close', 'update:modelValue'] },
   )
+  settingsDialogController = controller
+}
+
+// 关闭推荐内容共享设置弹窗。
+function closeRecommendSettings(controller = settingsDialogController) {
+  if (!controller || settingsDialogController !== controller) return
+  controller.close()
+  settingsDialogController = null
 }
 
 const builtInRecommendSources = createBuiltInRecommendSources(t)
@@ -82,7 +93,10 @@ const enableConfig = ref<{ [key: string]: boolean }>({
 
 // 额外的数据源
 const extraRecommendSources = ref<RecommendSource[]>([])
+let configRequest: Promise<void> | null = null
 let extraSourcesRequest: Promise<void> | null = null
+let initialLoadPromise: Promise<void> | null = null
+let hasDeactivated = false
 
 /** 只接受以标题为键、布尔值为开关的推荐配置。 */
 function normalizeEnableConfig(value: unknown): Record<string, boolean> | null {
@@ -92,6 +106,21 @@ function normalizeEnableConfig(value: unknown): Record<string, boolean> | null {
   if (entries.some(([, enabled]) => typeof enabled !== 'boolean')) return null
 
   return Object.fromEntries(entries)
+}
+
+// 同步读取本地缓存；若数据损坏则自动清理。
+function readLocalConfig(): Record<string, boolean> | null {
+  const localEnable = localStorage.getItem(localConfigKey)
+  if (!localEnable) return null
+
+  try {
+    const localConfig = normalizeEnableConfig(JSON.parse(localEnable))
+    if (localConfig) return localConfig
+  } catch {
+    // 损坏的本地值按未配置处理。
+  }
+  localStorage.removeItem(localConfigKey)
+  return null
 }
 
 /** 为旧版推荐配置补入新增内置榜单，同时保留用户已经明确保存的开关值。 */
@@ -123,67 +152,70 @@ function loadExtraRecommendSources() {
   return extraSourcesRequest
 }
 
-// 加载面板配置
-async function loadConfig() {
-  const localEnable = localStorage.getItem('MP_RECOMMEND')
-  if (localEnable) {
+// 加载面板配置；服务端为跨设备权威源，本地 localStorage 仅在远端无配置或请求失败时兜底，且去重在途请求。
+function loadConfig() {
+  if (configRequest) return configRequest
+
+  configRequest = (async () => {
     try {
-      const localConfig = normalizeEnableConfig(JSON.parse(localEnable))
-      if (localConfig) {
-        enableConfig.value = localConfig
+      const response = await api.get('/user/config/Recommend')
+      const remoteConfig = normalizeEnableConfig(response?.data?.value)
+      if (remoteConfig) {
+        localStorage.setItem(localConfigKey, JSON.stringify(remoteConfig))
+        enableConfig.value = { ...remoteConfig }
+        enableMissingBuiltInSources()
         return
       }
-    } catch {
-      // 损坏的本地值按未配置处理，继续尝试服务端配置。
+    } catch (error) {
+      console.error(error)
     }
-    localStorage.removeItem('MP_RECOMMEND')
-  }
 
-  try {
-    const response = await api.get('/user/config/Recommend')
-    const remoteConfig = normalizeEnableConfig(response?.data?.value)
-    if (remoteConfig) {
-      enableConfig.value = remoteConfig
-      localStorage.setItem('MP_RECOMMEND', JSON.stringify(remoteConfig))
+    const localConfig = readLocalConfig()
+    if (localConfig) {
+      enableConfig.value = { ...localConfig }
+      enableMissingBuiltInSources()
     }
-  } catch (error) {
-    console.error(error)
-  }
+  })().finally(() => {
+    configRequest = null
+  })
+
+  return configRequest
 }
 
-// 设置项目
-async function saveConfig(payload?: { enabled?: Record<string, boolean> }) {
-  if (payload?.enabled) {
-    enableConfig.value = payload.enabled
-  }
+// 设置项目；服务端确认成功后再更新页面状态与本地回退缓存。
+async function saveConfig(payload?: { enabled?: Record<string, boolean> }, controller = settingsDialogController) {
+  const nextConfig = payload?.enabled ? { ...payload.enabled } : { ...enableConfig.value }
 
-  // 启用配置
-  const enableString = JSON.stringify(enableConfig.value)
-  localStorage.setItem('MP_RECOMMEND', enableString)
-
-  // 保存到服务端
   try {
-    await api.post('/user/config/Recommend', enableConfig.value)
+    await api.post('/user/config/Recommend', nextConfig)
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.saveFailed'))
+    return
   }
-  settingsDialogController?.close()
-  settingsDialogController = null
+
+  enableConfig.value = nextConfig
+  localStorage.setItem(localConfigKey, JSON.stringify(nextConfig))
+  closeRecommendSettings(controller)
 }
 
 // 推荐分类标签与导航三级菜单共用同一份定义。
 const categoryItems = computed(() => getRecommendTabs(t))
 
-// 注册动态标签页
+// 注册动态标签页，将设置按钮合并至顶栏右侧同行。
 registerHeaderTab({
   items: categoryItems,
   modelValue: currentCategory,
-})
-
-useDynamicButton({
-  icon: 'mdi-tune',
-  onClick: openRecommendSettings,
-  show: computed(() => appMode.value),
+  appendButtons: [
+    {
+      title: t('recommend.configureContent'),
+      label: t('recommend.configureContent'),
+      icon: 'mdi-tune',
+      variant: 'outlined',
+      testId: 'recommend-settings-btn',
+      action: openRecommendSettings,
+    },
+  ],
 })
 
 // 页面是否准备就绪
@@ -192,47 +224,54 @@ const isReady = ref(false)
 // 定时器
 let timer: ReturnType<typeof setTimeout>
 
-onBeforeMount(async () => {
-  await loadConfig()
+async function initializeRecommend() {
+  // 同步预热本地缓存，降低首屏内容闪跳
+  const localConfig = readLocalConfig()
+  if (localConfig) {
+    enableConfig.value = localConfig
+    enableMissingBuiltInSources()
+  }
+
+  await Promise.all([loadConfig(), loadExtraRecommendSources()])
   enableMissingBuiltInSources()
+}
+
+onBeforeMount(() => {
+  initialLoadPromise = initializeRecommend().finally(() => {
+    initialLoadPromise = null
+  })
 })
 
-onMounted(async () => {
-  // 延迟渲染内容，避免阻塞页面切换动画
+onMounted(() => {
+  // 适度延迟渲染内容，兼顾页面切换流畅度与首屏速度
   timer = setTimeout(() => {
     isReady.value = true
-  }, 400)
-
-  await loadExtraRecommendSources()
+  }, 120)
 })
 
 onUnmounted(() => {
   if (timer) clearTimeout(timer)
 })
 
+onDeactivated(() => {
+  hasDeactivated = true
+})
+
 onActivated(async () => {
-  await loadExtraRecommendSources()
+  if (!hasDeactivated) {
+    if (initialLoadPromise) {
+      await initialLoadPromise
+    }
+    return
+  }
+
+  await Promise.all([loadConfig(), loadExtraRecommendSources()])
+  enableMissingBuiltInSources()
 })
 </script>
 
 <template>
   <div class="mp-recommend">
-    <div
-      v-if="!appMode && route.path === '/recommend' && !(isReady && filteredViews.length === 0)"
-      class="mp-page-action-bar"
-    >
-      <VBtn
-        size="small"
-        variant="outlined"
-        rounded="lg"
-        prepend-icon="mdi-tune"
-        data-testid="recommend-settings-btn"
-        @click="openRecommendSettings"
-      >
-        {{ t('recommend.configureContent') }}
-      </VBtn>
-    </div>
-
     <!-- 滚动内容区域 -->
     <div class="recommend-content">
       <TransitionGroup name="fade">

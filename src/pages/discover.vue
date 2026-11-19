@@ -10,29 +10,80 @@ import api from '@/api'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useToast } from 'vue-toastification'
 
 const DiscoverTabOrderDialog = defineAsyncComponent(() => import('@/components/dialog/DiscoverTabOrderDialog.vue'))
 
 // 国际化
 const { t } = useI18n()
+const $toast = useToast()
 
 // 路由
 const route = useRoute()
 
 const activeTab = ref('')
 
+// 按需懒挂载：仅首次切入对应标签后挂载其视图，切走后保留状态。
+const visitedTabs = reactive(new Set<string>())
+
+watch(
+  activeTab,
+  tab => {
+    if (tab) visitedTabs.add(tab)
+  },
+  { immediate: true },
+)
+
 // 本地存储键值
 const localOrderKey = 'MP_DISCOVER_TAB_ORDER'
 
-// 顺序配置
-const orderConfig = ref<{ name: string }[]>([])
+interface DiscoverTabOrderItem {
+  name: string
+  mediaid_prefix?: string
+  enabled?: boolean
+}
 
-// 标签页
+interface DiscoverTabOrderSavePayload {
+  tabs: DiscoverSource[]
+  enabled?: Record<string, boolean>
+}
+
+// 顺序与显隐配置
+const orderConfig = ref<DiscoverTabOrderItem[]>([])
+
+// 全部发现标签页（含已隐藏）
 const discoverTabs = ref<DiscoverSource[]>([])
 
-// 标签页项
+// 查找标签对应的配置项；优先按 mediaid_prefix 匹配，兼容旧版仅存 name 的配置。
+function findOrderConfigItem(tab: DiscoverSource) {
+  return orderConfig.value.find(item =>
+    item.mediaid_prefix ? item.mediaid_prefix === tab.mediaid_prefix : item.name === tab.name,
+  )
+}
+
+// 判断标签是否启用；缺省 enabled 视为启用。
+function isTabEnabled(tab: DiscoverSource) {
+  const matched = findOrderConfigItem(tab)
+  return matched ? matched.enabled !== false : true
+}
+
+// 各标签启用状态映射，供设置弹窗回显。
+const tabEnabledMap = computed<Record<string, boolean>>(() => {
+  const map: Record<string, boolean> = {}
+  discoverTabs.value.forEach(tab => {
+    map[tab.mediaid_prefix] = isTabEnabled(tab)
+  })
+  return map
+})
+
+// 当前启用的标签列表
+const visibleDiscoverTabs = computed(() => {
+  return discoverTabs.value.filter(isTabEnabled)
+})
+
+// 顶栏仅展示已启用的标签页项
 const discoverTabItems = computed(() => {
-  return discoverTabs.value.map(item => ({
+  return visibleDiscoverTabs.value.map(item => ({
     title: item.name,
     tab: item.mediaid_prefix,
   }))
@@ -42,10 +93,11 @@ const discoverTabItems = computed(() => {
 const extraDiscoverSources = ref<DiscoverSource[]>([])
 
 let orderDialogController: ReturnType<typeof openSharedDialog> | null = null
+let orderConfigRequest: Promise<void> | null = null
 let extraSourcesRequest: Promise<void> | null = null
-let initialLoadPromise: Promise<void> | null = null
+let hasDeactivated = false
 
-// 打开发现页标签排序共享弹窗。
+// 打开发现页标签排序与显隐共享弹窗。
 function openOrderConfigDialog() {
   orderDialogController?.close()
   const releaseController = () => {
@@ -56,10 +108,11 @@ function openOrderConfigDialog() {
     DiscoverTabOrderDialog,
     {
       tabs: discoverTabs.value,
+      enabled: tabEnabledMap.value,
     },
     {
       close: releaseController,
-      save: tabs => saveTabOrder(tabs, controller),
+      save: (payload: DiscoverTabOrderSavePayload | DiscoverSource[]) => saveTabOrder(payload, controller),
       'update:modelValue': (value: boolean) => {
         if (!value) releaseController()
       },
@@ -123,56 +176,128 @@ async function refreshExtraDiscoverSources() {
   }
 }
 
-// 按order的顺序排序
+/** 只接受包含有效名称（及可选 mediaid_prefix、enabled）的顺序数组。 */
+function normalizeOrderConfig(value: unknown): DiscoverTabOrderItem[] | null {
+  if (!Array.isArray(value)) return null
+
+  const normalized: DiscoverTabOrderItem[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const candidate = item as { name?: unknown; mediaid_prefix?: unknown; enabled?: unknown }
+    if (typeof candidate.name !== 'string' || !candidate.name.trim()) return null
+    if (candidate.mediaid_prefix !== undefined && typeof candidate.mediaid_prefix !== 'string') return null
+    if (candidate.enabled !== undefined && typeof candidate.enabled !== 'boolean') return null
+
+    const prefix = candidate.mediaid_prefix?.trim()
+    const normalizedItem: DiscoverTabOrderItem = { name: candidate.name }
+    if (prefix) normalizedItem.mediaid_prefix = prefix
+    if (candidate.enabled !== undefined) normalizedItem.enabled = candidate.enabled
+    normalized.push(normalizedItem)
+  }
+  return normalized
+}
+
+// 同步读取本地缓存；若数据损坏则自动清理。
+function readLocalOrderConfig(): DiscoverTabOrderItem[] | null {
+  const localOrder = localStorage.getItem(localOrderKey)
+  if (!localOrder) return null
+
+  try {
+    const parsedOrder = normalizeOrderConfig(JSON.parse(localOrder))
+    if (parsedOrder) return parsedOrder
+  } catch {
+    // 损坏的本地缓存不能阻止发现页使用默认标签。
+  }
+  localStorage.removeItem(localOrderKey)
+  return null
+}
+
+// 按 order 顺序排序；优先按 mediaid_prefix 稳定匹配，兼容旧版仅存 name 的配置。
 function sortSubscribeOrder() {
-  if (!orderConfig.value) {
+  if (!orderConfig.value || orderConfig.value.length === 0) {
     return
   }
   if (discoverTabs.value.length === 0) {
     return
   }
+  const findOrderIndex = (tab: DiscoverSource) =>
+    orderConfig.value.findIndex(item =>
+      item.mediaid_prefix ? item.mediaid_prefix === tab.mediaid_prefix : item.name === tab.name,
+    )
   discoverTabs.value.sort((a, b) => {
-    const aIndex = orderConfig.value.findIndex((item: { name: string }) => item.name === a.name)
-    const bIndex = orderConfig.value.findIndex((item: { name: string }) => item.name === b.name)
+    const aIndex = findOrderIndex(a)
+    const bIndex = findOrderIndex(b)
     return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
   })
 }
 
-// 加载顺序
-async function loadOrderConfig() {
-  // 顺序配置
-  const local_order = localStorage.getItem(localOrderKey)
-  if (local_order) {
-    try {
-      orderConfig.value = JSON.parse(local_order)
-      return
-    } catch {
-      localStorage.removeItem(localOrderKey)
-    }
+// 确保当前激活标签有效；若被隐藏或撤销则回退至首个可见标签。
+function ensureValidActiveTab() {
+  if (visibleDiscoverTabs.value.length === 0) {
+    activeTab.value = ''
+    return
   }
-
-  const response = await api.get(`/user/config/${localOrderKey}`)
-  if (response && response.data && response.data.value) {
-    orderConfig.value = response.data.value
-    localStorage.setItem(localOrderKey, JSON.stringify(orderConfig.value))
+  if (!activeTab.value || !visibleDiscoverTabs.value.some(tab => tab.mediaid_prefix === activeTab.value)) {
+    activeTab.value = visibleDiscoverTabs.value[0].mediaid_prefix
   }
 }
 
-// 保存顺序设置
-async function saveTabOrder(tabs = discoverTabs.value, controller = orderDialogController) {
-  discoverTabs.value = [...tabs]
-  // 顺序配置
-  const orderObj = discoverTabs.value.map(item => ({ name: item.name }))
-  orderConfig.value = orderObj
-  const orderString = JSON.stringify(orderObj)
-  localStorage.setItem(localOrderKey, orderString)
+// 加载顺序与显隐；服务端为跨设备权威源，本地 localStorage 仅在远端无配置或请求失败时兜底，且去重在途请求。
+function loadOrderConfig() {
+  if (orderConfigRequest) return orderConfigRequest
 
-  // 保存到服务端
+  orderConfigRequest = (async () => {
+    try {
+      const response = await api.get(`/user/config/${localOrderKey}`)
+      const remoteOrder = normalizeOrderConfig(response?.data?.value)
+      if (remoteOrder) {
+        orderConfig.value = remoteOrder
+        localStorage.setItem(localOrderKey, JSON.stringify(remoteOrder))
+        return
+      }
+    } catch (error) {
+      console.error(error)
+    }
+
+    const localOrder = readLocalOrderConfig()
+    if (localOrder) {
+      orderConfig.value = localOrder
+    }
+  })().finally(() => {
+    orderConfigRequest = null
+  })
+
+  return orderConfigRequest
+}
+
+// 保存顺序与显隐设置；服务端确认成功后再更新页面状态与本地回退缓存。
+async function saveTabOrder(
+  payload: DiscoverTabOrderSavePayload | DiscoverSource[] = {
+    tabs: discoverTabs.value,
+    enabled: tabEnabledMap.value,
+  },
+  controller = orderDialogController,
+) {
+  const tabs = Array.isArray(payload) ? payload : payload.tabs
+  const enabledMap = Array.isArray(payload) ? tabEnabledMap.value : (payload.enabled ?? tabEnabledMap.value)
+  const orderObj: DiscoverTabOrderItem[] = tabs.map(item => ({
+    name: item.name,
+    mediaid_prefix: item.mediaid_prefix,
+    enabled: enabledMap[item.mediaid_prefix] !== false,
+  }))
+
   try {
     await api.post(`/user/config/${localOrderKey}`, orderObj)
   } catch (error) {
     console.error(error)
+    $toast.error(t('common.saveFailed'))
+    return
   }
+
+  discoverTabs.value = [...tabs]
+  orderConfig.value = orderObj
+  localStorage.setItem(localOrderKey, JSON.stringify(orderObj))
+  ensureValidActiveTab()
   closeOrderConfigDialog(controller)
 }
 
@@ -181,13 +306,15 @@ const { registerHeaderTab } = useDynamicHeaderTab()
 
 // 注册动态标签页（在setup阶段，但使用computed保证响应性）
 registerHeaderTab({
-  items: discoverTabItems, // 传递computed值，会自动响应变化
+  items: discoverTabItems,
   modelValue: activeTab,
   appendButtons: [
     {
-      icon: 'mdi-order-alphabetical-ascending',
-      variant: 'text',
-      class: 'settings-icon-button',
+      title: t('discover.configureTabs'),
+      label: t('discover.configureTabs'),
+      icon: 'mdi-tune',
+      variant: 'outlined',
+      testId: 'discover-tab-config-btn',
       action: openOrderConfigDialog,
     },
   ],
@@ -195,67 +322,80 @@ registerHeaderTab({
 
 async function initializeDiscover() {
   discoverTabs.value = createBuiltInDiscoverTabs()
-  try {
-    await loadOrderConfig()
-  } catch (error) {
-    console.log(error)
+  // 同步预热本地缓存，避免首屏标签顺序闪跳
+  const localOrder = readLocalOrderConfig()
+  if (localOrder) {
+    orderConfig.value = localOrder
+    sortSubscribeOrder()
   }
-  await loadExtraDiscoverSources()
+
+  await Promise.all([loadOrderConfig(), loadExtraDiscoverSources()])
   sortSubscribeOrder()
-  // 选中第一个标签页
-  if (discoverTabs.value.length > 0) {
-    activeTab.value = discoverTabs.value[0].mediaid_prefix
+  // 首次初始化完成后选中权威排序下的第一个可见标签
+  if (visibleDiscoverTabs.value.length > 0) {
+    activeTab.value = visibleDiscoverTabs.value[0].mediaid_prefix
+  } else {
+    activeTab.value = ''
   }
 }
 
 onBeforeMount(() => {
-  initialLoadPromise = initializeDiscover().finally(() => {
-    initialLoadPromise = null
-  })
+  void initializeDiscover()
+})
+
+onDeactivated(() => {
+  hasDeactivated = true
 })
 
 onActivated(async () => {
-  if (initialLoadPromise) {
-    await initialLoadPromise
-    return
-  }
+  if (!hasDeactivated) return
 
-  await loadExtraDiscoverSources()
+  await Promise.all([loadOrderConfig(), loadExtraDiscoverSources()])
   sortSubscribeOrder()
-  // 如果当前没有选中任何标签页，或者当前选中的标签页不存在，则选中第一个标签页
-  if (!activeTab.value || !discoverTabs.value.find(tab => tab.mediaid_prefix === activeTab.value)) {
-    if (discoverTabs.value.length > 0) {
-      activeTab.value = discoverTabs.value[0].mediaid_prefix
-    }
-  }
+  ensureValidActiveTab()
 })
 </script>
 
 <template>
   <div>
-    <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
+    <div v-if="visibleDiscoverTabs.length === 0" class="discover-empty" data-testid="discover-empty-state">
+      <VIcon icon="mdi-compass-off-outline" size="48" class="discover-empty-icon" />
+      <p class="discover-empty-title">{{ t('discover.noVisibleTabs') }}</p>
+      <p class="discover-empty-hint">{{ t('discover.noVisibleTabsHint') }}</p>
+      <VBtn
+        color="primary"
+        variant="tonal"
+        size="small"
+        rounded="lg"
+        prepend-icon="mdi-tune"
+        @click="openOrderConfigDialog"
+      >
+        {{ t('discover.configureTabs') }}
+      </VBtn>
+    </div>
+    <VWindow v-else-if="activeTab" v-model="activeTab" class="disable-tab-transition" :touch="false">
       <VWindowItem value="themoviedb">
-        <div>
+        <div v-if="visitedTabs.has('themoviedb')">
           <TheMovieDbView />
         </div>
       </VWindowItem>
       <VWindowItem value="douban">
-        <div>
+        <div v-if="visitedTabs.has('douban')">
           <DoubanView />
         </div>
       </VWindowItem>
       <VWindowItem value="bangumi">
-        <div>
+        <div v-if="visitedTabs.has('bangumi')">
           <BangumiView />
         </div>
       </VWindowItem>
       <VWindowItem value="anilist">
-        <div>
+        <div v-if="visitedTabs.has('anilist')">
           <AniListView />
         </div>
       </VWindowItem>
       <VWindowItem v-for="item in extraDiscoverSources" :key="item.mediaid_prefix" :value="item.mediaid_prefix">
-        <div>
+        <div v-if="visitedTabs.has(item.mediaid_prefix)">
           <ExtraSourceView :source="item" />
         </div>
       </VWindowItem>
@@ -266,3 +406,32 @@ onActivated(async () => {
     </Teleport>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.discover-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  text-align: center;
+}
+
+.discover-empty-icon {
+  margin-block-end: 14px;
+  opacity: 0.45;
+}
+
+.discover-empty-title {
+  color: rgba(var(--v-theme-on-surface), 0.88);
+  font-size: 1rem;
+  font-weight: 500;
+  margin-block-end: 6px;
+}
+
+.discover-empty-hint {
+  font-size: 0.875rem;
+  margin-block-end: 18px;
+}
+</style>

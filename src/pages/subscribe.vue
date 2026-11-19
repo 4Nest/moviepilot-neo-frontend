@@ -2,8 +2,6 @@
 import SubscribeListView from '@/views/subscribe/SubscribeListView.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useUserStore } from '@/stores'
 import { getSubscribeMovieTabs, getSubscribeTvTabs } from '@/router/i18n-menu'
@@ -12,7 +10,6 @@ import { getSubscribeMovieTabs, getSubscribeTvTabs } from '@/router/i18n-menu'
 const { t } = useI18n()
 
 const route = useRoute()
-const { appMode } = usePWA()
 const userStore = useUserStore()
 
 // 非默认标签页和弹窗按需加载，避免进入订阅列表时同步下载分享/统计相关代码。
@@ -328,118 +325,6 @@ watch(subscribeSortBy, newSortBy => {
   saveSubscribeSortBy(newSortBy)
 })
 
-const subscribeDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(() => {
-  if (!appMode.value) return undefined
-
-  if (activeTab.value === 'mysub') {
-    if (subscribeBatchState.value.enabled) {
-      const hasSelectedSubscribes = subscribeBatchState.value.selectedCount > 0
-      const isBatchOperating = Boolean(subscribeBatchState.value.operating)
-
-      return [
-        {
-          titleKey: 'subscribe.selectedCount',
-          titleParams: {
-            count: subscribeBatchState.value.selectedCount,
-            total: subscribeBatchState.value.totalCount,
-          },
-          icon: 'mdi-checkbox-multiple-marked-outline',
-          disabled: true,
-          action: () => {},
-        },
-        {
-          titleKey: subscribeBatchState.value.allSelected ? 'subscribe.batchDeselectAll' : 'subscribe.batchSelectAll',
-          icon: subscribeBatchState.value.allSelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked',
-          disabled: subscribeBatchState.value.totalCount === 0 || isBatchOperating,
-          action: toggleSubscribeBatchSelectAll,
-        },
-        {
-          titleKey: 'subscribe.batchEnable',
-          icon: 'mdi-play',
-          color: 'success',
-          disabled: !hasSelectedSubscribes || isBatchOperating,
-          action: batchEnableSelectedSubscribes,
-        },
-        {
-          titleKey: 'subscribe.batchPause',
-          icon: 'mdi-pause',
-          color: 'info',
-          disabled: !hasSelectedSubscribes || isBatchOperating,
-          action: batchPauseSelectedSubscribes,
-        },
-        {
-          titleKey: 'subscribe.batchDelete',
-          icon: 'mdi-delete',
-          color: 'error',
-          disabled: !hasSelectedSubscribes || isBatchOperating,
-          action: batchDeleteSelectedSubscribes,
-        },
-        {
-          titleKey: 'subscribe.exitBatchMode',
-          icon: 'mdi-close',
-          disabled: isBatchOperating,
-          action: exitSubscribeBatchMode,
-        },
-      ]
-    }
-
-    const items: DynamicButtonMenuItem[] = []
-
-    if (showSubscribeHistoryAction.value) {
-      items.push({
-        titleKey: 'dialog.subscribeHistory.title',
-        titleParams: { type: subType },
-        icon: 'mdi-history',
-        action: openSubscribeHistoryDialog,
-      })
-    }
-
-    if (showDefaultRuleAction.value) {
-      items.push({
-        titleKey: 'dialog.subscribeEdit.titleDefault',
-        icon: 'mdi-clipboard-edit-outline',
-        action: openDefaultRuleDialog,
-      })
-    }
-    return items.length > 1 ? items : undefined
-  }
-
-  return undefined
-})
-
-const subscribeDynamicIcon = computed(() => {
-  if (subscribeBatchState.value.enabled) return 'mdi-checkbox-multiple-marked-outline'
-  if (showSubscribeHistoryAction.value) return 'mdi-history'
-  return 'mdi-clipboard-edit-outline'
-})
-
-function handleSubscribeDynamicAction() {
-  if (subscribeBatchState.value.enabled) {
-    exitSubscribeBatchMode()
-    return
-  }
-
-  if (showSubscribeHistoryAction.value) {
-    openSubscribeHistoryDialog()
-    return
-  }
-
-  if (showDefaultRuleAction.value) {
-    openDefaultRuleDialog()
-  }
-}
-
-useDynamicButton({
-  icon: subscribeDynamicIcon,
-  onClick: handleSubscribeDynamicAction,
-  menuItems: subscribeDynamicMenuItems,
-  show: computed(
-    () =>
-      appMode.value &&
-      (subscribeBatchState.value.enabled || showSubscribeHistoryAction.value || showDefaultRuleAction.value),
-  ),
-})
-
 // 使用动态标签页
 const { registerHeaderTab } = useDynamicHeaderTab()
 
@@ -455,7 +340,7 @@ registerHeaderTab({
       variant: 'outlined',
       testId: 'subscribe-history-btn',
       action: openSubscribeHistoryDialog,
-      show: computed(() => !appMode.value && showSubscribeHistoryAction.value),
+      show: computed(() => showSubscribeHistoryAction.value),
     },
     {
       title: t('dialog.subscribeEdit.titleDefault'),
@@ -464,7 +349,7 @@ registerHeaderTab({
       variant: 'outlined',
       testId: 'subscribe-default-rule-btn',
       action: openDefaultRuleDialog,
-      show: computed(() => !appMode.value && showDefaultRuleAction.value),
+      show: computed(() => showDefaultRuleAction.value),
     },
     {
       title: t('common.filter'),
@@ -519,9 +404,7 @@ onMounted(() => {
         <div>
           <div
             v-if="
-              !appMode &&
-              route.path.startsWith(`/subscribe/${subType === '电影' ? 'movie' : 'tv'}`) &&
-              subscribeBatchState.enabled
+              route.path.startsWith(`/subscribe/${subType === '电影' ? 'movie' : 'tv'}`) && subscribeBatchState.enabled
             "
             class="mp-page-action-bar"
           >
@@ -619,7 +502,7 @@ onMounted(() => {
         :activator="filterActivator"
         location="bottom end"
       >
-        <VCard min-width="220">
+        <VCard min-width="220" class="subscribe-filter-menu-card">
           <!-- 名称搜索 -->
           <div class="pa-3">
             <VTextField
@@ -683,5 +566,20 @@ onMounted(() => {
 <style scoped>
 .content-window {
   margin-block-start: 0;
+}
+
+.subscribe-filter-menu-card {
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background-color: rgb(var(--v-theme-surface));
+  max-inline-size: min(300px, calc(100vw - 24px));
+}
+
+@media (width <= 600px) {
+  .mp-page-action-bar {
+    gap: 6px;
+    padding-block: 6px;
+    padding-inline: 8px;
+  }
 }
 </style>

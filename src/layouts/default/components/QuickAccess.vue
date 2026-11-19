@@ -951,9 +951,8 @@ function handleBackdropClick(event: MouseEvent) {
   }
 }
 
-// 深色模式适配（实色背景 + 磨砂兜底，防止首页内容透字）
+// 深色模式适配（实色背景，防止首页内容透字）
 html[data-theme='dark'] .plugin-quick-access {
   background: rgb(var(--v-theme-surface));
-  backdrop-filter: blur(16px);
 }
 </style>

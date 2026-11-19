@@ -339,4 +339,38 @@ useDataRefresh(
     transform: rotate(360deg);
   }
 }
+
+@media (width <= 600px) {
+  .dashboard-work-card {
+    max-block-size: 320px;
+    min-block-size: 0;
+  }
+
+  .dashboard-work-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-work-content {
+    padding: 2px 14px 12px;
+  }
+
+  .background-task-avatar {
+    block-size: 30px !important;
+    inline-size: 30px !important;
+    margin-inline-end: 8px;
+  }
+
+  .background-task-summary {
+    gap: 8px;
+  }
+
+  .background-task-title {
+    font-size: 12.5px;
+  }
+
+  .background-task-subtitle,
+  .background-task-status {
+    font-size: 11px;
+  }
+}
 </style>

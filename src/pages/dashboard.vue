@@ -6,10 +6,8 @@ import api from '@/api'
 import { isNullOrEmptyObject } from '@/@core/utils'
 import type { DashboardItem } from '@/api/types'
 import DashboardElement from '@/components/misc/DashboardElement.vue'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/composables/useChineseText'
-import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
 import { useDisplay } from 'vuetify'
@@ -22,8 +20,6 @@ const ContentToggleSettingsDialog = defineAsyncComponent(
 const { t } = useI18n()
 const createConfirm = useConfirm()
 
-// PWA模式检测
-const { appMode } = usePWA()
 const display = useDisplay()
 
 // 路由
@@ -974,49 +970,6 @@ async function resetDashboardGridLayout() {
   notifyDashboardContentResize()
 }
 
-// 生成 appMode 底部动态按钮菜单，普通 Web 模式由页面内 FAB 承接。
-const dashboardDynamicButtonMenuItems = computed<DynamicButtonMenuItem[] | undefined>(() => {
-  if (!appMode.value) return undefined
-
-  const items: DynamicButtonMenuItem[] = [
-    {
-      title: isLayoutEditing.value ? t('dashboard.exitEditMode') : t('dashboard.editLayout'),
-      icon: isLayoutEditing.value ? 'mdi-check' : 'mdi-view-dashboard-edit',
-      color: 'primary',
-      action: toggleDashboardLayoutEditing,
-    },
-  ]
-
-  if (isLayoutEditing.value) {
-    items.push({
-      title: t('common.cancel'),
-      icon: 'mdi-close',
-      action: cancelDashboardLayoutEditing,
-    })
-    items.push({
-      title: t('dashboard.resetLayout'),
-      icon: 'mdi-restore',
-      color: 'warning',
-      action: resetDashboardGridLayout,
-    })
-  }
-
-  items.push({
-    title: t('dashboard.settings'),
-    icon: 'mdi-tune',
-    color: 'info',
-    action: openDashboardSettings,
-  })
-
-  return items
-})
-
-useDynamicButton({
-  icon: 'mdi-view-dashboard-edit',
-  menuItems: dashboardDynamicButtonMenuItems,
-  show: computed(() => appMode.value && route.path === '/dashboard'),
-})
-
 // 切换仪表板布局编辑模式，点击确认退出时持久化当前布局草稿。
 function toggleDashboardLayoutEditing() {
   if (isLayoutEditing.value) {
@@ -1733,7 +1686,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="!appMode && route.path === '/dashboard'" class="mp-page-action-bar">
+  <div v-if="route.path === '/dashboard'" class="mp-page-action-bar">
     <VBtn
       size="small"
       variant="outlined"
@@ -1956,5 +1909,36 @@ onBeforeUnmount(() => {
   inline-size: 24px;
   inset-block-end: -4px;
   inset-inline-end: -4px;
+}
+
+@media (width <= 600px) {
+  .mp-page-action-bar {
+    gap: 6px;
+    margin-block-end: 8px;
+    padding-inline: 2px;
+  }
+
+  .mp-page-action-bar :deep(.v-btn) {
+    font-size: 12px;
+    padding-inline: 10px;
+  }
+
+  .dashboard-grid :deep(.v-card) {
+    border-radius: 11px;
+    min-inline-size: 0;
+  }
+
+  .dashboard-grid :deep(.v-card-item) {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-grid :deep(.v-card-text) {
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-grid :deep(.v-card-title) {
+    font-size: 14px;
+    line-height: 1.3;
+  }
 }
 </style>

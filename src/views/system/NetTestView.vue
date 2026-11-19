@@ -393,4 +393,54 @@ onBeforeUnmount(() => {
   background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
 }
+
+@media (width <= 600px) {
+  .nettest-workbench {
+    gap: 8px;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+  }
+
+  .nettest-toolbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .nettest-icon-box {
+    border-radius: 7px;
+    block-size: 30px;
+    inline-size: 30px;
+  }
+
+  .nettest-stats {
+    gap: 6px 10px;
+    font-size: 11.5px;
+  }
+
+  .nettest-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto 28px;
+    gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .nettest-avatar {
+    border-radius: 7px;
+    block-size: 30px;
+    inline-size: 30px;
+  }
+
+  .nettest-name {
+    font-size: 13px;
+  }
+
+  .nettest-message {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .nettest-latency {
+    font-size: 11px;
+    padding-inline: 6px;
+  }
+}
 </style>

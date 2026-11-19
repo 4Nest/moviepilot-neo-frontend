@@ -81,11 +81,8 @@ const navbarExtraHeight = computed(() => {
   return `${dynamicTabHeight + horizontalNavHeight}rem`
 })
 
-const mainContentPaddingTop = computed(() => {
-  if (!appMode.value) return '0rem'
-
-  return showDynamicHeaderTab.value ? '2.75rem' : '0rem'
-})
+// 桌面端与 appMode 的顶栏 + HeaderTab 偏移统一由 --layout-navbar-block-size 承接，不再叠加额外 paddingTop
+const mainContentPaddingTop = computed(() => '0rem')
 
 // 插件快速访问相关状态
 const showPluginQuickAccess = ref(false)

@@ -346,7 +346,7 @@ watch(
 </script>
 
 <template>
-  <div>
+  <div class="profile-view">
     <VRow>
       <!-- 👉 账号概览 -->
       <VCol cols="12" md="4">
@@ -661,5 +661,63 @@ watch(
   font-weight: 600;
   line-height: 1.4;
   margin-block-end: 13px;
+}
+
+@media (width <= 600px) {
+  .profile-view {
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+  }
+
+  .profile-view :deep(.v-card) {
+    border: 1px solid var(--mp-border-card);
+    border-radius: 10px;
+    background: rgb(var(--v-theme-surface));
+    box-shadow: none;
+  }
+
+  .profile-view :deep(.v-card > .v-card-item) {
+    padding: 11px 14px;
+  }
+
+  .profile-view :deep(.v-card > .v-card-item .v-card-title) {
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+
+  .profile-view :deep(.v-card > .v-card-text) {
+    padding: 12px 14px;
+  }
+
+  .profile-overview-body {
+    gap: 11px;
+  }
+
+  .profile-avatar-actions {
+    gap: 6px;
+  }
+
+  .profile-avatar-tip {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .profile-security-meta {
+    gap: 8px;
+    min-inline-size: 0;
+  }
+
+  .profile-security-copy {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .profile-form-divider {
+    margin-block: 14px 10px;
+  }
+
+  .profile-section-heading {
+    margin-block-end: 10px;
+  }
 }
 </style>

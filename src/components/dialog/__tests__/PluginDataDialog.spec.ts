@@ -233,4 +233,71 @@ describe('PluginDataDialog', () => {
     expect(await screen.findByText('插件数据加载失败，请稍后重试')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText('此插件没有详情页面')).not.toBeInTheDocument())
   })
+
+  it('emits switch and close events from dialog footer and close button', async () => {
+    mocks.apiGet.mockResolvedValue({ page: [], render_mode: 'vuetify' })
+    const onClose = vi.fn()
+    const onSwitch = vi.fn()
+
+    await renderWithProviders(PluginDataDialog, {
+      props: {
+        modelValue: true,
+        onClose,
+        onSwitch,
+        plugin: {
+          id: 'DemoPlugin',
+          plugin_name: '示例插件',
+        },
+      },
+      global: {
+        stubs: {
+          LoadingBanner: { template: '<div data-testid="loading-banner" />' },
+          PageRender: { template: '<div data-testid="page-render" />' },
+          VDialogCloseBtn: {
+            template: '<button type="button" data-testid="close-btn" @click="$emit(\'click\')">关闭</button>',
+          },
+        },
+      },
+    })
+
+    expect(await screen.findByText('此插件没有详情页面')).toBeInTheDocument()
+    await fireEvent.click(screen.getByTestId('close-btn'))
+    const closeButtons = screen.getAllByRole('button', { name: '关闭' })
+    await fireEvent.click(closeButtons[closeButtons.length - 1])
+    await fireEvent.click(screen.getByRole('button', { name: '切换配置' }))
+
+    expect(onClose).toHaveBeenCalled()
+    expect(onSwitch).toHaveBeenCalledOnce()
+
+    mocks.apiGet.mockResolvedValue({ render_mode: 'vue' })
+    mocks.loadRemoteComponent.mockResolvedValue(createRemotePage([]))
+    const onVueClose = vi.fn()
+    const onVueSwitch = vi.fn()
+    await renderWithProviders(PluginDataDialog, {
+      props: {
+        modelValue: true,
+        onClose: onVueClose,
+        onSwitch: onVueSwitch,
+        plugin: {
+          id: 'DemoPluginVue',
+          plugin_name: 'Vue插件',
+        },
+      },
+      global: {
+        stubs: {
+          LoadingBanner: { template: '<div data-testid="loading-banner" />' },
+          PageRender: { template: '<div data-testid="page-render" />' },
+          VDialogCloseBtn: {
+            template: '<button type="button" data-testid="vue-close-btn" @click="$emit(\'click\')">关闭</button>',
+          },
+        },
+      },
+    })
+    expect(await screen.findByTestId('remote-page')).toBeInTheDocument()
+    await fireEvent.click(screen.getByTestId('vue-close-btn'))
+    const switchButtons = screen.getAllByRole('button', { name: '切换配置' })
+    await fireEvent.click(switchButtons[switchButtons.length - 1])
+    expect(onVueClose).toHaveBeenCalled()
+    expect(onVueSwitch).toHaveBeenCalledOnce()
+  })
 })

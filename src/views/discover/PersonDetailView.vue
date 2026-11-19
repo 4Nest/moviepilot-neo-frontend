@@ -376,4 +376,66 @@ onBeforeMount(() => {
 .person-credits-link:hover {
   color: rgb(var(--v-theme-primary));
 }
+
+@media (width <= 600px) {
+  .person-page {
+    padding-block: 4px 16px;
+  }
+
+  .person-header {
+    padding: 14px;
+    border: 1px solid var(--mp-border-card);
+    border-radius: 12px;
+    background: rgb(var(--v-theme-surface));
+    gap: 10px;
+    margin-block-end: 12px;
+  }
+
+  .person-portrait {
+    border-color: var(--mp-border-card);
+    border-radius: 10px;
+    box-shadow: none;
+    inline-size: 6.5rem;
+  }
+
+  .person-heading {
+    font-size: 1.2rem;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .person-attributes {
+    font-size: 12px;
+  }
+
+  .person-aliases {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .person-story-block {
+    padding: 12px 14px;
+    border: 1px solid var(--mp-border-card);
+    border-radius: 12px;
+    background: rgb(var(--v-theme-surface));
+    margin-block-end: 12px;
+  }
+
+  .person-section-heading {
+    font-size: 14px;
+  }
+
+  .person-biography,
+  .person-biography-text {
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .person-credits-section {
+    margin-block-start: 14px;
+  }
+}
 </style>

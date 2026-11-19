@@ -7,25 +7,8 @@ import type { AxiosInstance } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  dynamicButton: vi.fn(),
   openNewFolderDialog: vi.fn(),
 }))
-
-vi.mock('@/composables/usePWA', () => ({
-  usePWA: () => ({ appMode: ref(false) }),
-}))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (...args: unknown[]) => mocks.dynamicButton(...args),
-}))
-
-vi.mock('vue-router', async importOriginal => {
-  const actual = await importOriginal<typeof import('vue-router')>()
-  return {
-    ...actual,
-    useRoute: () => ({ path: '/filemanager' }),
-  }
-})
 
 const FileToolbarStub = defineComponent({
   name: 'FileToolbar',
@@ -268,19 +251,10 @@ describe('FileBrowser state and child contracts', () => {
     expect(wrapper.getComponent(FileNavigatorStub).props('items')).toEqual(items)
   })
 
-  it('keeps the new-folder entry inline on the toolbar on desktop and removes floating FAB', () => {
+  it('always keeps the new-folder entry inline on the toolbar without floating FAB', () => {
     const wrapper = mountBrowser()
 
     expect(wrapper.getComponent(FileToolbarStub).props('showNewFolderButton')).toBe(true)
     expect(wrapper.findComponent({ name: 'VFab' }).exists()).toBe(false)
-  })
-
-  it('connects the dynamic new-folder action to the toolbar controller', () => {
-    mountBrowser()
-    const options = mocks.dynamicButton.mock.calls.at(-1)?.[0] as { onClick: () => void }
-
-    options.onClick()
-
-    expect(mocks.openNewFolderDialog).toHaveBeenCalledOnce()
   })
 })

@@ -2247,6 +2247,7 @@ defineExpose({
   align-items: center;
   justify-content: flex-end;
   padding: 10px 20px;
+  padding-block-end: calc(10px + env(safe-area-inset-bottom, 0px));
   border-block-start: 1px solid var(--mp-border-subtle);
   background: rgb(var(--v-theme-surface));
   gap: 8px;
@@ -2359,5 +2360,57 @@ defineExpose({
   transition:
     color 0.16s ease,
     transform 0.16s ease;
+}
+
+@media (width <= 600px) {
+  .system-adv-grid {
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .system-adv-tile {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .system-adv-tile__icon {
+    block-size: 30px;
+    inline-size: 30px;
+  }
+
+  .system-adv-tile__desc {
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: normal;
+  }
+
+  .setting-group-card,
+  .scraping-section__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .setting-fields-card {
+    padding: 12px;
+  }
+
+  .advanced-dialog__mobile-titlebar {
+    padding: 10px 14px 6px;
+  }
+
+  .advanced-dialog__header {
+    padding: 12px 14px 10px;
+  }
+
+  .advanced-dialog__section-title {
+    font-size: 14.5px;
+  }
+
+  .advanced-dialog__scroll {
+    padding: 12px 14px;
+  }
+
+  .advanced-dialog__footer {
+    padding-inline: 14px;
+  }
 }
 </style>

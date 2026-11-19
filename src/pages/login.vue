@@ -1224,19 +1224,47 @@ onUnmounted(() => {
 }
 
 /* ===================== 小屏适配 ===================== */
-@media (width <= 480px) {
+@media (width <= 600px) {
+  .login-root {
+    padding-block: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 20px);
+  }
+
   .auth-wrapper {
     padding-inline: 12px;
   }
 
   .login-card {
-    padding: 1.5rem !important;
+    border-radius: 12px !important;
+    padding: 1.25rem !important;
+  }
+
+  .login-brand {
+    gap: 0.5rem;
+    margin-block-end: 1.2rem;
+  }
+
+  .login-brand__mark {
+    block-size: 2.6rem;
+    inline-size: 2.6rem;
+  }
+
+  .native-login-field {
+    block-size: 44px;
+  }
+
+  .native-login-field__input {
+    block-size: 42px;
+    font-size: 0.9rem;
+  }
+
+  .login-submit {
+    block-size: 40px !important;
   }
 }
 
 @media (width <= 480px) and (height <= 600px) {
   .login-card {
-    padding-block: 0.75rem !important;
+    padding-block: 0.85rem !important;
   }
 }
 </style>

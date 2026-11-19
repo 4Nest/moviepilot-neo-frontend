@@ -661,13 +661,13 @@ onBeforeUnmount(() => {
     inline-size: 100%;
     max-inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: 460px;
+    min-block-size: 320px;
   }
 
   .dashboard-recommend-topbar {
     justify-content: flex-end;
-    inset-block-start: 0.85rem;
-    inset-inline: 0.85rem;
+    inset-block-start: 12px;
+    inset-inline: 12px;
   }
 
   .dashboard-recommend-label {
@@ -676,11 +676,12 @@ onBeforeUnmount(() => {
 
   .dashboard-recommend-source {
     border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px !important;
     max-inline-size: none;
-    min-inline-size: 40px;
-    background: rgba(22, 23, 29, 0.8) !important;
-    block-size: 40px;
-    inline-size: 40px;
+    min-inline-size: 34px;
+    background: rgba(22, 23, 29, 0.84) !important;
+    block-size: 34px;
+    inline-size: 34px;
     padding: 0;
   }
 
@@ -694,19 +695,26 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-recommend-content {
-    max-inline-size: calc(100% - 1.7rem);
-    inset-block-end: 7.5rem;
-    inset-inline: 0.85rem;
+    max-inline-size: calc(100% - 28px);
+    inset-block-end: 42px;
+    inset-inline: 14px;
   }
 
   .dashboard-recommend-title {
-    font-size: 1.65rem;
+    font-size: 1.25rem;
+    line-height: 1.25;
+  }
+
+  .dashboard-recommend-meta {
+    margin-block-start: 4px;
+    font-size: 11.5px;
   }
 
   .dashboard-recommend-overview {
-    font-size: 0.8rem;
+    margin-block-start: 6px;
+    font-size: 12.5px;
     -webkit-line-clamp: 2;
-    line-height: 1.5;
+    line-height: 1.48;
   }
 
   .dashboard-recommend-detail {
@@ -718,17 +726,17 @@ onBeforeUnmount(() => {
   }
 
   .dashboard-recommend-pagination {
-    gap: 0.3rem;
-    inset-block-end: 1.75rem;
-    inset-inline: 22%;
+    gap: 5px;
+    inset-block-end: 14px;
+    inset-inline: 16%;
   }
 
   .dashboard-recommend-page {
-    inline-size: 22px;
+    inline-size: 20px;
   }
 
   .dashboard-recommend-page.is-active {
-    inline-size: 32px;
+    inline-size: 30px;
   }
 }
 

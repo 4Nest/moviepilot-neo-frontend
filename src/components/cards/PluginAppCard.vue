@@ -412,6 +412,8 @@ onUnmounted(() => {
 .plugin-app-card__desc {
   font-size: 12.5px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .plugin-app-card__icon-slot {
@@ -440,7 +442,7 @@ onUnmounted(() => {
 
 .plugin-app-card__tag {
   flex: 0 0 auto;
-  border-radius: 5px !important;
+  border-radius: 6px !important;
   block-size: 20px !important;
   font-size: 11px !important;
   max-inline-size: 100%;
@@ -510,7 +512,7 @@ onUnmounted(() => {
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgba(var(--v-theme-warning), 0.14);
   block-size: 20px;
   color: rgb(var(--v-theme-warning));
@@ -522,5 +524,42 @@ onUnmounted(() => {
   inset-inline-end: 12px;
   line-height: 1;
   padding-inline: 6px;
+}
+
+@media (width <= 600px) {
+  .plugin-card__banner {
+    padding: 11px 13px 10px;
+    gap: 5px;
+  }
+
+  .plugin-app-card__title {
+    font-size: 14.5px !important;
+  }
+
+  .plugin-app-card__version {
+    font-size: 11.5px;
+  }
+
+  .plugin-app-card__main {
+    gap: 10px;
+  }
+
+  .plugin-app-card__footer {
+    block-size: 40px;
+    max-block-size: 40px;
+    min-block-size: 40px;
+    padding: 0 12px !important;
+  }
+
+  .plugin-app-card__menu-wrap {
+    inset-inline-end: 6px;
+  }
+
+  .plugin-app-card__menu-btn {
+    border-radius: 7px !important;
+    block-size: 32px !important;
+    inline-size: 32px !important;
+    min-inline-size: 32px !important;
+  }
 }
 </style>

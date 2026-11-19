@@ -544,13 +544,15 @@ watch(
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.45;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .torrent-card__description {
   color: rgba(var(--v-theme-on-surface), 0.56);
   font-size: 12px;
   line-height: 1.4;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 </style>

@@ -8,7 +8,13 @@ defineProps<{
 
 <template>
   <li class="nav-link" :class="{ disabled: item.disable }">
-    <Component :is="item.to ? 'RouterLink' : 'a'" :to="item.to" :href="item.href">
+    <Component
+      :is="item.to ? 'RouterLink' : 'a'"
+      :to="item.to"
+      :href="item.href"
+      :title="item.title"
+      :aria-label="item.title"
+    >
       <VIcon :icon="item.icon as string" class="nav-item-icon" />
       <!-- 👉 Title -->
       <span class="nav-item-title">

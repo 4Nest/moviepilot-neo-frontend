@@ -1124,7 +1124,7 @@ watch([titleFilter, siteFilter], () => {
   inline-size: 100%;
   min-block-size: 0;
   overflow-y: auto;
-  padding-block: 13px calc(16px + env(safe-area-inset-bottom));
+  padding-block: 13px calc(16px + env(safe-area-inset-bottom, 0px));
   padding-inline: 14px;
 }
 
@@ -1222,7 +1222,7 @@ watch([titleFilter, siteFilter], () => {
   overflow-wrap: anywhere;
   padding-inline-end: 30px;
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .cache-mobile-card__main {
@@ -1233,7 +1233,7 @@ watch([titleFilter, siteFilter], () => {
   margin-block-start: 4px;
   overflow-wrap: anywhere;
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .cache-mobile-card__main span {
@@ -1309,5 +1309,41 @@ watch([titleFilter, siteFilter], () => {
 .cache-mobile-empty small {
   color: rgba(var(--v-theme-on-surface), 0.52);
   font-size: 12px;
+}
+
+@media (width <= 600px) {
+  .cache-manager__header {
+    padding: 8px 12px;
+  }
+
+  .cache-mobile-page {
+    gap: 10px;
+    padding-block: 10px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-inline: 12px;
+  }
+
+  .cache-mobile-stats {
+    gap: 8px;
+  }
+
+  .cache-mobile-stats .cache-stat-card {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .cache-stat-card__icon {
+    border-radius: 7px;
+    block-size: 30px;
+    inline-size: 30px;
+  }
+
+  .cache-mobile-stats .cache-stat-card__copy strong {
+    font-size: 18px;
+  }
+
+  .cache-mobile-card {
+    padding: 10px;
+    gap: 10px;
+  }
 }
 </style>

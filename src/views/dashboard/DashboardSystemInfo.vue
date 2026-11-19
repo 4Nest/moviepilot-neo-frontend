@@ -210,24 +210,61 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-system-footer strong {
+  overflow: hidden;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 740px) {
   .dashboard-system-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 
   .dashboard-system-grid > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
     padding-inline: 0;
   }
 
   .dashboard-system-grid > div + div {
+    border-block-start: 1px solid var(--mp-border-subtle);
     border-inline-start: 0;
+    padding-block-start: 6px;
+  }
+
+  .dashboard-system-grid dt {
+    flex-shrink: 0;
+  }
+
+  .dashboard-system-grid dd {
+    margin-block-start: 0;
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+    text-align: end;
+    white-space: normal;
+    word-break: normal;
+  }
+}
+
+@media (width <= 600px) {
+  .dashboard-system-heading {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-system-content {
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-system-footer {
+    margin-block-start: 10px;
   }
 }
 </style>

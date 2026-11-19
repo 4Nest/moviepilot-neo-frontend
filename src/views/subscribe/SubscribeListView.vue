@@ -133,8 +133,8 @@ const sortMode = computed({
 const canDragSort = computed(() => sortMode.value && canSortContext.value)
 const shouldVirtualizeList = computed(() => !sortMode.value)
 const subscribeGridMinItemWidth = computed(() => (display.xs.value ? 144 : 240))
-const subscribeGridEstimatedItemHeight = computed(() => (display.xs.value ? 190 : 300))
-const subscribeGridGap = computed(() => (display.xs.value ? 12 : 16))
+const subscribeGridEstimatedItemHeight = computed(() => (display.xs.value ? 172 : 300))
+const subscribeGridGap = computed(() => (display.xs.value ? 10 : 16))
 const scrollToIndex = computed(() => {
   if (!activeTargetSubId.value || sortMode.value) {
     return undefined
@@ -715,3 +715,12 @@ defineExpose({
     :error-description="errorDescription"
   />
 </template>
+
+<style scoped>
+@media (width <= 600px) {
+  :deep(.grid-subscribe-card) {
+    gap: 10px !important;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 144px), 1fr)) !important;
+  }
+}
+</style>

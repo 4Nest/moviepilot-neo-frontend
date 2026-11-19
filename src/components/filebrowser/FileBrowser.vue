@@ -5,8 +5,6 @@ import FileNavigator from './FileNavigator.vue'
 import type { EndPoints, FileItem, StorageConf } from '@/api/types'
 import { storageIconDict } from '@/api/constants'
 import type { AxiosInstance } from 'axios'
-import { useDynamicButton } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 
 // LocalStorage keys
 const SORT_KEY = 'fileBrowser.sort'
@@ -40,9 +38,6 @@ const props = defineProps({
 
 // 对外事件
 const emit = defineEmits(['pathchanged'])
-const route = useRoute()
-const { appMode } = usePWA()
-const toolbarRef = ref<InstanceType<typeof FileToolbar> | null>(null)
 
 const fileIcons = {
   // 压缩包
@@ -133,17 +128,6 @@ const fileIcons = {
   other: 'mdi-file-outline',
 }
 
-function openNewFolderDialog() {
-  toolbarRef.value?.openNewFolderDialog()
-}
-
-const showFloatingNewFolderAction = computed(() => route.path === '/filemanager')
-
-useDynamicButton({
-  icon: 'mdi-folder-plus-outline',
-  onClick: openNewFolderDialog,
-  show: computed(() => appMode.value && showFloatingNewFolderAction.value),
-})
 // 加载次数
 const loading = ref(0)
 
@@ -293,14 +277,13 @@ onUnmounted(cleanupDrag)
     <VProgressLinear v-if="loading > 0" indeterminate color="primary" height="2" class="file-browser-progress" />
     <div v-if="item">
       <FileToolbar
-        ref="toolbarRef"
         :sort="sort"
         :item="item"
         :itemstack="itemstack"
         :storages="storagesArray"
         :endpoints="endpoints"
         :axios="axios"
-        :show-new-folder-button="!(appMode && showFloatingNewFolderAction)"
+        :show-new-folder-button="true"
         @storagechanged="storageChanged"
         @pathchanged="pathChanged"
         @loading="loadingChanged"

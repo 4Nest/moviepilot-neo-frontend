@@ -7,16 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
-  appMode: false,
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({ default: { get: (...args: unknown[]) => mocks.apiGet(...args) } }))
-vi.mock('@/composables/usePWA', async () => {
-  const { computed } = await import('vue')
-  return { usePWA: () => ({ appMode: computed(() => mocks.appMode) }) }
-})
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
 }))
@@ -89,7 +84,6 @@ async function renderList() {
 
 describe('WorkflowListView incremental updates and enhancements', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.apiGet.mockReset()
     mocks.openSharedDialog.mockReset()
     mocks.toastError.mockReset()
@@ -259,9 +253,8 @@ describe('WorkflowListView incremental updates and enhancements', () => {
     expect(mocks.openSharedDialog.mock.calls[1][1]).toEqual({ initialTemplate: preset })
   })
 
-  it('shows retryable error state when initial load fails and hides duplicate toolbar creation buttons in appMode', async () => {
+  it('shows retryable error state when initial load fails and renders toolbar creation buttons after recovery', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.appMode = true
     let failFirst = true
     mocks.apiGet.mockImplementation((url: string) => {
       if (url === 'workflow/event_types') return Promise.resolve([])
@@ -281,10 +274,9 @@ describe('WorkflowListView incremental updates and enhancements', () => {
     await flushPromises()
 
     expect(await screen.findByText('工作流 A', { exact: true })).toBeInTheDocument()
-    // appMode 下隐藏顶部重复的 3 个新建按钮，保留刷新按钮
-    expect(screen.queryByRole('button', { name: '新建工作流' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '从模板创建' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '导入 JSON 新建' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '新建工作流' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '从模板创建' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导入 JSON 新建' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument()
   })
 })

@@ -47,7 +47,7 @@ describe('QuickAccess.vue', () => {
     ])
   })
 
-  it('renders filteredRecentPlugins and filteredPlugins, shows empty recent hint text, and uses opaque/blurred dark surface', async () => {
+  it('renders filteredRecentPlugins and filteredPlugins, shows empty recent hint text, and uses opaque dark surface without backdrop blur', async () => {
     const { container } = await renderWithProviders(QuickAccess, {
       props: { visible: true, pullDistance: 0 },
       global: { stubs: { VImg: true, LoadingBanner: true } },
@@ -64,9 +64,8 @@ describe('QuickAccess.vue', () => {
     const source = readFileSync(resolve(rootDir, 'src/layouts/default/components/QuickAccess.vue'), 'utf8')
     const darkBlock = source.match(/html\[data-theme='dark'\]\s+\.plugin-quick-access\s*\{[\s\S]*?\}/)?.[0] ?? ''
     expect(
-      darkBlock.includes('rgb(var(--v-theme-surface))') ||
-        darkBlock.includes('rgb(var(--v-theme-background))') ||
-        darkBlock.includes('backdrop-filter: blur(16px)'),
+      darkBlock.includes('rgb(var(--v-theme-surface))') || darkBlock.includes('rgb(var(--v-theme-background))'),
     ).toBe(true)
+    expect(source).not.toContain('backdrop-filter')
   })
 })

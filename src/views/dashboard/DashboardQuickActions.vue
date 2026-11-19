@@ -103,4 +103,30 @@ const { visibleShortcuts, openShortcutDialog } = useShortcutTools()
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (width <= 600px) {
+  .dashboard-quick-heading {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-quick-actions {
+    gap: 7px;
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-quick-action {
+    block-size: 38px;
+    gap: 7px;
+    padding: 0 9px;
+  }
+
+  .dashboard-quick-action__icon-box {
+    block-size: 24px;
+    inline-size: 24px;
+  }
+
+  .dashboard-quick-action__label {
+    font-size: 12.5px;
+  }
+}
 </style>

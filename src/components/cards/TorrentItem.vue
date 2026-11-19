@@ -393,7 +393,8 @@ watch(
   font-weight: 500;
   line-height: 1.45;
   margin-block-end: 2px;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .torrent-item__description {
@@ -401,7 +402,8 @@ watch(
   font-size: 12px;
   line-height: 1.4;
   margin-block-end: 6px;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .torrent-item__tags {

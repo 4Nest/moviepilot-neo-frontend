@@ -1000,7 +1000,7 @@ onUnmounted(() => {
 
       <LoadingBanner v-if="loading" />
       <!-- 文件详情 -->
-      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="text-center break-all py-8">
+      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="file-detail-card text-center py-8">
         <div v-if="items[0]?.thumbnail" class="flex justify-center">
           <VImg max-width="15rem" cover :src="items[0]?.thumbnail" class="rounded-lg border">
             <template #placeholder>
@@ -1024,7 +1024,7 @@ onUnmounted(() => {
           class="text-high-emphasis file-list-container py-1"
           :style="{ height: `${listAvailableHeight}px`, maxHeight: `${listAvailableHeight}px` }"
         >
-          <VVirtualScroll :items="displayItems" :item-height="42" style="block-size: 100%">
+          <VVirtualScroll :items="displayItems" :item-height="display.xs.value ? 46 : 42" style="block-size: 100%">
             <template #default="{ item }">
               <VHover>
                 <template #default="hover">
@@ -1359,6 +1359,94 @@ onUnmounted(() => {
 .file-row-action-btn--danger:hover {
   background: rgba(var(--v-theme-error), 0.12) !important;
   color: rgb(var(--v-theme-error)) !important;
+}
+
+.file-detail-card {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (width <= 600px) {
+  .file-subtoolbar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .file-subtoolbar__left {
+    flex: 1 1 180px;
+    gap: 6px;
+  }
+
+  .file-subtoolbar__filter {
+    flex: 1 1 0;
+    max-inline-size: none;
+  }
+
+  .file-subtoolbar__filter :deep(.v-field),
+  .file-subtoolbar__filter :deep(.v-field__input) {
+    min-block-size: 34px !important;
+  }
+
+  .file-case-pill {
+    border-radius: 8px;
+    background: rgba(var(--v-theme-on-surface), 0.03);
+    block-size: 34px;
+    inline-size: 34px;
+  }
+
+  .file-subtoolbar__right {
+    gap: 6px;
+  }
+
+  .file-subtoolbar__icon-btn {
+    border: 1px solid var(--mp-border-subtle) !important;
+    border-radius: 8px !important;
+    background: rgba(var(--v-theme-on-surface), 0.03) !important;
+    block-size: 34px !important;
+    inline-size: 34px !important;
+    min-inline-size: 34px !important;
+  }
+
+  .file-batch-btn {
+    border-radius: 7px !important;
+    block-size: 32px !important;
+    font-size: 12px !important;
+    padding-inline: 10px !important;
+  }
+
+  .file-selected-badge {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .file-list-row {
+    block-size: 46px !important;
+    margin-inline: 4px !important;
+    min-block-size: 46px !important;
+    padding-inline: 8px 4px !important;
+  }
+
+  .file-list-row :deep(.v-list-item__content) {
+    gap: 8px;
+  }
+
+  .file-item-icon {
+    margin-inline-end: 8px;
+  }
+
+  .file-item-title {
+    font-size: 13px !important;
+  }
+
+  .file-item-size {
+    font-size: 11.5px !important;
+  }
+
+  .file-row-action-btn {
+    border-radius: 7px !important;
+    block-size: 34px !important;
+    inline-size: 34px !important;
+    min-inline-size: 34px !important;
+  }
 }
 
 /* ===== 空目录与无过滤匹配提示 ===== */

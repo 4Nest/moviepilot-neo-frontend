@@ -1,4 +1,3 @@
-import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import type { Site, SiteStatistic, SiteUserData } from '@/api/types'
 import SiteCardListView from '@/views/site/SiteCardListView.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
@@ -13,16 +12,14 @@ import {
 } from '@tests/support/msw/handlers/site'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
-import { defineComponent, h, nextTick, ref, unref, type ComputedRef, type PropType, type Ref } from 'vue'
+import { defineComponent, h, nextTick, ref, type PropType } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  appMode: false,
   confirm: vi.fn(),
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
-  useDynamicButton: vi.fn(),
 }))
 
 vi.mock('@/composables/useConfirm', () => ({
@@ -33,26 +30,9 @@ vi.mock('vue-toastification', () => ({
   useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
 }))
 
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
-}))
-
-vi.mock('@/composables/usePWA', async () => {
-  const { computed } = await import('vue')
-  return { usePWA: () => ({ appMode: computed(() => mocks.appMode) }) }
-})
-
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
 }))
-
-type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
-
-interface DynamicButtonConfig {
-  menuItems: MaybeRef<DynamicButtonMenuItem[]>
-  onClick: () => void
-  show: MaybeRef<boolean>
-}
 
 const SiteCardStub = defineComponent({
   name: 'SiteCard',
@@ -161,7 +141,6 @@ const KeepAliveHost = defineComponent({
 })
 
 interface RenderListOptions {
-  appMode?: boolean
   initialRoute?: string
   listStatus?: number | (() => number)
   sites?: Site[]
@@ -175,7 +154,6 @@ interface RenderListOptions {
 }
 
 async function renderList(options: RenderListOptions = {}) {
-  mocks.appMode = options.appMode ?? false
   server.use(
     siteListHandler(options.sites ?? [], options.listStatus ?? 200, options.onListRequest),
     siteStatisticsHandler(options.statistics ?? [], options.statisticsStatus ?? 200, options.onStatisticsRequest),
@@ -200,16 +178,6 @@ async function renderList(options: RenderListOptions = {}) {
   })
 }
 
-function getDynamicButtonConfig() {
-  return mocks.useDynamicButton.mock.calls.at(-1)?.[0] as DynamicButtonConfig
-}
-
-function getMenuItem(titleKey: string) {
-  const item = unref(getDynamicButtonConfig().menuItems).find(candidate => candidate.titleKey === titleKey)
-  if (!item) throw new Error(`未注册动态操作 ${titleKey}`)
-  return item
-}
-
 async function selectFilter(label: string) {
   await fireEvent.click(screen.getByText('mdi-filter-multiple-outline'))
   await fireEvent.click(await screen.findByText(label))
@@ -226,7 +194,6 @@ function readBlob(blob: Blob) {
 
 describe('SiteCardListView', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
@@ -509,9 +476,9 @@ describe('SiteCardListView', () => {
     await renderList({ onListRequest: listRequests, sites: [site] })
     expect(await screen.findByText('弹窗站点')).toBeInTheDocument()
 
-    getDynamicButtonConfig().onClick()
-    getMenuItem('site.actions.import').action()
-    getMenuItem('site.statistics').action()
+    await fireEvent.click(screen.getByRole('button', { name: /新增站点/ }))
+    await fireEvent.click(screen.getByRole('button', { name: /导入/ }))
+    await fireEvent.click(screen.getByRole('button', { name: /统计信息/ }))
 
     expect(mocks.openSharedDialog).toHaveBeenCalledTimes(3)
     expect(mocks.openSharedDialog.mock.calls[0]?.[1]).toEqual({ oper: 'add' })
@@ -527,21 +494,20 @@ describe('SiteCardListView', () => {
   it('shows management actions only on the site route', async () => {
     await renderList({ initialRoute: '/dashboard', sites: [createSite()] })
     expect(await screen.findByTestId(/^site-card-/)).toBeInTheDocument()
-    expect(unref(getDynamicButtonConfig().show)).toBe(false)
-    expect(document.querySelector('.compact-fab-stack')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /新增站点/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /导入/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /导出/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /统计信息/ })).not.toBeInTheDocument()
   })
 
-  it('registers the app-mode dynamic menu after the first successful load', async () => {
-    await renderList({ appMode: true, sites: [createSite()] })
+  it('renders inline management actions after the first successful load', async () => {
+    await renderList({ sites: [createSite()] })
     expect(await screen.findByTestId(/^site-card-/)).toBeInTheDocument()
 
-    expect(unref(getDynamicButtonConfig().show)).toBe(true)
-    expect(unref(getDynamicButtonConfig().menuItems).map(item => item.titleKey)).toEqual([
-      'site.actions.add',
-      'site.actions.import',
-      'site.actions.export',
-      'site.statistics',
-    ])
+    expect(screen.getByRole('button', { name: /新增站点/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /导入/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /导出/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /统计信息/ })).toBeInTheDocument()
   })
 
   it('exports the current complete site fields and releases the object URL', async () => {
@@ -562,7 +528,7 @@ describe('SiteCardListView', () => {
     await renderList({ sites: [site] })
     expect(await screen.findByText('导出站点')).toBeInTheDocument()
 
-    await getMenuItem('site.actions.export').action()
+    await fireEvent.click(screen.getByRole('button', { name: /导出/ }))
 
     expect(mocks.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -596,7 +562,7 @@ describe('SiteCardListView', () => {
     expect(await screen.findByText('不可导出站点')).toBeInTheDocument()
     server.use(siteListHandler([], 500))
 
-    await getMenuItem('site.actions.export').action()
+    await fireEvent.click(screen.getByRole('button', { name: /导出/ }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('站点导出失败'))
     expect(createObjectURL).not.toHaveBeenCalled()

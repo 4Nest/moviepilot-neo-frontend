@@ -311,4 +311,25 @@ useKeepAliveRefresh(refresh)
 .network-dot--download {
   background: rgb(var(--v-theme-info));
 }
+
+@media (width <= 600px) {
+  .dashboard-chart-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-chart-content {
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-chart-current {
+    font-size: 18px;
+  }
+
+  .dashboard-chart-footer {
+    flex-wrap: wrap;
+    column-gap: 10px;
+    font-size: 11px;
+    row-gap: 4px;
+  }
+}
 </style>

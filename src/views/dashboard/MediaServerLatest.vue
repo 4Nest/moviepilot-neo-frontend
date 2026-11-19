@@ -263,4 +263,18 @@ onActivated(() => {
     display: none;
   }
 }
+
+@media (width <= 600px) {
+  .dashboard-media-header {
+    padding: 12px 14px 8px !important;
+  }
+
+  .dashboard-media-header :deep(.v-card-title) {
+    font-size: 14px;
+  }
+
+  .dashboard-media-content {
+    padding: 4px 14px 12px;
+  }
+}
 </style>

@@ -3,6 +3,7 @@ export default {
     confirm: '确认',
     cancel: '取消',
     save: '保存',
+    saveFailed: '保存失败',
     close: '关闭',
     version: '版本',
     author: '作者',
@@ -1233,8 +1234,11 @@ export default {
     selectNone: '全不选',
   },
   discover: {
-    setTabOrder: '设置标签顺序',
-    dragToReorder: '拖动对标签页进行排序',
+    setTabOrder: '设置标签',
+    dragToReorder: '拖动调整标签顺序，开关控制是否显示',
+    configureTabs: '配置标签',
+    noVisibleTabs: '所有发现标签均已隐藏',
+    noVisibleTabsHint: '点击下方按钮重新启用需要显示的标签页',
   },
   downloading: {
     noDownloader: '没有下载器',

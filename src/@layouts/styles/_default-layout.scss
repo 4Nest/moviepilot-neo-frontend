@@ -63,7 +63,11 @@ body,
 
 .layout-footer {
   .footer-content-container {
-    block-size: variables.$layout-vertical-nav-footer-height;
+    block-size: 0;
+  }
+
+  .layout-app-mode & .footer-content-container {
+    block-size: calc(5.25rem + env(safe-area-inset-bottom, 0px));
   }
 
   .footer-content-container-noheight {

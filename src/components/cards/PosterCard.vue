@@ -125,8 +125,7 @@ async function goPlay() {
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(12, 15, 24, 0.74);
-  backdrop-filter: blur(8px);
+  background: rgba(12, 15, 24, 0.88);
   block-size: 20px;
   color: rgba(248, 250, 252, 0.96);
   font-size: 11px;

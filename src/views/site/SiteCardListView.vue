@@ -4,16 +4,18 @@ import type { ApiResponse, Site, SiteStatistic, SiteUserData } from '@/api/types
 import SiteCard from '@/components/cards/SiteCard.vue'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { useConfirm } from '@/composables/useConfirm'
 import { useI18n } from '@/composables/useChineseText'
-import { usePWA } from '@/composables/usePWA'
 import { useToast } from 'vue-toastification'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useDisplay } from 'vuetify'
 
 // 国际化
 const { t } = useI18n()
+const display = useDisplay()
+
+const siteGridGap = computed(() => (display.xs.value ? 10 : 16))
 
 // 提示框
 const $toast = useToast()
@@ -23,9 +25,6 @@ const createConfirm = useConfirm()
 
 // 路由
 const route = useRoute()
-
-// APP 模式检测
-const { appMode } = usePWA()
 
 // 拖拽排序和站点弹窗都不是站点列表首屏必需，打开对应功能时再加载。
 const Draggable = defineAsyncComponent(() => import('vuedraggable').then(module => module.default))
@@ -389,39 +388,6 @@ watch(
 )
 
 const shouldShowFloatingActions = computed(() => route.path === '/site' && isRefreshed.value)
-
-// App 模式下将站点操作收纳到 Footer 动态菜单中，和插件页保持一致。
-const siteDynamicMenuItems = computed<DynamicButtonMenuItem[]>(() => [
-  {
-    titleKey: 'site.actions.add',
-    icon: 'mdi-web-plus',
-    action: openSiteAddDialog,
-  },
-  {
-    titleKey: 'site.actions.import',
-    icon: 'mdi-import',
-    action: openSiteImportDialog,
-  },
-  {
-    titleKey: 'site.actions.export',
-    icon: 'mdi-export',
-    disabled: exporting.value,
-    action: exportSites,
-  },
-  {
-    titleKey: 'site.statistics',
-    icon: 'mdi-chart-line',
-    action: openSiteStatisticsDialog,
-  },
-])
-
-// 使用动态按钮钩子
-useDynamicButton({
-  icon: 'mdi-web-plus',
-  onClick: openSiteAddDialog,
-  menuItems: siteDynamicMenuItems,
-  show: computed(() => appMode.value && shouldShowFloatingActions.value),
-})
 </script>
 
 <template>
@@ -484,7 +450,7 @@ useDynamicButton({
           <VTooltip activator="parent" location="bottom">{{ t('common.sortMode') }}</VTooltip>
         </IconBtn>
 
-        <template v-if="shouldShowFloatingActions && !appMode">
+        <template v-if="shouldShowFloatingActions">
           <span class="mp-page-action-divider" />
           <VBtn
             size="small"
@@ -559,6 +525,7 @@ useDynamicButton({
       :items="draggableSiteList"
       :get-item-key="item => item.id"
       :min-item-width="256"
+      :gap="siteGridGap"
       :estimated-item-height="156"
     >
       <template #default="{ item }">
@@ -617,5 +584,31 @@ useDynamicButton({
   block-size: 28px !important;
   inline-size: 28px !important;
   min-inline-size: 28px !important;
+}
+
+@media (width <= 600px) {
+  .site-page-header {
+    gap: 8px;
+    padding-inline: 2px;
+  }
+
+  .site-page-header__title,
+  .site-page-header__title :deep(*) {
+    font-size: 18px !important;
+  }
+
+  .site-page-header__actions {
+    gap: 6px;
+  }
+
+  .site-page-header__actions :deep(.v-btn) {
+    border-radius: 7px !important;
+    font-size: 12px;
+  }
+
+  :deep(.grid-site-card) {
+    gap: 10px !important;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 256px), 1fr)) !important;
+  }
 }
 </style>

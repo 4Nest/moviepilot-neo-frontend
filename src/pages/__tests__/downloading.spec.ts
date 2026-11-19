@@ -1,16 +1,14 @@
 import DownloadingPage from '@/pages/downloading.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { computed, defineComponent, h, KeepAlive, ref, unref, type ComputedRef } from 'vue'
+import { defineComponent, h, KeepAlive, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  appMode: false,
   apiGet: vi.fn(),
   fetchData: vi.fn(),
   openSharedDialog: vi.fn(),
   registerHeaderTab: vi.fn(),
-  useDynamicButton: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -21,14 +19,6 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/composables/useDynamicHeaderTab', () => ({
   useDynamicHeaderTab: () => ({ registerHeaderTab: mocks.registerHeaderTab }),
-}))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
-}))
-
-vi.mock('@/composables/usePWA', () => ({
-  usePWA: () => ({ appMode: computed(() => mocks.appMode) }),
 }))
 
 vi.mock('@/composables/useSharedDialog', () => ({
@@ -51,8 +41,7 @@ const DownloadingListViewStub = defineComponent({
   },
 })
 
-async function renderPage(appMode: boolean) {
-  mocks.appMode = appMode
+async function renderPage() {
   mocks.apiGet.mockResolvedValue([{ name: 'qb-main' }])
   return renderWithProviders(DownloadingPage, {
     initialRoute: '/downloading',
@@ -65,30 +54,16 @@ async function renderPage(appMode: boolean) {
   })
 }
 
-function getDynamicButtonConfig() {
-  const config = mocks.useDynamicButton.mock.calls.at(-1)?.[0]
-  if (!config) throw new Error('Dynamic button was not registered')
-  return config as {
-    icon: string
-    color?: string
-    onClick: () => void
-    menuItems: Array<{ title: string; icon: string; action: () => void }>
-    show: ComputedRef<boolean>
-  }
-}
-
 describe('Downloading page download actions', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.apiGet.mockReset()
     mocks.fetchData.mockReset().mockResolvedValue(undefined)
     mocks.openSharedDialog.mockReset()
     mocks.registerHeaderTab.mockReset()
-    mocks.useDynamicButton.mockReset()
   })
 
-  it('renders inline add and history toolbar buttons on desktop and passes the active downloader', async () => {
-    await renderPage(false)
+  it('renders inline add and history toolbar buttons and passes the active downloader', async () => {
+    await renderPage()
 
     await waitFor(() => expect(document.querySelector('[data-testid="downloading-add-btn"]')).not.toBeNull())
     const addButton = document.querySelector('[data-testid="downloading-add-btn"]') as HTMLButtonElement
@@ -109,31 +84,6 @@ describe('Downloading page download actions', () => {
     expect(mocks.fetchData).toHaveBeenCalledOnce()
 
     await fireEvent.click(historyButton)
-    expect(mocks.openSharedDialog).toHaveBeenLastCalledWith(expect.any(Object), {}, {}, { closeOn: ['close'] })
-  })
-
-  it('uses the mobile add action with add and history menu items', async () => {
-    await renderPage(true)
-    const dynamicButton = getDynamicButtonConfig()
-
-    expect(document.querySelector('[data-testid="downloading-add-btn"]')).not.toBeInTheDocument()
-    expect(dynamicButton.icon).toBe('mdi-plus')
-    expect(dynamicButton.color).toBeUndefined()
-    expect(unref(dynamicButton.show)).toBe(true)
-    expect(dynamicButton.menuItems.map(item => [item.title, item.icon])).toEqual([
-      ['添加种子', 'mdi-plus'],
-      ['下载历史', 'mdi-history'],
-    ])
-
-    dynamicButton.onClick()
-    expect(mocks.openSharedDialog).toHaveBeenCalledWith(
-      expect.any(Object),
-      { downloader: 'qb-main' },
-      { done: expect.any(Function) },
-      { closeOn: ['close', 'done'] },
-    )
-
-    dynamicButton.menuItems[1].action()
     expect(mocks.openSharedDialog).toHaveBeenLastCalledWith(expect.any(Object), {}, {}, { closeOn: ['close'] })
   })
 

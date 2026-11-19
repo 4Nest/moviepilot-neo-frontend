@@ -270,4 +270,25 @@ useKeepAliveRefresh(refresh)
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
   font-weight: 600;
 }
+
+@media (width <= 600px) {
+  .dashboard-chart-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-chart-content {
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-chart-current {
+    font-size: 18px;
+  }
+
+  .dashboard-chart-footer {
+    flex-wrap: wrap;
+    column-gap: 10px;
+    font-size: 11px;
+    row-gap: 4px;
+  }
+}
 </style>

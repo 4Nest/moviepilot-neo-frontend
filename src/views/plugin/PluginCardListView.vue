@@ -5,11 +5,9 @@ import { getPluginRatings as getPluginRatingSnapshot } from '@/api/pluginRating'
 import type { ApiResponse, Plugin, PluginRating } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import { getPluginTabs } from '@/router/i18n-menu'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { useI18n } from '@/composables/useChineseText'
 import PluginMixedSortCard from '@/components/cards/PluginMixedSortCard.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { usePWA } from '@/composables/usePWA'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
@@ -54,10 +52,6 @@ const PluginMarketSettingDialog = defineAsyncComponent(
 )
 const ProgressDialog = defineAsyncComponent(() => import('@/components/dialog/ProgressDialog.vue'))
 const PluginSearchDialog = defineAsyncComponent(() => import('@/components/dialog/PluginSearchDialog.vue'))
-
-// APP
-// PWA模式检测
-const { appMode } = usePWA()
 
 // 当前标签
 const activeTab = ref('installed')
@@ -1458,48 +1452,6 @@ const showSearchAction = computed(() => activeTab.value === 'installed' || activ
 const showNewFolderAction = computed(() => activeTab.value === 'installed' && !currentFolder.value)
 const showMarketSettingAction = computed(() => activeTab.value === 'market')
 
-const pluginDynamicMenuItems = computed(() => {
-  if (!appMode.value) return undefined
-  if (!showSearchAction.value) return undefined
-
-  const items: DynamicButtonMenuItem[] = [
-    {
-      titleKey: 'plugin.searchPlugins',
-      icon: 'mdi-magnify',
-
-      action: openPluginSearchDialog,
-    },
-  ]
-
-  if (showNewFolderAction.value) {
-    items.push({
-      titleKey: 'plugin.newFolder',
-      icon: 'mdi-folder-plus',
-
-      action: showNewFolderDialog,
-    })
-  }
-
-  if (showMarketSettingAction.value) {
-    items.push({
-      titleKey: 'dialog.pluginMarketSetting.title',
-      icon: 'mdi-store-cog',
-
-      action: openMarketSettingDialog,
-    })
-  }
-
-  return items.length > 1 ? items : undefined
-})
-
-useDynamicButton({
-  icon: 'mdi-magnify',
-  onClick: openPluginSearchDialog,
-  menuItems: pluginDynamicMenuItems,
-
-  show: computed(() => appMode.value && showSearchAction.value && isRefreshed.value),
-})
-
 // 获取插件文件夹配置
 async function loadPluginFolders() {
   try {
@@ -1925,7 +1877,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
         :activator="'[data-menu-activator=installed-filter-btn]'"
         location="bottom end"
       >
-        <VCard min-width="220">
+        <VCard class="plugin-filter-menu-card" min-width="220">
           <!-- 名称搜索 -->
           <div class="pa-3">
             <VCombobox
@@ -1975,7 +1927,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
         :activator="'[data-menu-activator=market-filter-btn]'"
         location="bottom end"
       >
-        <VCard min-width="260" max-width="320">
+        <VCard class="plugin-filter-menu-card" min-width="260" max-width="320">
           <!-- 名称搜索 -->
           <div class="pa-3">
             <VTextField
@@ -2063,7 +2015,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
       </VMenu>
     </Teleport>
 
-    <div v-if="isRefreshed && !appMode && showSearchAction" class="mp-page-action-bar">
+    <div v-if="isRefreshed && showSearchAction" class="mp-page-action-bar plugin-action-bar">
       <VBtn
         v-if="showMarketSettingAction"
         size="small"
@@ -2333,6 +2285,18 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
   margin-block: 4px 10px !important;
 }
 
+.plugin-filter-menu-card {
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+  max-inline-size: min(320px, calc(100vw - 24px));
+}
+
+.plugin-filter-menu-card :deep(.v-field) {
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 @media (width < 960px) {
   // 弹出菜单使用紧凑录入行，避免叠加全局移动表单高度与列表项纵向留白。
   .market-filter-options-list :deep(.v-list-item) {
@@ -2342,6 +2306,38 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
   .market-filter-options-list :deep(.app-responsive-input) {
     min-block-size: 3rem;
     padding-block: 0.125rem;
+  }
+}
+
+@media (width <= 600px) {
+  .plugin-action-bar {
+    justify-content: flex-start;
+    gap: 6px;
+    margin-block-end: 10px;
+    padding-inline: 0;
+  }
+
+  .plugin-action-bar :deep(.v-btn) {
+    flex: 1 1 auto;
+    border-radius: 8px !important;
+    block-size: 34px !important;
+    font-size: 12.5px !important;
+    min-inline-size: 0;
+    padding-inline: 10px !important;
+  }
+
+  .plugin-inline-page-title,
+  .plugin-inline-page-title :deep(*) {
+    font-size: 18px !important;
+    margin-block: 2px 8px !important;
+  }
+
+  .grid-plugin-card {
+    gap: 10px !important;
+  }
+
+  :deep(.progressive-card-grid__track) {
+    gap: 10px !important;
   }
 }
 </style>

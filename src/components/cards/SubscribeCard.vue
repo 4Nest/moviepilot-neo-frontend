@@ -624,7 +624,7 @@ function handleCardClick() {
                       v-if="lastUpdateText"
                       class="subscribe-card-mobile-image-meta__item subscribe-card-mobile-image-meta__updated"
                     >
-                      <VIcon icon="mdi-download" size="14" />
+                      <VIcon icon="mdi-download" size="12" />
                       <span>{{ lastUpdateText }}</span>
                     </div>
                   </div>
@@ -639,7 +639,7 @@ function handleCardClick() {
                         {{ formatSeasonLabel(props.media?.season, t('media.specials')) }}
                       </span>
                       <span v-if="hasMultipleVersions" class="subscribe-card-mobile-versions">
-                        <VIcon icon="mdi-layers-triple-outline" size="13" />
+                        <VIcon icon="mdi-layers-triple-outline" size="12" />
                         {{ versionCount }}
                       </span>
                     </div>
@@ -658,7 +658,7 @@ function handleCardClick() {
                         <VIcon
                           :icon="compactStateDisplay.icon"
                           :data-subscribe-state-icon="compactStateDisplay.icon"
-                          size="16"
+                          size="15"
                         />
                         <span v-if="subscribeProgressText" class="subscribe-card-mobile-progress-text">
                           {{ subscribeProgressText }}
@@ -667,16 +667,17 @@ function handleCardClick() {
                       <span
                         v-if="isSuperUser && subscriberName"
                         class="subscribe-card-mobile-owner"
+                        :title="subscriberName"
                         data-testid="subscribe-card-mobile-owner"
                       >
-                        <VIcon icon="mdi-account-outline" size="13" />
-                        <span>{{ subscriberName }}</span>
+                        <VIcon icon="mdi-account-outline" size="12" />
+                        <span class="subscribe-card-mobile-owner__name">{{ subscriberName }}</span>
                       </span>
 
                       <IconBtn v-if="!props.sortable" class="subscribe-card-mobile-menu" size="small" @click.stop>
-                        <VIcon icon="mdi-dots-horizontal" size="18" />
+                        <VIcon icon="mdi-dots-horizontal" size="16" />
                         <VMenu activator="parent" close-on-content-click>
-                          <VList>
+                          <VList density="compact">
                             <template v-for="(item, i) in dropdownItems" :key="i">
                               <VListItem
                                 v-if="item.show !== false"
@@ -684,7 +685,7 @@ function handleCardClick() {
                                 @click="item.props.click"
                               >
                                 <template #prepend>
-                                  <VIcon :icon="item.props.prependIcon" />
+                                  <VIcon :icon="item.props.prependIcon" size="18" />
                                 </template>
                                 <VListItemTitle v-text="item.title" />
                               </VListItem>
@@ -693,18 +694,29 @@ function handleCardClick() {
                         </VMenu>
                       </IconBtn>
                     </div>
-
-                    <div v-if="props.media?.total_episode" class="subscribe-card-mobile-progress">
-                      <VProgressLinear
-                        :model-value="getPercentage()"
-                        :bg-color="compactStateDisplay.color"
-                        :color="compactStateDisplay.color"
-                        bg-opacity="0.18"
-                        height="3"
-                        rounded
-                      />
-                    </div>
                   </div>
+                </div>
+
+                <div v-if="props.media?.total_episode" class="subscribe-card-mobile-progress">
+                  <VProgressLinear
+                    v-if="isBestVersion && getBufferPercentage() > 0"
+                    :model-value="getPercentage()"
+                    :buffer-value="getBufferPercentage()"
+                    :bg-color="compactStateDisplay.color"
+                    :color="compactStateDisplay.color"
+                    :buffer-color="compactStateDisplay.color"
+                    bg-opacity="0.16"
+                    buffer-opacity="0.45"
+                    height="3"
+                  />
+                  <VProgressLinear
+                    v-else
+                    :model-value="getPercentage()"
+                    :bg-color="compactStateDisplay.color"
+                    :color="compactStateDisplay.color"
+                    bg-opacity="0.16"
+                    height="3"
+                  />
                 </div>
               </template>
 
@@ -938,35 +950,41 @@ function handleCardClick() {
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.6875rem;
+  gap: 0.375rem;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
-  inset-block-start: 0.5rem;
-  inset-inline: 0.5rem;
+  inset-block-start: 6px;
+  inset-inline: 6px;
   pointer-events: none;
 }
 
 .subscribe-card-mobile-image-meta__item {
-  display: flex;
+  display: inline-flex;
   min-inline-size: 0;
   align-items: center;
-  gap: 0.25rem;
-  color: rgba(255, 255, 255, 0.9);
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.74);
+  color: rgba(255, 255, 255, 0.94);
   line-height: 1.2;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  padding-block: 2px;
+  padding-inline: 5px;
 }
 
 .subscribe-card-mobile-image-meta__updated {
   flex-shrink: 0;
   margin-inline-start: auto;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .subscribe-card-mobile-body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  padding: 0.25rem 0.625rem 0.375rem;
+  padding: 5px 8px 6px;
+  background-color: rgb(var(--v-theme-surface));
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
@@ -974,27 +992,29 @@ function handleCardClick() {
   position: absolute;
   z-index: 2;
   color: white;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   inset-block-end: 0;
   inset-inline: 0;
-  line-height: 1.35;
-  padding: 0.875rem 0.65rem 0.5rem;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  line-height: 1.3;
+  padding: 12px 8px 6px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92);
 }
 
 .subscribe-card-mobile-title-text {
   display: -webkit-box;
-  max-block-size: 3.9em;
+  max-block-size: 2.65em;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .subscribe-card-mobile-season {
-  margin-inline-start: 0.25rem;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 12px;
+  margin-inline-start: 4px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   white-space: nowrap;
@@ -1003,28 +1023,26 @@ function handleCardClick() {
 .subscribe-card-mobile-footer {
   display: flex;
   flex-direction: column;
-  gap: 0.1875rem;
   margin-block-start: auto;
 }
 
 .subscribe-card-mobile-meta {
   display: flex;
   min-inline-size: 0;
-  min-block-size: 26px;
+  min-block-size: 24px;
   align-items: center;
-  gap: 0.25rem;
-  justify-content: space-between;
+  gap: 4px;
 }
 
 .subscribe-card-mobile-state {
-  display: flex;
+  display: inline-flex;
   min-inline-size: 0;
   align-items: center;
-  flex: 1 1 auto;
-  gap: 0.3rem;
-  font-size: 12px;
+  flex: 0 1 auto;
+  gap: 3px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -1040,17 +1058,19 @@ function handleCardClick() {
 
 .subscribe-card-mobile-menu {
   border-radius: 6px !important;
-  block-size: 26px !important;
-  min-block-size: 26px !important;
-  inline-size: 26px !important;
-  min-inline-size: 26px !important;
-  flex: 0 0 26px;
+  block-size: 24px !important;
+  min-block-size: 24px !important;
+  inline-size: 24px !important;
+  min-inline-size: 24px !important;
+  flex: 0 0 24px;
+  margin-inline-start: auto;
   padding: 0 !important;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .subscribe-card-mobile-progress {
   display: flex;
+  flex-shrink: 0;
   block-size: 3px;
   inline-size: 100%;
 }
@@ -1136,18 +1156,17 @@ function handleCardClick() {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-inline-start: 0.35rem;
-  border: 1px solid rgba(255, 255, 255, 14%);
-  border-radius: 5px;
-  background: rgba(22, 23, 29, 82%);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 40%);
-  block-size: 20px;
+  margin-inline-start: 4px;
+  border: 1px solid rgba(255, 255, 255, 16%);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 82%);
+  block-size: 18px;
   color: white;
-  font-size: 11px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1;
-  padding-inline: 6px;
+  padding-inline: 5px;
   vertical-align: middle;
 }
 
@@ -1179,17 +1198,44 @@ function handleCardClick() {
 
 .subscribe-card-mobile-owner {
   display: inline-flex;
-  flex-shrink: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
   align-items: center;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.045);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 500;
-  gap: 0.2rem;
+  gap: 2px;
   line-height: 1;
+  max-inline-size: 4.4rem;
+  min-inline-size: 0;
+  padding-block: 3px;
+  padding-inline: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (width <= 599px) {
+.subscribe-card-mobile-owner .v-icon {
+  flex-shrink: 0;
+}
+
+.subscribe-card-mobile-owner__name {
+  overflow: hidden;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (width <= 600px) {
+  .subscribe-card-shell {
+    border-radius: 10px;
+  }
+
   .subscribe-card {
+    border: 1px solid var(--mp-border-card);
+    border-radius: 10px !important;
+    background-color: rgb(var(--v-theme-surface));
     min-block-size: 0 !important;
   }
 

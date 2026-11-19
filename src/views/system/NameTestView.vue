@@ -618,7 +618,7 @@ async function saveCustomWords() {
   line-height: 1.45;
   margin-block-start: 3px;
   overflow-wrap: anywhere;
-  word-break: break-all;
+  word-break: normal;
 }
 
 .applied-words {
@@ -704,11 +704,34 @@ async function saveCustomWords() {
   }
 }
 
-@media (width <= 420px) {
+@media (width <= 600px) {
+  .shortcut-workbench {
+    gap: 10px;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+  }
+
   .shortcut-panel {
     padding: 12px;
   }
 
+  .result-hero {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .hero-title-text {
+    font-size: 14.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .pipeline,
+  .applied-words {
+    padding: 10px 12px;
+  }
+}
+
+@media (width <= 420px) {
   .result-hero {
     grid-template-columns: 60px minmax(0, 1fr);
   }

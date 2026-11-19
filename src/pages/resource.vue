@@ -17,21 +17,16 @@ import SubtitleItem from '@/components/cards/SubtitleItem.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import TorrentFilterBar from '@/components/filter/TorrentFilterBar.vue'
 import { useI18n } from '@/composables/useChineseText'
-import { useDynamicButton } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 import { SearchReplaceBatchCollector, isSearchReplaceBatchEvent } from '@/utils/searchStream'
 import { useTorrentFilter } from '@/composables/useTorrentFilter'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { markTorrentDownloaded } from '@/utils/torrentDownloadCache'
-import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 
 const AddDownloadDialog = defineAsyncComponent(() => import('@/components/dialog/AddDownloadDialog.vue'))
 
 // 国际化
 const { t } = useI18n()
-
-const { appMode } = usePWA()
 
 // 使用筛选 composable
 const torrentFilter = useTorrentFilter()
@@ -343,41 +338,10 @@ function openBatchDownloadDialog() {
   )
 }
 
-// 搜索结果视图切换收纳到页面动态按钮中，和仪表盘的设置按钮保持一致。
+// 切换搜索结果卡片/列表视图。
 function toggleViewType() {
   changeViewType(viewType.value === 'card' ? 'row' : 'card')
 }
-
-const resourceDynamicIcon = computed(() => (isBatchMode.value ? 'mdi-download' : viewToggleIcon.value))
-const resourceDynamicMenuItems = computed<DynamicButtonMenuItem[]>(() => {
-  if (isBatchMode.value) {
-    return [
-      {
-        title: t('resource.batchDownloadCount', { count: selectedTorrents.value.length }),
-        icon: 'mdi-download',
-        disabled: selectedTorrents.value.length === 0,
-        action: openBatchDownloadDialog,
-      },
-      {
-        title: isAllTorrentsSelected.value ? t('resource.clearSelection') : t('resource.selectAll'),
-        icon: 'mdi-checkbox-multiple-marked-outline',
-        action: toggleSelectAllTorrents,
-      },
-      { title: t('resource.exitBatchMode'), icon: 'mdi-close', action: resetBatchSelection },
-    ]
-  }
-  return [
-    { title: t('resource.batchSelect'), icon: 'mdi-checkbox-multiple-marked-outline', action: toggleBatchMode },
-    { title: t('resource.switchingView'), icon: viewToggleIcon.value, action: toggleViewType },
-  ]
-})
-
-useDynamicButton({
-  icon: resourceDynamicIcon,
-  onClick: () => (isBatchMode.value ? openBatchDownloadDialog() : toggleViewType()),
-  menuItems: resourceDynamicMenuItems,
-  show: computed(() => appMode.value && isRefreshed.value && !isSubtitleSearch.value),
-})
 
 // 是否正在重新搜索
 const isRefreshing = ref(false)
@@ -1284,7 +1248,7 @@ onUnmounted(() => {
       </div>
 
       <div class="resource-page-header__actions d-flex flex-wrap align-center gap-2">
-        <template v-if="isRefreshed && !appMode">
+        <template v-if="isRefreshed">
           <template v-if="isBatchMode">
             <VBtn
               size="small"
@@ -1541,7 +1505,7 @@ onUnmounted(() => {
     <!-- 无数据显示（主动展开已过滤资源列表时收起空状态占位，将首屏直接留给被过滤卡片） -->
     <div
       v-else-if="isRefreshed && !progressActive && !(showRejected && rejectedItems.length)"
-      class="d-flex flex-column align-center justify-center py-6"
+      class="resource-empty-state d-flex flex-column align-center justify-center py-6"
     >
       <NoDataFound :errorTitle="displayErrorTitle" :errorDescription="displayErrorDescription" />
       <VBtn rounded="lg" size="small" color="primary" prepend-icon="mdi-home-outline" to="/">
@@ -1668,12 +1632,14 @@ onUnmounted(() => {
 .search-skeleton-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
 }
 
 .search-skeleton-card,
 .search-skeleton-list {
   overflow: hidden;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
   background: rgb(var(--v-theme-surface));
 }
 
@@ -1769,12 +1735,12 @@ onUnmounted(() => {
 
 .grid-rejected-torrent-card {
   gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
 }
 
 /* 卡片网格布局 */
 .grid-torrent-card {
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 }
 
 /* 列表视图样式 */
@@ -1793,7 +1759,42 @@ onUnmounted(() => {
 
 @media (width <= 600px) {
   .resource-page-header {
+    flex-wrap: wrap;
     gap: 8px;
+    margin-block-end: 10px !important;
+  }
+
+  .resource-page-header__title,
+  .resource-page-header__title :deep(*) {
+    font-size: 16px !important;
+    line-height: 1.3 !important;
+  }
+
+  .resource-page-header__actions {
+    gap: 6px;
+    max-inline-size: 100%;
+  }
+
+  .resource-page-header__actions :deep(.v-btn:not(.resource-refresh-btn)) {
+    border-radius: 7px !important;
+    font-size: 12px !important;
+    padding-inline: 9px !important;
+  }
+
+  .resource-refresh-btn {
+    border: 1px solid var(--mp-border-subtle);
+    background: rgb(var(--v-theme-surface));
+  }
+
+  :deep(.search-diagnostics) {
+    border-radius: 10px;
+    margin-block: 8px 10px !important;
+  }
+
+  :deep(.search-diagnostics__header) {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
   }
 
   .search-loading-state {
@@ -1801,11 +1802,13 @@ onUnmounted(() => {
   }
 
   .search-progress-card {
-    padding: 12px;
+    border-radius: 10px;
+    padding: 11px 12px;
   }
 
   .progress-header {
     align-items: flex-start;
+    gap: 10px;
   }
 
   .progress-icon-wrap {
@@ -1813,11 +1816,14 @@ onUnmounted(() => {
   }
 
   .progress-title {
+    font-size: 13.5px;
+    overflow-wrap: anywhere;
     white-space: normal;
+    word-break: normal;
   }
 
   .progress-percentage {
-    font-size: 0.85rem;
+    font-size: 12.5px;
     min-inline-size: 36px;
   }
 
@@ -1831,8 +1837,31 @@ onUnmounted(() => {
     display: none;
   }
 
+  .search-tag {
+    flex: 0 0 auto;
+  }
+
   .search-skeleton-grid {
+    gap: 10px;
     grid-template-columns: 1fr;
+  }
+
+  .rejected-results {
+    margin-block: 14px !important;
+    padding: 10px 12px;
+  }
+
+  .rejected-results__header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .grid-rejected-torrent-card {
+    gap: 8px;
+  }
+
+  .resource-empty-state {
+    padding-block: 16px 24px !important;
   }
 }
 </style>

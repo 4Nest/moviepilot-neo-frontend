@@ -60,18 +60,19 @@ defineExpose({ fetchData })
 
 <template>
   <LoadingBanner v-if="!isRefreshed" class="mt-10" />
-  <ProgressiveCardGrid
-    v-if="dataList.length > 0"
-    :items="dataList"
-    :get-item-key="item => item.hash || item.name"
-    :min-item-width="320"
-    :gap="14"
-    :estimated-item-height="230"
-  >
-    <template #default="{ item }">
-      <DownloadingCard :info="item" :downloader-name="props.name" @remove="removeDownloadItem" />
-    </template>
-  </ProgressiveCardGrid>
+  <div v-if="dataList.length > 0" class="downloading-list-view">
+    <ProgressiveCardGrid
+      :items="dataList"
+      :get-item-key="item => item.hash || item.name"
+      :min-item-width="320"
+      :gap="14"
+      :estimated-item-height="230"
+    >
+      <template #default="{ item }">
+        <DownloadingCard :info="item" :downloader-name="props.name" @remove="removeDownloadItem" />
+      </template>
+    </ProgressiveCardGrid>
+  </div>
   <NoDataFound
     v-if="dataList.length === 0 && isRefreshed"
     error-code="404"
@@ -79,3 +80,15 @@ defineExpose({ fetchData })
     :error-description="t('downloading.noTaskDescription')"
   />
 </template>
+
+<style scoped>
+.downloading-list-view {
+  min-inline-size: 0;
+}
+
+@media (width <= 600px) {
+  .downloading-list-view :deep(.progressive-card-grid__track) {
+    gap: 10px !important;
+  }
+}
+</style>

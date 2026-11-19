@@ -1068,14 +1068,104 @@ const executionStatus = computed(() => {
   cursor: not-allowed;
 }
 
-@media (width <= 599.98px) {
+@media (width <= 600px) {
   .workflow-task-card {
-    min-block-size: 170px;
+    border-radius: 10px !important;
+    min-block-size: 162px;
   }
 
-  .workflow-task-card__header,
+  .workflow-task-card__header {
+    gap: 9px;
+    padding: 11px 12px 10px !important;
+  }
+
+  .workflow-task-card__trigger-badge {
+    flex: 0 0 34px;
+    inline-size: 34px;
+    block-size: 34px;
+    border-radius: 8px;
+  }
+
+  .workflow-task-card__title {
+    font-size: 14px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .workflow-task-card__trigger-meta {
+    font-size: 11.5px;
+    line-height: 1.25;
+  }
+
+  .workflow-task-card__cron {
+    font-size: 11px;
+  }
+
+  .workflow-task-card__header-actions {
+    gap: 3px;
+  }
+
+  .workflow-task-card__status-chip {
+    border-radius: 6px !important;
+    block-size: 20px !important;
+    font-size: 11px !important;
+    padding-inline: 6px !important;
+  }
+
   .workflow-task-card__body {
-    padding-inline: 12px !important;
+    gap: 9px;
+    padding: 10px 12px 11px !important;
+  }
+
+  .workflow-task-card__progress-panel {
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 8px;
+  }
+
+  .workflow-task-card__telemetry-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .workflow-task-card__run-stat {
+    justify-content: flex-end;
+  }
+
+  .workflow-task-card__telemetry-label {
+    font-size: 11.5px;
+  }
+
+  .workflow-task-card__telemetry-value {
+    font-size: 12px;
+  }
+
+  .workflow-task-card__footer {
+    gap: 6px;
+  }
+
+  .workflow-task-card__execution-status {
+    gap: 4px;
+    font-size: 11.5px;
+  }
+
+  .workflow-task-card__toolbar {
+    gap: 4px;
+  }
+
+  .workflow-task-card__tool-btn {
+    inline-size: 26px;
+    block-size: 26px;
+    border-radius: 7px;
+  }
+
+  .workflow-task-card__toggle-btn {
+    block-size: 26px;
+    border-radius: 7px;
+    font-size: 11.5px;
+    padding-inline: 7px;
   }
 }
 </style>

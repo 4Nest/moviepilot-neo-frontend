@@ -1259,9 +1259,10 @@ onMounted(() => {
   line-height: 1.5;
   margin-block: 4px 6px;
   margin-inline: 0;
+  overflow-wrap: anywhere;
   padding: 8px 10px;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: normal;
 }
 
 .words-sync-panel {
@@ -1426,7 +1427,7 @@ onMounted(() => {
   line-height: 1.65;
   overflow-wrap: anywhere;
   white-space: pre-line;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .words-editor-footer {
@@ -1577,8 +1578,8 @@ onMounted(() => {
 
   .words-editor-footer {
     position: relative;
-    min-block-size: calc(48px + env(safe-area-inset-bottom));
-    padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+    min-block-size: calc(48px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
   }
 
   .words-footer-state {
@@ -1591,6 +1592,45 @@ onMounted(() => {
 
   .words-footer-actions .v-btn {
     min-inline-size: 0;
+  }
+}
+
+@media (width <= 600px) {
+  .words-mobile-tab {
+    min-block-size: 46px;
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+
+  .words-editor-header {
+    padding: 10px 12px 8px;
+  }
+
+  .words-editor-heading h2 {
+    font-size: 14.5px;
+  }
+
+  .words-editor-heading p {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .words-editor-scroll {
+    padding: 0 12px 12px;
+  }
+
+  .words-sync-source {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .words-sync-interval {
+    flex: 1 1 7.5rem;
+  }
+
+  .words-editor-footer {
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

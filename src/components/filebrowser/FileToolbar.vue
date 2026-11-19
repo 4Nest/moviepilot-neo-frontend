@@ -1,17 +1,15 @@
 <script lang="ts" setup>
 import type { AxiosRequestConfig, AxiosInstance } from 'axios'
 import type { ApiResponse, EndPoints, FileItem } from '@/api/types'
-import { useDisplay } from 'vuetify'
 import { useToast } from 'vue-toastification'
 import { useI18n } from '@/composables/useChineseText'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
 const FileNewFolderDialog = defineAsyncComponent(() => import('../dialog/FileNewFolderDialog.vue'))
 
-// 显示器宽度
-const display = useDisplay()
 const $toast = useToast()
 const { t } = useI18n()
+const breadcrumbsRef = ref<HTMLElement | null>(null)
 
 /** 工具栏存储选择项，由文件浏览器从存储配置映射得到。 */
 interface StorageOption {
@@ -206,6 +204,18 @@ const sortLabel = computed(() =>
   inProps.sort === 'time' ? '按修改时间排序（点击切为按名称）' : '按名称排序（点击切为按时间）',
 )
 
+// 路径变化后将面包屑自动滚到末尾，确保移动端深层目录始终优先露出当前目录。
+watch(
+  () => inProps.item.path,
+  async () => {
+    await nextTick()
+    if (breadcrumbsRef.value) {
+      breadcrumbsRef.value.scrollLeft = breadcrumbsRef.value.scrollWidth
+    }
+  },
+  { immediate: true },
+)
+
 onUnmounted(() => {
   newFolderDialogController?.close()
 })
@@ -247,7 +257,7 @@ defineExpose({
       </span>
 
       <!-- / 分隔面包屑路径胶囊 -->
-      <nav class="file-toolbar__breadcrumbs" aria-label="文件路径">
+      <nav ref="breadcrumbsRef" class="file-toolbar__breadcrumbs" aria-label="文件路径">
         <VBtn
           variant="text"
           color="default"
@@ -263,19 +273,17 @@ defineExpose({
         </VBtn>
 
         <template v-for="(segment, index) in pathSegments" :key="index">
-          <template v-if="display.mdAndUp.value || index === pathSegments.length - 1">
-            <span class="file-toolbar__slash">/</span>
-            <VBtn
-              variant="text"
-              color="default"
-              size="small"
-              class="file-toolbar__crumb"
-              :class="{ 'file-toolbar__crumb--active': index === pathSegments.length - 1 }"
-              @click="changePath(resolveCrumbItem(index + 1))"
-            >
-              {{ segment.name }}
-            </VBtn>
-          </template>
+          <span class="file-toolbar__slash">/</span>
+          <VBtn
+            variant="text"
+            color="default"
+            size="small"
+            class="file-toolbar__crumb"
+            :class="{ 'file-toolbar__crumb--active': index === pathSegments.length - 1 }"
+            @click="changePath(resolveCrumbItem(index + 1))"
+          >
+            {{ segment.name }}
+          </VBtn>
         </template>
       </nav>
     </div>
@@ -434,5 +442,61 @@ defineExpose({
 .file-toolbar__action-btn:hover {
   background: rgba(var(--v-theme-on-surface), 0.06) !important;
   color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+@media (width <= 600px) {
+  .file-browser-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    block-size: auto;
+    gap: 8px;
+  }
+
+  .file-toolbar__left {
+    inline-size: 100%;
+    gap: 6px;
+  }
+
+  .file-toolbar__storage-pill {
+    padding: 0 10px !important;
+    border-radius: 8px !important;
+    background: rgba(var(--v-theme-on-surface), 0.03) !important;
+    block-size: 32px !important;
+    font-size: 12.5px !important;
+  }
+
+  .file-toolbar__breadcrumbs {
+    padding-block: 1px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .file-toolbar__crumb {
+    padding: 0 8px !important;
+    border-radius: 7px !important;
+    block-size: 30px !important;
+    font-size: 12.5px !important;
+    min-inline-size: 30px !important;
+  }
+
+  .file-toolbar__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-block-start: 6px;
+    border-block-start: 1px solid var(--mp-border-subtle);
+    inline-size: 100%;
+    gap: 6px;
+  }
+
+  .file-toolbar__action-btn {
+    border: 1px solid var(--mp-border-subtle) !important;
+    border-radius: 8px !important;
+    background: rgba(var(--v-theme-on-surface), 0.03) !important;
+    block-size: 34px !important;
+    inline-size: 34px !important;
+    min-inline-size: 34px !important;
+  }
 }
 </style>

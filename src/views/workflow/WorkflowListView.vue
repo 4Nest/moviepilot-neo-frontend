@@ -8,8 +8,8 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
-import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useDisplay } from 'vuetify'
 
 const WorkflowAddEditDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowAddEditDialog.vue'))
 const WorkflowTemplateDialog = defineAsyncComponent(() => import('@/components/dialog/WorkflowTemplateDialog.vue'))
@@ -20,7 +20,10 @@ type TriggerFilterValue = 'all' | 'timer' | 'event' | 'manual'
 // 国际化
 const { t } = useI18n()
 const $toast = useToast()
-const { appMode } = usePWA()
+const display = useDisplay()
+
+const workflowGridMinItemWidth = computed(() => (display.xs.value ? 260 : 288))
+const workflowGridGap = computed(() => (display.xs.value ? 10 : 16))
 
 // 是否刷新完成首次加载
 const isRefreshed = ref(false)
@@ -382,24 +385,15 @@ defineExpose({
           <VIcon icon="mdi-refresh" size="17" />
           <VTooltip activator="parent" location="top">{{ t('workflow.quickActions.refresh') }}</VTooltip>
         </IconBtn>
-        <template v-if="!appMode">
-          <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-code-json" @click="openImportJsonDialog">
-            {{ t('workflow.quickActions.importJsonCreate') }}
-          </VBtn>
-          <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-auto-fix" @click="openTemplateDialog">
-            {{ t('workflow.quickActions.createFromTemplate') }}
-          </VBtn>
-          <VBtn
-            size="small"
-            variant="flat"
-            color="primary"
-            rounded="lg"
-            prepend-icon="mdi-plus"
-            @click="openAddDialog()"
-          >
-            {{ t('workflow.quickActions.createWorkflow') }}
-          </VBtn>
-        </template>
+        <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-code-json" @click="openImportJsonDialog">
+          {{ t('workflow.quickActions.importJsonCreate') }}
+        </VBtn>
+        <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-auto-fix" @click="openTemplateDialog">
+          {{ t('workflow.quickActions.createFromTemplate') }}
+        </VBtn>
+        <VBtn size="small" variant="flat" color="primary" rounded="lg" prepend-icon="mdi-plus" @click="openAddDialog()">
+          {{ t('workflow.quickActions.createWorkflow') }}
+        </VBtn>
       </div>
     </div>
 
@@ -407,7 +401,8 @@ defineExpose({
       v-if="filteredWorkflowList.length > 0 && isRefreshed"
       :items="filteredWorkflowList"
       :get-item-key="item => item.id"
-      :min-item-width="288"
+      :min-item-width="workflowGridMinItemWidth"
+      :gap="workflowGridGap"
       :estimated-item-height="196"
     >
       <template #default="{ item }">
@@ -557,15 +552,48 @@ defineExpose({
 }
 
 @media (width <= 680px) {
+  .workflow-list-toolbar {
+    gap: 8px;
+  }
+
+  .workflow-list-toolbar__filters {
+    flex: 1 1 100%;
+    gap: 8px;
+  }
+
+  .workflow-status-pill {
+    border-radius: 7px !important;
+    font-size: 12px !important;
+    padding-inline: 8px !important;
+  }
+
   .workflow-list-toolbar__inputs {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(104px, 0.85fr) minmax(0, 1.45fr);
+    gap: 6px;
     inline-size: 100%;
   }
 
   .workflow-trigger-select,
   .workflow-search-field {
+    min-inline-size: 0;
     max-inline-size: none;
-    flex: 1 1 140px;
+  }
+
+  .workflow-list-toolbar__actions {
+    inline-size: 100%;
+    gap: 6px;
+  }
+
+  .workflow-list-toolbar__actions :deep(.v-btn) {
+    border-radius: 7px !important;
+    font-size: 12px;
+  }
+}
+
+@media (width <= 340px) {
+  .workflow-list-toolbar__inputs {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

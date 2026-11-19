@@ -1917,12 +1917,12 @@ html[data-theme-radius='extra'] {
 
 // 网格布局样式
 .grid-info-card {
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
   padding-block-end: 1rem;
 }
 
 .grid-site-card {
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
   padding-block-end: 1rem;
 }
 
@@ -1931,15 +1931,15 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-backdrop-card {
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
 }
 
 .grid-torrent-card {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 }
 
 .grid-plugin-card {
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
 }
 
 // 插件卡片头部染色层：实色品牌强调底＋压暗遮罩。
@@ -1957,7 +1957,7 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-downloading-card {
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
 }
 
 .grid-directory-card {
@@ -1965,7 +1965,7 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-filterrule-card {
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
 }
 
 .grid-customrule-card {
@@ -1973,7 +1973,7 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-subscribe-card {
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
 }
 
 @media (width <= 599px) {
@@ -1984,19 +1984,19 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-user-card {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 }
 
 .grid-app-card {
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
 }
 
 .grid-workflow-card {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 }
 
 .grid-workflow-share-card {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
 }
 
 // 文本样式
@@ -2509,10 +2509,11 @@ html[data-theme-radius='extra'] {
   overflow: visible;
 }
 
-.v-dialog--fullscreen > .v-overlay__content > .v-card {
-  padding-block-end: calc(env(safe-area-inset-top) + env(safe-area-inset-bottom));
+.v-dialog > .v-overlay__content {
+  margin-block: env(safe-area-inset-top) env(safe-area-inset-bottom);
 }
 
+// 全屏弹窗由内部顶栏与动作栏分别承接顶部/底部安全区，此处清零避免双重叠加。
 .v-dialog--fullscreen > .v-overlay__content {
   display: flex;
   justify-content: center;
@@ -2520,6 +2521,7 @@ html[data-theme-radius='extra'] {
   box-shadow: none !important;
   inline-size: 100%;
   inset-inline: 0 !important;
+  margin-block: 0;
   margin-inline: auto;
 }
 
@@ -2529,10 +2531,6 @@ html[data-theme-radius='extra'] {
 .v-dialog--fullscreen > .v-overlay__content > form {
   margin-inline: auto;
   max-inline-size: 100%;
-}
-
-.v-dialog > .v-overlay__content {
-  margin-block: env(safe-area-inset-top) env(safe-area-inset-bottom);
 }
 
 .v-bottom-sheet > .v-bottom-sheet__content.v-overlay__content > .v-card {
@@ -3057,6 +3055,20 @@ html[data-theme='dark'] .app-pull-indicator {
     border-block-start: 1px solid var(--mp-border-subtle);
     margin-block-start: 18px;
     padding-block-start: 14px;
+  }
+}
+
+@media (width <= 600px) {
+  .mp-setting-card {
+    > .v-card-item {
+      padding-block: 12px !important;
+      padding-inline: 14px !important;
+    }
+
+    > .v-card-text {
+      padding-block: 12px !important;
+      padding-inline: 14px !important;
+    }
   }
 }
 

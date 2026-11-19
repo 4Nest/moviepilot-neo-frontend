@@ -7,23 +7,31 @@ import { useI18n } from '@/composables/useChineseText'
 const { t } = useI18n()
 const display = useDisplay()
 
+export interface DiscoverTabOrderSavePayload {
+  tabs: DiscoverSource[]
+  enabled: Record<string, boolean>
+}
+
 const props = withDefaults(
   defineProps<{
     modelValue?: boolean
     tabs: DiscoverSource[]
+    enabled?: Record<string, boolean>
   }>(),
   {
     modelValue: true,
+    enabled: undefined,
   },
 )
 
 const emit = defineEmits<{
   (event: 'close'): void
-  (event: 'save', tabs: DiscoverSource[]): void
+  (event: 'save', payload: DiscoverTabOrderSavePayload): void
   (event: 'update:modelValue', value: boolean): void
 }>()
 
 const localTabs = ref<DiscoverSource[]>([])
+const localEnabled = ref<Record<string, boolean>>({})
 
 const visible = computed({
   get: () => props.modelValue,
@@ -34,21 +42,43 @@ const visible = computed({
 })
 
 watch(
-  () => props.tabs,
+  [() => props.tabs, () => props.enabled],
   () => {
     resetLocalTabs()
   },
   { deep: true, immediate: true },
 )
 
-// 重置弹窗内部排序副本。
+// 重置弹窗内部排序与显隐副本。
 function resetLocalTabs() {
   localTabs.value = props.tabs.map(item => ({ ...item }))
+  const nextEnabled: Record<string, boolean> = {}
+  props.tabs.forEach(item => {
+    nextEnabled[item.mediaid_prefix] = props.enabled?.[item.mediaid_prefix] !== false
+  })
+  localEnabled.value = nextEnabled
 }
 
-// 保存当前拖拽后的发现标签顺序。
+// 计算已启用标签在当前列表中的可见序号（从 1 开始）。
+function getVisibleOrder(element: DiscoverSource) {
+  let order = 0
+  for (const item of localTabs.value) {
+    if (localEnabled.value[item.mediaid_prefix] !== false) {
+      order += 1
+    }
+    if (item.mediaid_prefix === element.mediaid_prefix) {
+      return order
+    }
+  }
+  return 0
+}
+
+// 保存当前拖拽后的发现标签顺序与显隐状态。
 function submitOrder() {
-  emit('save', localTabs.value)
+  emit('save', {
+    tabs: localTabs.value.map(item => ({ ...item })),
+    enabled: { ...localEnabled.value },
+  })
 }
 </script>
 
@@ -81,12 +111,27 @@ function submitOrder() {
           :animation="180"
           :component-data="{ 'class': 'settings-grid' }"
         >
-          <template #item="{ element, index }">
-            <div class="setting-item" :title="element.name">
+          <template #item="{ element }">
+            <div
+              class="setting-item"
+              :class="{ 'is-disabled': localEnabled[element.mediaid_prefix] === false }"
+              :title="element.name"
+            >
               <div class="setting-item-inner">
                 <VIcon icon="mdi-drag-vertical" size="18" class="drag-icon cursor-move" />
                 <span class="setting-label">{{ element.name }}</span>
-                <span class="setting-order-badge">{{ (index ?? localTabs.indexOf(element)) + 1 }}</span>
+                <span v-if="localEnabled[element.mediaid_prefix] !== false" class="setting-order-badge">
+                  {{ getVisibleOrder(element) }}
+                </span>
+                <VSwitch
+                  v-model="localEnabled[element.mediaid_prefix]"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  class="setting-switch"
+                  :aria-label="element.name"
+                />
               </div>
             </div>
           </template>
@@ -146,7 +191,7 @@ function submitOrder() {
 .settings-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .setting-item {
@@ -155,12 +200,17 @@ function submitOrder() {
   border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   border-radius: 8px;
   background-color: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.03));
-  min-block-size: 42px;
-  padding-block: 10px;
+  min-block-size: 44px;
+  padding-block: 6px;
   padding-inline: 10px 12px;
   transition:
     border-color 0.16s ease,
-    background-color 0.16s ease;
+    background-color 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.setting-item.is-disabled {
+  opacity: 0.56;
 }
 
 .setting-item:hover {
@@ -173,6 +223,10 @@ function submitOrder() {
   align-items: center;
   gap: 8px;
   min-inline-size: 0;
+}
+
+.setting-switch {
+  flex-shrink: 0;
 }
 
 .drag-icon {

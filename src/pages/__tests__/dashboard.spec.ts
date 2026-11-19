@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => {
     grid,
     gridInit: vi.fn<(options: unknown, element: unknown) => unknown>(() => grid),
     openSharedDialog: vi.fn(),
-    useDynamicButton: vi.fn(),
   }
 })
 
@@ -126,17 +125,6 @@ vi.mock('gridstack', () => ({
     init: (options: unknown, element: unknown) => mocks.gridInit(options, element),
   },
 }))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
-}))
-
-vi.mock('@/composables/usePWA', async () => {
-  const { ref } = await import('vue')
-  return {
-    usePWA: () => ({ appMode: ref(false) }),
-  }
-})
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),

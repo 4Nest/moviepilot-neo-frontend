@@ -257,5 +257,6 @@ onMounted(loadDownloadDirectories)
 .file-browser-view {
   position: relative;
   block-size: 100%;
+  min-inline-size: 0;
 }
 </style>

@@ -1,31 +1,17 @@
 import SubscribePage from '@/pages/subscribe.vue'
-import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { computed, defineComponent, h, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
+import { defineComponent, h, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  appMode: false,
   openSharedDialog: vi.fn(),
   registerHeaderTab: vi.fn(),
-  useDynamicButton: vi.fn(),
 }))
 
 vi.mock('@/composables/useDynamicHeaderTab', () => ({
   useDynamicHeaderTab: () => ({ registerHeaderTab: mocks.registerHeaderTab }),
 }))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
-}))
-
-vi.mock('@/composables/usePWA', async () => {
-  const { computed } = await import('vue')
-  return {
-    usePWA: () => ({ appMode: computed(() => mocks.appMode) }),
-  }
-})
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
@@ -167,15 +153,7 @@ interface HeaderTabConfig {
   appendButtons: HeaderButtonConfig[]
 }
 
-interface DynamicButtonConfig {
-  icon: MaybeRef<string>
-  menuItems?: MaybeRef<DynamicButtonMenuItem[] | undefined>
-  onClick?: () => void
-  show?: MaybeRef<boolean>
-}
-
 interface RenderSubscribeOptions {
-  appMode?: boolean
   initialRoute?: string
   subType?: '电影' | '电视剧'
   superUser?: boolean
@@ -183,7 +161,6 @@ interface RenderSubscribeOptions {
 
 async function renderSubscribe(options: RenderSubscribeOptions = {}) {
   const subType = options.subType ?? '电影'
-  mocks.appMode = options.appMode ?? false
 
   return renderWithProviders(SubscribePage, {
     initialRoute: options.initialRoute ?? `/subscribe/${subType === '电影' ? 'movie' : 'tv'}`,
@@ -206,10 +183,6 @@ function getHeaderConfig() {
   return mocks.registerHeaderTab.mock.calls.at(-1)?.[0] as HeaderTabConfig
 }
 
-function getDynamicButtonConfig() {
-  return mocks.useDynamicButton.mock.calls.at(-1)?.[0] as DynamicButtonConfig
-}
-
 function getHeaderButton(predicate: (button: HeaderButtonConfig) => boolean) {
   const button = getHeaderConfig().appendButtons.find(predicate)
   if (!button) throw new Error('Expected dynamic header button was not registered')
@@ -223,7 +196,6 @@ function getListOutput(label: string) {
 describe('subscribe page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.appMode = false
   })
 
   it('uses movie route meta and query values to register the movie page contract', async () => {
@@ -312,12 +284,12 @@ describe('subscribe page', () => {
   })
 
   it('exits batch management before entering drag sorting', async () => {
-    await renderSubscribe({ appMode: true })
+    const { container } = await renderSubscribe()
     const sortButton = getHeaderButton(button => button.icon === 'mdi-sort-variant')
     const batchButton = getHeaderButton(button => button.icon === 'mdi-checkbox-multiple-marked-outline')
 
     await fireEvent.click(screen.getByRole('button', { name: 'publish batch selection' }))
-    expect(unref(getDynamicButtonConfig().show)).toBe(true)
+    expect(container.querySelector('.mp-page-action-bar')).not.toBeNull()
 
     sortButton.action?.()
     await nextTick()
@@ -325,12 +297,11 @@ describe('subscribe page', () => {
     expect(getListOutput('list sort mode')).toHaveTextContent('true')
     expect(getListOutput('list sort by')).toHaveTextContent('custom')
     expect(unref(batchButton.color)).toBe('')
-    expect(unref(getDynamicButtonConfig().show)).toBe(true)
-    expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-history')
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
   })
 
-  it('delegates PWA batch actions to the list public API', async () => {
-    await renderSubscribe({ appMode: true })
+  it('delegates inline batch actions to the list public API', async () => {
+    await renderSubscribe()
     const batchButton = getHeaderButton(button => button.icon === 'mdi-checkbox-multiple-marked-outline')
 
     batchButton.action?.()
@@ -338,31 +309,22 @@ describe('subscribe page', () => {
     expect(getListOutput('last list command')).toHaveTextContent('enter-batch')
 
     await fireEvent.click(screen.getByRole('button', { name: 'publish batch selection' }))
-    const dynamicButton = getDynamicButtonConfig()
-    const menuItems = unref(dynamicButton.menuItems) ?? []
 
-    expect(unref(dynamicButton.show)).toBe(true)
-    expect(unref(dynamicButton.icon)).toBe('mdi-checkbox-multiple-marked-outline')
-    expect(menuItems.find(item => item.titleKey === 'subscribe.batchSelectAll')?.disabled).toBe(false)
-
-    for (const [titleKey, command] of [
-      ['subscribe.batchSelectAll', 'toggle-select-all'],
-      ['subscribe.batchEnable', 'batch-enable'],
-      ['subscribe.batchPause', 'batch-pause'],
-      ['subscribe.batchDelete', 'batch-delete'],
+    for (const [label, command] of [
+      ['选择全部订阅', 'toggle-select-all'],
+      ['批量启用', 'batch-enable'],
+      ['批量暂停', 'batch-pause'],
+      ['批量删除', 'batch-delete'],
+      ['退出批量操作', 'exit-batch'],
     ] as const) {
-      menuItems.find(item => item.titleKey === titleKey)?.action()
+      await fireEvent.click(screen.getByRole('button', { name: label }))
       await nextTick()
       expect(getListOutput('last list command')).toHaveTextContent(command)
     }
-
-    dynamicButton.onClick?.()
-    await nextTick()
-    expect(getListOutput('last list command')).toHaveTextContent('exit-batch')
   })
 
   it('exits batch mode when the header leaves the personal subscription tab', async () => {
-    await renderSubscribe({ appMode: true, subType: '电视剧' })
+    const { container } = await renderSubscribe({ subType: '电视剧' })
     await fireEvent.click(screen.getByRole('button', { name: 'publish batch selection' }))
 
     getHeaderConfig().modelValue.value = 'share'
@@ -370,7 +332,7 @@ describe('subscribe page', () => {
 
     expect(getListOutput('last list command')).toHaveTextContent('exit-batch')
     expect(getListOutput('list active state')).toHaveTextContent('false')
-    expect(unref(getDynamicButtonConfig().icon)).toBe('mdi-clipboard-edit-outline')
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
   })
 
   it('falls back to the default visible tab and never mounts SubscribeShareView when a non-superuser visits ?tab=share', async () => {
@@ -417,8 +379,8 @@ describe('subscribe page', () => {
     expect(screen.queryByLabelText('shared subscription stub')).not.toBeInTheDocument()
   })
 
-  it('registers history and default-rule actions in header appendButtons on desktop and dynamic button on PWA', async () => {
-    const { container, unmount } = await renderSubscribe()
+  it('registers history and default-rule actions in header appendButtons', async () => {
+    const { container } = await renderSubscribe()
 
     // 常态下不额外渲染占空行的 .mp-page-action-bar
     expect(container.querySelector('.mp-page-action-bar')).toBeNull()
@@ -440,22 +402,10 @@ describe('subscribe page', () => {
       {},
       { closeOn: ['close', 'save'] },
     )
-    unmount()
-
-    await renderSubscribe({ appMode: true })
-    expect(unref(getHeaderButton(button => button.testId === 'subscribe-history-btn').show)).toBe(false)
-    expect(unref(getHeaderButton(button => button.testId === 'subscribe-default-rule-btn').show)).toBe(false)
-    const dynamicButton = getDynamicButtonConfig()
-    expect(unref(dynamicButton.show)).toBe(true)
-    expect(unref(dynamicButton.icon)).toBe('mdi-history')
-    expect(unref(dynamicButton.menuItems)?.map(item => item.titleKey)).toEqual([
-      'dialog.subscribeHistory.title',
-      'dialog.subscribeEdit.titleDefault',
-    ])
   })
 
   it('omits share header filter button, labels mysub appendButtons, syncs route.query.id, and locks batch actions while operating', async () => {
-    const { router, unmount } = await renderSubscribe({
+    const { router } = await renderSubscribe({
       initialRoute: '/subscribe/tv?tab=share',
       subType: '电视剧',
     })
@@ -478,13 +428,5 @@ describe('subscribe page', () => {
     expect(screen.getByRole('button', { name: '批量启用' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '批量暂停' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '批量删除' })).toBeDisabled()
-    unmount()
-
-    await renderSubscribe({ appMode: true })
-    await fireEvent.click(screen.getByRole('button', { name: 'publish operating batch' }))
-    const dynamicItems = unref(getDynamicButtonConfig().menuItems) ?? []
-    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchEnable')?.disabled).toBe(true)
-    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchPause')?.disabled).toBe(true)
-    expect(dynamicItems.find(item => item.titleKey === 'subscribe.batchDelete')?.disabled).toBe(true)
   })
 })

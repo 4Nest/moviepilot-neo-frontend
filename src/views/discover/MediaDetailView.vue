@@ -1844,11 +1844,10 @@ onUnmounted(() => {
 .media-runtime-pill {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.48);
-  backdrop-filter: blur(6px);
-  color: rgba(241, 245, 249, 0.88);
+  background: rgba(12, 15, 24, 0.88);
+  color: rgba(241, 245, 249, 0.9);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
@@ -1877,9 +1876,8 @@ onUnmounted(() => {
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.09);
-  backdrop-filter: blur(6px);
-  color: rgba(248, 250, 252, 0.9);
+  background: rgba(12, 15, 24, 0.88);
+  color: rgba(248, 250, 252, 0.92);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.25;
@@ -1932,7 +1930,7 @@ ul.media-crew {
   padding: 0;
   border-block-start: 1px solid var(--mp-border-subtle);
   gap: 12px 20px;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
   list-style: none;
   margin-block-start: 1rem;
   padding-block-start: 0.9375rem;
@@ -1975,7 +1973,9 @@ a.crew-name {
   color: rgba(var(--v-theme-on-surface), 0.92);
   font-size: 13px;
   font-weight: 500;
+  overflow-wrap: anywhere;
   transition: color 0.15s ease;
+  word-break: normal;
 
   &:hover {
     color: rgb(var(--v-theme-primary));
@@ -1989,10 +1989,9 @@ a.crew-name {
 .media-in-library-badge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(34, 197, 94, 0.36);
+  border: 1px solid rgba(34, 197, 94, 0.42);
   border-radius: 6px;
-  background: rgba(22, 163, 74, 0.22);
-  backdrop-filter: blur(6px);
+  background: rgba(14, 42, 28, 0.92);
   color: #4ade80;
   font-size: 11.5px;
   font-weight: 600;
@@ -2131,18 +2130,18 @@ a.crew-name {
 
 .media-action-button--ghost {
   border-color: rgba(255, 255, 255, 0.2) !important;
-  background: rgba(15, 20, 30, 0.56) !important;
-  backdrop-filter: blur(8px);
+  background: rgba(12, 15, 24, 0.9) !important;
   color: #f8fafc !important;
 
   &:hover {
     border-color: rgba(255, 255, 255, 0.36) !important;
-    background: rgba(255, 255, 255, 0.14) !important;
+    background: rgba(24, 30, 44, 0.94) !important;
   }
 }
 
 .media-action-button--play {
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(var(--v-theme-primary), 0.45) !important;
+  background: rgba(12, 15, 24, 0.9) !important;
 }
 
 .media-actions > .media-action-button:only-child,
@@ -2493,5 +2492,126 @@ a.crew-name {
   max-inline-size: 42rem;
   padding-inline-start: 9px;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+@media (width <= 600px) {
+  .media-hero-stage {
+    border-radius: 12px;
+    min-block-size: auto;
+    padding-block: 16px 14px;
+    padding-inline: 14px;
+  }
+
+  .media-poster {
+    inline-size: 7rem;
+  }
+
+  .media-title {
+    margin-block-start: 12px;
+  }
+
+  .media-heading {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .media-heading__year {
+    font-size: 0.9375rem;
+  }
+
+  .media-attributes {
+    gap: 5px;
+    margin-block-start: 8px;
+  }
+
+  .tagline {
+    border-inline-start: 0;
+    font-size: 12.5px;
+    margin-block-start: 8px;
+    padding-inline-start: 0;
+    text-align: center;
+  }
+
+  .media-actions {
+    gap: 8px;
+    inline-size: 100%;
+    margin-block-start: 14px;
+    max-inline-size: 100%;
+  }
+
+  .media-action-button {
+    border-radius: 8px !important;
+    block-size: 34px !important;
+    font-size: 12.5px !important;
+    padding-inline: 10px !important;
+  }
+
+  .media-actions > .media-action-button:only-child,
+  .media-actions > .media-action-button:last-child:nth-child(odd):not(:first-child) {
+    inline-size: 100%;
+  }
+
+  .media-overview {
+    gap: 12px;
+    margin-block-start: 12px;
+  }
+
+  .media-detail-card {
+    border-radius: 11px;
+    padding-block: 14px;
+    padding-inline: 14px;
+  }
+
+  ul.media-crew {
+    gap: 10px 14px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr));
+  }
+
+  .media-seasons-section {
+    margin-block-start: 14px;
+  }
+
+  .media-seasons-section :deep(.v-expansion-panel-title) {
+    min-block-size: 46px;
+    padding-block: 10px;
+    padding-inline: 12px;
+  }
+
+  .media-seasons-section :deep(.v-expansion-panel-text__wrapper) {
+    padding-block: 0 12px;
+    padding-inline: 12px;
+  }
+
+  .media-episode-row {
+    gap: 10px;
+    padding-block: 12px;
+  }
+
+  .media-episode-title {
+    font-size: 13.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .media-episode-still {
+    border-radius: 8px;
+    inline-size: 100% !important;
+    max-inline-size: 100% !important;
+  }
+
+  .media-facts {
+    border-radius: 11px;
+  }
+
+  .media-ratings,
+  .media-fact {
+    padding-inline: 12px;
+  }
+
+  .media-related-stack {
+    margin-block-start: 14px;
+  }
 }
 </style>

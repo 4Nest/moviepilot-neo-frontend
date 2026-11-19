@@ -7,10 +7,15 @@ interface Props {
   tag?: string | Component
   isOverlayNavActive: boolean
   toggleIsOverlayNavActive: (value: boolean) => void
+  isCollapsed?: boolean
+  canToggleCollapse?: boolean
+  toggleCollapsed?: () => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
   tag: 'aside',
+  isCollapsed: false,
+  canToggleCollapse: false,
 })
 
 const { mdAndDown } = useDisplay()
@@ -71,6 +76,21 @@ function handleNavScroll(evt: Event) {
     </slot>
 
     <slot name="after-nav-items" />
+
+    <!-- 👉 Desktop Collapse Toggle Footer -->
+    <div v-if="props.canToggleCollapse && !mdAndDown" class="nav-collapse-footer">
+      <button
+        type="button"
+        class="nav-collapse-toggle"
+        data-testid="sidebar-collapse-toggle"
+        :aria-label="props.isCollapsed ? '展开侧边栏' : '收起侧边栏'"
+        :aria-expanded="!props.isCollapsed"
+        :title="props.isCollapsed ? '展开侧边栏' : '收起侧边栏'"
+        @click="props.toggleCollapsed?.()"
+      >
+        <VIcon :icon="props.isCollapsed ? 'mdi-chevron-right' : 'mdi-chevron-left'" class="nav-collapse-toggle__icon" />
+      </button>
+    </div>
   </Component>
 </template>
 
@@ -88,13 +108,15 @@ function handleNavScroll(evt: Event) {
   z-index: variables.$layout-vertical-nav-z-index;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   block-size: 100%;
-  inline-size: variables.$layout-vertical-nav-width;
+  block-size: 100dvh;
+  inline-size: var(--layout-vertical-nav-width, #{variables.$layout-vertical-nav-width});
   inset-block-start: 0;
   inset-inline-start: 0;
   transition:
     transform 0.25s ease-in-out,
-    inline-size 0.25s ease-in-out,
+    inline-size 0.2s ease-in-out,
     box-shadow 0.25s ease-in-out;
   visibility: hidden;
   will-change: transform, inline-size;
@@ -151,6 +173,8 @@ function handleNavScroll(evt: Event) {
   }
 
   .nav-items {
+    flex: 1 1 auto;
+    min-block-size: 0;
     block-size: 100%;
 
     // ℹ️ We no loner needs this overflow styles as perfect scrollbar applies it
@@ -158,6 +182,53 @@ function handleNavScroll(evt: Event) {
 
     // // ℹ️ We used `overflow-y` instead of `overflow` to mitigate overflow x. Revert back if any issue found.
     // overflow-y: auto;
+  }
+
+  .nav-collapse-footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    border-block-start: 1px solid var(--mp-border-subtle);
+    padding-block: 8px;
+    padding-inline: 12px;
+  }
+
+  .nav-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--mp-border-subtle);
+    border-radius: 8px;
+    background-color: transparent;
+    block-size: 30px;
+    color: rgba(var(--v-theme-on-surface), 0.64);
+    cursor: pointer;
+    inline-size: 30px;
+    padding: 0;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+
+    &:hover {
+      border-color: rgba(var(--v-theme-on-surface), 0.18);
+      background-color: rgba(var(--v-theme-on-surface), 0.06);
+      color: rgba(var(--v-theme-on-surface), 0.92);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--v-theme-primary));
+      outline-offset: -2px;
+    }
+  }
+
+  .nav-collapse-toggle__icon {
+    flex-shrink: 0;
+    block-size: 1.125rem;
+    color: inherit;
+    font-size: 1.125rem;
+    inline-size: 1.125rem;
   }
 
   .nav-item-title {
@@ -169,13 +240,15 @@ function handleNavScroll(evt: Event) {
 
   // 👉 Collapsed
   .layout-vertical-nav-collapsed & {
-    &:not(.hovered) {
-      inline-size: variables.$layout-vertical-nav-collapsed-width;
+    &:not(.hovered):not(.overlay-nav) {
+      inline-size: var(--layout-vertical-nav-width, #{variables.$layout-vertical-nav-collapsed-width});
     }
   }
 
   // 👉 Overlay nav
   &.overlay-nav {
+    inline-size: variables.$layout-vertical-nav-width;
+
     &:not(.visible) {
       transform: translateX(-#{variables.$layout-vertical-nav-width});
 

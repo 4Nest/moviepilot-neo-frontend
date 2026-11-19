@@ -10,6 +10,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { canDeleteSubscribeShare, isOwnShare, runConcurrentBatches } from '@/utils/sharePermissions'
 import { useToast } from 'vue-toastification'
+import { useDisplay } from 'vuetify'
 
 type SortType = 'time' | 'count' | 'rating'
 type ShareScope = 'all' | 'mine'
@@ -21,8 +22,12 @@ const BATCH_DELETE_CONCURRENCY = 4
 const { t } = useI18n()
 const $toast = useToast()
 const createConfirm = useConfirm()
+const display = useDisplay()
 const globalSettingsStore = useGlobalSettingsStore()
 const userStore = useUserStore()
+
+const shareGridMinItemWidth = computed(() => (display.xs.value ? 260 : 300))
+const shareGridGap = computed(() => (display.xs.value ? 10 : 16))
 
 // 输入参数
 const props = defineProps({
@@ -591,7 +596,7 @@ onUnmounted(() => {
               <span v-if="activeFilterCount > 0" class="ms-1">({{ activeFilterCount }})</span>
             </VBtn>
           </template>
-          <VCard max-width="380" class="pa-3">
+          <VCard max-width="380" class="share-filter-menu-card pa-3">
             <div class="d-flex align-center justify-space-between mb-2">
               <span class="text-subtitle-2 font-weight-bold">{{ t('common.filter') }}</span>
               <VBtn
@@ -752,7 +757,8 @@ onUnmounted(() => {
           item.id ||
           `${item.media_id || item.tmdbid || item.doubanid || item.bangumiid || item.anilistid || item.name}-${item.share_user}`
       "
-      :min-item-width="300"
+      :min-item-width="shareGridMinItemWidth"
+      :gap="shareGridGap"
       :estimated-item-height="168"
       tabindex="0"
     >
@@ -954,14 +960,63 @@ onUnmounted(() => {
   color: rgb(var(--v-theme-warning));
 }
 
+.share-filter-menu-card {
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px !important;
+  background-color: rgb(var(--v-theme-surface));
+  max-inline-size: min(360px, calc(100vw - 24px)) !important;
+}
+
 @media (width <= 680px) {
+  .share-toolbar__main {
+    gap: 8px;
+  }
+
   .share-toolbar__search {
     flex: 1 1 100%;
     max-inline-size: none;
   }
 
+  .share-toolbar__pills {
+    gap: 5px;
+  }
+
+  .share-toolbar__pill {
+    border-radius: 7px !important;
+    font-size: 12px !important;
+    padding-inline: 8px !important;
+  }
+
   .share-toolbar__actions {
+    inline-size: 100%;
+    gap: 6px;
     margin-inline-start: 0;
+  }
+
+  .share-toolbar__actions :deep(.v-btn) {
+    border-radius: 7px !important;
+    font-size: 12px;
+  }
+
+  .share-batch-bar {
+    gap: 6px;
+    padding-block: 8px;
+    padding-inline: 10px;
+  }
+
+  .share-batch-bar__count {
+    font-size: 12.5px;
+  }
+
+  .share-batch-bar__actions {
+    inline-size: 100%;
+    gap: 6px;
+  }
+
+  .share-search-heading,
+  .share-search-heading :deep(*) {
+    font-size: 17px !important;
+    padding-inline: 2px;
   }
 }
 </style>

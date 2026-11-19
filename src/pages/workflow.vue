@@ -3,15 +3,12 @@ import WorkflowListView from '@/views/workflow/WorkflowListView.vue'
 import WorkflowShareView from '@/views/workflow/WorkflowShareView.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 import { getWorkflowTabs } from '@/router/i18n-menu'
 
 // 国际化
 const { t } = useI18n()
 
 const route = useRoute()
-const { appMode } = usePWA()
 
 const activeTab = ref((route.query.tab as string) || 'list')
 const workflowListViewRef = ref<InstanceType<typeof WorkflowListView> | null>(null)
@@ -20,18 +17,6 @@ const workflowListViewRef = ref<InstanceType<typeof WorkflowListView> | null>(nu
 const workflowTabs = computed(() => {
   return getWorkflowTabs(t)
 })
-
-function openAddWorkflowDialog() {
-  workflowListViewRef.value?.openAddDialog()
-}
-
-function openTemplateWorkflowDialog() {
-  workflowListViewRef.value?.openTemplateDialog()
-}
-
-function openImportJsonWorkflowDialog() {
-  workflowListViewRef.value?.openImportJsonDialog()
-}
 
 function refreshWorkflowList() {
   workflowListViewRef.value?.refresh()
@@ -45,35 +30,6 @@ watch(
     }
   },
 )
-
-const workflowDynamicMenuItems = computed<DynamicButtonMenuItem[] | undefined>(() => {
-  if (!appMode.value || activeTab.value !== 'list') return undefined
-
-  return [
-    {
-      titleKey: 'workflow.quickActions.createWorkflow',
-      icon: 'mdi-plus',
-      action: openAddWorkflowDialog,
-    },
-    {
-      titleKey: 'workflow.quickActions.createFromTemplate',
-      icon: 'mdi-auto-fix',
-      action: openTemplateWorkflowDialog,
-    },
-    {
-      titleKey: 'workflow.quickActions.importJsonCreate',
-      icon: 'mdi-code-json',
-      action: openImportJsonWorkflowDialog,
-    },
-  ]
-})
-
-useDynamicButton({
-  icon: 'mdi-plus',
-  onClick: openAddWorkflowDialog,
-  menuItems: workflowDynamicMenuItems,
-  show: computed(() => appMode.value && activeTab.value === 'list'),
-})
 
 // 使用动态标签页
 const { registerHeaderTab } = useDynamicHeaderTab()

@@ -1,5 +1,4 @@
 import type { Plugin, PluginRating } from '@/api/types'
-import type { DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import PluginCardListView from '@/views/plugin/PluginCardListView.vue'
 import { usePluginSidebarNavStore } from '@/stores/pluginSidebarNav'
 import { getActiveRequestsCount, setNavigatingState } from '@/utils/requestOptimizer'
@@ -7,7 +6,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
 import { HttpResponse, http, type JsonBodyType } from 'msw'
-import { computed, defineComponent, h, nextTick, unref, type ComputedRef, type PropType, type Ref } from 'vue'
+import { defineComponent, h, nextTick, unref, type ComputedRef, type PropType, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const API_BASE_URL = 'http://localhost/api/v1/'
@@ -22,7 +21,6 @@ const apiUrls = {
 }
 
 const mocks = vi.hoisted(() => ({
-  appMode: false,
   confirm: vi.fn(),
   keepAliveHandler: undefined as undefined | ((context?: Record<string, unknown>) => Promise<void>),
   infiniteDone: vi.fn(),
@@ -31,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   toastWarning: vi.fn(),
-  useDynamicButton: vi.fn(),
 }))
 
 vi.mock('@/composables/useConfirm', () => ({
@@ -40,10 +37,6 @@ vi.mock('@/composables/useConfirm', () => ({
 
 vi.mock('vue-toastification', () => ({
   useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess, warning: mocks.toastWarning }),
-}))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
 }))
 
 vi.mock('@/composables/useDynamicHeaderTab', () => ({
@@ -59,10 +52,6 @@ vi.mock('@/composables/useKeepAliveRefresh', () => ({
 
 vi.mock('@/@core/utils/image', () => ({
   extractDominantColor: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/composables/usePWA', () => ({
-  usePWA: () => ({ appMode: computed(() => mocks.appMode) }),
 }))
 
 vi.mock('@/composables/useSharedDialog', () => ({
@@ -81,11 +70,6 @@ interface HeaderButton {
 interface HeaderConfig {
   appendButtons: HeaderButton[]
   modelValue: Ref<string>
-}
-
-interface DynamicButtonConfig {
-  menuItems?: MaybeRef<DynamicButtonMenuItem[] | undefined>
-  onClick: () => void
 }
 
 interface Deferred<T> {
@@ -423,16 +407,6 @@ function getHeaderConfig() {
   return mocks.registerHeaderTab.mock.calls.at(-1)?.[0] as HeaderConfig
 }
 
-function getDynamicButtonConfig() {
-  return mocks.useDynamicButton.mock.calls.at(-1)?.[0] as DynamicButtonConfig
-}
-
-function getDynamicMenuItem(titleKey: string) {
-  const item = unref(getDynamicButtonConfig().menuItems)?.find(candidate => candidate.titleKey === titleKey)
-  if (!item) throw new Error(`未注册动态操作 ${titleKey}`)
-  return item
-}
-
 function getHeaderButton(icon: string) {
   const button = getHeaderConfig().appendButtons.find(candidate => candidate.icon === icon)
   if (!button?.action) throw new Error(`未注册 header 操作 ${icon}`)
@@ -460,7 +434,6 @@ async function waitForRequestsToFinish() {
 
 describe('PluginCardListView loading and request ownership', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.keepAliveHandler = undefined
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -842,7 +815,6 @@ describe('PluginCardListView loading and request ownership', () => {
 
 describe('PluginCardListView market snapshot reuse', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.keepAliveHandler = undefined
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -903,7 +875,6 @@ describe('PluginCardListView market snapshot reuse', () => {
 
 describe('PluginCardListView market filtering and pagination', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.keepAliveHandler = undefined
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -1026,7 +997,6 @@ describe('PluginCardListView market filtering and pagination', () => {
 
 describe('PluginCardListView installed filtering and host callbacks', () => {
   beforeEach(() => {
-    mocks.appMode = true
     mocks.keepAliveHandler = undefined
     mocks.openSharedDialog.mockImplementation(() => ({ close: vi.fn(), id: 1, updateProps: vi.fn() }))
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1094,7 +1064,7 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     await waitForRequestsToFinish()
     const sidebarStore = usePluginSidebarNavStore(pinia)
 
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     const searchEvents = getDialogEvents()
     searchEvents['update:keyword']('needle')
     expect(controller.updateProps).toHaveBeenCalledWith(
@@ -1104,7 +1074,7 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     getHeaderConfig().modelValue.value = 'market'
     await nextTick()
     await waitForRequestsToFinish()
-    getDynamicMenuItem('dialog.pluginMarketSetting.title').action()
+    await fireEvent.click(screen.getByRole('button', { name: '插件市场设置' }))
     const requestsBeforeSetting = marketRequests
     getDialogEvents().save()
     await waitFor(() => expect(marketRequests).toBe(requestsBeforeSetting + 1))
@@ -1117,7 +1087,6 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
 
 describe('PluginCardListView search installation', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.confirm.mockReset().mockResolvedValue(true)
     mocks.keepAliveHandler = undefined
     mocks.openSharedDialog.mockImplementation(() => ({ close: vi.fn(), id: 1, updateProps: vi.fn() }))
@@ -1138,13 +1107,13 @@ describe('PluginCardListView search installation', () => {
     )
 
     mocks.confirm.mockResolvedValueOnce(false)
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
     expect(mocks.confirm).toHaveBeenCalledOnce()
     expect(installRequests).toBe(0)
 
     mocks.confirm.mockResolvedValueOnce(true)
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
     await waitFor(() => expect(installRequests).toBe(1))
     await waitForRequestsToFinish()
@@ -1220,7 +1189,7 @@ describe('PluginCardListView search installation', () => {
       }),
     )
 
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](
       createPlugin({
         id: 'SearchPlugin',
@@ -1233,7 +1202,7 @@ describe('PluginCardListView search installation', () => {
     expect(installRequests).toBe(0)
 
     mocks.toastError.mockClear()
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'SearchPlugin', plugin_name: '业务失败插件' }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(installRequests).toBe(1)
@@ -1241,7 +1210,7 @@ describe('PluginCardListView search installation', () => {
 
     mocks.toastError.mockClear()
     mode = 'http'
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'SearchPlugin', plugin_name: 'HTTP 失败插件' }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(installRequests).toBe(2)
@@ -1273,7 +1242,7 @@ describe('PluginCardListView search installation', () => {
     )
     const sidebarStore = usePluginSidebarNavStore(pinia)
 
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     await getDialogEvents()['open-plugin'](target)
 
     expect(await screen.findByText('plugin:搜索安装插件')).toBeInTheDocument()
@@ -1337,7 +1306,7 @@ describe('PluginCardListView search installation', () => {
       }),
     )
 
-    getDynamicButtonConfig().onClick()
+    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
     const installPromise = getDialogEvents()['open-plugin'](
       createPlugin({
         has_update: true,
@@ -1369,7 +1338,6 @@ describe('PluginCardListView search installation', () => {
 
 describe('PluginCardListView folders and persistence', () => {
   beforeEach(() => {
-    mocks.appMode = false
     mocks.keepAliveHandler = undefined
     mocks.openSharedDialog.mockImplementation(() => ({ close: vi.fn(), id: 1, updateProps: vi.fn() }))
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1418,7 +1386,6 @@ describe('PluginCardListView folders and persistence', () => {
   })
 
   it('rolls back a new folder and reports failure when persistence returns success false', async () => {
-    mocks.appMode = true
     await renderList({
       installed: () => [createPlugin({ id: 'Installed', installed: true, plugin_name: '已安装插件' })],
     })
@@ -1426,7 +1393,7 @@ describe('PluginCardListView folders and persistence', () => {
     await waitForRequestsToFinish()
     server.use(http.post(apiUrls.folders, () => HttpResponse.json({ message: '保存被拒绝', success: false })))
 
-    getDynamicMenuItem('plugin.newFolder').action()
+    await fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
     const events = getDialogEvents()
     events['update:name']('失败文件夹')
     await events.create()
@@ -1438,13 +1405,12 @@ describe('PluginCardListView folders and persistence', () => {
   })
 
   it('validates a new folder and persists a unique trimmed name', async () => {
-    mocks.appMode = true
     await renderList({ folders: () => ({ Existing: [] }) })
     await screen.findByText('folder:Existing')
     await waitForRequestsToFinish()
     server.use(http.post(apiUrls.folders, () => HttpResponse.json({ data: null, success: true })))
 
-    getDynamicMenuItem('plugin.newFolder').action()
+    await fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
     const events = getDialogEvents()
     events['update:name']('   ')
     await events.create()

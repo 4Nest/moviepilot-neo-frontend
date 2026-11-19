@@ -829,7 +829,25 @@ useSilentSettingRefresh(
 
 @media (width <= 600px) {
   .notification-template-grid {
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .notification-template-card {
+    min-block-size: 56px;
+    padding: 10px 12px;
     gap: 10px;
+  }
+
+  .template-card-icon {
+    flex-basis: 32px;
+    block-size: 32px;
+    inline-size: 32px;
+  }
+
+  .template-card-subtitle {
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 }
 

@@ -11,10 +11,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { formatFileSize } from '@/@core/utils/formatters'
 import { useI18n } from '@/composables/useChineseText'
-import { usePWA } from '@/composables/usePWA'
 import { useConfirm } from '@/composables/useConfirm'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
-import { useDynamicButton, type DynamicButtonMenuItem } from '@/composables/useDynamicButton'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 import { useGlobalSettingsStore } from '@/stores'
 import { openSharedDialog } from '@/composables/useSharedDialog'
@@ -38,8 +36,6 @@ const display = useDisplay()
 const isDesktop = computed(() => display.mdAndUp.value)
 const isCompactDesktop = computed(() => isDesktop.value && display.width.value < 1440)
 const isMobile = computed(() => display.smAndDown.value)
-// PWA模式检测
-const { appMode } = usePWA()
 
 // 计算列表可用高度
 const { availableHeight } = useAvailableHeight(135, 300)
@@ -1211,102 +1207,6 @@ const toggleGroupSelection = (checked: boolean | null, items: readonly any[]) =>
   updateHistorySelection(values, checked)
 }
 
-const historyDynamicIcon = computed(() => 'mdi-timer-sand-paused')
-const clearHistoryMenuItem = computed<DynamicButtonMenuItem>(() => ({
-  titleKey: 'transferHistory.actions.clearAll',
-  icon: 'mdi-delete-sweep-outline',
-  color: 'error',
-  disabled: clearing.value || !hasHistoryRecords.value,
-  action: clearAllHistory,
-}))
-
-const historyDynamicMenuItems = computed(() => {
-  if (!appMode.value) return undefined
-
-  if (mobileBatchMode.value) {
-    const hasSelectedHistory = mobileBatchSelectedCount.value > 0
-
-    const items: DynamicButtonMenuItem[] = [
-      {
-        titleKey: 'transferHistory.selectedCount',
-        titleParams: {
-          count: mobileBatchSelectedCount.value,
-          total: mobileBatchTotalCount.value,
-        },
-        icon: 'mdi-checkbox-multiple-marked-outline',
-        disabled: true,
-        action: () => {},
-      },
-      {
-        titleKey: isAllMobileHistorySelected.value
-          ? 'transferHistory.actions.deselectAll'
-          : 'transferHistory.actions.selectAll',
-        icon: isAllMobileHistorySelected.value ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked',
-        disabled: mobileBatchTotalCount.value === 0,
-        action: () => {
-          if (isAllMobileHistorySelected.value) {
-            deselectAllMobileHistory()
-            return
-          }
-          selectAllMobileHistory()
-        },
-      },
-      {
-        titleKey: 'transferHistory.actions.batchRedo',
-        icon: 'mdi-redo-variant',
-        color: 'success',
-        disabled: !hasSelectedHistory,
-        action: () => retransferBatch(),
-      },
-      {
-        titleKey: 'transferHistory.actions.batchDelete',
-        icon: 'mdi-trash-can-outline',
-        color: 'error',
-        disabled: !hasSelectedHistory,
-        action: () => removeHistoryBatch(),
-      },
-      clearHistoryMenuItem.value,
-      {
-        titleKey: 'transferHistory.actions.exitBatchMode',
-        icon: 'mdi-close',
-        action: exitMobileBatchMode,
-      },
-    ]
-    return items
-  }
-
-  if (selected.value.length === 0) return [clearHistoryMenuItem.value]
-
-  return [
-    {
-      titleKey: 'dialog.transferQueue.title',
-      icon: 'mdi-timer-sand-paused',
-      color: 'primary',
-      action: openTransferQueueDialog,
-    },
-    {
-      titleKey: 'transferHistory.actions.batchRedo',
-      icon: 'mdi-redo-variant',
-      color: 'success',
-      action: () => retransferBatch(),
-    },
-    {
-      titleKey: 'transferHistory.actions.batchDelete',
-      icon: 'mdi-trash-can-outline',
-      color: 'error',
-      action: () => removeHistoryBatch(),
-    },
-    clearHistoryMenuItem.value,
-  ]
-})
-
-useDynamicButton({
-  icon: historyDynamicIcon,
-  onClick: openTransferQueueDialog,
-  menuItems: historyDynamicMenuItems,
-  show: computed(() => appMode.value),
-})
-
 // 初始加载数据
 onMounted(() => {
   void loadStorages()
@@ -1384,7 +1284,7 @@ onUnmounted(() => {
           </VBtn>
         </template>
 
-        <template v-if="!appMode && isRefreshed">
+        <template v-if="isRefreshed">
           <VBtn
             v-if="selected.length > 0"
             size="small"
@@ -1644,40 +1544,43 @@ onUnmounted(() => {
         class="transfer-history-mobile-title my-0"
         style="margin-block: 0"
       />
-      <VBtn
-        v-if="!appMode && isRefreshed"
-        icon="mdi-timer-sand-paused"
-        color="primary"
-        :aria-label="t('dialog.transferQueue.title')"
-        :title="t('dialog.transferQueue.title')"
-        variant="text"
-        class="settings-icon-button"
-        @click="openTransferQueueDialog"
-      />
-      <VBtn
-        icon="mdi-delete-sweep-outline"
-        color="error"
-        :loading="clearing"
-        :disabled="!hasHistoryRecords || clearing"
-        :aria-label="t('transferHistory.actions.clearAll')"
-        :title="t('transferHistory.actions.clearAll')"
-        variant="text"
-        class="settings-icon-button transfer-history-mobile-titlebar__clear"
-        @click="clearAllHistory"
-      />
-      <VBtn
-        icon="mdi-checkbox-multiple-marked-outline"
-        :color="mobileBatchMode ? 'primary' : undefined"
-        :aria-label="
-          mobileBatchMode ? t('transferHistory.actions.exitBatchSelect') : t('transferHistory.actions.batchSelect')
-        "
-        :title="
-          mobileBatchMode ? t('transferHistory.actions.exitBatchSelect') : t('transferHistory.actions.batchSelect')
-        "
-        variant="text"
-        class="settings-icon-button transfer-history-mobile-titlebar__batch"
-        @click="toggleMobileBatchMode"
-      />
+      <div class="transfer-history-mobile-actions">
+        <VBtn
+          v-if="isRefreshed"
+          icon="mdi-timer-sand-paused"
+          color="primary"
+          :aria-label="t('dialog.transferQueue.title')"
+          :title="t('dialog.transferQueue.title')"
+          variant="text"
+          class="settings-icon-button transfer-history-mobile-action-btn"
+          @click="openTransferQueueDialog"
+        />
+        <VBtn
+          icon="mdi-delete-sweep-outline"
+          color="error"
+          :loading="clearing"
+          :disabled="!hasHistoryRecords || clearing"
+          :aria-label="t('transferHistory.actions.clearAll')"
+          :title="t('transferHistory.actions.clearAll')"
+          variant="text"
+          class="settings-icon-button transfer-history-mobile-action-btn transfer-history-mobile-titlebar__clear"
+          @click="clearAllHistory"
+        />
+        <VBtn
+          icon="mdi-checkbox-multiple-marked-outline"
+          :color="mobileBatchMode ? 'primary' : undefined"
+          :aria-label="
+            mobileBatchMode ? t('transferHistory.actions.exitBatchSelect') : t('transferHistory.actions.batchSelect')
+          "
+          :title="
+            mobileBatchMode ? t('transferHistory.actions.exitBatchSelect') : t('transferHistory.actions.batchSelect')
+          "
+          variant="text"
+          class="settings-icon-button transfer-history-mobile-action-btn transfer-history-mobile-titlebar__batch"
+          :class="{ 'is-active': mobileBatchMode }"
+          @click="toggleMobileBatchMode"
+        />
+      </div>
     </div>
 
     <VCombobox
@@ -1699,6 +1602,53 @@ onUnmounted(() => {
       rounded="lg"
       clearable
     />
+
+    <div v-if="mobileBatchMode" class="mp-page-action-bar transfer-history-mobile-batch-bar">
+      <VChip size="small" color="primary" variant="tonal" rounded="lg" class="me-auto">
+        {{
+          t('transferHistory.selectedCount', {
+            count: mobileBatchSelectedCount,
+            total: mobileBatchTotalCount,
+          })
+        }}
+      </VChip>
+      <VBtn
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        :prepend-icon="isAllMobileHistorySelected ? 'mdi-checkbox-blank-outline' : 'mdi-checkbox-multiple-marked'"
+        :disabled="mobileBatchTotalCount === 0"
+        @click="isAllMobileHistorySelected ? deselectAllMobileHistory() : selectAllMobileHistory()"
+      >
+        {{
+          isAllMobileHistorySelected ? t('transferHistory.actions.deselectAll') : t('transferHistory.actions.selectAll')
+        }}
+      </VBtn>
+      <VBtn
+        size="small"
+        variant="outlined"
+        rounded="lg"
+        prepend-icon="mdi-redo-variant"
+        :disabled="mobileBatchSelectedCount === 0"
+        @click="retransferBatch"
+      >
+        {{ t('transferHistory.actions.batchRedo') }}
+      </VBtn>
+      <VBtn
+        size="small"
+        variant="outlined"
+        color="error"
+        rounded="lg"
+        prepend-icon="mdi-trash-can-outline"
+        :disabled="mobileBatchSelectedCount === 0"
+        @click="removeHistoryBatch"
+      >
+        {{ t('transferHistory.actions.batchDelete') }}
+      </VBtn>
+      <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-close" @click="exitMobileBatchMode">
+        {{ t('transferHistory.actions.exitBatchMode') }}
+      </VBtn>
+    </div>
 
     <VInfiniteScroll
       :key="mobileInfiniteKey"
@@ -1728,8 +1678,8 @@ onUnmounted(() => {
         v-if="mobileDataList.length > 0"
         :items="mobileDataList"
         :columns="1"
-        :gap="14"
-        :estimated-item-height="296"
+        :gap="10"
+        :estimated-item-height="268"
         :overscan-rows="5"
         :get-item-key="getMobileHistoryItemKey"
       >
@@ -1765,7 +1715,7 @@ onUnmounted(() => {
                     />
                   </template>
                 </VImg>
-                <VIcon class="transfer-history-mobile-record__poster-type" :icon="getIcon(item.type || '')" size="14" />
+                <VIcon class="transfer-history-mobile-record__poster-type" :icon="getIcon(item.type || '')" size="13" />
               </div>
 
               <div class="transfer-history-mobile-record__heading">
@@ -1776,15 +1726,6 @@ onUnmounted(() => {
                   {{ getHistorySubtitle(item) || item.type || t('common.unknown') }}
                 </div>
               </div>
-
-              <VChip
-                class="transfer-history-mobile-record__status"
-                variant="tonal"
-                :color="getHistoryStatusColor(item)"
-                size="small"
-              >
-                {{ getHistoryStatusText(item) }}
-              </VChip>
 
               <VCheckbox
                 v-if="mobileBatchMode"
@@ -1797,9 +1738,9 @@ onUnmounted(() => {
               />
 
               <IconBtn v-else class="transfer-history-mobile-record__menu" size="small">
-                <VIcon icon="mdi-dots-vertical" />
+                <VIcon icon="mdi-dots-vertical" size="18" />
                 <VMenu activator="parent" close-on-content-click>
-                  <VList>
+                  <VList density="compact">
                     <VListItem
                       v-for="(menu, i) in getDropdownItems(item)"
                       :key="i"
@@ -1808,28 +1749,13 @@ onUnmounted(() => {
                       @click="menu.props.click()"
                     >
                       <template #prepend>
-                        <VIcon :icon="menu.props.prependIcon" />
+                        <VIcon :icon="menu.props.prependIcon" size="17" />
                       </template>
                       <VListItemTitle v-text="menu.title" />
                     </VListItem>
                   </VList>
                 </VMenu>
               </IconBtn>
-
-              <div class="transfer-history-mobile-record__meta">
-                <VChip
-                  class="transfer-history-mobile-record__mode"
-                  variant="tonal"
-                  color="secondary"
-                  size="x-small"
-                  label
-                >
-                  {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
-                </VChip>
-                <span>{{ formatFileSize(item?.src_fileitem?.size || 0) }}</span>
-                <span class="transfer-history-mobile-record__dot">·</span>
-                <span v-if="item?.date">{{ getHistoryDateText(item.date) }}</span>
-              </div>
             </header>
 
             <button
@@ -1838,38 +1764,73 @@ onUnmounted(() => {
               :class="{ 'transfer-history-mobile-record__paths--expanded': isMobilePathExpanded(item) }"
               @click.stop="handleMobilePathClick(item)"
             >
-              <div class="transfer-history-mobile-record__path-row">
+              <div class="transfer-history-mobile-record__path-row transfer-history-mobile-record__path-row--src">
                 <span class="transfer-history-mobile-record__storage">
                   {{ getHistoryStorageName(item?.src_storage) }}
                 </span>
                 <p>
                   <template v-if="item?.src">
                     <span class="transfer-history-mobile-record__path-dir">{{ splitHistoryPath(item.src).dir }}</span
-                    ><span class="transfer-history-mobile-record__path-file">{{
-                      splitHistoryPath(item.src).file
-                    }}</span>
+                    ><span
+                      class="transfer-history-mobile-record__path-file transfer-history-mobile-record__path-file--src"
+                      >{{ splitHistoryPath(item.src).file }}</span
+                    >
                   </template>
                   <template v-else>{{ t('common.unknown') }}</template>
                 </p>
               </div>
               <div v-if="item?.dest" class="transfer-history-mobile-record__path-arrow">
-                <VIcon icon="mdi-arrow-down" size="18" />
+                <VIcon icon="mdi-arrow-down" size="14" />
               </div>
-              <div v-if="item?.dest" class="transfer-history-mobile-record__path-row">
-                <span class="transfer-history-mobile-record__storage">
+              <div
+                v-if="item?.dest"
+                class="transfer-history-mobile-record__path-row transfer-history-mobile-record__path-row--dest"
+              >
+                <span class="transfer-history-mobile-record__storage transfer-history-mobile-record__storage--dest">
                   {{ getHistoryStorageName(item?.dest_storage) }}
                 </span>
                 <p>
                   <span class="transfer-history-mobile-record__path-dir">{{ splitHistoryPath(item.dest).dir }}</span
-                  ><span class="transfer-history-mobile-record__path-file">{{ splitHistoryPath(item.dest).file }}</span>
+                  ><span
+                    class="transfer-history-mobile-record__path-file transfer-history-mobile-record__path-file--dest"
+                    >{{ splitHistoryPath(item.dest).file }}</span
+                  >
                 </p>
               </div>
             </button>
 
             <div v-if="!item?.status && item?.errmsg" class="transfer-history-mobile-record__error">
-              <VIcon icon="mdi-alert-circle" size="18" />
-              {{ item.errmsg }}
+              <VIcon icon="mdi-alert-circle" size="16" />
+              <span>{{ item.errmsg }}</span>
             </div>
+
+            <footer class="transfer-history-mobile-record__meta">
+              <VChip
+                class="transfer-history-mobile-record__status"
+                variant="tonal"
+                :color="getHistoryStatusColor(item)"
+                size="x-small"
+                label
+              >
+                {{ getHistoryStatusText(item) }}
+              </VChip>
+              <VChip
+                class="transfer-history-mobile-record__mode"
+                variant="tonal"
+                color="secondary"
+                size="x-small"
+                label
+              >
+                {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
+              </VChip>
+              <span class="transfer-history-mobile-record__size">{{
+                formatFileSize(item?.src_fileitem?.size || 0)
+              }}</span>
+              <span class="transfer-history-mobile-record__dot">·</span>
+              <span v-if="item?.date" class="transfer-history-mobile-record__date">{{
+                getHistoryDateText(item.date)
+              }}</span>
+            </footer>
           </article>
         </template>
       </ProgressiveCardGrid>
@@ -2277,24 +2238,23 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-page {
-  --transfer-history-mobile-search-bg: rgba(var(--v-theme-on-surface), 0.045);
-  --transfer-history-mobile-muted-bg: rgba(var(--v-theme-on-surface), 0.06);
+  --transfer-history-mobile-muted-bg: rgba(var(--v-theme-on-surface), 0.03);
   --transfer-history-mobile-border: var(--mp-border-card);
-  --transfer-history-mobile-storage-width: 4.85rem;
+  --transfer-history-mobile-storage-width: 4.4rem;
 
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
   min-block-size: 100%;
-  padding-block: 0.25rem 1.25rem;
-  padding-inline: 0.35rem;
+  padding-block: 4px 16px;
+  padding-inline: 2px;
 }
 
 .transfer-history-mobile-titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .transfer-history-mobile-title {
@@ -2302,12 +2262,33 @@ onUnmounted(() => {
   min-inline-size: 0;
 }
 
+.transfer-history-mobile-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.transfer-history-mobile-action-btn {
+  border: 1px solid var(--mp-border-subtle) !important;
+  border-radius: 8px !important;
+  background: rgba(var(--v-theme-on-surface), 0.03) !important;
+  block-size: 34px !important;
+  inline-size: 34px !important;
+  min-inline-size: 34px !important;
+}
+
+.transfer-history-mobile-action-btn.is-active {
+  border-color: rgba(var(--v-theme-primary), 0.35) !important;
+  background: rgba(var(--v-theme-primary), 0.12) !important;
+}
+
 .transfer-history-mobile-titlebar__batch {
   flex: 0 0 auto;
 }
 
 .transfer-history-mobile-title :deep(h2) {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -2318,14 +2299,14 @@ onUnmounted(() => {
 
 .transfer-history-mobile-search :deep(.v-field) {
   border-radius: 8px;
-  background: var(--transfer-history-mobile-search-bg);
+  background: rgb(var(--v-theme-surface));
   font-size: 13px;
-  min-block-size: 36px;
+  min-block-size: 38px;
 }
 
 .transfer-history-mobile-search :deep(.v-field__input) {
   font-size: 13px;
-  min-block-size: 36px;
+  min-block-size: 38px;
   padding-block: 0;
 }
 
@@ -2365,9 +2346,8 @@ onUnmounted(() => {
 .transfer-history-mobile-record {
   overflow: hidden;
   border: 1px solid var(--transfer-history-mobile-border);
-  border-radius: var(--app-surface-radius);
+  border-radius: 12px;
   background: rgb(var(--v-theme-surface));
-  box-shadow: var(--app-card-rest-shadow);
 }
 
 .transfer-history-mobile-record--batch {
@@ -2375,35 +2355,33 @@ onUnmounted(() => {
 }
 
 .transfer-history-mobile-record--selected {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
+  border-color: rgb(var(--v-theme-primary));
+  outline: 1px solid rgb(var(--v-theme-primary));
+  outline-offset: -1px;
 }
 
 .transfer-history-mobile-record__header {
   display: grid;
-  align-items: start;
-  gap: 0.75rem;
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto 2rem;
-  grid-template-rows: auto auto;
-  padding-block: 0.85rem 0.75rem;
-  padding-inline: 1rem 0.85rem;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: 3rem minmax(0, 1fr) 2rem;
+  padding: 11px 12px;
 }
 
 .transfer-history-mobile-record__poster-wrapper {
   position: relative;
-  grid-row: 1 / span 2;
-  inline-size: 3.5rem;
-  block-size: 5.25rem;
-  border-radius: 8px;
   overflow: hidden;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
   background: var(--transfer-history-mobile-muted-bg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  block-size: 4.35rem;
+  inline-size: 3rem;
 }
 
 .transfer-history-mobile-record__poster {
   inline-size: 100%;
   block-size: 100%;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .transfer-history-mobile-record__poster :deep(.v-img__img) {
@@ -2427,112 +2405,82 @@ onUnmounted(() => {
 
 .transfer-history-mobile-record__poster-type {
   position: absolute;
-  inset-block-end: 4px;
-  inset-inline-start: 4px;
+  inset-block-end: 3px;
+  inset-inline-start: 3px;
   padding: 2px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
   color: rgb(255, 255, 255);
-  opacity: 0.92;
 }
 
 .transfer-history-mobile-record__heading {
-  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-inline-size: 0;
 }
 
 .transfer-history-mobile-record__title {
+  display: -webkit-box;
   overflow: hidden;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-size: 1.125rem;
-  font-weight: 650;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 14.5px;
+  font-weight: 600;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .transfer-history-mobile-record__subtitle {
   overflow: hidden;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.45;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transfer-history-mobile-record__status {
-  align-self: start;
-  border-radius: 999px !important;
-  font-weight: 650;
-  padding-inline: 0.65rem !important;
-}
-
 .transfer-history-mobile-record__menu {
+  border-radius: 7px !important;
+  block-size: 32px !important;
+  color: rgba(var(--v-theme-on-surface), 0.66) !important;
+  inline-size: 32px !important;
+  min-inline-size: 32px !important;
   place-self: start end;
 }
 
 .transfer-history-mobile-record__checkbox {
   place-self: start end;
-  margin-block-start: -0.35rem;
-  margin-inline-end: -0.35rem;
+  margin-block-start: -0.25rem;
+  margin-inline-end: -0.25rem;
 }
 
 .transfer-history-mobile-record__checkbox :deep(.v-selection-control) {
   min-block-size: 2rem;
 }
 
-.transfer-history-mobile-record__meta {
-  grid-column: 2 / -1;
-  grid-row: 2;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.65rem;
-  margin-block-start: 0;
-  min-inline-size: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.transfer-history-mobile-record__meta > span {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.transfer-history-mobile-record__mode {
-  border-radius: 6px !important;
-  block-size: 22px !important;
-  font-size: 11.5px !important;
-  font-weight: 500 !important;
-  padding-inline: 7px !important;
-}
-
-.transfer-history-mobile-record__dot {
-  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity)) !important;
-}
-
 .transfer-history-mobile-record__paths {
   display: grid;
   border: 0;
-  background: transparent;
-  border-block-start: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  background: var(--transfer-history-mobile-muted-bg);
+  border-block-start: 1px solid var(--mp-border-subtle);
   color: inherit;
   cursor: pointer;
-  gap: 0.45rem;
+  gap: 5px;
   grid-template-columns: 1fr;
   inline-size: 100%;
-  padding-block: 0.85rem 0.95rem;
-  padding-inline: 1rem;
+  padding: 10px 12px;
   text-align: start;
 }
 
 .transfer-history-mobile-record__path-row {
   display: grid;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: start;
+  gap: 8px;
   grid-template-columns: var(--transfer-history-mobile-storage-width) minmax(0, 1fr);
 }
 
@@ -2540,9 +2488,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), 0.42);
   inline-size: var(--transfer-history-mobile-storage-width);
-  padding-inline-start: 0.5rem;
+  margin-block: -2px;
 }
 
 .transfer-history-mobile-record__storage {
@@ -2550,43 +2498,56 @@ onUnmounted(() => {
   overflow: hidden;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--mp-border-subtle);
   border-radius: 6px;
-  background: var(--transfer-history-mobile-muted-bg);
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.4;
+  background: rgb(var(--v-theme-surface));
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  margin-block-start: 1px;
   max-inline-size: 100%;
-  min-block-size: 1.55rem;
-  padding-block: 0.125rem;
-  padding-inline: 0.425rem;
+  min-block-size: 22px;
+  padding-inline: 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.transfer-history-mobile-record__storage--dest {
+  border-color: rgba(var(--v-theme-primary), 0.28);
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+}
+
 .transfer-history-mobile-record__path-row p {
   margin: 0;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: 12.5px;
+  line-height: 1.4;
   min-inline-size: 0;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .transfer-history-mobile-record__path-dir {
   display: block;
   overflow: hidden;
-  color: rgba(var(--v-theme-on-surface), 0.46);
-  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.48);
+  font-size: 11.5px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .transfer-history-mobile-record__path-file {
   display: block;
-  color: rgba(var(--v-theme-on-surface), 0.92);
+  color: rgba(var(--v-theme-on-surface), 0.8);
   font-weight: 500;
   white-space: normal;
+}
+
+.transfer-history-mobile-record__path-file--dest {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 600;
 }
 
 .transfer-history-mobile-record__paths--expanded .transfer-history-mobile-record__path-dir {
@@ -2597,19 +2558,58 @@ onUnmounted(() => {
 
 .transfer-history-mobile-record__error {
   display: flex;
-  align-items: center;
-  border: 1px solid rgba(var(--v-theme-error), 0.2);
+  align-items: flex-start;
+  border: 1px solid rgba(var(--v-theme-error), 0.22);
   border-radius: 8px;
-  background: rgba(var(--v-theme-error), 0.08);
+  background: rgba(var(--v-theme-error), 0.07);
   color: rgb(var(--v-theme-error));
-  font-size: 0.875rem;
-  font-weight: 650;
-  gap: 0.5rem;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
   line-height: 1.45;
-  margin-block: 0 1rem;
-  margin-inline: 1rem;
+  margin: 8px 12px 0;
   overflow-wrap: anywhere;
-  padding-block: 0.65rem;
-  padding-inline: 0.75rem;
+  padding: 7px 10px;
+  word-break: normal;
+}
+
+.transfer-history-mobile-record__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  padding: 8px 12px;
+  min-inline-size: 0;
+}
+
+.transfer-history-mobile-record__status,
+.transfer-history-mobile-record__mode {
+  border-radius: 6px !important;
+  block-size: 22px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  padding-inline: 7px !important;
+}
+
+.transfer-history-mobile-record__meta > span {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.transfer-history-mobile-record__size {
+  margin-inline-start: auto;
+}
+
+.transfer-history-mobile-record__dot {
+  color: rgba(var(--v-theme-on-surface), 0.36) !important;
+}
+
+.transfer-history-mobile-record__date {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

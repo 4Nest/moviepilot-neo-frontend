@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   },
   sidebarStore: undefined as SidebarStoreMock | undefined,
   userStore: undefined as { superUser: boolean } | undefined,
+  appMode: { value: false } as { value: boolean },
   routeMock: { path: '/', meta: {} as Record<string, unknown> },
   footerStub: {
     name: 'Footer',
@@ -95,7 +96,12 @@ vi.mock('@/composables/usePullDownGesture', () => ({
     showPullIndicator: { value: false },
   }),
 }))
-vi.mock('@/composables/usePWA', () => ({ usePWA: () => ({ appMode: { value: false } }) }))
+vi.mock('@/composables/usePWA', async () => {
+  const { ref } = await import('vue')
+  mocks.appMode = ref(false)
+
+  return { usePWA: () => ({ appMode: mocks.appMode }) }
+})
 vi.mock('@/composables/useChineseText', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }))
@@ -115,6 +121,7 @@ describe('DefaultLayout', () => {
     mocks.ensureSidebarNav.mockResolvedValue(undefined)
     mocks.sidebarStore!.items = []
     mocks.userStore!.superUser = true
+    mocks.appMode.value = false
     mocks.routeMock.path = '/'
     mocks.routeMock.meta = {}
   })
@@ -236,6 +243,11 @@ describe('DefaultLayout', () => {
 
     const contentWrapper = wrapper.find('.main-content-wrapper')
     expect(contentWrapper.exists()).toBe(true)
+    expect((contentWrapper.element as HTMLElement).style.paddingTop).toBe('0rem')
+
+    // appMode 下同样由 --layout-navbar-block-size 统一承接，不再叠加 2.75rem 造成偏移偏差与切页跳动
+    mocks.appMode.value = true
+    await nextTick()
     expect((contentWrapper.element as HTMLElement).style.paddingTop).toBe('0rem')
 
     wrapper.unmount()

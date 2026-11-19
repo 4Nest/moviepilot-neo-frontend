@@ -321,7 +321,7 @@ describe('FileToolbar navigation and sorting', () => {
     wrapper.unmount()
   })
 
-  it('renders only the leaf breadcrumb on small screens and synthesizes file and empty-stack root breadcrumbs', async () => {
+  it('renders full scrollable breadcrumbs on small screens and synthesizes file and empty-stack root breadcrumbs', async () => {
     mocks.mdAndUp.value = false
     const fileItem: FileItem = {
       name: 'episode01.mkv',
@@ -337,12 +337,12 @@ describe('FileToolbar navigation and sorting', () => {
     })
 
     const navButtons = wrapper.findAll('.toolbar-button')
-    // [0] storage activator, [1] root crumb, [2] leaf crumb (intermediate crumbs hidden when mdAndUp=false)
-    expect(navButtons).toHaveLength(3)
-    expect(navButtons[2].text()).toBe('episode01.mkv')
+    // [0] storage activator, [1] root crumb, [2] downloads, [3] tv, [4] leaf crumb
+    expect(navButtons).toHaveLength(5)
+    expect(navButtons[4].text()).toBe('episode01.mkv')
 
     await navButtons[1].trigger('click')
-    await navButtons[2].trigger('click')
+    await navButtons[4].trigger('click')
     await wrapper.findAll('.icon-btn')[1].trigger('click')
 
     expect(wrapper.emitted('pathchanged')).toEqual([

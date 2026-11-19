@@ -57,6 +57,8 @@ if (pwaTabState) {
 // Ref for the tabs container
 const tabsContainerRef = ref<HTMLElement | null>(null)
 const showTabsScrollIndicator = ref(false)
+const canScrollLeft = ref(false)
+const canScrollRight = ref(false)
 const showLeftButton = ref(false)
 const showRightButton = ref(false)
 
@@ -96,10 +98,20 @@ const updateTabsIndicator = () => {
   const isScrolledToEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - tolerance
   const isScrolledToStart = el.scrollLeft <= tolerance
 
-  showTabsScrollIndicator.value = hasOverflow && !isScrolledToEnd && !shouldHideScrollControls
-  showLeftButton.value = hasOverflow && !isScrolledToStart && !shouldHideScrollControls
-  showRightButton.value = hasOverflow && !isScrolledToEnd && !shouldHideScrollControls
+  canScrollLeft.value = hasOverflow && !isScrolledToStart
+  canScrollRight.value = hasOverflow && !isScrolledToEnd
+  showTabsScrollIndicator.value = canScrollRight.value && !shouldHideScrollControls
+  showLeftButton.value = canScrollLeft.value && !shouldHideScrollControls
+  showRightButton.value = canScrollRight.value && !shouldHideScrollControls
 }
+
+watch(
+  () => props.items,
+  async () => {
+    await nextTick()
+    updateTabsIndicator()
+  },
+)
 
 let resizeTimeout: ReturnType<typeof setTimeout> | null = null
 const handleResize = () => {
@@ -135,7 +147,15 @@ onUnmounted(() => {
       <VIcon icon="tabler-chevron-left" size="small" color="secondary" />
     </VBtn>
 
-    <div ref="tabsContainerRef" class="header-tabs" :class="{ 'show-indicator': showTabsScrollIndicator }">
+    <div
+      ref="tabsContainerRef"
+      class="header-tabs"
+      :class="{
+        'show-indicator': showTabsScrollIndicator,
+        'has-overflow-left': canScrollLeft,
+        'has-overflow-right': canScrollRight,
+      }"
+    >
       <div
         v-for="(item, index) in items"
         :key="index"
@@ -257,6 +277,7 @@ onUnmounted(() => {
 .header-tabs {
   position: relative;
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
   padding: 3px;
   border: 1px solid var(--mp-border-subtle);
@@ -270,6 +291,18 @@ onUnmounted(() => {
 
   &::-webkit-scrollbar {
     display: none;
+  }
+
+  &.has-overflow-right:not(.has-overflow-left) {
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
+  }
+
+  &.has-overflow-left:not(.has-overflow-right) {
+    mask-image: linear-gradient(to right, transparent 0%, #000 20px);
+  }
+
+  &.has-overflow-left.has-overflow-right {
+    mask-image: linear-gradient(to right, transparent 0%, #000 20px, #000 calc(100% - 20px), transparent 100%);
   }
 }
 
@@ -320,6 +353,21 @@ onUnmounted(() => {
     .header-tab-icon {
       color: rgba(var(--v-theme-on-surface), 0.8);
     }
+  }
+}
+
+@media (width <= 600px) {
+  .tab-header {
+    gap: 6px;
+  }
+
+  .header-tab {
+    font-size: 12.5px;
+    padding-inline: 9px;
+  }
+
+  .header-tab-icon {
+    margin-inline-end: 4px;
   }
 }
 </style>

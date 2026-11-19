@@ -233,6 +233,21 @@ const getDownloadPercent = computed(() => {
   return Math.min(100, Math.max(3, (download / getMaxDataValue.value) * 100))
 })
 
+// 分享率与做种数（有有效数据时在 PT 卡片指标网格中展示）
+const formattedRatio = computed(() => {
+  const ratio = cardProps.data?.ratio
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio <= 0) return ''
+  return ratio >= 100 ? ratio.toFixed(0) : ratio.toFixed(2)
+})
+
+const formattedSeeding = computed(() => {
+  const seeding = cardProps.data?.seeding
+  if (typeof seeding !== 'number' || !Number.isFinite(seeding) || seeding <= 0) return ''
+  return seeding.toLocaleString('zh-CN')
+})
+
+const hasSecondaryMetrics = computed(() => Boolean(formattedRatio.value || formattedSeeding.value))
+
 // 保存站点
 function saveSite() {
   void getSiteIcon(true)
@@ -394,7 +409,7 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
           <!-- PT 站点显示上传下载数据。 -->
           <div v-else class="flex-1 flex flex-col justify-end">
             <div class="site-card__metrics border-t">
-              <div class="flex items-center justify-between gap-2.5 mb-1.5">
+              <div class="site-card__transfer-row mb-1.5">
                 <div class="site-card__metric-text">
                   <VIcon icon="mdi-arrow-up" size="13" color="info" class="mr-1 shrink-0" />
                   <span>{{ formatFileSize(cardProps.data?.upload || 0) }}</span>
@@ -404,13 +419,26 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
                 </div>
               </div>
 
-              <div class="flex items-center justify-between gap-2.5">
+              <div class="site-card__transfer-row">
                 <div class="site-card__metric-text">
                   <VIcon icon="mdi-arrow-down" size="13" color="success" class="mr-1 shrink-0" />
                   <span>{{ formatFileSize(cardProps.data?.download || 0) }}</span>
                 </div>
                 <div class="flex-grow h-1 rounded bg-on-surface/8 relative overflow-hidden">
                   <VProgressLinear :model-value="getDownloadPercent" color="warning" height="4" rounded="lg" />
+                </div>
+              </div>
+
+              <div v-if="hasSecondaryMetrics" class="site-card__submetrics">
+                <div v-if="formattedRatio" class="site-card__submetric-item">
+                  <VIcon icon="mdi-scale-balance" size="12" class="shrink-0" />
+                  <span class="site-card__submetric-label">{{ t('dialog.siteUserData.ratio') }}</span>
+                  <strong class="site-card__submetric-value">{{ formattedRatio }}</strong>
+                </div>
+                <div v-if="formattedSeeding" class="site-card__submetric-item">
+                  <VIcon icon="mdi-seed-outline" size="12" class="shrink-0" />
+                  <span class="site-card__submetric-label">{{ t('dialog.siteUserData.seedingTitle') }}</span>
+                  <strong class="site-card__submetric-value">{{ formattedSeeding }}</strong>
                 </div>
               </div>
             </div>
@@ -562,6 +590,13 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
   padding-block-start: 8px;
 }
 
+.site-card__transfer-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+}
+
 .site-card__metric-text {
   display: inline-flex;
   align-items: center;
@@ -571,6 +606,39 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
   line-height: 1.25;
   min-inline-size: 72px;
   white-space: nowrap;
+}
+
+.site-card__submetrics {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block-start: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 7px;
+  background: rgba(var(--v-theme-on-surface), 0.03);
+}
+
+.site-card__submetric-item {
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 4px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.site-card__submetric-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.site-card__submetric-value {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 600;
 }
 
 .site-card__public-chip {
@@ -693,11 +761,80 @@ const siteMenuLocation = computed(() => (display.smAndDown.value ? 'bottom end' 
   visibility: visible;
 }
 
-@media (hover: none), (width <= 600px) {
+@media (hover: none) and (width > 600px) {
   .site-card-actions {
     opacity: 1;
     transform: none;
     visibility: visible;
+  }
+}
+
+@media (width <= 600px) {
+  .site-card {
+    border-radius: 10px !important;
+    min-block-size: 0;
+  }
+
+  .site-card__body {
+    padding: 11px 12px 10px;
+  }
+
+  .site-card__avatar {
+    border-radius: 8px !important;
+    block-size: 34px !important;
+    inline-size: 34px !important;
+  }
+
+  .site-card__title {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+
+  .site-card__url-row {
+    margin-block: 5px 7px;
+  }
+
+  .site-card__url {
+    font-size: 11.5px;
+  }
+
+  .site-card__metrics {
+    padding-block-start: 7px;
+  }
+
+  .site-card__transfer-row {
+    gap: 8px;
+    grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  }
+
+  .site-card__metric-text {
+    font-size: 11.5px;
+    min-inline-size: 68px;
+  }
+
+  .site-card-actions {
+    position: static !important;
+    inset: auto !important;
+    justify-content: flex-end;
+    border: 0;
+    border-block-start: 1px solid var(--mp-border-subtle);
+    border-radius: 0;
+    background: rgba(var(--v-theme-on-surface), 0.03);
+    box-shadow: none;
+    gap: 6px;
+    opacity: 1;
+    padding: 6px 12px;
+    transform: none;
+    visibility: visible;
+  }
+
+  .site-card__action-btn {
+    border: 1px solid var(--mp-border-subtle);
+    border-radius: 7px !important;
+    background: rgb(var(--v-theme-surface));
+    block-size: 28px !important;
+    inline-size: 28px !important;
+    min-inline-size: 28px !important;
   }
 }
 </style>

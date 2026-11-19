@@ -51,13 +51,13 @@ onMounted(async () => {
 </script>
 <template>
   <div class="app-settings-container">
-    <VContainer class="app-settings-content">
+    <div class="app-settings-content">
       <!-- 遍历所有分组 -->
       <section v-for="(apps, header) in appGroups" :key="header" class="settings-section">
-        <VListSubheader class="settings-section-title">
+        <h2 class="settings-section-title">
           {{ header }}
-        </VListSubheader>
-        <!-- 分组内容 - 使用卡片包装 -->
+        </h2>
+        <!-- 分组内容 - 统一纯色微边框卡片 -->
         <VCard variant="flat" class="app-grouped-list settings-section-card">
           <VList lines="one" class="settings-list">
             <VListItem
@@ -69,19 +69,16 @@ onMounted(async () => {
               rounded="0"
             >
               <template #prepend>
-                <VAvatar
-                  size="34"
-                  color="primary"
-                  variant="tonal"
-                  rounded="lg"
+                <span
                   class="settings-list-icon me-3"
                   :class="`settings-list-icon--tone-${app.iconColor || 'primary'}`"
+                  aria-hidden="true"
                 >
-                  <VIcon :icon="app.icon as string" size="18"></VIcon>
-                </VAvatar>
+                  <VIcon :icon="app.icon as string" size="17" />
+                </span>
               </template>
 
-              <VListItemTitle class="settings-list-title font-weight-medium">
+              <VListItemTitle class="settings-list-title">
                 {{ app.full_title || app.title }}
               </VListItemTitle>
 
@@ -90,7 +87,7 @@ onMounted(async () => {
               </VListItemSubtitle>
 
               <template #append>
-                <VIcon class="settings-list-chevron" icon="mdi-chevron-right"></VIcon>
+                <VIcon class="settings-list-chevron" icon="mdi-chevron-right" size="18" />
               </template>
 
               <span v-if="appIndex < apps.length - 1" class="settings-list-separator" aria-hidden="true"></span>
@@ -98,7 +95,7 @@ onMounted(async () => {
           </VList>
         </VCard>
       </section>
-    </VContainer>
+    </div>
   </div>
 </template>
 
@@ -111,169 +108,143 @@ onMounted(async () => {
   overflow-x: hidden;
 }
 
+.app-settings-content {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-block: 6px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-inline: 2px;
+}
+
 .settings-section {
-  margin-block-end: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .settings-section-title {
-  padding-inline-start: 4px;
+  margin: 0;
+  padding-inline: 4px;
+  color: rgba(var(--v-theme-on-surface), 0.48);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
 }
 
 .settings-section-card {
   overflow: hidden;
-  border: var(--app-grouped-list-border);
-  background-color: var(--app-grouped-list-background);
-  box-shadow: var(--app-surface-shadow);
-  transition:
-    border-color 0.2s ease,
-    border-width 0.2s ease,
-    box-shadow 0.2s ease;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 12px !important;
+  background-color: rgb(var(--v-theme-surface));
+  box-shadow: none;
 }
 
 .settings-list {
   padding: 0;
+  background: transparent;
 }
 
 .settings-list-item {
-  padding-block: 8px;
-  padding-inline: 12px;
-  transition: background-color 0.2s;
-
-  &:not(:last-child) {
-    border-block-end: 1px solid rgba(var(--v-border-color), 0.12);
-  }
+  position: relative;
+  min-block-size: 48px;
+  min-inline-size: 0;
+  padding-block: 9px;
+  padding-inline: 12px 10px;
+  border-radius: 0 !important;
+  transition: background-color 0.14s ease;
 
   &:hover {
-    background-color: var(--app-grouped-list-hover-background);
+    background-color: rgba(var(--v-theme-on-surface), 0.03);
   }
+
+  &:active {
+    background-color: rgba(var(--v-theme-on-surface), 0.06);
+  }
+}
+
+.settings-list-item :deep(.v-list-item__content) {
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.settings-list-separator {
+  position: absolute;
+  z-index: 2;
+  background-color: var(--mp-border-subtle);
+  block-size: 1px;
+  inset-block-end: 0;
+  inset-inline: 56px 0;
+  pointer-events: none;
 }
 
 .settings-list-icon {
-  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-primary-rgb, var(--v-theme-primary));
+  --app-grouped-list-icon-rgb: var(--v-theme-primary);
 
-  block-size: 34px !important;
-  inline-size: 34px !important;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  block-size: 32px;
+  inline-size: 32px;
   border: 1px solid rgba(var(--app-grouped-list-icon-rgb), 0.16);
-  border-radius: max(var(--app-control-radius), 8px) !important;
-  background: rgba(var(--app-grouped-list-icon-rgb), 0.12) !important;
-  color: rgb(var(--app-grouped-list-icon-rgb)) !important;
+  border-radius: 8px;
+  background: rgba(var(--app-grouped-list-icon-rgb), 0.1);
+  color: rgb(var(--app-grouped-list-icon-rgb));
 }
 
 .settings-list-icon--tone-info {
-  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-info-rgb, var(--v-theme-info));
+  --app-grouped-list-icon-rgb: var(--v-theme-info);
 }
 
 .settings-list-icon--tone-success {
-  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-success-rgb, var(--v-theme-success));
+  --app-grouped-list-icon-rgb: var(--v-theme-success);
 }
 
 .settings-list-icon--tone-warning {
-  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-warning-rgb, var(--v-theme-warning));
+  --app-grouped-list-icon-rgb: var(--v-theme-warning);
 }
 
 .settings-list-icon--tone-secondary {
-  --app-grouped-list-icon-rgb: var(--app-grouped-list-icon-secondary-rgb, var(--v-theme-secondary));
+  --app-grouped-list-icon-rgb: var(--v-theme-secondary);
 }
 
-.settings-list-icon :deep(.v-icon) {
-  color: rgb(var(--app-grouped-list-icon-rgb)) !important;
-  font-size: 18px !important;
+.settings-list-title {
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.settings-list-subtitle {
+  margin-block-start: 2px;
+  color: rgba(var(--v-theme-on-surface), 0.54);
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 
 .settings-list-chevron {
-  color: var(--app-grouped-list-chevron-color);
-  font-size: 1.25rem;
+  color: rgba(var(--v-theme-on-surface), 0.36);
 }
 
-@media (width <= 768px) {
+@media (width <= 600px) {
   .app-settings-content {
-    box-sizing: border-box;
-    max-inline-size: 100%;
-    overflow-x: hidden;
-    padding-block: 8px calc(24px + env(safe-area-inset-bottom));
-    padding-inline: 12px;
-  }
-
-  .settings-section {
-    margin-block-end: 18px;
-  }
-
-  .settings-section:last-child {
-    margin-block-end: 0;
-  }
-
-  .settings-section-title {
-    min-block-size: auto;
-    padding-block: 0 7px;
-    padding-inline: 12px;
-    color: var(--app-grouped-list-header-color);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    letter-spacing: 0.015em;
-    line-height: 1.25rem;
-    text-transform: none;
+    gap: 14px;
+    padding-block: 4px calc(24px + env(safe-area-inset-bottom, 0px));
+    padding-inline: 0;
   }
 
   .settings-section-card {
-    max-inline-size: 100%;
-    overflow-x: hidden;
-    border-radius: var(--app-grouped-list-radius) !important;
-  }
-
-  .settings-list {
-    max-inline-size: 100%;
-    overflow-x: hidden;
-    background: transparent;
-    border-radius: inherit !important;
+    border-radius: 11px !important;
   }
 
   .settings-list-item {
-    max-inline-size: 100%;
-    min-inline-size: 0;
-    min-block-size: 58px;
-    overflow: hidden;
-    padding-block: 7px;
-    padding-inline: 12px 9px;
-    border-block-end: 0 !important;
-    border-radius: 0 !important;
-  }
-
-  .settings-list-separator {
-    position: absolute;
-    background-color: var(--app-grouped-list-separator-color);
-    block-size: 1px;
-    inset-block-end: 0;
-    inset-inline: var(--app-grouped-list-content-offset) 0;
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .settings-list-item:active {
-    background-color: var(--app-grouped-list-active-background);
-  }
-
-  .settings-list-item :deep(.v-list-item__content) {
-    min-inline-size: 0;
-    overflow: hidden;
-  }
-
-  .settings-list-title {
-    font-size: 1rem;
-    font-weight: 500 !important;
-    letter-spacing: 0;
-    line-height: 1.375rem;
-  }
-
-  .settings-list-subtitle {
-    margin-block-start: 2px;
-    color: rgba(var(--v-theme-on-surface), 0.58);
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  .settings-list-chevron {
-    color: var(--app-grouped-list-chevron-color);
-    font-size: 1.375rem;
+    min-block-size: 46px;
+    padding-block: 8px;
+    padding-inline: 12px 10px;
   }
 }
 </style>

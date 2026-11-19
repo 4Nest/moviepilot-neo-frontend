@@ -1,7 +1,6 @@
 import RecommendPage from '@/pages/recommend.vue'
 import type { RecommendSource } from '@/api/types'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@tests/support/render'
 import {
   recommendApiUrls,
@@ -11,30 +10,42 @@ import {
 } from '@tests/support/msw/handlers/recommend'
 import { server } from '@tests/support/msw/server'
 import { HttpResponse, http } from 'msw'
-import { defineComponent, nextTick, ref, type Ref } from 'vue'
+import { defineComponent, nextTick, ref, unref, type ComputedRef, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+interface HeaderTabButton {
+  action: () => void
+  icon: string
+  label?: string
+  show?: boolean | ComputedRef<boolean>
+  testId?: string
+}
+
+interface HeaderTabConfig {
+  appendButtons: HeaderTabButton[]
+  modelValue: Ref<string>
+}
+
+interface SharedDialogController {
+  close: ReturnType<typeof vi.fn>
+  id: number
+  updateProps: ReturnType<typeof vi.fn>
+}
+
 const mocks = vi.hoisted(() => ({
-  closeDialog: vi.fn(),
+  controllers: [] as SharedDialogController[],
   openSharedDialog: vi.fn(),
   registerHeaderTab: vi.fn(),
-  useDynamicButton: vi.fn(),
+  toastError: vi.fn(),
+}))
+
+vi.mock('vue-toastification', () => ({
+  useToast: () => ({ error: mocks.toastError }),
 }))
 
 vi.mock('@/composables/useDynamicHeaderTab', () => ({
   useDynamicHeaderTab: () => ({ registerHeaderTab: mocks.registerHeaderTab }),
 }))
-
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: unknown) => mocks.useDynamicButton(options),
-}))
-
-vi.mock('@/composables/usePWA', async () => {
-  const { ref } = await import('vue')
-  return {
-    usePWA: () => ({ appMode: ref(false) }),
-  }
-})
 
 vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
@@ -54,6 +65,18 @@ interface SharedDialogEvents {
   close: () => void
   save: (payload?: { enabled?: Record<string, boolean> }) => Promise<void>
   'update:modelValue': (value: boolean) => void
+}
+
+function getHeaderConfig() {
+  const config = mocks.registerHeaderTab.mock.calls[0]?.[0] as HeaderTabConfig | undefined
+  if (!config) throw new Error('推荐页未注册动态标签')
+  return config
+}
+
+function getSettingsHeaderButton() {
+  const button = getHeaderConfig().appendButtons.find(item => item.testId === 'recommend-settings-btn')
+  if (!button) throw new Error('推荐页顶栏未注册设置按钮')
+  return button
 }
 
 async function renderRecommend() {
@@ -104,18 +127,42 @@ function dynamicRecommendSources(getSources: () => RecommendSource[], onRequest 
 
 describe('recommend page', () => {
   beforeEach(() => {
-    mocks.openSharedDialog.mockReturnValue({
-      close: mocks.closeDialog,
-      id: 1,
-      updateProps: vi.fn(),
+    mocks.controllers.length = 0
+    mocks.toastError.mockReset()
+    server.use(recommendConfigHandler(null, 200))
+    mocks.openSharedDialog.mockImplementation(() => {
+      const controller: SharedDialogController = {
+        close: vi.fn(),
+        id: mocks.controllers.length + 1,
+        updateProps: vi.fn(),
+      }
+      mocks.controllers.push(controller)
+      return controller
     })
   })
 
-  it('uses local configuration and merges extra sources without duplicates', async () => {
+  it('registers settings button in header appendButtons without top action bar', async () => {
+    const sourcesRequested = vi.fn()
+    server.use(recommendSourcesHandler([], 200, sourcesRequested))
+    const { container } = await renderRecommend()
+    await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
+
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
+    const settingsBtn = getSettingsHeaderButton()
+    expect(settingsBtn).toMatchObject({
+      icon: 'mdi-tune',
+      label: '设置显示内容',
+      testId: 'recommend-settings-btn',
+    })
+    expect(unref(settingsBtn.show ?? true)).toBe(true)
+  })
+
+  it('prefers remote configuration over stale local cache and merges extra sources without duplicates', async () => {
     let remoteConfigRequests = 0
-    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true, '自定义来源': true }))
+    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': false }))
+    const remoteConfig = { '流行趋势': true, '自定义来源': true }
     server.use(
-      recommendConfigHandler({}, 200, () => {
+      recommendConfigHandler(remoteConfig, 200, () => {
         remoteConfigRequests += 1
       }),
       recommendSourcesHandler([
@@ -126,14 +173,15 @@ describe('recommend page', () => {
     await renderRecommend()
 
     expect(await screen.findByText('自定义来源')).toBeInTheDocument()
-    expect(screen.getAllByTestId('recommend-view')).toHaveLength(4)
+    await waitFor(() => expect(remoteConfigRequests).toBe(1))
+    await waitFor(() => expect(screen.getAllByTestId('recommend-view')).toHaveLength(4))
     expect(screen.getByText('AniList 当前趋势')).toBeInTheDocument()
     expect(screen.getByText('AniList 本季热门')).toBeInTheDocument()
     expect(screen.queryByText('重复来源')).not.toBeInTheDocument()
-    expect(remoteConfigRequests).toBe(0)
+    expect(JSON.parse(localStorage.getItem('MP_RECOMMEND') || '{}')).toEqual(remoteConfig)
   })
 
-  it('filters by the registered category and waits until ready before showing its empty state', async () => {
+  it('filters by the registered category and waits 120ms until ready before showing its empty state', async () => {
     const setTimeout = vi.spyOn(window, 'setTimeout')
     const sourcesRequested = vi.fn()
     localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true }))
@@ -141,12 +189,12 @@ describe('recommend page', () => {
 
     await renderRecommend()
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    const headerTab = mocks.registerHeaderTab.mock.calls[0][0] as { modelValue: Ref<string> }
+    const headerTab = getHeaderConfig()
     headerTab.modelValue.value = '电视剧'
     await nextTick()
 
     expect(screen.queryByText('当前分类下没有可显示的内容')).not.toBeInTheDocument()
-    const readyTimer = setTimeout.mock.calls.find(([, delay]) => delay === 400)?.[0]
+    const readyTimer = setTimeout.mock.calls.find(([, delay]) => delay === 120)?.[0]
     expect(typeof readyTimer).toBe('function')
     ;(readyTimer as () => void)()
     await nextTick()
@@ -182,22 +230,35 @@ describe('recommend page', () => {
     expect(await screen.findByText('请求完成来源')).toBeInTheDocument()
   })
 
-  it('removes an extra source withdrawn while the kept-alive page is inactive', async () => {
+  it('syncs updated remote config and withdrawn extra sources when KeepAlive page reactivates', async () => {
     let sources: RecommendSource[] = [{ api_path: 'recommend/custom', name: '已撤销来源', type: '扩展' }]
-    const requested = vi.fn()
-    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true, '已撤销来源': true }))
-    server.use(dynamicRecommendSources(() => sources, requested))
+    let remoteConfig: Record<string, boolean> = { '流行趋势': true, '已撤销来源': true }
+    const sourcesRequested = vi.fn()
+    const configRequested = vi.fn()
+    server.use(
+      http.get(recommendApiUrls.config, () => {
+        configRequested()
+        return HttpResponse.json({ data: { value: remoteConfig }, success: true })
+      }),
+      dynamicRecommendSources(() => sources, sourcesRequested),
+    )
 
     await renderKeptAliveRecommend()
     expect(await screen.findByText('已撤销来源')).toBeInTheDocument()
-    const requestsBeforeReactivation = requested.mock.calls.length
+    expect(screen.getByText('流行趋势')).toBeInTheDocument()
+    const sourcesCountBefore = sourcesRequested.mock.calls.length
+    const configCountBefore = configRequested.mock.calls.length
     sources = []
+    remoteConfig = { '流行趋势': false, '正在热映': true }
 
     await fireEvent.click(screen.getByRole('button', { name: '停用推荐页' }))
     await fireEvent.click(screen.getByRole('button', { name: '启用推荐页' }))
 
-    await waitFor(() => expect(requested).toHaveBeenCalledTimes(requestsBeforeReactivation + 1))
+    await waitFor(() => expect(sourcesRequested).toHaveBeenCalledTimes(sourcesCountBefore + 1))
+    await waitFor(() => expect(configRequested).toHaveBeenCalledTimes(configCountBefore + 1))
     await waitFor(() => expect(screen.queryByText('已撤销来源')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('流行趋势')).not.toBeInTheDocument())
+    expect(screen.getByText('正在热映')).toBeInTheDocument()
   })
 
   it('loads remote configuration when local configuration is absent', async () => {
@@ -223,21 +284,31 @@ describe('recommend page', () => {
     ['null', 'null'],
     ['an array', '[]'],
     ['a non-boolean field', JSON.stringify({ '流行趋势': 'enabled' })],
-  ])('clears %s local configuration and falls back to the server', async (_case, storedConfig) => {
+  ])('clears %s local configuration when remote configuration is unavailable', async (_case, storedConfig) => {
     const configRequested = vi.fn()
     const sourcesRequested = vi.fn()
     localStorage.setItem('MP_RECOMMEND', storedConfig)
-    server.use(
-      recommendConfigHandler({ '流行趋势': true }, 200, configRequested),
-      recommendSourcesHandler([], 200, sourcesRequested),
-    )
+    server.use(recommendConfigHandler(null, 200, configRequested), recommendSourcesHandler([], 200, sourcesRequested))
 
     await renderRecommend()
 
     await waitFor(() => expect(configRequested).toHaveBeenCalledOnce())
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    await waitFor(() => expect(localStorage.getItem('MP_RECOMMEND')).toBe(JSON.stringify({ '流行趋势': true })))
+    expect(localStorage.getItem('MP_RECOMMEND')).toBeNull()
     expect(screen.getByText('流行趋势')).toBeInTheDocument()
+  })
+
+  it('falls back to local configuration when remote configuration request fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const configRequested = vi.fn()
+    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': false, '正在热映': true }))
+    server.use(recommendConfigHandler(null, 500, configRequested), recommendSourcesHandler([]))
+
+    await renderRecommend()
+
+    await waitFor(() => expect(configRequested).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.queryByText('流行趋势')).not.toBeInTheDocument())
+    expect(screen.getByText('正在热映')).toBeInTheDocument()
   })
 
   it('keeps defaults and does not persist an invalid remote configuration', async () => {
@@ -256,18 +327,15 @@ describe('recommend page', () => {
     expect(localStorage.getItem('MP_RECOMMEND')).toBeNull()
   })
 
-  it('saves settings through the shared dialog boundary', async () => {
+  it('saves settings through the shared dialog boundary opened from header button', async () => {
     const savedConfig = vi.fn()
     const sourcesRequested = vi.fn()
-    const user = userEvent.setup()
     localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true }))
     server.use(recommendSourcesHandler([], 200, sourcesRequested), saveRecommendConfigHandler(savedConfig))
     await renderRecommend()
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    const settingsButton = await screen.findByTestId('recommend-settings-btn')
 
-    expect(settingsButton).toBeInTheDocument()
-    await user.click(settingsButton)
+    getSettingsHeaderButton().action()
     expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
     const dialogEvents = mocks.openSharedDialog.mock.calls[0][2] as SharedDialogEvents
     const nextConfig = { '流行趋势': false, '正在热映': true }
@@ -276,19 +344,36 @@ describe('recommend page', () => {
 
     expect(savedConfig).toHaveBeenCalledWith(nextConfig)
     expect(localStorage.getItem('MP_RECOMMEND')).toBe(JSON.stringify(nextConfig))
-    expect(mocks.closeDialog).toHaveBeenCalledOnce()
+    expect(mocks.controllers[0].close).toHaveBeenCalledOnce()
+  })
+
+  it('keeps current settings and local cache intact when saving to server fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true }))
+    server.use(
+      recommendSourcesHandler([]),
+      saveRecommendConfigHandler(() => {}, 500),
+    )
+    await renderRecommend()
+
+    getSettingsHeaderButton().action()
+    const dialogEvents = mocks.openSharedDialog.mock.calls[0][2] as SharedDialogEvents
+    await dialogEvents.save({ enabled: { '流行趋势': false } })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('保存失败')
+    expect(localStorage.getItem('MP_RECOMMEND')).toBe(JSON.stringify({ '流行趋势': true }))
+    expect(mocks.controllers[0].close).not.toHaveBeenCalled()
   })
 
   it('releases the shared settings controller through both close contracts', async () => {
     const sourcesRequested = vi.fn()
-    const user = userEvent.setup()
     localStorage.setItem('MP_RECOMMEND', JSON.stringify({ '流行趋势': true }))
     server.use(recommendSourcesHandler([], 200, sourcesRequested))
     await renderRecommend()
     await waitFor(() => expect(sourcesRequested).toHaveBeenCalledOnce())
-    const settingsButton = (await screen.findByTestId('recommend-settings-btn')) as HTMLButtonElement
+    const openSettings = getSettingsHeaderButton().action
 
-    await user.click(settingsButton)
+    openSettings()
     const dialogProps = mocks.openSharedDialog.mock.calls[0][1] as {
       valueGetter: (item: { title: string }) => string
     }
@@ -296,18 +381,18 @@ describe('recommend page', () => {
     expect(dialogProps.valueGetter({ title: '流行趋势' })).toBe('流行趋势')
 
     firstDialogEvents.close()
-    await user.click(settingsButton)
-    expect(mocks.closeDialog).not.toHaveBeenCalled()
+    openSettings()
+    expect(mocks.controllers[0].close).not.toHaveBeenCalled()
 
     const secondDialogEvents = mocks.openSharedDialog.mock.calls[1][2] as SharedDialogEvents
     secondDialogEvents['update:modelValue'](true)
-    await user.click(settingsButton)
-    expect(mocks.closeDialog).toHaveBeenCalledOnce()
+    openSettings()
+    expect(mocks.controllers[1].close).toHaveBeenCalledOnce()
 
     const thirdDialogEvents = mocks.openSharedDialog.mock.calls[2][2] as SharedDialogEvents
     thirdDialogEvents['update:modelValue'](false)
-    await user.click(settingsButton)
-    expect(mocks.closeDialog).toHaveBeenCalledOnce()
+    openSettings()
+    expect(mocks.controllers[2].close).not.toHaveBeenCalled()
   })
 
   it('keeps built-in content when remote requests fail', async () => {
@@ -334,7 +419,7 @@ describe('recommend page', () => {
     await fireEvent.click(screen.getByText('流行趋势'))
     const componentTimerIndexes = setTimeout.mock.calls
       .map(([, delay], index) => ({ delay, index }))
-      .filter(({ delay }) => delay === 400)
+      .filter(({ delay }) => delay === 120)
     expect(componentTimerIndexes).toHaveLength(1)
     const componentTimer = setTimeout.mock.results[componentTimerIndexes[0].index].value
     unmount()

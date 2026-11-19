@@ -21,8 +21,7 @@
   justify-content: center;
   border: 1px solid rgba(74, 222, 128, 0.45);
   border-radius: 6px;
-  background: rgba(16, 185, 129, 0.86);
-  backdrop-filter: blur(8px);
+  background: rgba(16, 185, 129, 0.94);
   block-size: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   color: #fff;

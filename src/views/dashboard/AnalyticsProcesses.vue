@@ -170,5 +170,23 @@ useDataRefresh(
   font-size: 11.5px;
   font-weight: 600;
   padding-inline: 8px;
+  white-space: nowrap;
+}
+
+@media (width <= 600px) {
+  .dashboard-processes-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-processes-table {
+    overflow-x: auto;
+  }
+
+  .dashboard-processes-table :deep(thead th),
+  .dashboard-processes-table :deep(tbody td) {
+    font-size: 12px !important;
+    padding-inline: 10px !important;
+    white-space: nowrap;
+  }
 }
 </style>

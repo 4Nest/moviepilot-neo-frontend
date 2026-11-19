@@ -1009,6 +1009,7 @@ onUnmounted(() => {
 .logging-shell.is-wrap .logging-record-body {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  word-break: normal;
 }
 
 .logging-record-level.level-trace,
@@ -1092,25 +1093,47 @@ onUnmounted(() => {
     min-block-size: 0;
   }
 
+  .logging-toolbar {
+    gap: 6px;
+  }
+
+  .logging-level-select {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .logging-search {
+    flex: 1 1 100%;
+    min-inline-size: 0;
+  }
+
   .logging-record {
     gap: 3px;
     grid-template-columns: minmax(0, 1fr);
   }
 
   .logging-record-time {
+    font-size: 11.5px;
     padding-block: 0;
   }
 
   .logging-record-panel {
     padding: 6px 8px;
-  }
-
-  .logging-record-line {
     gap: 8px;
   }
 
+  .logging-record-line {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .logging-record-level {
+    flex-basis: 3.6rem;
+    min-inline-size: 3.6rem;
+  }
+
   .logging-shell {
-    padding: 8px 10px;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
   .logging-loading-overlay {

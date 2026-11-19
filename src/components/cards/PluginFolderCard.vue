@@ -222,7 +222,7 @@ const dropdownItems = ref([
             @click="handleCardClick"
             class="plugin-folder-card app-hover-lift-card h-full"
             :class="{
-              'plugin-folder-card--mobile': display.mobile,
+              'plugin-folder-card--mobile': display.mobile.value,
               'plugin-folder-card--hover': hover.isHovering && !props.sortable,
               'plugin-folder-card--sortable': props.sortable,
               'plugin-folder-card--custom': hasCustomAppearance,
@@ -250,7 +250,7 @@ const dropdownItems = ref([
                 <div v-if="shouldShowIcon" class="plugin-folder-card__icon-container">
                   <VIcon
                     :icon="folderIcon"
-                    :size="display.mobile ? 20 : 22"
+                    :size="display.mobile.value ? 20 : 22"
                     :color="iconColor"
                     :class="{ 'cursor-move': props.sortable && display.mdAndUp.value }"
                   />
@@ -434,7 +434,9 @@ const dropdownItems = ref([
     line-clamp: 1;
     line-height: 1.35;
     max-inline-size: none;
+    overflow-wrap: anywhere;
     text-overflow: ellipsis;
+    word-break: normal;
 
     .plugin-folder-card--custom & {
       color: white;
@@ -485,6 +487,32 @@ const dropdownItems = ref([
     inline-size: 26px !important;
     min-inline-size: 26px !important;
     padding: 0 !important;
+  }
+}
+
+@media (width <= 600px) {
+  .plugin-folder-card {
+    min-block-size: 6.25rem !important;
+
+    &__content {
+      padding: 12px 13px;
+    }
+
+    &__info {
+      padding-inline-end: 28px;
+    }
+
+    &__menu-wrap {
+      inset-block-start: 6px;
+      inset-inline-end: 6px;
+    }
+
+    &__menu-btn {
+      border-radius: 7px !important;
+      block-size: 32px !important;
+      inline-size: 32px !important;
+      min-inline-size: 32px !important;
+    }
   }
 }
 

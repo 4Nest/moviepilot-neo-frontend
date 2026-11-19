@@ -438,6 +438,12 @@ useSilentSettingRefresh(
   .site-reset-box {
     flex-direction: column;
     align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .site-reset-box__control {
+    inline-size: 100%;
   }
 }
 </style>

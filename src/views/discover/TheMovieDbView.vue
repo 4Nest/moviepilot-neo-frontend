@@ -281,30 +281,27 @@ onUnmounted(() => {
         hide-details
         @end="handleVoteAverageEnd"
         @keyup="handleSliderKeyup"
-      >
-        <template #append>
-          <div class="discover-vote-count" title="最低评价人数">
-            <span class="discover-vote-count__label" aria-hidden="true">
-              <VIcon icon="mdi-account-check-outline" size="13" />
-              <span>人数≥</span>
-            </span>
-            <VTextField
-              :model-value="voteCountInput"
-              aria-label="最低评价人数"
-              variant="outlined"
-              width="4.5rem"
-              density="compact"
-              type="number"
-              min="0"
-              class="discover-vote-input"
-              hide-details
-              single-line
-              @update:model-value="handleVoteCountUpdate"
-            />
-            <VTooltip activator="parent" location="top">最低评价人数</VTooltip>
-          </div>
-        </template>
-      </VSlider>
+      />
+      <div class="discover-vote-count" title="最低评价人数">
+        <span class="discover-vote-count__label" aria-hidden="true">
+          <VIcon icon="mdi-account-check-outline" size="13" />
+          <span>人数≥</span>
+        </span>
+        <VTextField
+          :model-value="voteCountInput"
+          aria-label="最低评价人数"
+          variant="outlined"
+          width="4.5rem"
+          density="compact"
+          type="number"
+          min="0"
+          class="discover-vote-input"
+          hide-details
+          single-line
+          @update:model-value="handleVoteCountUpdate"
+        />
+        <VTooltip activator="parent" location="top">最低评价人数</VTooltip>
+      </div>
     </div>
   </div>
 
@@ -378,12 +375,13 @@ onUnmounted(() => {
 
 .discover-rating-slider {
   flex: 1 1 auto;
-  max-inline-size: 460px;
   margin-inline: 0 !important;
+  max-inline-size: 320px;
 }
 
 .discover-vote-count {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 5px;
 }
@@ -410,5 +408,34 @@ onUnmounted(() => {
   min-block-size: 28px;
   padding-block: 2px;
   padding-inline: 8px;
+}
+
+@media (width <= 600px) {
+  .discover-filter-row--slider {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .discover-rating-slider {
+    flex: 1 1 calc(100% - 54px);
+    max-inline-size: none;
+  }
+
+  .discover-vote-count {
+    gap: 10px;
+    inline-size: 100%;
+    padding-inline-start: 0;
+  }
+
+  .discover-vote-count__label {
+    flex: 0 0 44px;
+    color: var(--mp-text-secondary, rgba(var(--v-theme-on-surface), 0.62));
+    font-size: 12px;
+    min-inline-size: 44px;
+  }
+
+  .discover-vote-count__label :deep(.v-icon) {
+    display: none;
+  }
 }
 </style>

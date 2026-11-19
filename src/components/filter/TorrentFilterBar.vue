@@ -527,7 +527,7 @@ onUnmounted(() => {
   <!-- 移动端头部和筛选区域 -->
   <VCard class="d-block d-sm-none search-header-mobile filter-toolbar-card mb-3" elevation="0">
     <div class="view-header">
-      <div class="d-flex align-center flex-wrap pa-2.5">
+      <div class="filter-toolbar-mobile-body d-flex align-center flex-wrap">
         <div class="d-flex align-center w-100">
           <VChip color="primary" variant="tonal" size="small" class="search-count me-auto" prepend-icon="mdi-magnify">
             {{ totalFilteredCount }} {{ t('torrent.resources') }}
@@ -588,45 +588,44 @@ onUnmounted(() => {
           </VBtn>
         </div>
 
-        <!-- 筛选图标按钮区域 -->
+        <!-- 筛选胶囊按钮区域 -->
         <div class="filter-buttons-grid w-100 mt-2">
           <VBtn
             v-for="(title, key) in filterTitles"
             v-show="filterOptions[key].length > 0"
             :key="key"
-            variant="tonal"
-            color="primary"
+            size="small"
+            :variant="filterForm[key].length > 0 ? 'tonal' : 'outlined'"
+            :color="filterForm[key].length > 0 ? 'primary' : undefined"
             class="filter-btn-mobile"
+            :class="{ 'filter-btn-mobile--active': filterForm[key].length > 0 }"
             @click="toggleFilterMenu(key)"
           >
-            <VIcon :icon="getFilterIcon(key)" class="filter-icon me-1"></VIcon>
+            <VIcon :icon="getFilterIcon(key)" size="14" class="filter-icon"></VIcon>
             <span class="filter-label">
               {{ title }}
             </span>
-            <VBadge
-              v-if="filterForm[key].length > 0"
-              :content="filterForm[key].length"
-              color="primary"
-              location="top end"
-              offset-x="-10"
-              offset-y="-10"
-            ></VBadge>
+            <span v-if="filterForm[key].length > 0" class="filter-btn-mobile__count">
+              {{ filterForm[key].length }}
+            </span>
           </VBtn>
 
           <!-- 全部筛选按钮 -->
-          <VBtn variant="tonal" color="primary" class="filter-btn-mobile" @click="toggleAllFilterMenu">
-            <VIcon icon="mdi-filter-variant" class="filter-icon me-1"></VIcon>
+          <VBtn
+            size="small"
+            :variant="getFilterCount > 0 ? 'tonal' : 'outlined'"
+            :color="getFilterCount > 0 ? 'primary' : undefined"
+            class="filter-btn-mobile"
+            :class="{ 'filter-btn-mobile--active': getFilterCount > 0 }"
+            @click="toggleAllFilterMenu"
+          >
+            <VIcon icon="mdi-filter-variant" size="14" class="filter-icon"></VIcon>
             <span class="filter-label">
               {{ t('torrent.allFilters') }}
             </span>
-            <VBadge
-              v-if="getFilterCount > 0"
-              :content="getFilterCount"
-              color="primary"
-              location="top end"
-              offset-x="-10"
-              offset-y="-10"
-            ></VBadge>
+            <span v-if="getFilterCount > 0" class="filter-btn-mobile__count">
+              {{ getFilterCount }}
+            </span>
           </VBtn>
         </div>
       </div>
@@ -843,52 +842,68 @@ onUnmounted(() => {
   padding-inline: 13px;
 }
 
+.filter-toolbar-mobile-body {
+  padding-block: 10px;
+  padding-inline: 12px;
+}
+
 .filter-buttons-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .filter-btn-mobile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
-  border-radius: 8px;
-  block-size: 46px;
-  min-block-size: 46px;
-  min-inline-size: 0;
-  padding-block: 4px;
-  padding-inline: 4px;
+  border-color: var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12)) !important;
+  border-radius: 7px !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.03);
+  block-size: 30px !important;
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-weight: 500;
+  min-block-size: 30px !important;
+  min-inline-size: 0 !important;
+  padding-block: 0 !important;
+  padding-inline: 9px !important;
+}
+
+.filter-btn-mobile--active {
+  border-color: rgba(var(--v-theme-primary), 0.35) !important;
 }
 
 .filter-btn-mobile :deep(.v-btn__content) {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 100%;
-  max-inline-size: 100%;
-  min-inline-size: 0;
-  line-height: 1.15;
-  white-space: normal;
+  gap: 4px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .filter-icon {
-  font-size: 16px;
-  margin-block-end: 2px;
+  flex-shrink: 0;
+  font-size: 14px;
+  opacity: 0.78;
 }
 
 .filter-label {
-  display: -webkit-box;
-  overflow: hidden;
   font-size: 12px;
-  line-height: 1.15;
-  max-inline-size: 100%;
-  overflow-wrap: anywhere;
-  text-align: center;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.filter-btn-mobile__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background-color: rgb(var(--v-theme-primary));
+  block-size: 16px;
+  color: rgb(var(--v-theme-on-primary));
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  min-inline-size: 16px;
+  padding-inline: 4px;
 }
 </style>

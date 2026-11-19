@@ -483,4 +483,54 @@ onBeforeUnmount(() => {
   opacity: 1;
   transform: translateY(0);
 }
+
+@media (width <= 600px) {
+  .progress-card {
+    margin: 8px 12px;
+    padding: 11px 12px;
+  }
+
+  .progress-header {
+    gap: 8px;
+    margin-block-end: 8px;
+  }
+
+  .progress-icon-box {
+    border-radius: 7px;
+    block-size: 30px;
+    inline-size: 30px;
+  }
+
+  .progress-title {
+    font-size: 13.5px;
+  }
+
+  .stat-number {
+    font-size: 18px;
+  }
+
+  .results-container {
+    padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    padding-inline: 12px;
+  }
+
+  .module-item {
+    padding: 9px 11px;
+  }
+
+  .module-header {
+    gap: 8px;
+  }
+
+  .module-name {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .module-error {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+}
 </style>

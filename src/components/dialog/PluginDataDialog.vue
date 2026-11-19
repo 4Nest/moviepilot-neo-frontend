@@ -176,9 +176,28 @@ onMounted(() => {
       </VCardActions>
     </VCard>
     <!-- Vue 渲染模式 -->
-    <VCard v-else-if="renderMode === 'vue'" class="plugin-vue-card">
-      <VDialogCloseBtn v-if="!display.mdAndUp.value" class="plugin-vue-fallback-close" @click="emit('close')" />
-      <VCardText class="pa-0">
+    <VCard v-else-if="renderMode === 'vue'" class="mp-dialog-card plugin-vue-card">
+      <VCardItem class="mp-dialog-header">
+        <template #prepend>
+          <VIcon icon="mdi-database-eye-outline" size="20" class="me-2 text-primary" />
+        </template>
+        <VCardTitle>{{ props.plugin?.plugin_name || t('dialog.pluginData.title') }}</VCardTitle>
+        <template v-if="show_switch" #append>
+          <VBtn
+            color="default"
+            variant="outlined"
+            size="small"
+            prepend-icon="mdi-cog-outline"
+            class="me-8"
+            @click="emit('switch')"
+          >
+            切换配置
+          </VBtn>
+        </template>
+      </VCardItem>
+      <VDialogCloseBtn class="plugin-vue-fallback-close" @click="emit('close')" />
+      <VDivider />
+      <VCardText class="mp-dialog-body plugin-vue-body">
         <component
           :is="dynamicComponent"
           :api="api"

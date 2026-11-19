@@ -378,7 +378,7 @@ async function deleteDownload() {
 }
 
 .downloading-card__chips :deep(.v-chip) {
-  border-radius: 5px !important;
+  border-radius: 6px !important;
   block-size: 20px !important;
   flex: 0 1 auto;
   font-size: 11px !important;
@@ -443,6 +443,7 @@ async function deleteDownload() {
   -webkit-line-clamp: 2;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .downloading-card__title-meta {
@@ -467,7 +468,7 @@ async function deleteDownload() {
   line-height: 1.4;
   overflow-wrap: anywhere;
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .downloading-card__torrent-title--focusable {
@@ -509,14 +510,21 @@ async function deleteDownload() {
   flex: 1 1 5.5rem;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: 2px 6px;
   line-height: 1.3;
 }
 
+.downloading-card__progress-copy > span:first-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .downloading-card__progress-remaining {
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
   white-space: normal;
+  word-break: normal;
 }
 
 .downloading-card__progress-label strong {
@@ -592,17 +600,17 @@ async function deleteDownload() {
 
 @container (width <= 25rem) {
   .downloading-card {
-    min-block-size: 8.25rem;
-    grid-template-columns: 5.75rem minmax(0, 1fr);
+    min-block-size: 8rem;
+    grid-template-columns: 5rem minmax(0, 1fr);
   }
 
   .downloading-card__poster {
-    min-block-size: 8.25rem;
+    min-block-size: 8rem;
   }
 
   .downloading-card__body {
     gap: 6px;
-    padding: 11px 12px !important;
+    padding: 10px 12px !important;
   }
 
   .downloading-card__chips {
@@ -613,22 +621,62 @@ async function deleteDownload() {
     font-size: 14px;
   }
 
+  .downloading-card__title-meta {
+    margin-inline-start: 4px;
+    font-size: 11.5px;
+  }
+
   .downloading-card__torrent-title {
     font-size: 11.5px;
   }
 
+  .downloading-card__footer {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+  }
+
   .downloading-card__speeds {
+    flex: 1 1 0;
     column-gap: 8px;
+    row-gap: 3px;
   }
 
   .downloading-card__speed strong {
     font-size: 11.5px;
   }
+
+  .downloading-card__actions {
+    gap: 6px;
+  }
 }
 
 @container (width <= 21rem) {
+  .downloading-card {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+
   .downloading-card__body {
-    padding-inline: 10px !important;
+    padding: 10px !important;
+  }
+
+  .downloading-card__speeds {
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 2px;
+  }
+}
+
+@media (width <= 600px) {
+  .downloading-card__action-btn {
+    border-radius: 8px !important;
+    block-size: 34px !important;
+    inline-size: 34px !important;
+    min-inline-size: 34px !important;
+  }
+
+  .downloading-card__actions {
+    gap: 6px;
   }
 }
 

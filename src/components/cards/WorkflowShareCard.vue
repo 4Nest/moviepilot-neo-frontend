@@ -390,4 +390,72 @@ function doDelete() {
   align-items: center;
   gap: 0.2rem;
 }
+
+@media (width <= 600px) {
+  .workflow-share-card {
+    border-radius: 10px !important;
+    min-block-size: 132px;
+  }
+
+  .workflow-share-card__layout {
+    gap: 7px;
+    padding: 11px 12px;
+  }
+
+  .workflow-share-card__header {
+    gap: 8px;
+  }
+
+  .workflow-share-card__icon-box {
+    flex: 0 0 32px;
+    border-radius: 8px;
+    block-size: 32px;
+    inline-size: 32px;
+  }
+
+  .workflow-share-card__title {
+    font-size: 14px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .workflow-share-card__mine-badge {
+    border-radius: 6px;
+    font-size: 11px;
+    padding-inline: 5px;
+  }
+
+  .workflow-share-card__comment {
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .workflow-share-card__pills {
+    gap: 4px;
+  }
+
+  .workflow-share-card__pill {
+    border-radius: 6px;
+    font-size: 11px;
+    max-inline-size: 8.5rem;
+    padding-inline: 5px;
+  }
+
+  .workflow-share-card__footer {
+    gap: 6px;
+    padding-block-start: 2px;
+  }
+
+  .workflow-share-card__author,
+  .workflow-share-card__stats {
+    font-size: 11.5px;
+  }
+
+  .workflow-share-card__stats {
+    gap: 6px;
+  }
+}
 </style>

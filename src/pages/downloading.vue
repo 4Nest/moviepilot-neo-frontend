@@ -6,8 +6,6 @@ import NoDataFound from '@/components/states/NoDataFound.vue'
 import { useI18n } from '@/composables/useChineseText'
 import { useDynamicHeaderTab } from '@/composables/useDynamicHeaderTab'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
-import { useDynamicButton } from '@/composables/useDynamicButton'
-import { usePWA } from '@/composables/usePWA'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 
 const AddDownloadDialog = defineAsyncComponent(() => import('@/components/dialog/AddDownloadDialog.vue'))
@@ -17,7 +15,6 @@ const DownloadHistoryDialog = defineAsyncComponent(() => import('@/components/di
 const { t } = useI18n()
 
 const route = useRoute()
-const { appMode } = usePWA()
 const activeTab = ref<string>((route.query.tab as string) || '')
 const isPageActive = ref(true)
 
@@ -53,16 +50,6 @@ function openAddDownloadDialog() {
     { closeOn: ['close', 'done'] },
   )
 }
-
-useDynamicButton({
-  icon: 'mdi-plus',
-  onClick: openAddDownloadDialog,
-  menuItems: [
-    { title: t('downloading.addTorrent'), icon: 'mdi-plus', action: openAddDownloadDialog },
-    { title: t('downloading.history'), icon: 'mdi-history', action: openDownloadHistoryDialog },
-  ],
-  show: computed(() => appMode.value),
-})
 
 // 下载器
 const downloaders = ref<DownloaderConf[]>([])
@@ -104,7 +91,7 @@ useKeepAliveRefresh(async () => {
 
 <template>
   <div>
-    <div v-if="!appMode && route.path === '/downloading'" class="mp-page-action-bar">
+    <div v-if="route.path === '/downloading'" class="mp-page-action-bar">
       <VBtn
         size="small"
         variant="outlined"

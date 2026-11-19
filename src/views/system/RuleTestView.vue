@@ -495,7 +495,7 @@ onMounted(() => {
   line-height: 1.45;
   margin-block-start: 3px;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .empty-state {
@@ -543,11 +543,33 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 420px) {
+@media (width <= 600px) {
+  .shortcut-workbench {
+    gap: 10px;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+  }
+
   .shortcut-panel {
     padding: 12px;
   }
 
+  .hero-title-text {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .hero-subtitle {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .pipeline {
+    padding: 10px 12px;
+  }
+}
+
+@media (width <= 420px) {
   .result-hero {
     grid-template-columns: minmax(0, 1fr);
   }

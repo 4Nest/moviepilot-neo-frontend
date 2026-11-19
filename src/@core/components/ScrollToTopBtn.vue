@@ -1,5 +1,10 @@
 <script lang="ts" setup>
+import { usePWA } from '@/composables/usePWA'
+
 defineProps<{ offsetFab?: boolean }>()
+
+// App 模式下显示底部导航栏，隐藏回到顶部浮钮以避免任何视口下与底栏重叠
+const { appMode } = usePWA()
 
 // 控制回到顶部按钮的可见性
 const showScrollToTop = ref(false)
@@ -28,7 +33,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="global-action-buttons d-none d-sm-block" :class="{ 'global-action-buttons--offset-fab': offsetFab }">
+  <div
+    v-if="!appMode"
+    class="global-action-buttons d-none d-sm-block"
+    :class="{ 'global-action-buttons--offset-fab': offsetFab }"
+  >
     <Transition name="scroll-fade">
       <button v-show="showScrollToTop" class="global-action-button" @click="scrollToTop">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

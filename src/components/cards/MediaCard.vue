@@ -638,7 +638,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 常态磨砂微胶囊角标 */
+/* 常态微胶囊角标 */
 .media-card__badge {
   position: absolute;
   z-index: 2;
@@ -646,8 +646,7 @@ onBeforeUnmount(() => {
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(12, 15, 24, 0.74);
-  backdrop-filter: blur(8px);
+  background: rgba(12, 15, 24, 0.9);
   block-size: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
   color: rgba(248, 250, 252, 0.96);
@@ -705,8 +704,7 @@ onBeforeUnmount(() => {
   padding: 2px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(12, 15, 24, 0.72);
-  backdrop-filter: blur(6px);
+  background: rgba(12, 15, 24, 0.9);
   block-size: 20px;
   inline-size: 20px;
   inset-block-end: 6px;
@@ -753,8 +751,7 @@ onBeforeUnmount(() => {
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
-  background: rgba(12, 15, 24, 0.74);
-  backdrop-filter: blur(8px);
+  background: rgba(12, 15, 24, 0.9);
   block-size: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   font-size: 11px;
@@ -812,8 +809,7 @@ onBeforeUnmount(() => {
 .media-card__action-btn {
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   border-radius: 8px !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  backdrop-filter: blur(10px);
+  background: rgba(12, 15, 24, 0.88) !important;
   block-size: 28px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
   inline-size: 28px !important;
@@ -824,7 +820,7 @@ onBeforeUnmount(() => {
 
   &:hover {
     border-color: rgba(255, 255, 255, 0.38) !important;
-    background: rgba(255, 255, 255, 0.22) !important;
+    background: rgba(24, 30, 44, 0.94) !important;
     transform: translateY(-1px);
   }
 }

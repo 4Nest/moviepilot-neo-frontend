@@ -175,4 +175,48 @@ useKeepAliveRefresh(loadRecentImports)
   gap: 8px;
   font-size: 13px;
 }
+
+@media (width <= 600px) {
+  .dashboard-list-card {
+    min-block-size: 0;
+  }
+
+  .dashboard-card-heading {
+    padding: 12px 14px 8px !important;
+  }
+
+  .dashboard-card-heading :deep(.v-card-title) {
+    font-size: 14px;
+  }
+
+  .recent-import-list {
+    padding: 2px 14px 12px !important;
+  }
+
+  .recent-import-item {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 10px;
+    min-block-size: 56px;
+    padding-block: 6px;
+  }
+
+  .recent-import-poster {
+    border-radius: 7px;
+    block-size: 52px;
+    inline-size: 38px;
+  }
+
+  .recent-import-title {
+    font-size: 13px;
+  }
+
+  .recent-import-meta,
+  .recent-import-time {
+    font-size: 11.5px;
+  }
+
+  .recent-import-empty {
+    padding-block: 24px;
+  }
+}
 </style>

@@ -164,4 +164,33 @@ useKeepAliveRefresh(getStorage)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (width <= 600px) {
+  .dashboard-summary-card {
+    min-block-size: 0;
+  }
+
+  .dashboard-summary-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-summary-content {
+    padding: 2px 14px 12px;
+  }
+
+  .animated-storage-value {
+    font-size: 19px;
+  }
+
+  .animated-storage-meta {
+    font-size: 12.5px;
+    margin-block-start: 4px;
+  }
+
+  .animated-storage-caption {
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: normal;
+  }
+}
 </style>

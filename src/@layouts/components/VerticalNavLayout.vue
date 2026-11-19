@@ -8,6 +8,34 @@ import {
 } from '@/composables/useThemeCustomizer'
 import { usePWA } from '@/composables/usePWA'
 
+export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'MP_SIDEBAR_COLLAPSED'
+
+/** 读取桌面端侧边栏折叠持久化状态；未设置时回落到主题布局。 */
+function readSidebarCollapsedState(fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback
+
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY)
+    if (stored === 'true') return true
+    if (stored === 'false') return false
+  } catch {
+    // 隐私模式或存储受限时回落到默认值
+  }
+
+  return fallback
+}
+
+/** 将桌面端侧边栏折叠状态写入本地存储。 */
+function persistSidebarCollapsedState(collapsed: boolean) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed))
+  } catch {
+    // 忽略存储写入受限异常
+  }
+}
+
 export default defineComponent({
   setup(_props, { slots }) {
     const isOverlayNavActive = ref(false)
@@ -18,9 +46,19 @@ export default defineComponent({
     const { mdAndDown } = useDisplay()
     const { appMode } = usePWA()
     const themeLayout = ref(readThemeCustomizerSettings().layout)
+    const isSidebarCollapsed = ref(readSidebarCollapsedState(themeLayout.value === 'collapsed'))
     const canUseDesktopLayout = computed(() => !mdAndDown.value && !appMode.value)
-    const isCollapsedLayout = computed(() => canUseDesktopLayout.value && themeLayout.value === 'collapsed')
     const isHorizontalLayout = computed(() => canUseDesktopLayout.value && themeLayout.value === 'horizontal')
+    const canToggleSidebarCollapse = computed(() => canUseDesktopLayout.value && !isHorizontalLayout.value)
+    const isCollapsedLayout = computed(() => canToggleSidebarCollapse.value && isSidebarCollapsed.value)
+
+    const toggleSidebarCollapsed = () => {
+      if (!canToggleSidebarCollapse.value) return
+
+      const nextCollapsed = !isSidebarCollapsed.value
+      isSidebarCollapsed.value = nextCollapsed
+      persistSidebarCollapsedState(nextCollapsed)
+    }
 
     syncRef(isOverlayNavActive, isLayoutOverlayVisible)
 
@@ -34,7 +72,13 @@ export default defineComponent({
     }
 
     const handleThemeCustomizerChange = (event: Event) => {
-      themeLayout.value = (event as CustomEvent<ThemeCustomizerSettings>).detail.layout
+      const nextLayout = (event as CustomEvent<ThemeCustomizerSettings>).detail.layout
+      themeLayout.value = nextLayout
+      if (nextLayout === 'collapsed' || nextLayout === 'vertical') {
+        const nextCollapsed = nextLayout === 'collapsed'
+        isSidebarCollapsed.value = nextCollapsed
+        persistSidebarCollapsedState(nextCollapsed)
+      }
     }
 
     // 监听弹窗状态变化
@@ -71,7 +115,13 @@ export default defineComponent({
       // 👉 Vertical nav
       const verticalNav = h(
         VerticalNav,
-        { isOverlayNavActive: isOverlayNavActive.value, toggleIsOverlayNavActive },
+        {
+          isOverlayNavActive: isOverlayNavActive.value,
+          toggleIsOverlayNavActive,
+          isCollapsed: isCollapsedLayout.value,
+          canToggleCollapse: canToggleSidebarCollapse.value,
+          toggleCollapsed: toggleSidebarCollapsed,
+        },
         {
           'nav-header': () => slots['vertical-nav-header']?.(),
           'before-nav-items': () => slots['before-vertical-nav-items']?.(),
@@ -166,6 +216,7 @@ export default defineComponent({
 }
 
 .layout-wrapper.layout-nav-type-vertical {
+  --layout-vertical-nav-width: #{variables.$layout-vertical-nav-width};
   --layout-navbar-block-size: calc(
     env(safe-area-inset-top, 0px) + #{variables.$layout-vertical-nav-navbar-height} + var(--navbar-tab-height, 0rem)
   );
@@ -190,13 +241,14 @@ export default defineComponent({
     border-block-end: 1px solid var(--mp-border-subtle);
     block-size: var(--layout-navbar-block-size);
     box-shadow: none;
-    inline-size: calc(100% - variables.$layout-vertical-nav-width);
+    inline-size: calc(100% - var(--layout-vertical-nav-width));
     inset-block-start: 0;
     inset-inline-end: 0;
     margin-inline: 0;
     max-inline-size: none;
     padding-inline: 0;
     transform: translate3d(0, 0, 0);
+    transition: inline-size 0.2s ease-in-out;
 
     .navbar-content-container {
       background-color: transparent;
@@ -241,16 +293,12 @@ export default defineComponent({
   }
 
   &:not(.layout-overlay-nav) .layout-content-wrapper {
-    padding-inline-start: calc(variables.$layout-vertical-nav-width);
+    padding-inline-start: var(--layout-vertical-nav-width);
   }
 
-  // Adjust right column pl when vertical nav is collapsed
-  &.layout-vertical-nav-collapsed .layout-content-wrapper {
-    padding-inline-start: variables.$layout-vertical-nav-collapsed-width;
-  }
-
-  &.layout-vertical-nav-collapsed .layout-navbar {
-    inline-size: calc(100% - variables.$layout-vertical-nav-collapsed-width);
+  // Adjust right column pl & navbar width when vertical nav is collapsed
+  &.layout-vertical-nav-collapsed {
+    --layout-vertical-nav-width: #{variables.$layout-vertical-nav-collapsed-width};
   }
 
   &.layout-vertical-nav-collapsed .layout-vertical-nav:not(.overlay-nav) {
@@ -278,9 +326,25 @@ export default defineComponent({
     }
 
     .app-logo h1,
-    .nav-item-title,
-    .nav-section-title {
+    .app-logo .app-logo-title,
+    .nav-item-title {
       display: none;
+    }
+
+    .nav-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--mp-border-subtle);
+      block-size: 1px;
+      margin-block: 10px;
+      margin-inline: 16px !important;
+      padding-inline: 0 !important;
+
+      .title-wrapper,
+      .title-text {
+        display: none;
+      }
     }
 
     .nav-link > a {
@@ -293,6 +357,11 @@ export default defineComponent({
 
     .nav-item-icon {
       margin-inline-end: 0 !important;
+    }
+
+    .nav-collapse-footer {
+      justify-content: center;
+      padding-inline: 0;
     }
   }
 
@@ -338,8 +407,8 @@ export default defineComponent({
     }
   }
 
-  // 非 App 模式统一由 --layout-navbar-block-size 承接固定顶栏偏移，彻底杜绝顶部截断与双倍空白
-  &:not(.layout-app-mode).layout-navbar-fixed .layout-page-content {
+  // 统一由 --layout-navbar-block-size 承接固定顶栏偏移（含桌面端与 appMode），杜绝顶部截断、12px 偏差与切页跳动
+  &.layout-navbar-fixed .layout-page-content {
     padding-block-start: var(--layout-navbar-block-size);
   }
 

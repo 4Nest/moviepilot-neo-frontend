@@ -5,6 +5,8 @@ const API_BASE_URL = 'http://localhost/api/v1/'
 
 export interface DiscoverOrderItem {
   name: string
+  mediaid_prefix?: string
+  enabled?: boolean
 }
 
 export const discoverApiUrls = {

@@ -820,4 +820,46 @@ watch(
   block-size: 30px !important;
   inline-size: 30px !important;
 }
+
+@media (width <= 600px) {
+  .auto-fill__grid {
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auto-fill__rule,
+  .auto-fill__add {
+    min-block-size: 64px;
+    padding: 10px 12px;
+  }
+
+  .auto-fill-dialog__header {
+    padding: 12px 14px 10px;
+    gap: 10px;
+  }
+
+  .auto-fill-dialog__title {
+    font-size: 14.5px;
+  }
+
+  .auto-fill-dialog__subtitle {
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .auto-fill-dialog__body {
+    padding: 12px 14px !important;
+  }
+
+  .auto-fill-dialog__group {
+    padding: 11px 12px;
+  }
+
+  .auto-fill-dialog__footer {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
 </style>

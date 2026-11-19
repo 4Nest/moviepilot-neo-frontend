@@ -535,6 +535,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .scheduler-progress-meta span {
@@ -551,7 +552,7 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
 .mobile-scheduler-view {
   background: transparent;
   min-block-size: 100%;
-  padding-block: 10px calc(18px + env(safe-area-inset-bottom));
+  padding-block: 10px calc(18px + env(safe-area-inset-bottom, 0px));
   padding-inline: 14px;
 }
 
@@ -692,5 +693,31 @@ useDataRefresh('scheduler-failed-history', loadFailedHistory, 10000, true)
   font-size: 13px;
   font-weight: 600;
   gap: 8px;
+}
+
+@media (width <= 600px) {
+  .mobile-scheduler-view {
+    padding-inline: 12px;
+  }
+
+  .mobile-scheduler-list {
+    gap: 8px;
+  }
+
+  .mobile-scheduler-card {
+    padding: 10px 12px;
+    column-gap: 10px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+  }
+
+  .mobile-scheduler-icon {
+    border-radius: 8px;
+    block-size: 32px;
+    inline-size: 32px;
+  }
+
+  .mobile-failure-card {
+    padding: 10px 12px;
+  }
 }
 </style>

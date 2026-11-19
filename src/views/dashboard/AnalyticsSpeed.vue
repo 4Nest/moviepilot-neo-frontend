@@ -287,4 +287,43 @@ const { loading } = useDataRefresh(
   font-weight: 600;
   white-space: nowrap;
 }
+
+@media (width <= 600px) {
+  .dashboard-work-header {
+    padding: 12px 14px 6px;
+  }
+
+  .dashboard-work-content {
+    padding: 4px 14px 12px;
+  }
+
+  .dashboard-speed-rate {
+    gap: 8px;
+  }
+
+  .dashboard-speed-rate strong {
+    overflow: hidden;
+    font-size: 18px;
+    min-inline-size: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-speed-divider {
+    margin-block: 10px 8px;
+  }
+
+  .dashboard-speed-stat-row {
+    gap: 8px;
+    min-block-size: 30px;
+  }
+
+  .dashboard-speed-stat-title {
+    font-size: 12.5px;
+  }
+
+  .dashboard-speed-stat-amount {
+    font-size: 12.5px;
+  }
+}
 </style>

@@ -9,11 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
-  dynamicButtonOptions: undefined as unknown as { onClick: () => void },
   keepAliveRefresh: undefined as unknown as () => Promise<void>,
   openSharedDialog: vi.fn(),
   toastError: vi.fn(),
-  useDynamicButton: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -27,26 +25,12 @@ vi.mock('@/composables/useSharedDialog', () => ({
   openSharedDialog: (...args: unknown[]) => mocks.openSharedDialog(...args),
 }))
 
-vi.mock('@/composables/useDynamicButton', () => ({
-  useDynamicButton: (options: { onClick: () => void }) => {
-    mocks.dynamicButtonOptions = options
-    mocks.useDynamicButton(options)
-  },
-}))
-
 vi.mock('@/composables/useKeepAliveRefresh', () => ({
   useKeepAliveRefresh: (refresh: () => Promise<void>) => {
     mocks.keepAliveRefresh = refresh
     return { refresh }
   },
 }))
-
-vi.mock('@/composables/usePWA', async () => {
-  const { ref } = await import('vue')
-  return {
-    usePWA: () => ({ appMode: ref(false) }),
-  }
-})
 
 vi.mock('vue-toastification', () => ({
   useToast: () => ({
@@ -764,7 +748,7 @@ describe('resource page search flow', () => {
     expect(await screen.findByTestId('torrent-card')).toHaveTextContent('可见卡片结果')
   })
 
-  it('restores row view and persists the dynamic card/row toggle', async () => {
+  it('restores row view and persists the inline card/row toggle', async () => {
     localStorage.setItem('MPTorrentsViewType', 'row')
     await renderResource({
       path: '/resource',
@@ -775,7 +759,7 @@ describe('resource page search flow', () => {
 
     expect(await screen.findByTestId('torrent-row')).toHaveTextContent('切换视图结果')
 
-    mocks.dynamicButtonOptions.onClick()
+    await fireEvent.click(fabButton('切换视图'))
     await nextTick()
 
     expect(screen.getByTestId('torrent-card')).toHaveTextContent('切换视图结果')

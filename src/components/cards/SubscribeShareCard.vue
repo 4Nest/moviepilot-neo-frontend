@@ -573,4 +573,83 @@ function doDelete() {
   align-items: center;
   gap: 0.2rem;
 }
+
+@media (width <= 600px) {
+  .share-card {
+    border-radius: 10px !important;
+    min-block-size: 124px;
+  }
+
+  .share-card__layout {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .share-card__poster {
+    flex: 0 0 58px;
+    border-radius: 7px;
+    block-size: 87px;
+    inline-size: 58px;
+  }
+
+  .share-card__main {
+    gap: 4px;
+  }
+
+  .share-card__header {
+    gap: 6px;
+  }
+
+  .share-card__title {
+    font-size: 14px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .share-card__year-tag {
+    font-size: 11.5px;
+  }
+
+  .share-card__mine-badge,
+  .share-card__rating-badge {
+    border-radius: 6px;
+    block-size: 19px;
+    font-size: 11px;
+    padding-inline: 5px;
+  }
+
+  .share-card__comment {
+    font-size: 12px;
+    line-height: 1.38;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .share-card__rules {
+    gap: 4px;
+  }
+
+  .share-card__rule-pill {
+    border-radius: 6px;
+    block-size: 19px;
+    font-size: 11px;
+    max-inline-size: 7.5rem;
+    padding-inline: 5px;
+  }
+
+  .share-card__footer {
+    gap: 6px;
+    padding-block-start: 2px;
+  }
+
+  .share-card__author,
+  .share-card__stats {
+    font-size: 11.5px;
+  }
+
+  .share-card__stats {
+    gap: 6px;
+  }
+}
 </style>
