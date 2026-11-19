@@ -62,9 +62,14 @@ type MaybeRef<T> = T | Ref<T> | ComputedRef<T>
 
 interface HeaderButton {
   action?: () => void | Promise<void>
+  color?: MaybeRef<string>
   dataAttr?: string
   disabled?: MaybeRef<boolean>
   icon: string
+  label?: MaybeRef<string>
+  show?: MaybeRef<boolean>
+  testId?: string
+  variant?: string
 }
 
 interface HeaderConfig {
@@ -411,6 +416,13 @@ function getHeaderButton(icon: string) {
   const button = getHeaderConfig().appendButtons.find(candidate => candidate.icon === icon)
   if (!button?.action) throw new Error(`未注册 header 操作 ${icon}`)
   return button
+}
+
+async function triggerHeaderAction(icon: string) {
+  const button = getHeaderButton(icon)
+  expect(unref(button.show ?? true)).toBe(true)
+  await button.action?.()
+  await nextTick()
 }
 
 function getInstalledLabels() {
@@ -1054,7 +1066,7 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     let marketRequests = 0
     const controller = { close: vi.fn(), id: 1, updateProps: vi.fn() }
     mocks.openSharedDialog.mockReturnValue(controller)
-    const { pinia } = await renderList({
+    const { container, pinia } = await renderList({
       installed: () => [createPlugin({ id: 'Installed', installed: true, plugin_name: '已安装插件' })],
       market: () => {
         marketRequests += 1
@@ -1063,8 +1075,14 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     })
     await waitForRequestsToFinish()
     const sidebarStore = usePluginSidebarNavStore(pinia)
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
 
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    const searchBtn = getHeaderButton('mdi-magnify')
+    expect(searchBtn).toMatchObject({ color: 'primary', testId: 'plugin-search-btn', variant: 'flat' })
+    expect(unref(getHeaderButton('mdi-folder-plus').show)).toBe(true)
+    expect(unref(getHeaderButton('mdi-store-cog').show)).toBe(false)
+
+    await triggerHeaderAction('mdi-magnify')
     const searchEvents = getDialogEvents()
     searchEvents['update:keyword']('needle')
     expect(controller.updateProps).toHaveBeenCalledWith(
@@ -1074,7 +1092,9 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
     getHeaderConfig().modelValue.value = 'market'
     await nextTick()
     await waitForRequestsToFinish()
-    await fireEvent.click(screen.getByRole('button', { name: '插件市场设置' }))
+    expect(unref(getHeaderButton('mdi-folder-plus').show)).toBe(false)
+    expect(unref(getHeaderButton('mdi-store-cog').show)).toBe(true)
+    await triggerHeaderAction('mdi-store-cog')
     const requestsBeforeSetting = marketRequests
     getDialogEvents().save()
     await waitFor(() => expect(marketRequests).toBe(requestsBeforeSetting + 1))
@@ -1107,13 +1127,13 @@ describe('PluginCardListView search installation', () => {
     )
 
     mocks.confirm.mockResolvedValueOnce(false)
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
     expect(mocks.confirm).toHaveBeenCalledOnce()
     expect(installRequests).toBe(0)
 
     mocks.confirm.mockResolvedValueOnce(true)
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'ConfirmTarget', plugin_name: '待确认安装插件' }))
     await waitFor(() => expect(installRequests).toBe(1))
     await waitForRequestsToFinish()
@@ -1189,7 +1209,7 @@ describe('PluginCardListView search installation', () => {
       }),
     )
 
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](
       createPlugin({
         id: 'SearchPlugin',
@@ -1202,7 +1222,7 @@ describe('PluginCardListView search installation', () => {
     expect(installRequests).toBe(0)
 
     mocks.toastError.mockClear()
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'SearchPlugin', plugin_name: '业务失败插件' }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(installRequests).toBe(1)
@@ -1210,7 +1230,7 @@ describe('PluginCardListView search installation', () => {
 
     mocks.toastError.mockClear()
     mode = 'http'
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](createPlugin({ id: 'SearchPlugin', plugin_name: 'HTTP 失败插件' }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(installRequests).toBe(2)
@@ -1242,7 +1262,7 @@ describe('PluginCardListView search installation', () => {
     )
     const sidebarStore = usePluginSidebarNavStore(pinia)
 
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     await getDialogEvents()['open-plugin'](target)
 
     expect(await screen.findByText('plugin:搜索安装插件')).toBeInTheDocument()
@@ -1306,7 +1326,7 @@ describe('PluginCardListView search installation', () => {
       }),
     )
 
-    await fireEvent.click(screen.getByRole('button', { name: '搜索插件' }))
+    await triggerHeaderAction('mdi-magnify')
     const installPromise = getDialogEvents()['open-plugin'](
       createPlugin({
         has_update: true,
@@ -1393,7 +1413,7 @@ describe('PluginCardListView folders and persistence', () => {
     await waitForRequestsToFinish()
     server.use(http.post(apiUrls.folders, () => HttpResponse.json({ message: '保存被拒绝', success: false })))
 
-    await fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
+    await triggerHeaderAction('mdi-folder-plus')
     const events = getDialogEvents()
     events['update:name']('失败文件夹')
     await events.create()
@@ -1410,7 +1430,7 @@ describe('PluginCardListView folders and persistence', () => {
     await waitForRequestsToFinish()
     server.use(http.post(apiUrls.folders, () => HttpResponse.json({ data: null, success: true })))
 
-    await fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
+    await triggerHeaderAction('mdi-folder-plus')
     const events = getDialogEvents()
     events['update:name']('   ')
     await events.create()

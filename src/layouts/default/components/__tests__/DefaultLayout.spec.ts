@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   sidebarStore: undefined as SidebarStoreMock | undefined,
   userStore: undefined as { superUser: boolean } | undefined,
   appMode: { value: false } as { value: boolean },
+  displayXs: { value: false } as { value: boolean },
   routeMock: { path: '/', meta: {} as Record<string, unknown> },
   footerStub: {
     name: 'Footer',
@@ -110,10 +111,15 @@ vi.mock('vue-router', async importOriginal => ({
   useRoute: () => mocks.routeMock,
   useRouter: () => ({ push: vi.fn() }),
 }))
-vi.mock('vuetify', async importOriginal => ({
-  ...(await importOriginal<typeof import('vuetify')>()),
-  useDisplay: () => ({ mdAndDown: { value: false } }),
-}))
+vi.mock('vuetify', async importOriginal => {
+  const { ref } = await import('vue')
+  mocks.displayXs = ref(false)
+
+  return {
+    ...(await importOriginal<typeof import('vuetify')>()),
+    useDisplay: () => ({ mdAndDown: { value: false }, xs: mocks.displayXs }),
+  }
+})
 
 describe('DefaultLayout', () => {
   beforeEach(() => {
@@ -122,6 +128,7 @@ describe('DefaultLayout', () => {
     mocks.sidebarStore!.items = []
     mocks.userStore!.superUser = true
     mocks.appMode.value = false
+    mocks.displayXs.value = false
     mocks.routeMock.path = '/'
     mocks.routeMock.meta = {}
   })
@@ -307,10 +314,10 @@ describe('DefaultLayout', () => {
 
     const BtnStub = {
       name: 'VBtn',
-      props: ['icon', 'disabled', 'loading', 'title'],
+      props: ['icon', 'disabled', 'loading', 'title', 'color', 'variant'],
       emits: ['click'],
       template:
-        '<button type="button" data-testid="dyn-btn" :disabled="disabled" :title="title" @click="$emit(`click`)"><slot>{{ icon }}</slot></button>',
+        '<button type="button" data-testid="dyn-btn" :disabled="disabled" :title="title" :data-color="color" :data-variant="variant" :data-icon="icon" @click="$emit(`click`)"><slot>{{ icon }}</slot></button>',
     }
 
     const wrapper = shallowMount(DefaultLayout, {
@@ -339,6 +346,9 @@ describe('DefaultLayout', () => {
           appendButtons?: Array<{
             title?: string
             label?: string
+            color?: string
+            variant?: string
+            show?: boolean
             testId?: string
             icon: string
             disabled?: boolean
@@ -349,6 +359,7 @@ describe('DefaultLayout', () => {
     ).__VUE_INJECT_DYNAMIC_HEADER_TAB__
 
     const labeledAction = vi.fn()
+    const primaryAction = vi.fn()
     injectRegister?.({
       items: [{ title: 'TMDB', tab: 'themoviedb' }],
       modelValue: 'themoviedb',
@@ -362,6 +373,22 @@ describe('DefaultLayout', () => {
           icon: 'mdi-history',
           action: labeledAction,
         },
+        {
+          title: '添加下载',
+          label: '添加下载',
+          color: 'primary',
+          variant: 'flat',
+          testId: 'primary-add-btn',
+          icon: 'mdi-plus',
+          action: primaryAction,
+        },
+        {
+          title: '隐藏按钮',
+          label: '隐藏按钮',
+          testId: 'hidden-btn',
+          icon: 'mdi-eye-off',
+          show: false,
+        },
       ],
     })
     await nextTick()
@@ -372,10 +399,35 @@ describe('DefaultLayout', () => {
     expect(buttons[0].attributes('title')).toBe('禁用刷新')
     expect(buttons[0].attributes('disabled')).toBeDefined()
 
+    expect(wrapper.find('[data-testid="hidden-btn"]').exists()).toBe(false)
+
     const labeledBtn = wrapper.get('[data-testid="labeled-history-btn"]')
     expect(labeledBtn.text()).toContain('订阅历史')
+    expect(labeledBtn.attributes('data-variant')).toBe('outlined')
     await labeledBtn.trigger('click')
     expect(labeledAction).toHaveBeenCalledOnce()
+
+    const primaryBtn = wrapper.get('[data-testid="primary-add-btn"]')
+    expect(primaryBtn.text()).toContain('添加下载')
+    expect(primaryBtn.attributes('data-color')).toBe('primary')
+    expect(primaryBtn.attributes('data-variant')).toBe('flat')
+    await primaryBtn.trigger('click')
+    expect(primaryAction).toHaveBeenCalledOnce()
+
+    // 窄屏 xs 下带文本标签的按钮应自动回退为紧凑图标按钮，且保留主按钮 flat 变体与无障碍标签
+    mocks.displayXs.value = true
+    await nextTick()
+    const compactPrimaryBtn = wrapper.get('[data-testid="primary-add-btn"]')
+    expect(compactPrimaryBtn.attributes('data-icon')).toBe('mdi-plus')
+    expect(compactPrimaryBtn.attributes('data-color')).toBe('primary')
+    expect(compactPrimaryBtn.attributes('data-variant')).toBe('flat')
+    expect(compactPrimaryBtn.attributes('aria-label')).toBe('添加下载')
+
+    const compactHistoryBtn = wrapper.get('[data-testid="labeled-history-btn"]')
+    expect(compactHistoryBtn.attributes('data-icon')).toBe('mdi-history')
+    expect(compactHistoryBtn.attributes('data-variant')).toBe('text')
+    mocks.displayXs.value = false
+    await nextTick()
 
     // 即使直接触发组件 click 事件，handleHeaderButtonClick 守卫也应阻止禁用按钮执行 action
     wrapper.findAllComponents(BtnStub)[0].vm.$emit('click')

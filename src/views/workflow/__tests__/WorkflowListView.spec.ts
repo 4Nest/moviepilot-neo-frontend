@@ -253,7 +253,7 @@ describe('WorkflowListView incremental updates and enhancements', () => {
     expect(mocks.openSharedDialog.mock.calls[1][1]).toEqual({ initialTemplate: preset })
   })
 
-  it('shows retryable error state when initial load fails and renders toolbar creation buttons after recovery', async () => {
+  it('shows retryable error state when initial load fails and renders compact filter toolbar after recovery', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     let failFirst = true
     mocks.apiGet.mockImplementation((url: string) => {
@@ -274,9 +274,9 @@ describe('WorkflowListView incremental updates and enhancements', () => {
     await flushPromises()
 
     expect(await screen.findByText('工作流 A', { exact: true })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '新建工作流' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '从模板创建' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '导入 JSON 新建' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('搜索名称、描述、Cron 或事件...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '新建工作流' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '从模板创建' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '导入 JSON 新建' })).not.toBeInTheDocument()
   })
 })

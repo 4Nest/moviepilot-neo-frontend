@@ -92,6 +92,17 @@ registerHeaderTab({
   modelValue: activeTab,
   appendButtons: [
     {
+      icon: 'mdi-arrow-left',
+      variant: 'text',
+      color: undefined,
+      class: 'settings-icon-button',
+
+      action: () => {
+        backToMain()
+      },
+      show: computed(() => activeTab.value === 'installed' && !!currentFolder.value),
+    },
+    {
       icon: 'mdi-filter-multiple-outline',
       variant: 'text',
       color: computed(() => (hasInstalledActiveFilter.value ? 'primary' : '')),
@@ -141,15 +152,41 @@ registerHeaderTab({
       show: computed(() => activeTab.value === 'market'),
     },
     {
-      icon: 'mdi-arrow-left',
-      variant: 'text',
-      color: undefined,
-      class: 'settings-icon-button',
+      title: t('dialog.pluginMarketSetting.title'),
+      label: t('dialog.pluginMarketSetting.title'),
+      icon: 'mdi-store-cog',
+      variant: 'outlined',
+      testId: 'plugin-market-setting-btn',
 
       action: () => {
-        backToMain()
+        openMarketSettingDialog()
       },
-      show: computed(() => activeTab.value === 'installed' && !!currentFolder.value),
+      show: computed(() => isRefreshed.value && showMarketSettingAction.value),
+    },
+    {
+      title: t('plugin.newFolder'),
+      label: t('plugin.newFolder'),
+      icon: 'mdi-folder-plus',
+      variant: 'outlined',
+      testId: 'plugin-new-folder-btn',
+
+      action: () => {
+        showNewFolderDialog()
+      },
+      show: computed(() => isRefreshed.value && showNewFolderAction.value),
+    },
+    {
+      title: t('plugin.searchPlugins'),
+      label: t('plugin.searchPlugins'),
+      icon: 'mdi-magnify',
+      color: 'primary',
+      variant: 'flat',
+      testId: 'plugin-search-btn',
+
+      action: () => {
+        openPluginSearchDialog()
+      },
+      show: computed(() => isRefreshed.value && showSearchAction.value),
     },
   ],
 })
@@ -2015,39 +2052,6 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
       </VMenu>
     </Teleport>
 
-    <div v-if="isRefreshed && showSearchAction" class="mp-page-action-bar plugin-action-bar">
-      <VBtn
-        v-if="showMarketSettingAction"
-        size="small"
-        variant="outlined"
-        rounded="lg"
-        prepend-icon="mdi-store-cog"
-        @click="openMarketSettingDialog"
-      >
-        {{ t('dialog.pluginMarketSetting.title') }}
-      </VBtn>
-      <VBtn
-        v-if="showNewFolderAction"
-        size="small"
-        variant="outlined"
-        rounded="lg"
-        prepend-icon="mdi-folder-plus"
-        @click="showNewFolderDialog"
-      >
-        {{ t('plugin.newFolder') }}
-      </VBtn>
-      <VBtn
-        size="small"
-        variant="flat"
-        color="primary"
-        rounded="lg"
-        prepend-icon="mdi-magnify"
-        @click="openPluginSearchDialog"
-      >
-        {{ t('plugin.searchPlugins') }}
-      </VBtn>
-    </div>
-
     <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
       <!-- 我的插件 -->
       <VWindowItem value="installed">
@@ -2310,22 +2314,6 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
 }
 
 @media (width <= 600px) {
-  .plugin-action-bar {
-    justify-content: flex-start;
-    gap: 6px;
-    margin-block-end: 10px;
-    padding-inline: 0;
-  }
-
-  .plugin-action-bar :deep(.v-btn) {
-    flex: 1 1 auto;
-    border-radius: 8px !important;
-    block-size: 34px !important;
-    font-size: 12.5px !important;
-    min-inline-size: 0;
-    padding-inline: 10px !important;
-  }
-
   .plugin-inline-page-title,
   .plugin-inline-page-title :deep(*) {
     font-size: 18px !important;

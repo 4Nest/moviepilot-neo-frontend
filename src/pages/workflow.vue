@@ -38,6 +38,54 @@ const { registerHeaderTab } = useDynamicHeaderTab()
 registerHeaderTab({
   items: workflowTabs,
   modelValue: activeTab,
+  appendButtons: [
+    {
+      title: t('workflow.quickActions.refresh'),
+      icon: 'mdi-refresh',
+      variant: 'text',
+      class: 'settings-icon-button',
+      testId: 'workflow-refresh-btn',
+      loading: computed(() => Boolean(workflowListViewRef.value?.isRefreshing)),
+      action: () => {
+        workflowListViewRef.value?.refresh()
+      },
+      show: computed(() => activeTab.value === 'list'),
+    },
+    {
+      title: t('workflow.quickActions.importJsonCreate'),
+      label: t('workflow.quickActions.importJsonCreate'),
+      icon: 'mdi-code-json',
+      variant: 'outlined',
+      testId: 'workflow-import-json-btn',
+      action: () => {
+        workflowListViewRef.value?.openImportJsonDialog()
+      },
+      show: computed(() => activeTab.value === 'list'),
+    },
+    {
+      title: t('workflow.quickActions.createFromTemplate'),
+      label: t('workflow.quickActions.createFromTemplate'),
+      icon: 'mdi-auto-fix',
+      variant: 'outlined',
+      testId: 'workflow-template-btn',
+      action: () => {
+        workflowListViewRef.value?.openTemplateDialog()
+      },
+      show: computed(() => activeTab.value === 'list'),
+    },
+    {
+      title: t('workflow.quickActions.createWorkflow'),
+      label: t('workflow.quickActions.createWorkflow'),
+      icon: 'mdi-plus',
+      color: 'primary',
+      variant: 'flat',
+      testId: 'workflow-create-btn',
+      action: () => {
+        workflowListViewRef.value?.openAddDialog()
+      },
+      show: computed(() => activeTab.value === 'list'),
+    },
+  ],
 })
 
 // 注册动态标签页

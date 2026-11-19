@@ -1,8 +1,23 @@
 import DownloadingPage from '@/pages/downloading.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
-import { defineComponent, h, KeepAlive, ref } from 'vue'
+import { defineComponent, h, KeepAlive, ref, unref, type ComputedRef, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+interface HeaderButtonConfig {
+  action?: () => void
+  color?: string | ComputedRef<string>
+  icon: string
+  label?: string | ComputedRef<string>
+  show?: boolean | ComputedRef<boolean>
+  testId?: string
+  variant?: string
+}
+
+interface HeaderTabConfig {
+  appendButtons?: HeaderButtonConfig[]
+  modelValue: Ref<string>
+}
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -62,16 +77,24 @@ describe('Downloading page download actions', () => {
     mocks.registerHeaderTab.mockReset()
   })
 
-  it('renders inline add and history toolbar buttons and passes the active downloader', async () => {
-    await renderPage()
+  it('registers add and history buttons in HeaderTab without rendering an extra action bar row', async () => {
+    const { container } = await renderPage()
 
-    await waitFor(() => expect(document.querySelector('[data-testid="downloading-add-btn"]')).not.toBeNull())
-    const addButton = document.querySelector('[data-testid="downloading-add-btn"]') as HTMLButtonElement
-    const historyButton = document.querySelector('[data-testid="downloading-history-btn"]') as HTMLButtonElement
-    expect(addButton).toBeInTheDocument()
-    expect(historyButton).toBeInTheDocument()
+    await waitFor(() => expect(mocks.registerHeaderTab).toHaveBeenCalled())
+    await screen.findByText('qb-main:true')
+    expect(container.querySelector('.mp-page-action-bar')).toBeNull()
 
-    await fireEvent.click(addButton)
+    const headerConfig = mocks.registerHeaderTab.mock.calls.at(-1)?.[0] as HeaderTabConfig
+    const historyButton = headerConfig.appendButtons?.find(btn => btn.testId === 'downloading-history-btn')
+    const addButton = headerConfig.appendButtons?.find(btn => btn.testId === 'downloading-add-btn')
+    expect(historyButton).toBeDefined()
+    expect(addButton).toBeDefined()
+    expect(unref(historyButton?.show)).toBe(true)
+    expect(unref(addButton?.show)).toBe(true)
+    expect(addButton?.color).toBe('primary')
+    expect(addButton?.variant).toBe('flat')
+
+    addButton?.action?.()
     expect(mocks.openSharedDialog).toHaveBeenCalledWith(
       expect.any(Object),
       { downloader: 'qb-main' },
@@ -83,7 +106,7 @@ describe('Downloading page download actions', () => {
     await done()
     expect(mocks.fetchData).toHaveBeenCalledOnce()
 
-    await fireEvent.click(historyButton)
+    historyButton?.action?.()
     expect(mocks.openSharedDialog).toHaveBeenLastCalledWith(expect.any(Object), {}, {}, { closeOn: ['close'] })
   })
 

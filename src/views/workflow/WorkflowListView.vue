@@ -309,6 +309,7 @@ function openImportJsonDialog() {
 }
 
 defineExpose({
+  isRefreshing,
   openAddDialog,
   openImportJsonDialog,
   openTemplateDialog,
@@ -333,7 +334,7 @@ defineExpose({
       </template>
     </NoDataFound>
 
-    <!-- 顶部筛选、搜索与快捷动作工具栏 -->
+    <!-- 顶部筛选与搜索工具栏 -->
     <div v-if="workflowList.length > 0 && isRefreshed" class="workflow-list-toolbar mb-3">
       <div class="workflow-list-toolbar__filters">
         <div class="workflow-status-pills" role="group">
@@ -372,28 +373,6 @@ defineExpose({
             class="workflow-search-field"
           />
         </div>
-      </div>
-
-      <div class="workflow-list-toolbar__actions">
-        <IconBtn
-          :loading="isRefreshing"
-          size="small"
-          class="workflow-refresh-btn"
-          :aria-label="t('workflow.quickActions.refresh')"
-          @click="fetchData"
-        >
-          <VIcon icon="mdi-refresh" size="17" />
-          <VTooltip activator="parent" location="top">{{ t('workflow.quickActions.refresh') }}</VTooltip>
-        </IconBtn>
-        <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-code-json" @click="openImportJsonDialog">
-          {{ t('workflow.quickActions.importJsonCreate') }}
-        </VBtn>
-        <VBtn size="small" variant="outlined" rounded="lg" prepend-icon="mdi-auto-fix" @click="openTemplateDialog">
-          {{ t('workflow.quickActions.createFromTemplate') }}
-        </VBtn>
-        <VBtn size="small" variant="flat" color="primary" rounded="lg" prepend-icon="mdi-plus" @click="openAddDialog()">
-          {{ t('workflow.quickActions.createWorkflow') }}
-        </VBtn>
       </div>
     </div>
 
@@ -526,20 +505,6 @@ defineExpose({
   padding-block: 4px;
 }
 
-.workflow-list-toolbar__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.workflow-refresh-btn {
-  border-radius: 7px !important;
-  block-size: 28px !important;
-  inline-size: 28px !important;
-  min-inline-size: 28px !important;
-}
-
 .workflow-empty-state__actions {
   display: flex;
   flex-wrap: wrap;
@@ -578,16 +543,6 @@ defineExpose({
   .workflow-search-field {
     min-inline-size: 0;
     max-inline-size: none;
-  }
-
-  .workflow-list-toolbar__actions {
-    inline-size: 100%;
-    gap: 6px;
-  }
-
-  .workflow-list-toolbar__actions :deep(.v-btn) {
-    border-radius: 7px !important;
-    font-size: 12px;
   }
 }
 

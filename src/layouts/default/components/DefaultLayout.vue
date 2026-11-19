@@ -746,14 +746,20 @@ onMounted(async () => {
               <VBtn
                 v-else
                 :icon="button.icon"
-                :variant="button.color || !button.variant || button.variant === 'outlined' ? 'text' : button.variant"
+                :variant="
+                  button.variant === 'flat' || button.variant === 'tonal'
+                    ? button.variant
+                    : button.color || !button.variant || button.variant === 'outlined'
+                      ? 'text'
+                      : button.variant
+                "
                 :color="resolveHeaderButtonColor(button)"
                 :size="button.size || 'default'"
                 :class="button.class || 'settings-icon-button'"
                 :loading="resolveHeaderButtonLoading(button)"
                 :disabled="resolveHeaderButtonDisabled(button)"
-                :aria-label="button.title || button.icon"
-                :title="button.title || undefined"
+                :aria-label="button.title || resolveHeaderButtonLabel(button) || button.icon"
+                :title="button.title || resolveHeaderButtonLabel(button) || undefined"
                 :data-menu-activator="button.dataAttr"
                 v-bind="button.testId ? { 'data-testid': button.testId } : undefined"
                 @click="handleHeaderButtonClick(button)"
