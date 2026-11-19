@@ -102,8 +102,15 @@ const previewVisible = ref(false)
 // 是否已加载预览
 const previewLoaded = ref(false)
 
-// 预览数据
-const previewData = ref<ManualTransferPreviewData>()
+// 预览数据（使用浅响应避免大批量预览项被深度递归代理）
+const previewData = shallowRef<ManualTransferPreviewData | undefined>(undefined)
+
+// 预览列表状态筛选
+const previewStatusFilter = ref<'all' | 'failed'>('all')
+
+// 预览请求代际计数与中止控制器，用于取消在途请求并丢弃过期响应
+let previewRequestGeneration = 0
+let previewAbortController: AbortController | null = null
 
 // 手动整理历史查询状态
 const manualHistoryLoading = ref(false)
@@ -497,87 +504,31 @@ watch(
   },
 )
 
-// 过滤并排序后的预览数据
-const filteredPreviewItems = computed(() => {
-  const items = [...(previewData.value?.items ?? [])]
-
-  return items.sort((a, b) => {
-    // 1. 获取季号（如果有的话优先按季号排）
-    const seasonA = getPreviewSeasonNumber(a)
-    const seasonB = getPreviewSeasonNumber(b)
-    if (seasonA !== seasonB) {
-      if (seasonA === undefined) return 1
-      if (seasonB === undefined) return -1
-      return seasonA - seasonB
-    }
-
-    // 2. 获取集数
-    const epA = toPreviewNumber(a.episode)
-    const epB = toPreviewNumber(b.episode)
-
-    // 如果都有集数，按集数排序
-    if (epA !== undefined && epB !== undefined) {
-      if (epA !== epB) return epA - epB
-      // 集数相同（可能是同集的视频、字幕等），退化到按文件名排序，保证相关文件挨在一起
-    }
-
-    // 3. 有集数的排前面，没集数的（通常是其他文件）排后面
-    if (epA !== undefined && epB === undefined) return -1
-    if (epA === undefined && epB !== undefined) return 1
-
-    // 4. 如果都没集数，或者集数完全相同，则按照目标路径（或源路径）的字母顺序排
-    const nameA = a.target || a.source || ''
-    const nameB = b.target || b.source || ''
-    return nameA.localeCompare(nameB, undefined, { numeric: true })
-  })
-})
-
-// 分页后的预览数据（含文件名解析）
-const pagedPreviewRows = computed(() => {
-  const start = (previewPage.value - 1) * previewPageSize.value
-  return filteredPreviewItems.value.slice(start, start + previewPageSize.value).map(item => {
-    const sourceName = getFileName(item.source)
-    const targetName = getFileName(item.target)
-    return {
-      ...item,
-      sourceName,
-      targetName,
-      sameName: sourceName === targetName,
-    }
-  })
-})
-
-// 预览统计
-const previewSummary = computed(() => {
-  return (
-    previewData.value?.summary ?? {
-      total: 0,
-      success: 0,
-      failed: 0,
-    }
-  )
-})
-
-// 分页总数
-const previewTotalPages = computed(() => {
-  return Math.ceil(filteredPreviewItems.value.length / previewPageSize.value)
-})
+interface PreviewFileRow extends ManualTransferPreviewItem {
+  sourceName: string
+  sourceDir: string
+  targetName: string
+  targetDir: string
+  sameName: boolean
+  seasonNumber?: number
+  episodeNumber?: number
+}
 
 // 标准化路径
 function normalizePath(path?: string) {
   return (path || '').replace(/\\/g, '/')
 }
 
-// 获取文件名
-function getFileName(path?: string) {
+// 一次性拆分目录路径与文件名，避免渲染阶段重复 split
+function splitPath(path?: string) {
   const normalizedPath = normalizePath(path).replace(/\/+$/, '')
-  if (!normalizedPath) return '-'
-  return normalizedPath.split('/').pop() || normalizedPath
-}
-
-// 获取唯一非空值
-function getUniqueValues(values: (string | undefined)[]) {
-  return [...new Set(values.map(item => item?.trim()).filter(Boolean) as string[])]
+  if (!normalizedPath) return { dir: '', name: '-' }
+  const lastSlashIndex = normalizedPath.lastIndexOf('/')
+  if (lastSlashIndex < 0) return { dir: '', name: normalizedPath }
+  return {
+    dir: normalizedPath.slice(0, lastSlashIndex) || '/',
+    name: normalizedPath.slice(lastSlashIndex + 1) || normalizedPath,
+  }
 }
 
 // 归一化可选目的路径，保证未指定时向接口传递 null 而不是空字符串。
@@ -631,7 +582,7 @@ function extractSeasonFromText(text?: string) {
 }
 
 // 获取预览项季号，优先使用响应字段，缺失时从目标/源路径回退提取
-function getPreviewSeasonNumber(item: ManualTransferPreviewItem) {
+function getPreviewSeasonNumber(item: ManualTransferPreviewItem, isMovie: boolean) {
   const season = toPreviewNumber(item.season)
   if (season !== undefined) return season
 
@@ -639,128 +590,206 @@ function getPreviewSeasonNumber(item: ManualTransferPreviewItem) {
     extractSeasonFromText(item.target) ??
     extractSeasonFromText(item.target_dir) ??
     extractSeasonFromText(item.source) ??
-    (toPreviewNumber(item.episode) !== undefined && !previewIsMovie.value ? 1 : undefined)
+    (toPreviewNumber(item.episode) !== undefined && !isMovie ? 1 : undefined)
   )
 }
 
-// 顶部媒体信息
-const previewMediaInfo = computed(() => {
-  const titles = getUniqueValues(filteredPreviewItems.value.map(item => item.title))
-  const types = getUniqueValues(filteredPreviewItems.value.map(item => item.type))
+// 标准化预览项中的识别词命中详情
+function getPreviewApplyWords(item: ManualTransferPreviewItem) {
+  if (!item.apply_words?.length) return []
+  const words = new Set<string>()
+  for (const word of item.apply_words) {
+    const trimmed = word?.trim()
+    if (trimmed) words.add(trimmed)
+  }
+  return [...words]
+}
 
+// 一次遍历预计算预览元信息、路径拆分与排序后的文件行，避免大批量数据时重复解析和多次 filter
+const previewDerived = computed(() => {
+  const rawItems = previewData.value?.items ?? []
+  const titleSet = new Set<string>()
+  const typeSet = new Set<string>()
+  for (const item of rawItems) {
+    const title = item.title?.trim()
+    if (title) titleSet.add(title)
+    const type = item.type?.trim()
+    if (type) typeSet.add(type)
+  }
+
+  const titles = [...titleSet]
+  const types = [...typeSet]
   const titleText = titles.length <= 1 ? titles[0] || '-' : `${titles[0]} +${titles.length - 1}`
   const typeText = types.length <= 1 ? types[0] || t('common.unknown') : types.join(' / ')
+  const normalizedType = typeText.toLowerCase()
+  const isMovie = normalizedType === '电影' || normalizedType === 'movie'
+
+  const seasonSet = new Set<number>()
+  const episodeKeys = new Set<string>()
+  const groupedWordDetails = new Map<string, { sourceNames: Set<string>; orgString?: string; applyWords: string[] }>()
+  const rows: PreviewFileRow[] = new Array(rawItems.length)
+  let needsWideLayout = false
+
+  for (let index = 0; index < rawItems.length; index++) {
+    const item = rawItems[index]
+    const sourceParts = splitPath(item.source)
+    const targetParts = splitPath(item.target)
+    const seasonNumber = getPreviewSeasonNumber(item, isMovie)
+    const episodeNumber = toPreviewNumber(item.episode)
+
+    if (seasonNumber !== undefined) seasonSet.add(seasonNumber)
+    if (episodeNumber !== undefined) {
+      const seasonKey = seasonNumber ?? 1
+      const episodeEnd = toPreviewNumber(item.episode_end) ?? episodeNumber
+      for (let currentEpisode = episodeNumber; currentEpisode <= episodeEnd; currentEpisode++) {
+        episodeKeys.add(`${seasonKey}-${currentEpisode}`)
+      }
+    }
+
+    const applyWords = getPreviewApplyWords(item)
+    if (applyWords.length) {
+      const detailKey = applyWords.join('\u0000')
+      const existingDetail = groupedWordDetails.get(detailKey)
+      if (existingDetail) {
+        existingDetail.sourceNames.add(sourceParts.name)
+      } else {
+        groupedWordDetails.set(detailKey, {
+          sourceNames: new Set([sourceParts.name]),
+          orgString: item.org_string?.trim() || undefined,
+          applyWords,
+        })
+      }
+    }
+
+    if (!needsWideLayout && sourceParts.name.length + targetParts.name.length > 72) {
+      needsWideLayout = true
+    }
+
+    rows[index] = {
+      ...item,
+      sourceName: sourceParts.name,
+      sourceDir: sourceParts.dir,
+      targetName: targetParts.name,
+      targetDir: targetParts.dir,
+      sameName: sourceParts.name === targetParts.name,
+      seasonNumber,
+      episodeNumber,
+    }
+  }
+
+  rows.sort((a, b) => {
+    if (a.seasonNumber !== b.seasonNumber) {
+      if (a.seasonNumber === undefined) return 1
+      if (b.seasonNumber === undefined) return -1
+      return a.seasonNumber - b.seasonNumber
+    }
+
+    if (a.episodeNumber !== undefined && b.episodeNumber !== undefined) {
+      if (a.episodeNumber !== b.episodeNumber) return a.episodeNumber - b.episodeNumber
+    }
+    if (a.episodeNumber !== undefined && b.episodeNumber === undefined) return -1
+    if (a.episodeNumber === undefined && b.episodeNumber !== undefined) return 1
+
+    const nameA = a.target || a.source || ''
+    const nameB = b.target || b.source || ''
+    return nameA.localeCompare(nameB, undefined, { numeric: true })
+  })
+
+  const seasons = [...seasonSet].sort((a, b) => a - b)
+  let seasonText = '-'
+  if (seasons.length === 1) {
+    seasonText = `S${String(seasons[0]).padStart(2, '0')}`
+  } else if (seasons.length > 1) {
+    seasonText = `S${String(seasons[0]).padStart(2, '0')} +${seasons.length - 1}`
+  }
+
+  let episodeCountText = '-'
+  if (episodeKeys.size > 0) {
+    episodeCountText = String(episodeKeys.size)
+  } else if (rawItems.length > 0) {
+    episodeCountText = String(rawItems.length)
+  }
+
+  const customWordDetails = [...groupedWordDetails.values()].map(detail => {
+    const names = [...detail.sourceNames]
+    return {
+      sourceName: names.length > 1 ? t('dialog.reorganize.customWordsSameRules', { count: names.length }) : names[0],
+      orgString: names.length > 1 ? undefined : detail.orgString,
+      applyWords: detail.applyWords,
+    }
+  })
 
   return {
-    title: titleText,
-    type: typeText,
+    rows,
+    mediaInfo: {
+      title: titleText,
+      type: typeText,
+    },
+    isMovie,
+    seasonText,
+    episodeCountText,
+    customWordDetails,
+    needsWideLayout,
   }
 })
 
-// 是否为电影
-const previewIsMovie = computed(() => {
-  const type = previewMediaInfo.value.type.toLowerCase()
-  return type === '电影' || type === 'movie'
+// 按状态筛选后的预览文件行
+const filteredPreviewRows = computed(() => {
+  if (previewStatusFilter.value === 'failed') {
+    return previewDerived.value.rows.filter(item => item.success === false)
+  }
+  return previewDerived.value.rows
 })
+
+// 分页后的预览数据（直接切片预计算结果）
+const pagedPreviewRows = computed(() => {
+  const start = (previewPage.value - 1) * previewPageSize.value
+  return filteredPreviewRows.value.slice(start, start + previewPageSize.value)
+})
+
+// 预览统计
+const previewSummary = computed(() => {
+  return (
+    previewData.value?.summary ?? {
+      total: 0,
+      success: 0,
+      failed: 0,
+    }
+  )
+})
+
+// 分页总数
+const previewTotalPages = computed(() => {
+  return Math.ceil(filteredPreviewRows.value.length / previewPageSize.value)
+})
+
+// 顶部媒体信息
+const previewMediaInfo = computed(() => previewDerived.value.mediaInfo)
+
+// 是否为电影
+const previewIsMovie = computed(() => previewDerived.value.isMovie)
 
 // 顶部季信息
-const previewSeasonText = computed(() => {
-  const seasons = [
-    ...new Set(
-      filteredPreviewItems.value
-        .map(item => getPreviewSeasonNumber(item))
-        .filter((season): season is number => season !== undefined && season !== null),
-    ),
-  ]
-
-  if (seasons.length === 0) return '-'
-
-  const seasonLabels = seasons.sort((a, b) => a - b).map(season => `S${String(season).padStart(2, '0')}`)
-
-  if (seasonLabels.length === 1) return seasonLabels[0]
-  return `${seasonLabels[0]} +${seasonLabels.length - 1}`
-})
+const previewSeasonText = computed(() => previewDerived.value.seasonText)
 
 // 顶部总集数
-const previewEpisodeCountText = computed(() => {
-  const episodeKeys = new Set<string>()
-
-  filteredPreviewItems.value.forEach(item => {
-    const season = getPreviewSeasonNumber(item) ?? 1
-    const episode = toPreviewNumber(item.episode)
-    const episodeEnd = toPreviewNumber(item.episode_end) ?? episode
-
-    if (episode === undefined) return
-
-    for (let currentEpisode = episode; currentEpisode <= (episodeEnd ?? episode); currentEpisode++) {
-      episodeKeys.add(`${season}-${currentEpisode}`)
-    }
-  })
-
-  if (episodeKeys.size > 0) return String(episodeKeys.size)
-  if (filteredPreviewItems.value.length > 0) return String(filteredPreviewItems.value.length)
-  return '-'
-})
-
-// 文件列表
-const previewFileRows = computed(() => {
-  return filteredPreviewItems.value.map(item => {
-    const sourceName = getFileName(item.source)
-    const targetName = getFileName(item.target)
-
-    return {
-      sourceName,
-      targetName,
-      sameName: sourceName === targetName,
-      success: item.success,
-      message: item.message || '-',
-      source: item.source,
-      target: item.target,
-    }
-  })
-})
-
-// 标准化预览项中的识别词命中详情
-function getPreviewApplyWords(item: ManualTransferPreviewItem) {
-  return [
-    ...new Set((item.apply_words ?? []).map(word => word?.trim()).filter((word): word is string => Boolean(word))),
-  ]
-}
+const previewEpisodeCountText = computed(() => previewDerived.value.episodeCountText)
 
 // 手动整理识别词应用详情
-const previewCustomWordDetails = computed(() => {
-  const groupedDetails = new Map<string, { sourceNames: string[]; orgString?: string; applyWords: string[] }>()
+const previewCustomWordDetails = computed(() => previewDerived.value.customWordDetails)
 
-  filteredPreviewItems.value.forEach(item => {
-    const applyWords = getPreviewApplyWords(item)
-    if (!applyWords.length) return
+// 切换仅查看失败项/查看全部
+function setPreviewStatusFilter(nextFilter: 'all' | 'failed') {
+  if (nextFilter === 'failed' && previewSummary.value.failed <= 0) return
+  if (previewStatusFilter.value === nextFilter) return
+  previewStatusFilter.value = nextFilter
+  previewPage.value = 1
+}
 
-    const sourceName = getFileName(item.source)
-    const orgString = item.org_string?.trim() || undefined
-    const detailKey = JSON.stringify(applyWords)
-    const existingDetail = groupedDetails.get(detailKey)
-
-    if (existingDetail) {
-      if (!existingDetail.sourceNames.includes(sourceName)) existingDetail.sourceNames.push(sourceName)
-      return
-    }
-
-    groupedDetails.set(detailKey, {
-      sourceNames: [sourceName],
-      orgString,
-      applyWords,
-    })
-  })
-
-  return [...groupedDetails.values()].map(detail => ({
-    sourceName:
-      detail.sourceNames.length > 1
-        ? t('dialog.reorganize.customWordsSameRules', { count: detail.sourceNames.length })
-        : detail.sourceNames[0],
-    orgString: detail.sourceNames.length > 1 ? undefined : detail.orgString,
-    applyWords: detail.applyWords,
-  }))
-})
+function toggleFailedPreviewFilter() {
+  if (previewSummary.value.failed <= 0) return
+  setPreviewStatusFilter(previewStatusFilter.value === 'failed' ? 'all' : 'failed')
+}
 
 const previewEpisodeFormatRuleDetails = computed(() => {
   const episodeFormat = transferForm.episode_format?.trim()
@@ -814,11 +843,7 @@ const previewRecognitionDetailTitle = computed(() => {
 })
 
 // 是否需要拓宽窗口
-const previewNeedsWideLayout = computed(() => {
-  const candidates = [...previewFileRows.value.map(item => `${item.sourceName}${item.targetName}`)]
-
-  return candidates.some(item => item.length > 72)
-})
+const previewNeedsWideLayout = computed(() => previewDerived.value.needsWideLayout)
 
 // 弹窗宽度
 const dialogMaxWidth = computed(() => {
@@ -953,8 +978,13 @@ function createTransferPayload(options: {
 async function requestManualTransfer<T = unknown>(
   payload: ManualTransferPayload,
   background: boolean = false,
+  signal?: AbortSignal,
 ): Promise<ApiResponse<T>> {
-  return await api.post<ApiResponse<T>, ApiResponse<T>>(`transfer/manual?background=${background}`, payload)
+  return await api.post<ApiResponse<T>, ApiResponse<T>>(
+    `transfer/manual?background=${background}`,
+    payload,
+    signal ? { signal } : undefined,
+  )
 }
 
 // 查询当前文件或目录是否存在成功整理历史，决定是否展示重新整理语义。
@@ -1068,11 +1098,28 @@ function getDefaultPreviewData(): ManualTransferPreviewData {
   }
 }
 
-// 重置预览数据和分页状态。
+// 重置预览数据、筛选和分页状态。
 function resetPreviewState() {
   previewData.value = undefined
   previewLoaded.value = false
   previewPage.value = 1
+  previewStatusFilter.value = 'all'
+}
+
+// 中止在途预览请求并推进代际号，确保过期响应不会回写状态。
+function abortPreviewRequest() {
+  previewRequestGeneration += 1
+  if (previewAbortController) {
+    previewAbortController.abort()
+    previewAbortController = null
+  }
+}
+
+// 判断异常是否源于主动取消请求。
+function isPreviewAbortError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const err = error as { name?: string; code?: string }
+  return err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED'
 }
 
 // 判断预览结果中是否存在失败项。
@@ -1115,28 +1162,30 @@ function createFailedPreviewData(options: { source?: string; type?: string; titl
   } satisfies ManualTransferPreviewData
 }
 
-// 合并多次预览结果
-function mergePreviewData(target: ManualTransferPreviewData, incoming?: ManualTransferPreviewData) {
+// 单次遍历合并预览结果并增量维护计数，避免重复拷贝数组与多次 filter。
+function mergePreviewData(
+  target: ManualTransferPreviewData,
+  incoming?: ManualTransferPreviewData,
+  seenItemKeys?: Set<string>,
+) {
   if (!incoming) return
 
-  const mergedItems = [...(target.items ?? [])]
-  const existingItemKeys = new Set(mergedItems.map(item => getPreviewItemKey(item)))
+  const targetItems = target.items ?? (target.items = [])
+  const existingItemKeys = seenItemKeys ?? new Set(targetItems.map(item => getPreviewItemKey(item)))
 
-  ;(incoming.items ?? []).forEach(item => {
+  for (const item of incoming.items ?? []) {
     const itemKey = getPreviewItemKey(item)
-    if (existingItemKeys.has(itemKey)) return
+    if (existingItemKeys.has(itemKey)) continue
 
     existingItemKeys.add(itemKey)
-    mergedItems.push(item)
-  })
-
-  target.items = mergedItems
-  target.summary.total = mergedItems.length
-  target.summary.success = mergedItems.filter(item => item.success !== false).length
-  target.summary.failed = mergedItems.filter(item => item.success === false).length
+    targetItems.push(item)
+    target.summary.total += 1
+    if (item.success === false) target.summary.failed += 1
+    else target.summary.success += 1
+  }
 
   if (incoming.message) {
-    target.message = [target.message, incoming.message].filter(Boolean).join('；')
+    target.message = target.message ? `${target.message}；${incoming.message}` : incoming.message
   }
 }
 
@@ -1157,10 +1206,16 @@ function resolvePreviewResponseData(result: ApiResponse<ManualTransferPreviewDat
 async function previewTransfer() {
   if (!props.logids?.length && !normalizedItems.value.length) return
 
+  abortPreviewRequest()
+  const generation = previewRequestGeneration
+  const controller = new AbortController()
+  previewAbortController = controller
+
   previewLoading.value = true
   resetPreviewState()
 
   const mergedPreviewData = getDefaultPreviewData()
+  const seenItemKeys = new Set<string>()
 
   try {
     const tasks: Promise<void>[] = []
@@ -1170,7 +1225,10 @@ async function previewTransfer() {
         try {
           const result = await requestManualTransfer<ManualTransferPreviewData>(
             createTransferPayload({ items: normalizedItems.value, preview: true }),
+            false,
+            controller.signal,
           )
+          if (generation !== previewRequestGeneration) return
           if (!result.success) {
             mergePreviewData(
               mergedPreviewData,
@@ -1178,11 +1236,13 @@ async function previewTransfer() {
                 source: getBatchItemsLabel(normalizedItems.value),
                 message: result.message || t('dialog.reorganize.previewRequestFailed'),
               }),
+              seenItemKeys,
             )
           } else {
-            mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result))
+            mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result), seenItemKeys)
           }
         } catch (err: any) {
+          if (generation !== previewRequestGeneration || isPreviewAbortError(err)) return
           console.warn(`预览请求异常: ${err?.message}`)
           mergePreviewData(
             mergedPreviewData,
@@ -1190,6 +1250,7 @@ async function previewTransfer() {
               source: getBatchItemsLabel(normalizedItems.value),
               message: `${getBatchItemsLabel(normalizedItems.value)}: ${err?.message || t('dialog.reorganize.previewRequestFailed')}`,
             }),
+            seenItemKeys,
           )
         }
       } else {
@@ -1198,7 +1259,10 @@ async function previewTransfer() {
             try {
               const result = await requestManualTransfer<ManualTransferPreviewData>(
                 createTransferPayload({ item, preview: true }),
+                false,
+                controller.signal,
               )
+              if (generation !== previewRequestGeneration) return
               if (!result.success) {
                 mergePreviewData(
                   mergedPreviewData,
@@ -1208,12 +1272,14 @@ async function previewTransfer() {
                     title: item.name,
                     message: result.message || t('dialog.reorganize.previewRequestFailed'),
                   }),
+                  seenItemKeys,
                 )
                 return
               }
 
-              mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result))
+              mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result), seenItemKeys)
             } catch (err: any) {
+              if (generation !== previewRequestGeneration || isPreviewAbortError(err)) return
               console.warn(`预览请求异常: ${err?.message}`)
               mergePreviewData(
                 mergedPreviewData,
@@ -1223,6 +1289,7 @@ async function previewTransfer() {
                   title: item.name,
                   message: `${item.name || item.path}: ${err?.message || t('dialog.reorganize.previewRequestFailed')}`,
                 }),
+                seenItemKeys,
               )
             }
           }),
@@ -1238,7 +1305,10 @@ async function previewTransfer() {
           try {
             const result = await requestManualTransfer<ManualTransferPreviewData>(
               createTransferPayload({ logids, preview: true }),
+              false,
+              controller.signal,
             )
+            if (generation !== previewRequestGeneration) return
             if (!result.success) {
               mergePreviewData(
                 mergedPreviewData,
@@ -1246,12 +1316,14 @@ async function previewTransfer() {
                   source: historyLabel,
                   message: result.message || t('dialog.reorganize.previewRequestFailed'),
                 }),
+                seenItemKeys,
               )
               return
             }
 
-            mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result))
+            mergePreviewData(mergedPreviewData, resolvePreviewResponseData(result), seenItemKeys)
           } catch (err: any) {
+            if (generation !== previewRequestGeneration || isPreviewAbortError(err)) return
             console.warn(`预览请求异常: ${err?.message}`)
             mergePreviewData(
               mergedPreviewData,
@@ -1259,6 +1331,7 @@ async function previewTransfer() {
                 source: historyLabel,
                 message: `${historyLabel}: ${err?.message || t('dialog.reorganize.previewRequestFailed')}`,
               }),
+              seenItemKeys,
             )
           }
         })(),
@@ -1267,6 +1340,8 @@ async function previewTransfer() {
 
     await Promise.all(tasks)
 
+    if (generation !== previewRequestGeneration || !previewVisible.value) return
+
     previewData.value = mergedPreviewData
     previewLoaded.value = true
 
@@ -1274,19 +1349,24 @@ async function previewTransfer() {
       $toast.warning(getPreviewResultSummaryMessage(mergedPreviewData))
     }
   } catch (error: any) {
+    if (generation !== previewRequestGeneration || isPreviewAbortError(error)) return
     previewVisible.value = false
     resetPreviewState()
     $toast.error(error?.message || t('dialog.reorganize.previewRequestFailed'))
   } finally {
-    previewLoading.value = false
+    if (generation === previewRequestGeneration) {
+      previewLoading.value = false
+      previewAbortController = null
+    }
   }
 }
 
-// 切换预览面板，首次展开时拉取最新预览结果。
+// 切换预览面板，收起时中止在途请求，展开时拉取最新预览结果。
 async function togglePreview() {
-  if (previewLoading.value) return
-
   if (previewVisible.value) {
+    debouncedPreviewTransfer.cancel()
+    abortPreviewRequest()
+    previewLoading.value = false
     previewVisible.value = false
     return
   }
@@ -1295,9 +1375,9 @@ async function togglePreview() {
   await previewTransfer()
 }
 
-// 展开预览后，表单变更合并为一次延迟刷新，避免连续输入触发并行预览请求。
+// 展开预览后，表单变更合并为一次延迟刷新，允许新代际请求取代旧在途请求。
 const debouncedPreviewTransfer = debounce(() => {
-  if (previewVisible.value && !previewLoading.value && !transferSubmitting.value) void previewTransfer()
+  if (previewVisible.value && !transferSubmitting.value) void previewTransfer()
 }, 500)
 
 watch(
@@ -1458,6 +1538,7 @@ onMounted(async () => {
 onUnmounted(() => {
   stopLoadingProgress()
   debouncedPreviewTransfer.cancel()
+  abortPreviewRequest()
   if (episodeGroupQueryTimer) clearTimeout(episodeGroupQueryTimer)
 })
 </script>
@@ -1816,18 +1897,31 @@ onUnmounted(() => {
                 <div class="reorganize-preview-pane__title-row">
                   <div class="text-h6">{{ t('dialog.reorganize.previewTitle') }}</div>
                   <div v-if="previewLoaded" class="preview-title-stats">
-                    <VChip color="primary" variant="tonal" size="small">
+                    <VChip
+                      color="primary"
+                      :variant="previewStatusFilter === 'all' ? 'tonal' : 'outlined'"
+                      size="small"
+                      :class="{ 'preview-stat-chip--clickable': previewStatusFilter === 'failed' }"
+                      @click="setPreviewStatusFilter('all')"
+                    >
                       {{ t('dialog.reorganize.previewTotal', { count: previewSummary.total }) }}
                     </VChip>
                     <VChip color="success" variant="tonal" size="small">
                       {{ t('dialog.reorganize.previewSuccess', { count: previewSummary.success }) }}
                     </VChip>
-                    <VChip color="error" variant="tonal" size="small">
+                    <VChip
+                      color="error"
+                      :variant="previewStatusFilter === 'failed' ? 'flat' : 'tonal'"
+                      size="small"
+                      :class="{ 'preview-stat-chip--clickable': previewSummary.failed > 0 }"
+                      :aria-pressed="previewSummary.failed > 0 ? previewStatusFilter === 'failed' : undefined"
+                      @click="toggleFailedPreviewFilter"
+                    >
                       {{ t('dialog.reorganize.previewFailed', { count: previewSummary.failed }) }}
                     </VChip>
                   </div>
                 </div>
-                <div class="text-body-2 text-medium-emphasis mt-2">
+                <div class="text-body-2 text-medium-emphasis mt-1">
                   {{ t('dialog.reorganize.previewSubtitle') }}
                 </div>
               </div>
@@ -1843,31 +1937,25 @@ onUnmounted(() => {
                     <div v-if="previewData?.message" class="preview-note">
                       {{ previewData.message }}
                     </div>
-                    <div class="preview-summary-grid">
-                      <div class="preview-overview-card">
-                        <span class="preview-overview-card__label">{{ t('dialog.reorganize.previewMediaName') }}</span>
-                        <span class="preview-overview-card__value">{{ previewMediaInfo.title }}</span>
-                      </div>
-                      <div class="preview-overview-card">
-                        <span class="preview-overview-card__label">{{ t('dialog.reorganize.previewMediaType') }}</span>
-                        <span class="preview-overview-card__value">{{ previewMediaInfo.type }}</span>
-                      </div>
-                      <div v-if="!previewIsMovie" class="preview-overview-card">
-                        <span class="preview-overview-card__label">{{
-                          t('dialog.reorganize.previewSeasonLabel')
-                        }}</span>
-                        <span class="preview-overview-card__value">{{ previewSeasonText }}</span>
-                      </div>
-                      <div v-if="!previewIsMovie" class="preview-overview-card">
-                        <span class="preview-overview-card__label">{{
-                          t('dialog.reorganize.previewEpisodeCount')
-                        }}</span>
-                        <span class="preview-overview-card__value">{{ previewEpisodeCountText }}</span>
+                    <div class="preview-summary-strip">
+                      <span class="preview-summary-strip__title" :title="previewMediaInfo.title">
+                        {{ previewMediaInfo.title }}
+                      </span>
+                      <div class="preview-summary-strip__meta">
+                        <span class="preview-meta-pill">{{ previewMediaInfo.type }}</span>
+                        <span v-if="!previewIsMovie" class="preview-meta-pill">{{ previewSeasonText }}</span>
+                        <span v-if="!previewIsMovie" class="preview-meta-pill">
+                          {{
+                            previewEpisodeCountText === '-'
+                              ? `${t('dialog.reorganize.previewEpisodeCount')} -`
+                              : `共 ${previewEpisodeCountText} 集`
+                          }}
+                        </span>
                       </div>
                     </div>
                     <div v-if="previewRecognitionDetails.length" class="preview-custom-words">
                       <div class="preview-custom-words__title">
-                        <VIcon icon="mdi-tag-text-outline" size="16" />
+                        <VIcon icon="mdi-tag-text-outline" size="15" />
                         <span>{{ previewRecognitionDetailTitle }}</span>
                       </div>
                       <div class="preview-custom-words__items">
@@ -1904,26 +1992,48 @@ onUnmounted(() => {
                         class="preview-file-row app-surface-shape"
                         :class="{ 'preview-file-row--failed': item.success === false }"
                       >
-                        <div class="preview-file-row__card preview-file-row__card--source">
-                          <span class="preview-file-row__label">{{ t('dialog.reorganize.previewBeforeColumn') }}</span>
-                          <span class="preview-file-row__name">{{ item.sourceName }}</span>
-                          <span class="preview-file-row__path">{{ item.source || '-' }}</span>
+                        <div class="preview-file-row__line preview-file-row__line--source">
+                          <span class="preview-file-tag preview-file-tag--source">原</span>
+                          <div class="preview-file-row__content">
+                            <span class="preview-file-row__name" :title="item.source || '-'">
+                              {{ item.sourceName }}
+                            </span>
+                            <span v-if="item.sourceDir" class="preview-file-row__dir" :title="item.sourceDir">
+                              {{ item.sourceDir }}
+                            </span>
+                          </div>
                         </div>
-                        <div class="preview-file-row__arrow">
-                          <VIcon icon="mdi-arrow-right" size="18" />
-                        </div>
-                        <div class="preview-file-row__card preview-file-row__card--target">
-                          <span class="preview-file-row__label">{{ t('dialog.reorganize.previewAfterColumn') }}</span>
-                          <span class="preview-file-row__name">{{ item.targetName }}</span>
-                          <span class="preview-file-row__path">{{ item.target || '-' }}</span>
-                          <span v-if="item.success === false && item.message" class="preview-file-row__message">
-                            {{ item.message }}
+                        <div class="preview-file-row__line preview-file-row__line--target">
+                          <span class="preview-file-row__branch" aria-hidden="true">↳</span>
+                          <span
+                            class="preview-file-tag preview-file-tag--target"
+                            :class="{ 'preview-file-tag--failed': item.success === false }"
+                          >
+                            新
                           </span>
+                          <div class="preview-file-row__content">
+                            <span
+                              class="preview-file-row__name preview-file-row__name--target"
+                              :title="item.target || '-'"
+                            >
+                              {{ item.targetName }}
+                            </span>
+                            <span v-if="item.targetDir" class="preview-file-row__dir" :title="item.targetDir">
+                              {{ item.targetDir }}
+                            </span>
+                            <span v-if="item.success === false && item.message" class="preview-file-row__message">
+                              {{ item.message }}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                     <div v-else class="reorganize-preview-list__empty">
-                      {{ t('dialog.reorganize.noPreviewData') }}
+                      {{
+                        previewStatusFilter === 'failed'
+                          ? t('dialog.reorganize.noFailedPreviewData')
+                          : t('dialog.reorganize.noPreviewData')
+                      }}
                     </div>
                   </div>
                   <div v-if="previewTotalPages > 1" class="reorganize-preview-pane__pagination">
@@ -2143,16 +2253,27 @@ onUnmounted(() => {
 .preview-title-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.375rem;
   min-inline-size: 0;
+}
+
+.preview-stat-chip--clickable {
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.preview-stat-chip--clickable:hover {
+  opacity: 0.9;
 }
 
 .reorganize-preview-pane__summary {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-block-start: 16px;
+  gap: 0.5rem;
+  padding-block-start: 12px;
   padding-inline: 22px;
 }
 
@@ -2162,42 +2283,58 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-error), 0.06);
   color: rgb(var(--v-theme-error));
   font-size: 0.8125rem;
-  line-height: 1.5;
-  padding-block: 0.625rem;
-  padding-inline: 0.875rem;
+  line-height: 1.45;
+  padding-block: 0.5rem;
+  padding-inline: 0.75rem;
 }
 
-.preview-summary-grid {
-  display: grid;
-  gap: 0.625rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.preview-overview-card {
+.preview-summary-strip {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   border-radius: 10px;
   background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
-  gap: 0.25rem;
+  gap: 0.5rem 0.75rem;
+  min-block-size: 2.75rem;
   min-inline-size: 0;
-  padding-block: 0.75rem;
+  padding-block: 0.5rem;
   padding-inline: 0.875rem;
 }
 
-.preview-overview-card__label {
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
-  line-height: 1.2;
+.preview-summary-strip__title {
+  overflow: hidden;
+  flex: 1 1 10rem;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.preview-overview-card__value {
-  overflow: hidden;
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
+.preview-summary-strip__meta {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.preview-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.12));
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  padding-block: 0.2rem;
+  padding-inline: 0.55rem;
   white-space: nowrap;
 }
 
@@ -2207,61 +2344,61 @@ onUnmounted(() => {
   border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   border-radius: 10px;
   background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.025));
-  gap: 0.625rem;
-  padding-block: 0.75rem;
-  padding-inline: 0.875rem;
+  gap: 0.375rem;
+  padding-block: 0.5rem;
+  padding-inline: 0.75rem;
 }
 
 .preview-custom-words__title {
   display: inline-flex;
   align-items: center;
   color: rgb(var(--v-theme-info));
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  gap: 0.375rem;
+  gap: 0.3rem;
 }
 
 .preview-custom-words__items {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.375rem;
   min-inline-size: 0;
 }
 
 .preview-custom-words__item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   min-inline-size: 0;
 }
 
 .preview-custom-words__source {
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .preview-custom-words__original {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.75rem;
-  line-height: 1.4;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .preview-custom-words__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: 0.3rem;
   min-inline-size: 0;
 }
 
 .preview-custom-words__chip {
   block-size: auto !important;
   max-inline-size: 100%;
-  min-block-size: 1.5rem;
-  padding-block: 0.25rem;
+  min-block-size: 1.35rem;
+  padding-block: 0.15rem;
   white-space: normal;
   word-break: break-all;
 }
@@ -2271,9 +2408,9 @@ onUnmounted(() => {
   overflow: hidden auto;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: 0.625rem;
   min-block-size: 0;
-  padding-block-end: 1rem;
+  padding-block-end: 0.875rem;
 }
 
 .reorganize-preview-pane__pagination {
@@ -2282,7 +2419,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
-  padding-block: 0 1rem;
+  padding-block: 0 0.75rem;
   padding-inline: 1rem;
 }
 
@@ -2302,7 +2439,7 @@ onUnmounted(() => {
   overflow: visible;
   flex: 0 0 auto;
   flex-direction: column;
-  margin-block-end: 1.25rem;
+  margin-block-end: 0.75rem;
   min-block-size: 0;
   min-inline-size: 0;
   padding-inline: 22px;
@@ -2313,23 +2450,21 @@ onUnmounted(() => {
   overflow: visible;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.5rem;
   min-block-size: 0;
   min-inline-size: 0;
 }
 
 .preview-file-row {
-  display: grid;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
   border-radius: 10px;
   background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.02));
-  gap: 0.875rem;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  min-block-size: 4.75rem;
+  gap: 0.375rem;
   min-inline-size: 0;
-  padding-block: 0.75rem;
-  padding-inline: 1rem;
+  padding-block: 0.625rem;
+  padding-inline: 0.875rem;
 }
 
 .preview-file-row--failed {
@@ -2337,61 +2472,96 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-error), 0.04);
 }
 
-.preview-file-row__card {
+.preview-file-row__line {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: flex-start;
+  gap: 0.5rem;
   min-inline-size: 0;
 }
 
-.preview-file-row__label {
+.preview-file-row__line--target {
+  padding-inline-start: 0.125rem;
+}
+
+.preview-file-row__branch {
+  flex: 0 0 auto;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.35rem;
+  user-select: none;
+}
+
+.preview-file-tag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  block-size: 1.25rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  line-height: 1;
+  margin-block-start: 0.05rem;
+  min-inline-size: 1.375rem;
+  padding-inline: 0.25rem;
+}
+
+.preview-file-tag--source {
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
+.preview-file-tag--target {
+  background: rgba(var(--v-theme-primary), 0.14);
+  color: rgb(var(--v-theme-primary));
+}
+
+.preview-file-tag--failed {
+  background: rgba(var(--v-theme-error), 0.14);
+  color: rgb(var(--v-theme-error));
+}
+
+.preview-file-row__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
 }
 
 .preview-file-row__name {
-  overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.preview-file-row__name--target {
+  color: rgb(var(--v-theme-primary));
+}
+
+.preview-file-row--failed .preview-file-row__name--target {
+  color: rgb(var(--v-theme-error));
+}
+
+.preview-file-row__dir {
+  overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.preview-file-row__path {
-  overflow: visible;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  word-break: break-all;
-}
-
-.preview-file-row__card--target .preview-file-row__name {
-  color: rgb(var(--v-theme-primary));
-}
-
-.preview-file-row--failed .preview-file-row__card--target .preview-file-row__name {
-  color: rgb(var(--v-theme-error));
-}
-
 .preview-file-row__message {
   color: rgb(var(--v-theme-error));
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   line-height: 1.4;
-}
-
-.preview-file-row__arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  block-size: 2rem;
-  color: rgb(var(--v-theme-info));
-  inline-size: 2rem;
+  margin-block-start: 0.125rem;
+  overflow-wrap: anywhere;
 }
 
 .reorganize-preview-list__empty {
@@ -2409,19 +2579,6 @@ onUnmounted(() => {
   .reorganize-preview-pane__header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .preview-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-file-row {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-file-row__arrow {
-    justify-self: start;
-    transform: rotate(90deg);
   }
 }
 

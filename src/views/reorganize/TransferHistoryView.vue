@@ -36,6 +36,7 @@ const globalSettingsStore = useGlobalSettingsStore()
 // APP
 const display = useDisplay()
 const isDesktop = computed(() => display.mdAndUp.value)
+const isCompactDesktop = computed(() => isDesktop.value && display.width.value < 1440)
 const isMobile = computed(() => display.smAndDown.value)
 // PWA模式检测
 const { appMode } = usePWA()
@@ -105,7 +106,7 @@ function sortBySourceSize(a: TransferHistory, b: TransferHistory) {
   return (a.src_fileitem?.size ?? 0) - (b.src_fileitem?.size ?? 0)
 }
 
-// 表头
+// 桌面端默认紧凑表头：右侧合并为「状态 / 大小」单列，始终优先保障标题与路径展示空间
 const headers = [
   {
     title: t('transferHistory.titleColumn'),
@@ -120,25 +121,11 @@ const headers = [
     cellProps: { class: 'history-path-td' },
   },
   {
-    title: t('transferHistory.modeColumn'),
-    key: 'mode',
-    sortable: true,
-  },
-  {
-    title: t('transferHistory.sizeColumn'),
+    title: `${t('transferHistory.statusColumn')} / ${t('transferHistory.sizeColumn')}`,
     key: 'size',
     sortable: true,
     sortRaw: sortBySourceSize,
-  },
-  {
-    title: t('transferHistory.dateColumn'),
-    key: 'date',
-    sortable: true,
-  },
-  {
-    title: t('transferHistory.statusColumn'),
-    key: 'status',
-    sortable: true,
+    cellProps: { class: 'history-compact-meta-td' },
   },
   {
     title: '',
@@ -147,7 +134,7 @@ const headers = [
   },
 ]
 
-// 分组表头
+// 桌面端默认紧凑分组表头
 const groupHeaders = [
   {
     title: t('transferHistory.seasonEpisode'),
@@ -162,25 +149,11 @@ const groupHeaders = [
     cellProps: { class: 'history-path-td' },
   },
   {
-    title: t('transferHistory.modeColumn'),
-    key: 'mode',
-    sortable: true,
-  },
-  {
-    title: t('transferHistory.sizeColumn'),
+    title: `${t('transferHistory.statusColumn')} / ${t('transferHistory.sizeColumn')}`,
     key: 'size',
     sortable: true,
     sortRaw: sortBySourceSize,
-  },
-  {
-    title: t('transferHistory.dateColumn'),
-    key: 'date',
-    sortable: true,
-  },
-  {
-    title: t('transferHistory.statusColumn'),
-    key: 'status',
-    sortable: true,
+    cellProps: { class: 'history-compact-meta-td' },
   },
   {
     title: '',
@@ -245,6 +218,9 @@ const totalItems = ref(0)
 
 // 是否要分组
 const group = ref<boolean>(route.query.grouped === 'true')
+
+// 根据分组状态选择桌面端紧凑表头
+const activeHeaders = computed(() => (group.value ? groupHeaders : headers))
 
 // 分组条件
 const groupBy = ref<any>([
@@ -1066,12 +1042,13 @@ function parseDisplayDate(value?: string): Date | null {
 
 /**
  * 将有效日期的浏览器本地年月日编码为连续自然日序号，不受夏令时的 23/25 小时影响。
+ * Date.UTC 仅编码本地日历字段，不代表按 UTC 日期分组或计算本地零点的经过时长。
  */
 function getLocalCalendarDay(date: Date): number {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000
 }
 
-// 按浏览器本地自然日压缩移动端卡片时间，无法解析时保留原文本。
+// 按浏览器本地自然日压缩桌面紧凑列与移动端卡片时间，无法解析时保留原文本。
 function getHistoryDateText(date?: string) {
   if (!date) return ''
 
@@ -1363,7 +1340,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <VCard v-if="isDesktop" ref="desktopHistoryCardRef" class="transfer-history-card">
+  <VCard
+    v-if="isDesktop"
+    ref="desktopHistoryCardRef"
+    class="transfer-history-card"
+    :class="{ 'transfer-history-card--compact': isCompactDesktop }"
+  >
     <!-- 干净标准的 54px 顶部工具栏 -->
     <div class="transfer-history-toolbar">
       <div class="transfer-history-toolbar__left">
@@ -1468,9 +1450,9 @@ onUnmounted(() => {
 
     <VDataTableVirtual
       v-model="selected"
-      class="transfer-history-table"
+      class="transfer-history-table transfer-history-table--compact"
       :groupBy="group ? groupBy : undefined"
-      :headers="group ? groupHeaders : headers"
+      :headers="activeHeaders"
       :items="dataList"
       :loading="loading"
       density="compact"
@@ -1531,10 +1513,14 @@ onUnmounted(() => {
             <VIcon :icon="getIcon(item.type || '')" size="16" />
           </span>
           <div class="history-title-copy">
-            <span v-if="item.type === '电视剧'" class="history-title-primary text-high-emphasis">
+            <span
+              v-if="item.type === '电视剧'"
+              class="history-title-primary text-high-emphasis"
+              :title="getHistoryDisplayTitle(item)"
+            >
               <template v-if="!group">{{ item?.title }} </template>{{ item?.seasons }}{{ item?.episodes }}
             </span>
-            <span v-else class="history-title-primary text-high-emphasis">
+            <span v-else class="history-title-primary text-high-emphasis" :title="getHistoryDisplayTitle(item)">
               {{ item?.title || item?.year || item?.type }}
             </span>
             <span v-if="item?.category" class="history-title-category">{{ item?.category }}</span>
@@ -1562,35 +1548,40 @@ onUnmounted(() => {
           </div>
         </div>
       </template>
-      <template #item.mode="{ item }">
-        <VChip variant="tonal" color="secondary" size="x-small" label class="history-pill">
-          {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
-        </VChip>
-      </template>
-      <template #item.status="{ item }">
-        <VChip v-if="item?.status" variant="tonal" color="success" size="x-small" label class="history-pill">
-          {{ t('transferHistory.status.success') }}
-        </VChip>
-        <VTooltip v-else :text="item?.errmsg" max-width="360">
-          <template #activator="{ props }">
-            <VChip
-              v-bind="props"
-              variant="tonal"
-              color="error"
-              size="x-small"
-              label
-              class="history-pill history-pill--clickable"
-            >
-              {{ t('transferHistory.status.failed') }}
-            </VChip>
-          </template>
-        </VTooltip>
-      </template>
       <template #item.size="{ item }">
-        <span class="history-meta-text">{{ formatFileSize(item?.src_fileitem?.size || 0) }}</span>
-      </template>
-      <template #item.date="{ item }">
-        <span class="history-meta-text">{{ item?.date }}</span>
+        <div class="history-compact-meta">
+          <div class="history-compact-meta__top">
+            <VChip v-if="item?.status" variant="tonal" color="success" size="x-small" label class="history-pill">
+              {{ t('transferHistory.status.success') }}
+            </VChip>
+            <VTooltip v-else :text="item?.errmsg" max-width="360">
+              <template #activator="{ props }">
+                <VChip
+                  v-bind="props"
+                  variant="tonal"
+                  color="error"
+                  size="x-small"
+                  label
+                  class="history-pill history-pill--clickable"
+                >
+                  {{ t('transferHistory.status.failed') }}
+                </VChip>
+              </template>
+            </VTooltip>
+            <VChip variant="tonal" color="secondary" size="x-small" label class="history-pill">
+              {{ TransferDict[item?.mode ?? ''] || t('common.unknown') }}
+            </VChip>
+          </div>
+          <div class="history-compact-meta__bottom">
+            <span class="history-meta-text">{{ formatFileSize(item?.src_fileitem?.size || 0) }}</span>
+            <template v-if="item?.date">
+              <span class="history-compact-meta__dot">·</span>
+              <span class="history-meta-text history-compact-meta__date" :title="item.date">
+                {{ getHistoryDateText(item.date) }}
+              </span>
+            </template>
+          </div>
+        </div>
       </template>
       <template #item.actions="{ item }">
         <IconBtn class="history-row-menu-btn">
@@ -1914,9 +1905,10 @@ onUnmounted(() => {
 
 .transfer-history-toolbar__left {
   display: flex;
-  flex: 1 1 260px;
+  flex: 1 1 240px;
   align-items: center;
   max-inline-size: 320px;
+  min-inline-size: 200px;
 }
 
 .transfer-history-search {
@@ -1930,10 +1922,25 @@ onUnmounted(() => {
 
 .transfer-history-toolbar__actions {
   display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.transfer-history-card--compact .transfer-history-toolbar {
+  padding: 8px 14px;
+  gap: 10px;
+}
+
+.transfer-history-card--compact .transfer-history-toolbar__left {
+  flex: 1 1 200px;
+  max-inline-size: 280px;
+}
+
+.transfer-history-card--compact .transfer-history-toolbar__actions {
+  gap: 6px;
 }
 
 .history-selected-badge {
@@ -1960,7 +1967,7 @@ onUnmounted(() => {
   color: rgba(var(--v-theme-on-surface), 0.62) !important;
   font-size: 12px !important;
   font-weight: 600 !important;
-  padding-inline: 10px !important;
+  padding-inline: 8px !important;
   white-space: nowrap;
 }
 
@@ -1971,7 +1978,7 @@ onUnmounted(() => {
 
 :deep(.v-table tbody td) {
   padding-block: 8px !important;
-  padding-inline: 10px !important;
+  padding-inline: 8px !important;
   white-space: nowrap;
 }
 
@@ -1979,6 +1986,12 @@ onUnmounted(() => {
   inline-size: 100%;
   max-inline-size: 0;
   white-space: normal !important;
+}
+
+.transfer-history-table--compact :deep(tbody td.history-compact-meta-td) {
+  inline-size: 160px;
+  max-inline-size: 168px;
+  min-inline-size: 148px;
 }
 
 .history-group-row td {
@@ -2042,15 +2055,49 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
+/* 窄桌面模式：缩减图标并放宽标题至最多 2 行自然折行 */
+.transfer-history-table--compact .history-title-cell {
+  align-items: flex-start;
+  gap: 8px;
+  max-inline-size: 15.5rem;
+  min-inline-size: 11rem;
+}
+
+.transfer-history-table--compact .history-title-cell--grouped {
+  max-inline-size: 10rem;
+  min-inline-size: 6.5rem;
+}
+
+.transfer-history-table--compact .history-title-icon {
+  flex: 0 0 28px;
+  border-radius: 7px;
+  block-size: 28px;
+  inline-size: 28px;
+  margin-block-start: 1px;
+}
+
+.transfer-history-table--compact .history-title-primary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  font-size: 13px;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+}
+
 /* 双行结构化路径组件：自然换行完整展示文件名，目录前缀弱化、文件名高对比突出 */
 .history-paths {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   inline-size: 100%;
   max-inline-size: 100%;
   min-inline-size: 0;
-  padding-block: 2px;
+  padding-block: 1px;
 }
 
 .history-paths__row {
@@ -2086,7 +2133,7 @@ onUnmounted(() => {
 .history-paths__dest {
   flex: 1 1 auto;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.4;
   min-inline-size: 0;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -2124,6 +2171,41 @@ onUnmounted(() => {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* 窄桌面紧凑合并详情列：状态+转移方式与大小+紧凑时间双行排版 */
+.history-compact-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  inline-size: 156px;
+  max-inline-size: 164px;
+  min-inline-size: 148px;
+}
+
+.history-compact-meta__top {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.history-compact-meta__bottom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+
+.history-compact-meta__dot {
+  color: rgba(var(--v-theme-on-surface), 0.36);
+  font-size: 11px;
+}
+
+.history-compact-meta__date {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-row-menu-btn {

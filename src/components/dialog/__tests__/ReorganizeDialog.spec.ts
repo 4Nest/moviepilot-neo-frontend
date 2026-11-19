@@ -1,3 +1,4 @@
+import api from '@/api'
 import type { ApiResponse, FileItem, StorageConf, TransferDirectoryConf } from '@/api/types'
 import ReorganizeDialog from '@/components/dialog/ReorganizeDialog.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
@@ -344,7 +345,12 @@ async function renderDialog({
 
 function previewResponse(
   items: Array<{
+    apply_words?: string[]
+    episode?: number
+    episode_end?: number
     message?: string
+    org_string?: string
+    season?: number
     source: string
     success: boolean
     target: string
@@ -1098,5 +1104,274 @@ describe('ReorganizeDialog preview', () => {
 
     expect(container.querySelector('.mp-settings-card')).not.toBeNull()
     expect(container.querySelector('.v-col-md-3')).toBeNull()
+  })
+
+  it('renders compact summary strip, vertical diff rows, and toggles failed-only filter', async () => {
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, () =>
+        HttpResponse.json(
+          previewResponse([
+            {
+              source: '/downloads/tv/Show.S01E01.mkv',
+              success: true,
+              target: '/library/tv/Show/Season 01/Show - S01E01.mkv',
+              title: '示例剧集',
+              type: '电视剧',
+            },
+            {
+              message: '未识别到集数',
+              source: '/downloads/tv/Show.Special.mkv',
+              success: false,
+              target: '',
+              title: '示例剧集',
+              type: '电视剧',
+            },
+          ]),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    const { container } = await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '预览' }))
+
+    expect(await screen.findByText('Show - S01E01.mkv')).toBeInTheDocument()
+    expect(container.querySelector('.preview-summary-strip')).not.toBeNull()
+    expect(container.querySelector('.preview-summary-grid')).toBeNull()
+    expect(container.querySelectorAll('.preview-file-row__line--source')).toHaveLength(2)
+    expect(container.querySelectorAll('.preview-file-row__line--target')).toHaveLength(2)
+    expect(screen.getAllByText('/downloads/tv')).toHaveLength(2)
+    expect(screen.getByText('/library/tv/Show/Season 01')).toBeInTheDocument()
+
+    // 点击「失败 1」胶囊仅展示失败项
+    await user.click(screen.getByText('失败 1'))
+    expect(screen.queryByText('Show - S01E01.mkv')).not.toBeInTheDocument()
+    expect(screen.getByText('Show.Special.mkv')).toBeInTheDocument()
+    expect(screen.getByText('未识别到集数')).toBeInTheDocument()
+
+    // 再次点击「失败 1」恢复展示全部，再切到失败后点击「总数 2」也能切回全部
+    await user.click(screen.getByText('失败 1'))
+    expect(screen.getByText('Show - S01E01.mkv')).toBeInTheDocument()
+    expect(screen.getByText('Show.Special.mkv')).toBeInTheDocument()
+
+    await user.click(screen.getByText('失败 1'))
+    expect(screen.queryByText('Show - S01E01.mkv')).not.toBeInTheDocument()
+    await user.click(screen.getByText('总数 2'))
+    expect(screen.getByText('Show - S01E01.mkv')).toBeInTheDocument()
+  })
+
+  it('summarizes multi-season episode ranges, grouped custom words, and hides season pills for movies', async () => {
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, () =>
+        HttpResponse.json(
+          previewResponse([
+            {
+              apply_words: ['RAW => 1080p'],
+              episode: 1,
+              episode_end: 2,
+              org_string: 'Show.S01E01-E02.RAW.mkv',
+              season: 1,
+              source: '/downloads/Show.S01E01-E02.RAW.mkv',
+              success: true,
+              target: '/library/Show/Season 01/Show - S01E01-E02.mkv',
+              title: '示例剧集A',
+              type: '电视剧',
+            },
+            {
+              apply_words: ['RAW => 1080p'],
+              episode: 1,
+              org_string: 'Show.S02E01.RAW.mkv',
+              season: 2,
+              source: 'Show.S02E01.RAW.mkv',
+              success: true,
+              target: '/library/Show/Season 02/Show - S02E01.mkv',
+              title: '示例剧集B',
+              type: '电视剧',
+            },
+          ]),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '预览' }))
+
+    expect(await screen.findByText('示例剧集A +1')).toBeInTheDocument()
+    expect(screen.getByText('S01 +1')).toBeInTheDocument()
+    expect(screen.getByText('共 3 集')).toBeInTheDocument()
+    expect(screen.getByText('2 个文件应用相同识别词')).toBeInTheDocument()
+    expect(screen.getByText('RAW => 1080p')).toBeInTheDocument()
+
+    // 失败数为 0 时点击「失败 0」不会进入空筛选状态
+    await user.click(screen.getByText('失败 0'))
+    expect(screen.getByText('Show - S01E01-E02.mkv')).toBeInTheDocument()
+  })
+
+  it('hides season and episode pills in summary strip for movies', async () => {
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, () =>
+        HttpResponse.json(
+          previewResponse([
+            {
+              source: '/downloads/Inception.mkv',
+              success: true,
+              target: '/library/Movies/Inception (2010)/Inception.mkv',
+              title: '盗梦空间',
+              type: '电影',
+            },
+          ]),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    const { container } = await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '预览' }))
+
+    expect(await screen.findByText('盗梦空间')).toBeInTheDocument()
+    const pills = Array.from(container.querySelectorAll('.preview-meta-pill')).map(el => el.textContent?.trim())
+    expect(pills).toEqual(['电影'])
+  })
+
+  it('discards stale preview responses when a newer preview request supersedes an in-flight one', async () => {
+    const firstResponse = createDeferred<ReturnType<typeof previewResponse>>()
+    const secondResponse = createDeferred<ReturnType<typeof previewResponse>>()
+    const postSpy = vi.spyOn(api, 'post')
+    let callCount = 0
+
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async () => {
+        callCount += 1
+        const currentCall = callCount
+        if (currentCall === 1) {
+          return HttpResponse.json(await firstResponse.promise)
+        }
+        return HttpResponse.json(await secondResponse.promise)
+      }),
+    )
+
+    try {
+      await renderDialog()
+      await fireEvent.click(screen.getByRole('button', { name: '预览' }))
+      await waitFor(() => expect(callCount).toBe(1))
+
+      const previewSignals = () =>
+        postSpy.mock.calls
+          .filter(([url]) => typeof url === 'string' && url.startsWith('transfer/manual?'))
+          .map(([, , config]) => config?.signal as AbortSignal | undefined)
+
+      expect(previewSignals()[0]?.aborted).toBe(false)
+
+      vi.useFakeTimers()
+      try {
+        // 首次请求仍在途时修改表单，500ms 后应触发新代际请求并中止旧请求
+        await fireEvent.input(screen.getByLabelText('集数偏移'), { target: { value: 'EP+2' } })
+        await vi.advanceTimersByTimeAsync(500)
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(callCount).toBe(2)
+        expect(previewSignals()[0]?.aborted).toBe(true)
+        expect(previewSignals()[1]?.aborted).toBe(false)
+
+        // 新请求先返回
+        secondResponse.resolve(
+          previewResponse([
+            {
+              source: '/downloads/Movie.mkv',
+              success: true,
+              target: '/library/NewTarget.mkv',
+              title: '最新结果',
+              type: '电影',
+            },
+          ]),
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        await vi.advanceTimersByTimeAsync(10)
+
+        // 旧请求后返回（模拟未能被网络层取消的场景）
+        firstResponse.resolve(
+          previewResponse([
+            {
+              source: '/downloads/Movie.mkv',
+              success: true,
+              target: '/library/StaleTarget.mkv',
+              title: '过期结果',
+              type: '电影',
+            },
+          ]),
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(screen.getByText('NewTarget.mkv')).toBeInTheDocument()
+        expect(screen.queryByText('StaleTarget.mkv')).not.toBeInTheDocument()
+        expect(mocks.toastError).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    } finally {
+      postSpy.mockRestore()
+    }
+  })
+
+  it('aborts in-flight preview request when collapsing the preview panel', async () => {
+    const pendingResponse = createDeferred<ReturnType<typeof previewResponse>>()
+    const postSpy = vi.spyOn(api, 'post')
+    let requestArrived = false
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, async () => {
+        requestArrived = true
+        return HttpResponse.json(await pendingResponse.promise)
+      }),
+    )
+
+    try {
+      await renderDialog()
+      const previewButton = screen.getByRole('button', { name: '预览' })
+
+      await fireEvent.click(previewButton)
+      await waitFor(() => expect(requestArrived).toBe(true))
+
+      const previewSignal = postSpy.mock.calls.find(
+        ([url]) => typeof url === 'string' && url.startsWith('transfer/manual?'),
+      )?.[2]?.signal as AbortSignal | undefined
+      expect(previewSignal?.aborted).toBe(false)
+
+      // 加载中再次点击预览按钮收起面板并中止在途请求
+      await fireEvent.click(previewButton)
+      expect(previewSignal?.aborted).toBe(true)
+      expect(previewButton).not.toHaveClass('reorganize-action-btn--active')
+
+      pendingResponse.resolve(
+        previewResponse([{ source: '/downloads/Movie.mkv', success: true, target: '/library/Late.mkv' }]),
+      )
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(mocks.toastError).not.toHaveBeenCalled()
+    } finally {
+      postSpy.mockRestore()
+    }
+  })
+
+  it('records HTTP preview errors as failed preview rows and renders empty preview state when backend returns no items', async () => {
+    server.use(
+      http.post(new URL('transfer/manual', API_BASE_URL).href, () =>
+        HttpResponse.json({ message: '预览服务异常' }, { status: 500 }),
+      ),
+    )
+    const user = userEvent.setup()
+    await renderDialog()
+
+    await user.click(screen.getByRole('button', { name: '预览' }))
+    expect(await screen.findByText('总数 1')).toBeInTheDocument()
+    expect(screen.getByText('失败 1')).toBeInTheDocument()
+
+    // 切换回空结果响应验证空状态展示
+    server.use(http.post(new URL('transfer/manual', API_BASE_URL).href, () => HttpResponse.json(previewResponse([]))))
+    await user.click(screen.getByRole('button', { name: '预览' }))
+    await user.click(screen.getByRole('button', { name: '预览' }))
+    expect(await screen.findByText('暂无预览结果')).toBeInTheDocument()
   })
 })

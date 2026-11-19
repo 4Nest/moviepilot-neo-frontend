@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   progressStop: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  width: 1600,
 }))
 
 vi.mock('@/api', () => ({
@@ -46,6 +47,7 @@ vi.mock('vuetify', async importOriginal => {
     useDisplay: () => ({
       mdAndUp: computed(() => mocks.desktop),
       smAndDown: computed(() => !mocks.desktop),
+      width: computed(() => mocks.width),
     }),
   }
 })
@@ -86,6 +88,21 @@ let stubDisplayOrder: (items: TransferHistory[]) => TransferHistory[] = items =>
 let renderTitleSlot = false
 /** 是否在替身表格中直接渲染 `#item.src` 插槽。 */
 let renderSrcSlot = false
+/** 是否在替身表格中直接渲染右侧详情列（size/mode/date/status）插槽。 */
+let renderDetailSlots = false
+
+const TooltipStub = defineComponent({
+  name: 'VTooltip',
+  props: {
+    text: {
+      type: String,
+      default: '',
+    },
+  },
+  setup(props, { slots }) {
+    return () => h('span', { 'data-tooltip-text': props.text }, [slots.activator?.({ props: {} }), slots.default?.()])
+  },
+})
 
 const HistoryTableStub = defineComponent({
   name: 'VDataTableVirtual',
@@ -94,6 +111,7 @@ const HistoryTableStub = defineComponent({
       type: Array as PropType<
         Array<{
           key: string
+          title?: string
           sortRaw?: (left: TransferHistory, right: TransferHistory) => number
         }>
       >,
@@ -109,7 +127,7 @@ const HistoryTableStub = defineComponent({
     },
   },
   emits: ['update:modelValue'],
-  setup(props, { emit, slots }) {
+  setup(props, { attrs, emit, slots }) {
     return () => {
       const sortResults =
         props.items.length >= 2
@@ -121,29 +139,43 @@ const HistoryTableStub = defineComponent({
           : {}
 
       const displayedItems = stubDisplayOrder(props.items)
+      const headerKeys = props.headers.map(header => header.key)
 
-      return h('section', { 'aria-label': '整理历史桌面列表' }, [
-        h('div', { class: 'v-table__wrapper' }, [
-          h('output', { 'aria-label': '整理历史排序结果' }, JSON.stringify(sortResults)),
-          ...(slots['body.prepend']?.({ groupedItems: displayedItems.map(raw => ({ type: 'item', raw })) }) ?? []),
-          ...displayedItems.map(item =>
-            h('article', { 'data-history-id': item.id }, [
-              slots['item.data-table-select']?.({ item }),
-              renderTitleSlot ? slots['item.title']?.({ item }) : h('span', item.title),
-              renderSrcSlot ? slots['item.src']?.({ item }) : null,
-              slots['item.actions']?.({ item }),
-            ]),
-          ),
-          h(
-            'button',
-            {
-              onClick: () => emit('update:modelValue', props.items),
-              type: 'button',
-            },
-            '选择当前页',
-          ),
-        ]),
-      ])
+      return h(
+        'section',
+        {
+          ...attrs,
+          'aria-label': '整理历史桌面列表',
+          'data-header-keys': headerKeys.join(','),
+          'data-header-titles': props.headers.map(header => header.title ?? '').join(','),
+        },
+        [
+          h('div', { class: 'v-table__wrapper' }, [
+            h('output', { 'aria-label': '整理历史排序结果' }, JSON.stringify(sortResults)),
+            ...(slots['body.prepend']?.({ groupedItems: displayedItems.map(raw => ({ type: 'item', raw })) }) ?? []),
+            ...displayedItems.map(item =>
+              h('article', { 'data-history-id': item.id }, [
+                slots['item.data-table-select']?.({ item }),
+                renderTitleSlot ? slots['item.title']?.({ item }) : h('span', item.title),
+                renderSrcSlot ? slots['item.src']?.({ item }) : null,
+                renderDetailSlots && headerKeys.includes('mode') ? slots['item.mode']?.({ item }) : null,
+                renderDetailSlots && headerKeys.includes('size') ? slots['item.size']?.({ item }) : null,
+                renderDetailSlots && headerKeys.includes('date') ? slots['item.date']?.({ item }) : null,
+                renderDetailSlots && headerKeys.includes('status') ? slots['item.status']?.({ item }) : null,
+                slots['item.actions']?.({ item }),
+              ]),
+            ),
+            h(
+              'button',
+              {
+                onClick: () => emit('update:modelValue', props.items),
+                type: 'button',
+              },
+              '选择当前页',
+            ),
+          ]),
+        ],
+      )
     }
   },
 })
@@ -327,6 +359,7 @@ async function renderHistory(initialRoute = '/history') {
         VPageContentTitle: true,
         VPagination: EmptyStub,
         VSelect: EmptyStub,
+        VTooltip: TooltipStub,
       },
     },
     initialRoute,
@@ -372,8 +405,10 @@ describe('TransferHistoryView', () => {
     stubDisplayOrder = items => items
     renderTitleSlot = false
     renderSrcSlot = false
+    renderDetailSlots = false
     mocks.appMode = true
     mocks.desktop = true
+    mocks.width = 1600
     mocks.dynamicButtonConfig = undefined
     mocks.progressCallback = undefined
     mocks.apiDelete.mockResolvedValue({ success: true })
@@ -1072,5 +1107,267 @@ describe('TransferHistoryView', () => {
     await nextTick()
     await fireEvent.click(screen.getByRole('button', { name: '批量重新整理' }))
     expect(getDialogCall(1).props).toEqual({ logids: [10, 11], target_storage: undefined })
+  })
+
+  it('merges right-side metadata columns into a compact details cell on narrow desktop (< 1440px) with sorting and failure tooltip intact', async () => {
+    mocks.width = 1280
+    renderTitleSlot = true
+    renderDetailSlots = true
+    const histories = [
+      createHistory(1, '超长动漫标题测试记录', {
+        date: '2025-11-19 08:45:12',
+        mode: 'link',
+        src_fileitem: { size: 1024 * 1024 * 1024 } as TransferHistory['src_fileitem'],
+        status: true,
+      }),
+      createHistory(2, '失败记录项', {
+        date: '2025-11-18 22:10:05',
+        errmsg: '目标目录无写入权限',
+        mode: 'unknown_mode',
+        src_fileitem: { size: 2048 * 1024 * 1024 } as TransferHistory['src_fileitem'],
+        status: false,
+      }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory()
+    expect(await screen.findByText('超长动漫标题测试记录')).toBeInTheDocument()
+
+    const table = screen.getByLabelText('整理历史桌面列表')
+    expect(table).toHaveAttribute('data-header-keys', 'title,src,size,actions')
+    expect(table.className).toContain('transfer-history-table--compact')
+
+    // sortRaw 排序仍对 size 列生效
+    const sortResults = JSON.parse(screen.getByRole('status', { name: '整理历史排序结果' }).textContent || '{}')
+    expect(sortResults.size).toBeLessThan(0)
+
+    // 成功项渲染紧凑双行详情，时间保留完整 title
+    const successRow = container.querySelector('[data-history-id="1"]')!
+    expect(successRow.querySelector('.history-compact-meta')).not.toBeNull()
+    expect(successRow.querySelector('.history-compact-meta__top')?.textContent).toContain('成功')
+    expect(successRow.querySelector('.history-compact-meta__top')?.textContent).toContain('硬链接')
+    const dateEl = successRow.querySelector('.history-compact-meta__date')
+    expect(dateEl).toHaveAttribute('title', '2025-11-19 08:45:12')
+    expect(dateEl?.textContent?.trim()).toBe('11-19 08:45')
+
+    // 失败项渲染失败徽标与 errmsg Tooltip
+    const failedRow = container.querySelector('[data-history-id="2"]')!
+    expect(failedRow.querySelector('.history-compact-meta__top')?.textContent).toContain('失败')
+    expect(failedRow.querySelector('[data-tooltip-text="目标目录无写入权限"]')).not.toBeNull()
+  })
+
+  it('uses compact group headers in grouped narrow desktop mode', async () => {
+    mocks.width = 1200
+    renderTitleSlot = true
+    const histories = [
+      createHistory(1, '分组窄屏剧集', {
+        episodes: 'E01',
+        seasons: 'S01',
+        type: '电视剧',
+      }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory('/history?grouped=true')
+    expect(await screen.findByText('S01E01')).toBeInTheDocument()
+
+    const table = screen.getByLabelText('整理历史桌面列表')
+    expect(table).toHaveAttribute('data-header-keys', 'title,src,size,actions')
+    expect(table.getAttribute('data-header-titles')).toBe('季集/类别,路径,状态 / 大小,')
+    expect(container.querySelector('.history-title-cell--grouped')).not.toBeNull()
+  })
+
+  it('uses compact 4-column desktop layout by default even on wide screens (>= 1440px)', async () => {
+    mocks.width = 1600
+    renderDetailSlots = true
+    const histories = [
+      createHistory(1, '宽屏成功项', {
+        date: '2025-11-19 08:45:12',
+        mode: 'link',
+        src_fileitem: { size: 512 * 1024 * 1024 } as TransferHistory['src_fileitem'],
+        status: true,
+      }),
+      createHistory(2, '宽屏失败项', {
+        date: '2025-11-18 22:10:05',
+        errmsg: '磁盘空间不足',
+        mode: 'copy',
+        src_fileitem: { size: 1024 * 1024 * 1024 } as TransferHistory['src_fileitem'],
+        status: false,
+      }),
+    ]
+    mocks.apiGet.mockImplementation((path: string) =>
+      Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+    )
+
+    const { container } = await renderHistory()
+    expect(await screen.findByText('宽屏成功项')).toBeInTheDocument()
+
+    const table = screen.getByLabelText('整理历史桌面列表')
+    expect(table).toHaveAttribute('data-header-keys', 'title,src,size,actions')
+    expect(table.className).toContain('transfer-history-table--compact')
+    expect(container.querySelector('.history-compact-meta')).not.toBeNull()
+    expect(container.querySelector('[data-history-id="1"] .history-compact-meta__date')).toHaveAttribute(
+      'title',
+      '2025-11-19 08:45:12',
+    )
+    expect(container.querySelector('[data-history-id="2"] [data-tooltip-text="磁盘空间不足"]')).not.toBeNull()
+  })
+
+  describe('calendar date displays', () => {
+    let histories: TransferHistory[]
+
+    beforeEach(() => {
+      histories = []
+      renderDetailSlots = true
+      mocks.apiGet.mockImplementation((path: string) =>
+        Promise.resolve(path === 'system/setting/public/Storages' ? storageResponse() : historyResponse(histories)),
+      )
+    })
+
+    it('compares local calendar days rather than 24-hour spans around midnight on desktop', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // 刚过午夜 5 分钟：10 分钟前的记录属于昨天，而非因为不足 24 小时归为今天
+      vi.setSystemTime(new Date(2026, 10, 12, 0, 5, 0))
+      const cases = [
+        ['2026-11-12 00:01:00', '今天 00:01'],
+        ['2026-11-11 23:55:00', '昨天 23:55'],
+        ['2026-11-11 00:01:00', '昨天 00:01'],
+        ['2026-11-10 23:59:00', '11-10 23:59'],
+      ] as const
+      histories = cases.map(([date], index) => createHistory(index + 1, `自然日边界记录${index}`, { date }))
+
+      const { container } = await renderHistory('/history?grouped=false')
+      await screen.findByText('自然日边界记录3')
+
+      for (const [index, [date, expected]] of cases.entries()) {
+        const dateEl = container.querySelector(`[data-history-id="${index + 1}"] .history-compact-meta__date`)
+        expect(dateEl?.textContent?.trim()).toBe(expected)
+        expect(dateEl).toHaveAttribute('title', date)
+      }
+    })
+
+    it('updates desktop compact dates across midnight without refetching and releases the shared timer on unmount', async () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+      vi.setSystemTime(new Date(2026, 10, 12, 23, 59, 30))
+      const timerCount = vi.getTimerCount()
+      const intervals = vi.spyOn(globalThis, 'setInterval')
+      const offset = new Date(2026, 10, 12, 17, 5, 44, 400).toISOString().replace('Z', '+00:00')
+      const cases = [
+        ['2026-11-12 00:05:00', '今天 00:05', '昨天 00:05'],
+        ['2026-11-11 23:55:00', '昨天 23:55', '11-11 23:55'],
+        ['2026-11-11 00:05:00', '昨天 00:05', '11-11 00:05'],
+        ['2026-11-10 21:05:39', '11-10 21:05', '11-10 21:05'],
+        ['2026-11-13 00:01:00', '11-13 00:01', '今天 00:01'],
+        [offset, '今天 17:05', '昨天 17:05'],
+      ] as const
+      histories = cases.map(([date], index) => createHistory(index + 1, `桌面跨日记录${index}`, { date }))
+
+      const { container, unmount } = await renderHistory('/history?grouped=false')
+      await screen.findByText('桌面跨日记录5')
+
+      const dateTexts = () =>
+        cases.map((_, index) =>
+          container.querySelector(`[data-history-id="${index + 1}"] .history-compact-meta__date`)?.textContent?.trim(),
+        )
+      expect(dateTexts()).toEqual(cases.map(([, before]) => before))
+      for (const [index, [date]] of cases.entries()) {
+        expect(container.querySelector(`[data-history-id="${index + 1}"] .history-compact-meta__date`)).toHaveAttribute(
+          'title',
+          date,
+        )
+      }
+      const requests = mocks.apiGet.mock.calls.length
+      expect(intervals.mock.calls.filter(([, delay]) => delay === 60000)).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(60000)
+
+      expect(dateTexts()).toEqual(cases.map(([, , after]) => after))
+      expect(mocks.apiGet).toHaveBeenCalledTimes(requests)
+      unmount()
+      expect(vi.getTimerCount()).toBe(timerCount)
+    })
+
+    it.each([true, false])(
+      'preserves empty and unparseable dates on desktop=%s without invalid labels',
+      async desktop => {
+        mocks.desktop = desktop
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date(2026, 10, 12, 21, 4))
+        const dates = ['not a date', '2026-11-12 25:00:00', '2026-02-31 10:00:00', '', undefined]
+        histories = dates.map((date, index) => createHistory(index + 1, `异常时间记录${index}`, { date }))
+
+        const { container } = await renderHistory('/history?grouped=false')
+        if (!desktop) await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
+        await screen.findByText('异常时间记录4')
+
+        expect(screen.getByText('not a date')).toBeInTheDocument()
+        expect(screen.getByText('2026-11-12 25:00:00')).toBeInTheDocument()
+        expect(screen.getByText('2026-02-31 10:00:00')).toBeInTheDocument()
+        expect(container).not.toHaveTextContent(/Invalid Date|今天|昨天/)
+
+        if (desktop) {
+          for (const [index, date] of dates.entries()) {
+            const dateEl = container.querySelector(`[data-history-id="${index + 1}"] .history-compact-meta__date`)
+            if (date) {
+              expect(dateEl?.textContent?.trim()).toBe(date)
+              expect(dateEl).toHaveAttribute('title', date)
+            } else {
+              expect(dateEl).toBeNull()
+            }
+          }
+        } else {
+          for (const [index, date] of dates.entries()) {
+            const record = screen.getByText(`异常时间记录${index}`).closest('.transfer-history-mobile-record')
+            const meta = [...(record?.querySelectorAll('.transfer-history-mobile-record__meta > span') || [])].map(
+              item => item.textContent?.trim(),
+            )
+            expect(meta.at(-1)).toBe(date || '·')
+          }
+        }
+      },
+    )
+
+    it('formats local and offset mobile dates across midnight without refetching and releases the shared timer', async () => {
+      mocks.desktop = false
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+      vi.setSystemTime(new Date(2026, 10, 12, 23, 59, 30))
+      const timerCount = vi.getTimerCount()
+      const intervals = vi.spyOn(globalThis, 'setInterval')
+      const offset = new Date(2026, 10, 12, 17, 5, 44, 400).toISOString().replace('Z', '+00:00')
+      const cases = [
+        ['2026-11-12 19:10:00', '今天 19:10', '昨天 19:10'],
+        ['2026-11-11T19:10:00', '昨天 19:10', '11-11 19:10'],
+        ['2026-11-10 21:05:39', '11-10 21:05', '11-10 21:05'],
+        [offset, '今天 17:05', '昨天 17:05'],
+      ] as const
+      histories = cases.map(([date], index) => createHistory(index + 1, `移动时间记录${index}`, { date }))
+
+      const { unmount } = await renderHistory('/history?grouped=false')
+      await fireEvent.click(screen.getByRole('button', { name: '加载下一页' }))
+      await screen.findByText('移动时间记录3')
+
+      const dateTexts = () =>
+        cases.map((_, index) =>
+          screen
+            .getByText(`移动时间记录${index}`)
+            .closest('.transfer-history-mobile-record')
+            ?.querySelector('.transfer-history-mobile-record__meta > span:last-child')
+            ?.textContent?.trim(),
+        )
+      expect(dateTexts()).toEqual(cases.map(([, before]) => before))
+      const requests = mocks.apiGet.mock.calls.length
+      expect(intervals.mock.calls.filter(([, delay]) => delay === 60000)).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(60000)
+
+      expect(dateTexts()).toEqual(cases.map(([, , after]) => after))
+      expect(mocks.apiGet).toHaveBeenCalledTimes(requests)
+      unmount()
+      expect(vi.getTimerCount()).toBe(timerCount)
+    })
   })
 })
