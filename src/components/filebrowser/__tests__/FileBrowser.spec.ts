@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
 
 const FileToolbarStub = defineComponent({
   name: 'FileToolbar',
-  props: ['showNewFolderButton', 'sort'],
-  emits: ['foldercreated', 'pathchanged', 'sortchanged', 'storagechanged'],
+  props: ['showNewFolderButton', 'sort', 'defaultPath', 'quickDirectories', 'savingDefaultPath'],
+  emits: ['foldercreated', 'pathchanged', 'sortchanged', 'storagechanged', 'save-default-path'],
   setup(_props, { emit, expose }) {
     expose({ openNewFolderDialog: mocks.openNewFolderDialog })
     return () =>
@@ -31,6 +31,7 @@ const FileToolbarStub = defineComponent({
             }),
         }),
         h('button', { class: 'emit-folder', onClick: () => emit('foldercreated') }),
+        h('button', { class: 'emit-save-default', onClick: () => emit('save-default-path', '/media/Raw/') }),
       ])
   },
 })
@@ -45,9 +46,9 @@ const FileNavigatorStub = defineComponent({
 const FileListStub = defineComponent({
   name: 'FileList',
   props: ['refreshpending', 'sort', 'showTree'],
-  emits: ['items-updated', 'loading', 'pathchanged', 'refreshed', 'switch-tree'],
+  emits: ['items-updated', 'loading', 'pathchanged', 'refreshed', 'switch-tree', 'sortchanged', 'create-folder'],
   template:
-    '<div><button class="emit-loading" @click="$emit(`loading`, 1)" /><button class="emit-tree" @click="$emit(`switch-tree`, true)" /></div>',
+    '<div><button class="emit-loading" @click="$emit(`loading`, 1)" /><button class="emit-tree" @click="$emit(`switch-tree`, true)" /><button class="emit-list-sort" @click="$emit(`sortchanged`, `time`)" /><button class="emit-list-create" @click="$emit(`create-folder`)" /></div>',
 })
 
 function createBrowserProps() {
@@ -211,16 +212,30 @@ describe('FileBrowser state and child contracts', () => {
     expect(wrapper.findComponent(FileNavigatorStub).exists()).toBe(true)
   })
 
-  it('forwards storage and path navigation events', async () => {
+  it('forwards storage, path and default path save events', async () => {
     const wrapper = mountBrowser()
 
     await wrapper.get('.emit-storage').trigger('click')
     await wrapper.get('.emit-path').trigger('click')
+    await wrapper.get('.emit-save-default').trigger('click')
 
+    expect(wrapper.emitted('storagechanged')).toEqual([['rclone']])
     expect(wrapper.emitted('pathchanged')).toEqual([
-      [{ fileid: 'root', path: '/', storage: 'rclone' }],
       [{ name: 'movies', path: '/movies/', storage: 'local', type: 'dir' }],
     ])
+    expect(wrapper.emitted('save-default-path')).toEqual([['/media/Raw/']])
+  })
+
+  it('forwards list column sort changes and opens new-folder dialog from empty-state action', async () => {
+    const wrapper = mountBrowser()
+
+    await wrapper.get('.emit-list-sort').trigger('click')
+    await wrapper.get('.emit-list-create').trigger('click')
+    await nextTick()
+
+    expect(localStorage.getItem('fileBrowser.sort')).toBe('time')
+    expect(wrapper.getComponent(FileListStub).props('refreshpending')).toBe(true)
+    expect(mocks.openNewFolderDialog).toHaveBeenCalledOnce()
   })
 
   it('tracks child loading and refresh lifecycle without invalid native loading attribute', async () => {

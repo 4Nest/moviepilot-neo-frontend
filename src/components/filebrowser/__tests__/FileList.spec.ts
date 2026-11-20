@@ -792,3 +792,144 @@ describe('FileList dialogs, download and lifecycle', () => {
     expect(renameController.close).not.toHaveBeenCalled()
   })
 })
+
+describe('FileList enhanced interactions and layout', () => {
+  beforeEach(() => {
+    mocks.confirm.mockResolvedValue(true)
+    mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('displays directory/file stats, filtered match stats, and clears filter from empty filter state', async () => {
+    await renderList(() =>
+      Promise.resolve([
+        createItem({ name: 'Season 01', path: '/media/Season 01/', type: 'dir' }),
+        createItem({ name: 'ep01.mkv', path: '/media/ep01.mkv', size: 1024 }),
+        createItem({ name: 'ep01.ass', path: '/media/ep01.ass', size: 512 }),
+      ]),
+    )
+
+    await screen.findByText('Season 01')
+    expect(screen.getByTestId('file-list-stats').textContent?.trim()).toBe('1 个文件夹 · 2 个文件')
+
+    const filterInput = screen.getByPlaceholderText(/搜索/)
+    await fireEvent.update(filterInput, 'ep01')
+    expect(screen.getByTestId('file-list-stats').textContent?.trim()).toBe('匹配 2 / 3 项')
+
+    await fireEvent.update(filterInput, 'non-existent-keyword')
+    expect(screen.getByTestId('file-list-stats').textContent?.trim()).toBe('匹配 0 / 3 项')
+
+    await fireEvent.click(screen.getByTestId('clear-filter-btn'))
+    expect(screen.getByTestId('file-list-stats').textContent?.trim()).toBe('1 个文件夹 · 2 个文件')
+    expect(screen.getByText('Season 01')).toBeInTheDocument()
+  })
+
+  it('emits sortchanged when clicking desktop column sort headers', async () => {
+    const { emitted } = await renderList(() => Promise.resolve([createItem({ name: 'movie.mkv' })]), { sort: 'name' })
+    await screen.findByText('movie.mkv')
+
+    // 点击已激活的「名称」列头不重复触发
+    await fireEvent.click(screen.getByTestId('sort-header-name'))
+    expect(emitted().sortchanged).toBeUndefined()
+
+    // 点击「修改时间」列头触发切换排序
+    await fireEvent.click(screen.getByTestId('sort-header-time'))
+    expect(emitted().sortchanged).toEqual([['time']])
+  })
+
+  it('exits multi-select mode when pressing Escape', async () => {
+    await renderList(() => Promise.resolve([createItem({ name: 'ep01.mkv', path: '/media/ep01.mkv' })]))
+    await screen.findByText('ep01.mkv')
+
+    await fireEvent.click(getIconButton('mdi-select'))
+    await fireEvent.click(screen.getByText('ep01.mkv').closest('[role="button"]') as Element)
+    expect(screen.getByText('已选 1 项')).toBeInTheDocument()
+
+    await fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByText('已选 1 项')).not.toBeInTheDocument()
+    expect(getIconButton('mdi-select')).toBeInTheDocument()
+  })
+
+  it('provides parent navigation and create-folder actions in empty directory state', async () => {
+    const { emitted } = await renderList(() => Promise.resolve([]), {
+      item: createItem({ name: 'Raw', path: '/media/Raw/', type: 'dir' }),
+    })
+    await screen.findByText('空目录')
+
+    await fireEvent.click(screen.getByTestId('empty-go-up-btn'))
+    expect(emitted().pathchanged?.at(-1)).toEqual([
+      {
+        name: 'media',
+        path: '/media/',
+        storage: 'local',
+        type: 'dir',
+      },
+    ])
+
+    await fireEvent.click(screen.getByTestId('empty-new-folder-btn'))
+    expect(emitted()['create-folder']).toHaveLength(1)
+  })
+
+  it('renders structured metadata rows on the single-file detail card', async () => {
+    const detailItem = createItem({
+      modify_time: 1700000000,
+      name: 'Movie.2024.1080p.mkv',
+      path: '/media/Movies/Movie.2024.1080p.mkv',
+      size: 2048,
+      type: 'file',
+    })
+    await renderList(() => Promise.resolve([detailItem]), { item: detailItem })
+
+    const meta = await screen.findByTestId('file-detail-meta')
+    expect(meta.textContent).toContain('Movie.2024.1080p.mkv')
+    expect(meta.textContent).toContain('2 KB')
+    expect(meta.textContent).toContain('/media/Movies/Movie.2024.1080p.mkv')
+  })
+
+  it('renders semantic icon kinds and compact modify times across date ranges', async () => {
+    const now = new Date()
+    const todayTs = Math.floor(now.getTime() / 1000)
+    const sameYearOtherDay = new Date(now.getFullYear(), now.getMonth() === 0 ? 1 : 0, 15, 9, 30)
+    const sameYearTs = Math.floor(sameYearOtherDay.getTime() / 1000)
+    const pastYearTs = Math.floor(new Date(now.getFullYear() - 1, 5, 10, 14, 20).getTime() / 1000)
+
+    const { container } = await renderList(() =>
+      Promise.resolve([
+        createItem({ name: 'Season 01', path: '/media/Season 01/', type: 'dir', modify_time: todayTs }),
+        createItem({ extension: 'mkv', name: 'video.mkv', path: '/media/video.mkv', size: 1024, modify_time: todayTs }),
+        createItem({ extension: 'ass', name: 'sub.ass', path: '/media/sub.ass', size: 512, modify_time: sameYearTs }),
+        createItem({
+          extension: 'flac',
+          name: 'track.flac',
+          path: '/media/track.flac',
+          size: 2048,
+          modify_time: pastYearTs,
+        }),
+        createItem({
+          extension: 'png',
+          name: 'poster.png',
+          path: '/media/poster.png',
+          size: 256,
+          modify_time: undefined,
+        }),
+        createItem({
+          extension: 'nfo',
+          name: 'movie.nfo',
+          path: '/media/movie.nfo',
+          size: 128,
+          modify_time: Number.NaN,
+        }),
+      ]),
+    )
+
+    await screen.findByText('video.mkv')
+    expect(container.querySelector('.file-item-icon--dir')).not.toBeNull()
+    expect(container.querySelector('.file-item-icon--video')).not.toBeNull()
+    expect(container.querySelector('.file-item-icon--subtitle')).not.toBeNull()
+    expect(container.querySelector('.file-item-icon--audio')).not.toBeNull()
+    expect(container.querySelector('.file-item-icon--image')).not.toBeNull()
+    expect(container.querySelector('.file-item-icon--other')).not.toBeNull()
+    expect(container.textContent).toContain('今天 ')
+    expect(container.textContent).toContain(`${now.getFullYear() - 1}-06-10`)
+  })
+})

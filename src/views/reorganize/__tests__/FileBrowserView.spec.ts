@@ -5,31 +5,60 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   default: {
     get: mocks.apiGet,
+    post: mocks.apiPost,
   },
+}))
+
+vi.mock('vue-toastification', () => ({
+  useToast: () => ({
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  }),
 }))
 
 const FileBrowserStub = defineComponent({
   name: 'FileBrowser',
-  emits: ['pathchanged'],
-  props: ['item', 'itemstack', 'storages'],
+  emits: ['pathchanged', 'storagechanged', 'save-default-path'],
+  props: ['item', 'itemstack', 'storages', 'defaultPath', 'quickDirectories', 'savingDefaultPath'],
   template: '<div data-testid="file-browser" />',
 })
 
+interface MockDirectory {
+  download_path?: string
+  library_path?: string
+  library_storage?: string
+  name?: string
+  storage: string
+}
+
 function mockSettings(
   storages: Array<{ name: string; type: string }> | null,
-  directories: Array<{ download_path?: string; storage: string }> | null,
+  directories: MockDirectory[] | null,
+  defaultPathsResponse: { data?: { value?: Record<string, string> | null }; success: boolean } | Error = {
+    data: { value: null },
+    success: true,
+  },
 ) {
   mocks.apiGet.mockImplementation((endpoint: string) => {
     if (endpoint === 'system/setting/public/Storages') {
-      return { data: { value: storages }, success: true }
+      return Promise.resolve({ data: { value: storages }, success: true })
     }
     if (endpoint === 'system/setting/public/Directories') {
-      return { data: { value: directories }, success: true }
+      return Promise.resolve({ data: { value: directories }, success: true })
+    }
+    if (endpoint === '/user/config/FileManagerDefaultPaths') {
+      if (defaultPathsResponse instanceof Error) {
+        return Promise.reject(defaultPathsResponse)
+      }
+      return Promise.resolve(defaultPathsResponse)
     }
     throw new Error(`Unexpected GET ${endpoint}`)
   })
@@ -49,7 +78,11 @@ async function mountView() {
 
 describe('FileBrowserView initialization', () => {
   beforeEach(() => {
+    localStorage.clear()
     mocks.apiGet.mockReset()
+    mocks.apiPost.mockReset()
+    mocks.toastError.mockReset()
+    mocks.toastSuccess.mockReset()
   })
 
   it('falls back to the storage root when Directories is null', async () => {
@@ -200,6 +233,166 @@ describe('FileBrowserView initialization', () => {
       { name: 'tv', path: '/downloads/tv/', storage: 'local', type: 'dir' },
       { name: 'Season 01', path: '/downloads/tv/Season 01/', storage: 'local', type: 'dir' },
     ])
+  })
+
+  it('prefers server default path over local cache and configured download directories, and syncs back to localStorage', async () => {
+    localStorage.setItem('MP_FILE_MANAGER_DEFAULT_PATHS', JSON.stringify({ local: '/stale/local/' }))
+    mockSettings(
+      [{ name: '本地', type: 'local' }],
+      [{ download_path: '/downloads/anime', name: '动漫下载', storage: 'local' }],
+      { data: { value: { local: '/media/Raw' } }, success: true },
+    )
+
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    expect(browser.props('item')).toMatchObject({
+      name: 'Raw',
+      path: '/media/Raw/',
+      storage: 'local',
+      type: 'dir',
+    })
+    expect(browser.props('defaultPath')).toBe('/media/Raw/')
+    expect(JSON.parse(localStorage.getItem('MP_FILE_MANAGER_DEFAULT_PATHS') || '{}')).toEqual({
+      local: '/media/Raw/',
+    })
+  })
+
+  it('falls back to localStorage default paths when server config fails or is empty', async () => {
+    localStorage.setItem('MP_FILE_MANAGER_DEFAULT_PATHS', JSON.stringify({ local: '/cached/raw/' }))
+    mockSettings(
+      [{ name: '本地', type: 'local' }],
+      [{ download_path: '/downloads/tv', storage: 'local' }],
+      new Error('config service unavailable'),
+    )
+
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    expect(browser.props('item')).toMatchObject({
+      name: 'raw',
+      path: '/cached/raw/',
+      storage: 'local',
+    })
+    expect(browser.props('defaultPath')).toBe('/cached/raw/')
+  })
+
+  it('navigates to target storage default path, configured common path, or root when switching storages', async () => {
+    mockSettings(
+      [
+        { name: '本地', type: 'local' },
+        { name: '115', type: 'u115' },
+        { name: '网盘', type: 'rclone' },
+      ],
+      [
+        { download_path: '/downloads/local', name: '本地下载', storage: 'local' },
+        { download_path: '/cloud/movies', name: '电影', storage: 'rclone' },
+        { download_path: '/cloud/tv', name: '剧集', storage: 'rclone' },
+      ],
+      { data: { value: { u115: '/115/Anime/' } }, success: true },
+    )
+
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    // 切到已配置默认打开路径的 u115
+    browser.vm.$emit('storagechanged', 'u115')
+    await flushPromises()
+    expect(browser.props('item')).toMatchObject({
+      name: 'Anime',
+      path: '/115/Anime/',
+      storage: 'u115',
+    })
+    expect(browser.props('defaultPath')).toBe('/115/Anime/')
+
+    // 切到未配置默认路径但有多个下载目录的 rclone -> 回退公共路径 /cloud/
+    browser.vm.$emit('storagechanged', 'rclone')
+    await flushPromises()
+    expect(browser.props('item')).toMatchObject({
+      name: 'cloud',
+      path: '/cloud/',
+      storage: 'rclone',
+    })
+    expect(browser.props('defaultPath')).toBe('')
+
+    // 切到既无默认路径又无目录配置的存储 -> 回退根目录 /
+    browser.vm.$emit('storagechanged', 'smb')
+    await flushPromises()
+    expect(browser.props('item')).toMatchObject({
+      name: '/',
+      path: '/',
+      storage: 'smb',
+    })
+  })
+
+  it('deduplicates configured download and library paths into quickDirectories for the active storage', async () => {
+    mockSettings(
+      [
+        { name: '本地', type: 'local' },
+        { name: '网盘', type: 'rclone' },
+      ],
+      [
+        {
+          download_path: '/media/downloads',
+          library_path: '/media/library/movies',
+          name: '电影',
+          storage: 'local',
+        },
+        {
+          download_path: '/media/downloads/',
+          library_path: '/remote/library',
+          library_storage: 'rclone',
+          name: '跨盘电影',
+          storage: 'local',
+        },
+      ],
+    )
+
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    expect(browser.props('quickDirectories')).toEqual([
+      { kind: 'download', name: '电影', path: '/media/downloads/' },
+      { kind: 'library', name: '电影（媒体库）', path: '/media/library/movies/' },
+    ])
+  })
+
+  it('saves and clears default path with server authority, localStorage sync and error handling', async () => {
+    mockSettings([{ name: '本地', type: 'local' }], [{ download_path: '/downloads', storage: 'local' }])
+    const browser = (await mountView()).getComponent(FileBrowserStub)
+
+    // 业务失败不更新状态与本地缓存
+    mocks.apiPost.mockResolvedValueOnce({ message: '无权限保存', success: false })
+    browser.vm.$emit('save-default-path', '/media/Raw')
+    await flushPromises()
+    expect(mocks.toastError).toHaveBeenCalledWith('无权限保存')
+    expect(browser.props('defaultPath')).toBe('')
+    expect(localStorage.getItem('MP_FILE_MANAGER_DEFAULT_PATHS')).toBeNull()
+
+    // 保存成功更新状态、本地缓存并弹成功提示
+    mocks.apiPost.mockResolvedValueOnce({ success: true })
+    browser.vm.$emit('save-default-path', '/media/Raw')
+    await flushPromises()
+    expect(mocks.apiPost).toHaveBeenCalledWith('/user/config/FileManagerDefaultPaths', {
+      local: '/media/Raw/',
+    })
+    expect(browser.props('defaultPath')).toBe('/media/Raw/')
+    expect(JSON.parse(localStorage.getItem('MP_FILE_MANAGER_DEFAULT_PATHS') || '{}')).toEqual({
+      local: '/media/Raw/',
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已保存默认打开路径')
+
+    // 清除默认路径成功
+    mocks.apiPost.mockResolvedValueOnce({ success: true })
+    browser.vm.$emit('save-default-path', '')
+    await flushPromises()
+    expect(mocks.apiPost).toHaveBeenLastCalledWith('/user/config/FileManagerDefaultPaths', {})
+    expect(browser.props('defaultPath')).toBe('')
+    expect(JSON.parse(localStorage.getItem('MP_FILE_MANAGER_DEFAULT_PATHS') || '{}')).toEqual({})
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已清除默认打开路径')
+
+    // 网络异常弹出错误提示
+    mocks.apiPost.mockRejectedValueOnce(new Error('network error'))
+    browser.vm.$emit('save-default-path', '/media/TV')
+    await flushPromises()
+    expect(mocks.toastError).toHaveBeenCalledWith('network error')
+    expect(browser.props('defaultPath')).toBe('')
   })
 
   it('does not clip outer surface shadows on .file-browser-view', async () => {

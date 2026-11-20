@@ -64,6 +64,8 @@ const emit = defineEmits([
   'renamed',
   'items-updated',
   'switch-tree',
+  'sortchanged',
+  'create-folder',
 ])
 
 // 确认框
@@ -220,6 +222,111 @@ const files = computed(() => filteredItems.value.filter(item => item.type === 'f
 
 // 虚拟列表数据，保持引用稳定，避免模板内联展开数组导致虚拟列表重算。
 const displayItems = computed(() => [...dirs.value, ...files.value])
+
+// 目录原始统计（不受筛选词影响）
+const totalDirCount = computed(() => items.value.filter(item => item.type === 'dir').length)
+const totalFileCount = computed(() => items.value.filter(item => item.type === 'file').length)
+
+// 子工具栏紧凑统计文案
+const listStatsText = computed(() => {
+  if (filter.value) {
+    return `匹配 ${displayItems.value.length} / ${items.value.length} 项`
+  }
+  return `${totalDirCount.value} 个文件夹 · ${totalFileCount.value} 个文件`
+})
+
+// 当前目录是否可返回上级
+const canGoUp = computed(() => {
+  const path = inProps.item.path || '/'
+  return path.split('/').filter(Boolean).length > 0
+})
+
+// 从空目录状态返回上级目录
+function goToParentDirectory() {
+  const parts = (inProps.item.path || '/').split('/').filter(Boolean)
+  if (parts.length === 0) return
+  const parentParts = parts.slice(0, -1)
+  const parentPath = parentParts.length === 0 ? '/' : `/${parentParts.join('/')}/`
+  emit('pathchanged', {
+    storage: inProps.item.storage,
+    type: 'dir',
+    name: parentParts.length === 0 ? '/' : parentParts[parentParts.length - 1],
+    path: parentPath,
+    ...(parentPath === '/' ? { fileid: 'root' } : {}),
+  })
+}
+
+// 清除筛选词
+function clearFilter() {
+  filter.value = ''
+}
+
+// 列头排序点击
+function selectSort(nextSort: 'name' | 'time') {
+  if (inProps.sort !== nextSort) {
+    emit('sortchanged', nextSort)
+  }
+}
+
+const VIDEO_EXTS = new Set(['mp4', 'mkv', 'avi', 'wmv', 'mov', 'flv', 'rmvb', 'ts', 'm2ts', 'webm'])
+const SUBTITLE_EXTS = new Set(['srt', 'ass', 'ssa', 'sub', 'vtt', 'sup'])
+const AUDIO_EXTS = new Set(['mp2', 'mp3', 'm4a', 'wma', 'aac', 'ogg', 'flac', 'wav'])
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico', 'svg'])
+
+/** 按文件类型返回温和语义色类，用于列表图标圆角块区分 */
+function getItemIconKindClass(item: FileItem): string {
+  if (item.type === 'dir') return 'file-item-icon--dir'
+  const ext = item.extension?.toLowerCase() ?? ''
+  if (VIDEO_EXTS.has(ext)) return 'file-item-icon--video'
+  if (SUBTITLE_EXTS.has(ext)) return 'file-item-icon--subtitle'
+  if (AUDIO_EXTS.has(ext)) return 'file-item-icon--audio'
+  if (IMAGE_EXTS.has(ext)) return 'file-item-icon--image'
+  return 'file-item-icon--other'
+}
+
+/** 格式化紧凑自然日/日期时间（用于列表修改时间列） */
+function formatCompactTime(timestamp?: number): string {
+  if (!timestamp) return '—'
+  const date = new Date(timestamp * 1000)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const timeText = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const now = new Date()
+
+  if (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  ) {
+    return `今天 ${timeText}`
+  }
+
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${timeText}`
+  }
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${timeText}`
+}
+
+/** 移动端行副标题紧凑元信息（大小 · 修改时间） */
+function formatMobileMeta(item: FileItem): string {
+  const parts: string[] = []
+  if (item.type !== 'dir' && item.size) {
+    parts.push(formatBytes(item.size))
+  }
+  if (item.modify_time) {
+    parts.push(formatCompactTime(item.modify_time))
+  }
+  return parts.join(' · ')
+}
+
+// 多选模式下按 Escape 快捷退出多选
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && selectMode.value) {
+    exitSelectMode()
+  }
+}
 
 // 当前可见列表项是否已全部选中
 const isAllDisplayedSelected = computed(
@@ -845,7 +952,12 @@ useKeepAliveRefresh(list_files, {
   active: computed(() => inProps.active),
 })
 
+onMounted(() => {
+  window.addEventListener('keydown', handleWindowKeydown)
+})
+
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleWindowKeydown)
   imageRequestSeed += 1
   listLoadingRequestSeed = ++listRequestSeed
   revokeCurrentImgLink()
@@ -896,6 +1008,10 @@ onUnmounted(() => {
           >
             <VIcon icon="mdi-format-letter-case" size="16" />
           </button>
+
+          <span v-if="!isFile" class="file-subtoolbar__stats" data-testid="file-list-stats">
+            {{ listStatsText }}
+          </span>
         </div>
 
         <div class="file-subtoolbar__right">
@@ -989,7 +1105,7 @@ onUnmounted(() => {
             v-if="!isFile"
             class="file-subtoolbar__icon-btn"
             :class="{ 'is-active': selectMode }"
-            :title="selectMode ? '退出多选' : '多选模式'"
+            :title="selectMode ? '退出多选（Esc）' : '多选模式'"
             :aria-label="selectMode ? '退出多选' : '多选模式'"
             @click="changeSelectMode"
           >
@@ -999,32 +1115,117 @@ onUnmounted(() => {
       </div>
 
       <LoadingBanner v-if="loading" />
-      <!-- 文件详情 -->
-      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="file-detail-card text-center py-8">
-        <div v-if="items[0]?.thumbnail" class="flex justify-center">
-          <VImg max-width="15rem" cover :src="items[0]?.thumbnail" class="rounded-lg border">
-            <template #placeholder>
-              <VSkeletonLoader class="object-cover w-full h-full" />
-            </template>
-          </VImg>
+      <!-- 单文件详情 -->
+      <VCardText v-else-if="isFile && !isImage && items.length > 0" class="file-detail-card">
+        <div class="file-detail-panel">
+          <div v-if="items[0]?.thumbnail" class="file-detail-thumb">
+            <VImg max-width="15rem" cover :src="items[0]?.thumbnail" class="rounded-lg border">
+              <template #placeholder>
+                <VSkeletonLoader class="object-cover w-full h-full" />
+              </template>
+            </VImg>
+          </div>
+          <div v-else class="file-detail-hero-icon" :class="getItemIconKindClass(items[0])">
+            <VIcon
+              v-if="inProps.icons && items[0]?.extension"
+              size="28"
+              :icon="inProps.icons[items[0].extension.toLowerCase()] || inProps.icons?.other"
+            />
+            <VIcon v-else size="28" icon="mdi-file-outline" />
+          </div>
+
+          <div class="file-detail-title">{{ items[0]?.name }}</div>
+
+          <dl class="file-detail-meta" data-testid="file-detail-meta">
+            <div class="file-detail-meta__row">
+              <dt>文件名</dt>
+              <dd>{{ items[0]?.name || '—' }}</dd>
+            </div>
+            <div class="file-detail-meta__row">
+              <dt>{{ t('file.size') }}</dt>
+              <dd class="file-tabular">{{ items[0]?.size ? formatBytes(items[0].size) : '—' }}</dd>
+            </div>
+            <div class="file-detail-meta__row">
+              <dt>{{ t('file.modifyTime') }}</dt>
+              <dd class="file-tabular">
+                {{ items[0]?.modify_time ? formatTime(items[0].modify_time) : '—' }}
+              </dd>
+            </div>
+            <div class="file-detail-meta__row">
+              <dt>完整路径</dt>
+              <dd>{{ items[0]?.path || inProps.item.path || '—' }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="text-subtitle-1 font-weight-semibold text-high-emphasis mt-3">{{ items[0]?.name }}</div>
-        <p class="text-body-2 text-medium-emphasis mt-2" v-if="items[0]?.size && items[0].modify_time">
-          {{ t('file.size') }}：{{ formatBytes(items[0]?.size || 0) }}<br />
-          {{ t('file.modifyTime') }}：{{ formatTime(items[0]?.modify_time || 0) }}
-        </p>
       </VCardText>
-      <!-- 图片 -->
-      <VCardText v-else-if="isFile && isImage && items.length > 0" class="grow d-flex justify-center align-center">
-        <VImg :src="currentImgLink" max-width="100%" max-height="100%" />
+
+      <!-- 图片预览 -->
+      <VCardText v-else-if="isFile && isImage && items.length > 0" class="file-image-preview">
+        <div class="file-image-preview__stage">
+          <VImg :src="currentImgLink" max-width="100%" max-height="100%" />
+        </div>
+        <dl class="file-detail-meta file-detail-meta--compact" data-testid="file-image-meta">
+          <div class="file-detail-meta__row">
+            <dt>文件名</dt>
+            <dd>{{ items[0]?.name || '—' }}</dd>
+          </div>
+          <div class="file-detail-meta__row">
+            <dt>{{ t('file.size') }}</dt>
+            <dd class="file-tabular">{{ items[0]?.size ? formatBytes(items[0].size) : '—' }}</dd>
+          </div>
+          <div class="file-detail-meta__row">
+            <dt>{{ t('file.modifyTime') }}</dt>
+            <dd class="file-tabular">
+              {{ items[0]?.modify_time ? formatTime(items[0].modify_time) : '—' }}
+            </dd>
+          </div>
+          <div class="file-detail-meta__row">
+            <dt>完整路径</dt>
+            <dd>{{ items[0]?.path || inProps.item.path || '—' }}</dd>
+          </div>
+        </dl>
       </VCardText>
+
       <!-- 目录和文件列表 -->
-      <VCardText v-else-if="dirs.length || files.length" class="p-0 flex-grow-1 overflow-hidden">
+      <VCardText v-else-if="dirs.length || files.length" class="p-0 flex-grow-1 overflow-hidden d-flex flex-column">
+        <!-- 桌面端结构化列头 -->
+        <div v-if="display.mdAndUp.value" class="file-list-header" data-testid="file-list-header">
+          <button
+            type="button"
+            class="file-list-header__cell file-list-header__name file-list-header__sort-btn"
+            :class="{ 'is-active': sort !== 'time' }"
+            data-testid="sort-header-name"
+            @click="selectSort('name')"
+          >
+            <span>名称</span>
+            <VIcon v-if="sort !== 'time'" icon="mdi-arrow-up" size="13" class="file-list-header__sort-icon" />
+          </button>
+          <span class="file-list-header__cell file-list-header__size">大小</span>
+          <button
+            type="button"
+            class="file-list-header__cell file-list-header__time file-list-header__sort-btn"
+            :class="{ 'is-active': sort === 'time' }"
+            data-testid="sort-header-time"
+            @click="selectSort('time')"
+          >
+            <span>修改时间</span>
+            <VIcon v-if="sort === 'time'" icon="mdi-arrow-up" size="13" class="file-list-header__sort-icon" />
+          </button>
+          <span class="file-list-header__cell file-list-header__actions">操作</span>
+        </div>
+
         <VList
           class="text-high-emphasis file-list-container py-1"
-          :style="{ height: `${listAvailableHeight}px`, maxHeight: `${listAvailableHeight}px` }"
+          :style="{
+            height: `${Math.max(240, listAvailableHeight - (display.mdAndUp.value ? 32 : 0))}px`,
+            maxHeight: `${Math.max(240, listAvailableHeight - (display.mdAndUp.value ? 32 : 0))}px`,
+          }"
         >
-          <VVirtualScroll :items="displayItems" :item-height="display.xs.value ? 46 : 42" style="block-size: 100%">
+          <VVirtualScroll
+            :items="displayItems"
+            :item-height="display.smAndDown.value ? 50 : 42"
+            style="block-size: 100%"
+          >
             <template #default="{ item }">
               <VHover>
                 <template #default="hover">
@@ -1046,20 +1247,41 @@ onUnmounted(() => {
                           @input="rangeSelection.onCheckboxInput(item, $event)"
                         />
                       </VListItemAction>
-                      <span v-else class="file-item-icon" :class="{ 'file-item-icon--dir': item.type === 'dir' }">
+                      <span v-else class="file-item-icon" :class="getItemIconKindClass(item)">
                         <VIcon
                           v-if="inProps.icons && item.extension"
-                          size="19"
+                          size="16"
                           :icon="inProps.icons[item.extension.toLowerCase()] || inProps.icons?.other"
                         />
-                        <VIcon v-else-if="item.type == 'dir'" size="19" icon="mdi-folder" />
-                        <VIcon v-else size="19" icon="mdi-file-outline" />
+                        <VIcon v-else-if="item.type == 'dir'" size="16" icon="mdi-folder" />
+                        <VIcon v-else size="16" icon="mdi-file-outline" />
                       </span>
                     </template>
-                    <VListItemTitle class="file-item-title" :title="item.name" v-text="item.name" />
-                    <VListItemSubtitle v-if="item.size" class="file-item-size">
-                      {{ formatBytes(item.size) }}
-                    </VListItemSubtitle>
+
+                    <div class="file-row-main">
+                      <div class="file-row-name-col">
+                        <VListItemTitle class="file-item-title" :title="item.name" v-text="item.name" />
+                        <VListItemSubtitle
+                          v-if="display.smAndDown.value && formatMobileMeta(item)"
+                          class="file-item-mobile-meta"
+                        >
+                          {{ formatMobileMeta(item) }}
+                        </VListItemSubtitle>
+                      </div>
+
+                      <span v-if="display.mdAndUp.value" class="file-row-size-col">
+                        {{ item.type === 'dir' || !item.size ? '—' : formatBytes(item.size) }}
+                      </span>
+
+                      <span
+                        v-if="display.mdAndUp.value"
+                        class="file-row-time-col"
+                        :title="item.modify_time ? formatTime(item.modify_time) : ''"
+                      >
+                        {{ formatCompactTime(item.modify_time) }}
+                      </span>
+                    </div>
+
                     <template #append>
                       <IconBtn v-if="display.smAndDown.value && !selectMode" class="file-row-action-btn">
                         <VIcon icon="mdi-dots-vertical" size="18" />
@@ -1080,35 +1302,37 @@ onUnmounted(() => {
                           </VList>
                         </VMenu>
                       </IconBtn>
-                      <span v-if="hover.isHovering && display.mdAndUp.value && !selectMode" class="file-row-actions">
-                        <IconBtn
-                          class="file-row-action-btn"
-                          :title="t('file.recognize')"
-                          @click.stop="recognize(item.path || '')"
-                        >
-                          <VIcon icon="mdi-text-recognition" size="16" />
-                        </IconBtn>
-                        <IconBtn class="file-row-action-btn" :title="t('file.scrape')" @click.stop="showScrape(item)">
-                          <VIcon icon="mdi-auto-fix" size="16" />
-                        </IconBtn>
-                        <IconBtn class="file-row-action-btn" :title="t('file.rename')" @click.stop="showRenmae(item)">
-                          <VIcon icon="mdi-rename" size="16" />
-                        </IconBtn>
-                        <IconBtn
-                          class="file-row-action-btn"
-                          :title="t('file.reorganize')"
-                          @click.stop="showTransfer(item)"
-                        >
-                          <VIcon icon="mdi-folder-arrow-right" size="16" />
-                        </IconBtn>
-                        <IconBtn
-                          class="file-row-action-btn file-row-action-btn--danger"
-                          :title="t('common.delete')"
-                          @click.stop="deleteItem(item)"
-                        >
-                          <VIcon icon="mdi-delete-outline" size="16" />
-                        </IconBtn>
-                      </span>
+                      <div v-else-if="display.mdAndUp.value" class="file-row-actions-col">
+                        <span v-if="!selectMode" class="file-row-actions" :class="{ 'is-visible': hover.isHovering }">
+                          <IconBtn
+                            class="file-row-action-btn"
+                            :title="t('file.recognize')"
+                            @click.stop="recognize(item.path || '')"
+                          >
+                            <VIcon icon="mdi-text-recognition" size="16" />
+                          </IconBtn>
+                          <IconBtn class="file-row-action-btn" :title="t('file.scrape')" @click.stop="showScrape(item)">
+                            <VIcon icon="mdi-auto-fix" size="16" />
+                          </IconBtn>
+                          <IconBtn class="file-row-action-btn" :title="t('file.rename')" @click.stop="showRenmae(item)">
+                            <VIcon icon="mdi-rename" size="16" />
+                          </IconBtn>
+                          <IconBtn
+                            class="file-row-action-btn"
+                            :title="t('file.reorganize')"
+                            @click.stop="showTransfer(item)"
+                          >
+                            <VIcon icon="mdi-folder-arrow-right" size="16" />
+                          </IconBtn>
+                          <IconBtn
+                            class="file-row-action-btn file-row-action-btn--danger"
+                            :title="t('common.delete')"
+                            @click.stop="deleteItem(item)"
+                          >
+                            <VIcon icon="mdi-delete-outline" size="16" />
+                          </IconBtn>
+                        </span>
+                      </div>
                     </template>
                   </VListItem>
                 </template>
@@ -1118,12 +1342,44 @@ onUnmounted(() => {
         </VList>
       </VCardText>
       <VCardText v-else-if="filter" class="file-list-empty">
-        <VIcon icon="mdi-file-search-outline" size="32" class="file-list-empty__icon" />
-        <span>{{ t('file.noFiles') }}</span>
+        <VIcon icon="mdi-file-search-outline" size="34" class="file-list-empty__icon" />
+        <div class="file-list-empty__title">{{ t('file.noFiles') }}</div>
+        <div class="file-list-empty__actions">
+          <button
+            type="button"
+            class="file-empty-btn file-empty-btn--primary"
+            data-testid="clear-filter-btn"
+            @click="clearFilter"
+          >
+            <VIcon icon="mdi-filter-remove-outline" size="15" />
+            <span>清除筛选</span>
+          </button>
+        </div>
       </VCardText>
       <VCardText v-else-if="!loading" class="file-list-empty">
-        <VIcon icon="mdi-folder-open-outline" size="32" class="file-list-empty__icon" />
-        <span>{{ t('file.emptyDirectory') }}</span>
+        <VIcon icon="mdi-folder-open-outline" size="34" class="file-list-empty__icon" />
+        <div class="file-list-empty__title">{{ t('file.emptyDirectory') }}</div>
+        <div class="file-list-empty__actions">
+          <button
+            v-if="canGoUp"
+            type="button"
+            class="file-empty-btn"
+            data-testid="empty-go-up-btn"
+            @click="goToParentDirectory"
+          >
+            <VIcon icon="mdi-arrow-up" size="15" />
+            <span>返回上级</span>
+          </button>
+          <button
+            type="button"
+            class="file-empty-btn file-empty-btn--primary"
+            data-testid="empty-new-folder-btn"
+            @click="emit('create-folder')"
+          >
+            <VIcon icon="mdi-folder-plus-outline" size="15" />
+            <span>新建文件夹</span>
+          </button>
+        </div>
       </VCardText>
     </VCard>
   </div>
@@ -1138,6 +1394,10 @@ onUnmounted(() => {
   border-radius: 0 !important;
   background: rgb(var(--v-theme-surface)) !important;
   box-shadow: none !important;
+}
+
+.file-tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== 44px 清爽过滤与操作子工具栏 ===== */
@@ -1158,6 +1418,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   min-inline-size: 0;
+}
+
+.file-subtoolbar__stats {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-inline-start: 4px;
+  white-space: nowrap;
 }
 
 .file-subtoolbar__right {
@@ -1195,8 +1464,8 @@ onUnmounted(() => {
 }
 
 .file-subtoolbar__filter {
-  flex: 1 1 200px;
-  max-inline-size: 280px;
+  flex: 1 1 180px;
+  max-inline-size: 260px;
 }
 
 .file-subtoolbar__filter :deep(.v-field) {
@@ -1256,6 +1525,7 @@ onUnmounted(() => {
   background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
   color: rgba(var(--v-theme-on-surface), 0.78);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -1266,7 +1536,79 @@ onUnmounted(() => {
   padding-inline: 10px !important;
 }
 
-/* ===== 40px IDE 文件行 ===== */
+/* ===== 桌面端 32px 结构化列头 ===== */
+.file-list-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-inline: 16px 14px;
+  border-block-end: 1px solid var(--mp-border-subtle);
+  background: rgba(var(--v-theme-on-surface), 0.025);
+  block-size: 32px;
+  gap: 12px;
+}
+
+.file-list-header__cell {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.file-list-header__sort-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  gap: 4px;
+  margin-inline: -4px;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.file-list-header__sort-btn:hover {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.file-list-header__sort-btn.is-active {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 600;
+}
+
+.file-list-header__sort-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.file-list-header__name {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-inline-size: 0;
+}
+
+.file-list-header__size {
+  flex-shrink: 0;
+  inline-size: 100px;
+  text-align: end;
+}
+
+.file-list-header__time {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  inline-size: 144px;
+}
+
+.file-list-header__actions {
+  flex-shrink: 0;
+  inline-size: 148px;
+  text-align: end;
+}
+
+/* ===== 结构化文件行 ===== */
 .file-list-container {
   overflow: hidden auto;
   border-radius: 0 !important;
@@ -1276,7 +1618,7 @@ onUnmounted(() => {
 }
 
 .file-list-row {
-  border-radius: 6px !important;
+  border-radius: 7px !important;
   block-size: 40px !important;
   margin-block: 1px !important;
   margin-inline: 6px !important;
@@ -1296,8 +1638,21 @@ onUnmounted(() => {
 .file-list-row :deep(.v-list-item__content) {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  min-inline-size: 0;
+}
+
+.file-row-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   gap: 12px;
+  min-inline-size: 0;
+}
+
+.file-row-name-col {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-inline-size: 0;
 }
 
@@ -1306,37 +1661,102 @@ onUnmounted(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: rgba(var(--v-theme-on-surface), 0.62);
+  border-radius: 7px;
+  background: rgba(var(--v-theme-on-surface), 0.055);
+  block-size: 26px;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  inline-size: 26px;
   margin-inline-end: 10px;
 }
 
 .file-item-icon--dir {
-  color: rgba(var(--v-theme-warning), 0.85);
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-warning));
+}
+
+.file-item-icon--video {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.file-item-icon--subtitle {
+  background: rgba(var(--v-theme-info), 0.12);
+  color: rgb(var(--v-theme-info));
+}
+
+.file-item-icon--audio {
+  background: rgba(var(--v-theme-secondary), 0.14);
+  color: rgb(var(--v-theme-secondary));
+}
+
+.file-item-icon--image {
+  background: rgba(var(--v-theme-success), 0.12);
+  color: rgb(var(--v-theme-success));
 }
 
 .file-item-title {
-  flex: 1 1 auto;
+  overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
   font-size: 13.5px !important;
   font-weight: 450;
   line-height: 1.4 !important;
   min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.file-item-size {
-  flex-shrink: 0;
-  margin: 0 !important;
-  color: rgba(var(--v-theme-on-surface), 0.5) !important;
-  font-size: 12px !important;
+.file-item-mobile-meta {
+  color: rgba(var(--v-theme-on-surface), 0.54) !important;
+  font-size: 11.5px !important;
   font-variant-numeric: tabular-nums;
+  line-height: 1.3 !important;
+  margin-block-start: 1px !important;
   opacity: 1 !important;
+}
+
+.file-row-size-col {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  inline-size: 100px;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.file-row-time-col {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), 0.52);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  inline-size: 144px;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.file-row-actions-col {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  inline-size: 148px;
+  margin-inline-start: 12px;
 }
 
 .file-row-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-inline-start: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+
+.file-list-row:hover .file-row-actions,
+.file-list-row:focus-within .file-row-actions,
+.file-row-actions.is-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .file-row-action-btn {
@@ -1361,9 +1781,113 @@ onUnmounted(() => {
   color: rgb(var(--v-theme-error)) !important;
 }
 
+/* ===== 单文件详情与图片预览 ===== */
 .file-detail-card {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 16px !important;
   overflow-wrap: anywhere;
   word-break: normal;
+}
+
+.file-detail-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 20px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+  gap: 12px;
+  inline-size: min(560px, 100%);
+}
+
+.file-detail-thumb {
+  display: flex;
+  justify-content: center;
+}
+
+.file-detail-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  block-size: 52px;
+  inline-size: 52px;
+  margin-inline-end: 0;
+}
+
+.file-detail-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.file-detail-meta {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.025);
+  gap: 8px;
+  inline-size: 100%;
+  margin: 0;
+}
+
+.file-detail-meta--compact {
+  max-inline-size: 720px;
+}
+
+.file-detail-meta__row {
+  display: grid;
+  align-items: baseline;
+  gap: 12px;
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+.file-detail-meta__row dt {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-detail-meta__row dd {
+  margin: 0;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.file-image-preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px !important;
+}
+
+.file-image-preview__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.02);
+  inline-size: 100%;
+  max-block-size: 62vh;
+  max-inline-size: 720px;
 }
 
 @media (width <= 600px) {
@@ -1374,7 +1898,13 @@ onUnmounted(() => {
 
   .file-subtoolbar__left {
     flex: 1 1 180px;
+    flex-wrap: wrap;
     gap: 6px;
+  }
+
+  .file-subtoolbar__stats {
+    flex-basis: 100%;
+    margin-inline-start: 2px;
   }
 
   .file-subtoolbar__filter {
@@ -1414,19 +1944,11 @@ onUnmounted(() => {
     padding-inline: 10px !important;
   }
 
-  .file-selected-badge {
-    font-variant-numeric: tabular-nums;
-  }
-
   .file-list-row {
-    block-size: 46px !important;
+    block-size: 48px !important;
     margin-inline: 4px !important;
-    min-block-size: 46px !important;
+    min-block-size: 48px !important;
     padding-inline: 8px 4px !important;
-  }
-
-  .file-list-row :deep(.v-list-item__content) {
-    gap: 8px;
   }
 
   .file-item-icon {
@@ -1435,10 +1957,6 @@ onUnmounted(() => {
 
   .file-item-title {
     font-size: 13px !important;
-  }
-
-  .file-item-size {
-    font-size: 11.5px !important;
   }
 
   .file-row-action-btn {
@@ -1465,5 +1983,54 @@ onUnmounted(() => {
 
 .file-list-empty__icon {
   color: rgba(var(--v-theme-on-surface), 0.34);
+}
+
+.file-list-empty__title {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.file-list-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+
+.file-empty-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 8px;
+  background: rgb(var(--v-theme-surface));
+  block-size: 32px;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  gap: 5px;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.file-empty-btn:hover {
+  border-color: var(--mp-border-hover);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+.file-empty-btn--primary {
+  border-color: rgba(var(--v-theme-primary), 0.38);
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+}
+
+.file-empty-btn--primary:hover {
+  background: rgba(var(--v-theme-primary), 0.16);
 }
 </style>

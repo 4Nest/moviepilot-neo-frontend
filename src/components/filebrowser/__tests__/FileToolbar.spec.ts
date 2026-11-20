@@ -46,7 +46,10 @@ function mountToolbar(
     { name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' },
   ],
   options: {
+    defaultPath?: string
     mkdirMethod?: string
+    quickDirectories?: Array<{ kind: 'download' | 'library'; name: string; path: string }>
+    savingDefaultPath?: boolean
     showNewFolderButton?: boolean
     storages?: Array<{ icon: string; title: string; value: string }>
   } = {},
@@ -68,9 +71,12 @@ function mountToolbar(
   return mount(FileToolbar, {
     props: {
       axios,
+      defaultPath: options.defaultPath ?? '',
       endpoints,
       item,
       itemstack,
+      quickDirectories: options.quickDirectories ?? [],
+      savingDefaultPath: options.savingDefaultPath ?? false,
       showNewFolderButton: options.showNewFolderButton ?? true,
       sort,
       storages: options.storages ?? [
@@ -349,6 +355,103 @@ describe('FileToolbar navigation and sorting', () => {
       [{ fileid: 'root', name: '/', path: '/', storage: 'unmatched', type: 'dir' }],
       [{ name: 'episode01.mkv', path: '/downloads/tv/episode01.mkv', storage: 'unmatched', type: 'file' }],
       [{ name: 'tv', path: '/downloads/tv/', storage: 'unmatched', type: 'dir' }],
+    ])
+  })
+})
+
+describe('FileToolbar default path menu and direct path jump', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.mdAndUp.value = true
+  })
+
+  it('supports setting current directory, saving manual default path, clearing default path, and quick jumping', async () => {
+    const wrapper = mountToolbar(
+      vi.fn(),
+      'name',
+      { name: 'Raw', path: '/media/Raw/', storage: 'local', type: 'dir' },
+      [
+        { name: '/', path: '/', storage: 'local', type: 'dir' },
+        { name: 'media', path: '/media/', storage: 'local', type: 'dir' },
+        { name: 'Raw', path: '/media/Raw/', storage: 'local', type: 'dir' },
+      ],
+      {
+        defaultPath: '/downloads/',
+        quickDirectories: [
+          { kind: 'download', name: '动漫下载', path: '/downloads/anime/' },
+          { kind: 'library', name: '动漫（媒体库）', path: '/library/anime/' },
+        ],
+      },
+    )
+
+    expect(wrapper.get('[data-testid="default-path-status"]').text()).toBe('/downloads/')
+
+    // 一键设为当前目录
+    await wrapper.get('[data-testid="default-path-set-current"]').trigger('click')
+    expect(wrapper.emitted('save-default-path')?.[0]).toEqual(['/media/Raw/'])
+
+    // 手动输入并提交保存
+    const defaultInput = wrapper.get('[data-testid="default-path-input"]')
+    await defaultInput.setValue('/mnt/nas/movies')
+    await wrapper.get('.file-default-menu__form').trigger('submit')
+    expect(wrapper.emitted('save-default-path')?.[1]).toEqual(['/mnt/nas/movies/'])
+
+    // 一键清除默认路径
+    await wrapper.get('[data-testid="default-path-clear"]').trigger('click')
+    expect(wrapper.emitted('save-default-path')?.[2]).toEqual([''])
+
+    // 快捷跳转：默认路径、根目录、已配置快捷目录
+    await wrapper.get('[data-testid="quick-jump-default"]').trigger('click')
+    await wrapper.get('[data-testid="quick-jump-root"]').trigger('click')
+    await wrapper.findAll('[data-testid="quick-jump-directory"]')[1].trigger('click')
+
+    expect(wrapper.emitted('pathchanged')).toEqual([
+      [{ name: 'downloads', path: '/downloads/', storage: 'local', type: 'dir' }],
+      [{ name: '/', path: '/', storage: 'local', type: 'dir' }],
+      [{ name: 'anime', path: '/library/anime/', storage: 'local', type: 'dir' }],
+    ])
+  })
+
+  it('highlights the home trigger and disables set-current when already in the default directory', () => {
+    const wrapper = mountToolbar(
+      vi.fn(),
+      'name',
+      { name: 'Raw', path: '/media/Raw/', storage: 'local', type: 'dir' },
+      [{ name: '/', path: '/', storage: 'local', type: 'dir' }],
+      { defaultPath: '/media/Raw/' },
+    )
+
+    expect(wrapper.get('[data-testid="default-path-trigger"]').classes()).toContain('is-active')
+    expect(wrapper.get('[data-testid="default-path-set-current"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('jumps to a normalized directory path on Enter and cancels editing on Escape', async () => {
+    const wrapper = mountToolbar(vi.fn())
+
+    // 进入地址栏路径直输态并按 Esc 取消
+    await wrapper.get('[data-testid="path-edit-trigger"]').trigger('click')
+    const escInput = wrapper.get('[data-testid="path-jump-input"]')
+    await escInput.setValue('/ignored/path')
+    await escInput.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[data-testid="path-jump-input"]').exists()).toBe(false)
+    expect(wrapper.emitted('pathchanged')).toBeUndefined()
+
+    // 再次进入并输入路径提交跳转
+    await wrapper.get('[data-testid="path-edit-trigger"]').trigger('click')
+    const jumpInput = wrapper.get('[data-testid="path-jump-input"]')
+    await jumpInput.setValue('media/Raw/Season 01')
+    await wrapper.get('.file-toolbar__path-editor').trigger('submit')
+
+    expect(wrapper.find('[data-testid="path-jump-input"]').exists()).toBe(false)
+    expect(wrapper.emitted('pathchanged')).toEqual([
+      [
+        {
+          name: 'Season 01',
+          path: '/media/Raw/Season 01/',
+          storage: 'local',
+          type: 'dir',
+        },
+      ],
     ])
   })
 })

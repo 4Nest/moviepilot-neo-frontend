@@ -2,6 +2,7 @@
 import FileList from './FileList.vue'
 import FileToolbar from './FileToolbar.vue'
 import FileNavigator from './FileNavigator.vue'
+import type { QuickDirectoryItem } from './types'
 import type { EndPoints, FileItem, StorageConf } from '@/api/types'
 import { storageIconDict } from '@/api/constants'
 import type { AxiosInstance } from 'axios'
@@ -34,10 +35,24 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  defaultPath: {
+    type: String,
+    default: '',
+  },
+  quickDirectories: {
+    type: Array as PropType<QuickDirectoryItem[]>,
+    default: () => [],
+  },
+  savingDefaultPath: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 // 对外事件
-const emit = defineEmits(['pathchanged'])
+const emit = defineEmits(['pathchanged', 'storagechanged', 'save-default-path'])
+
+const toolbarRef = ref<{ openNewFolderDialog: () => void } | null>(null)
 
 const fileIcons = {
   // 压缩包
@@ -174,7 +189,17 @@ function loadingChanged(isLoading: number | boolean) {
 
 // 存储切换
 async function storageChanged(storage: string) {
-  emit('pathchanged', { storage: storage, path: '/', fileid: 'root' })
+  emit('storagechanged', storage)
+}
+
+// 保存或清除默认打开路径
+function saveDefaultPath(path: string) {
+  emit('save-default-path', path)
+}
+
+// 打开新建文件夹弹窗
+function openNewFolderDialog() {
+  toolbarRef.value?.openNewFolderDialog()
 }
 
 // 路径变化
@@ -277,6 +302,7 @@ onUnmounted(cleanupDrag)
     <VProgressLinear v-if="loading > 0" indeterminate color="primary" height="2" class="file-browser-progress" />
     <div v-if="item">
       <FileToolbar
+        ref="toolbarRef"
         :sort="sort"
         :item="item"
         :itemstack="itemstack"
@@ -284,11 +310,15 @@ onUnmounted(cleanupDrag)
         :endpoints="endpoints"
         :axios="axios"
         :show-new-folder-button="true"
+        :default-path="defaultPath"
+        :quick-directories="quickDirectories"
+        :saving-default-path="savingDefaultPath"
         @storagechanged="storageChanged"
         @pathchanged="pathChanged"
         @loading="loadingChanged"
         @foldercreated="refreshPending = true"
         @sortchanged="sortChanged"
+        @save-default-path="saveDefaultPath"
       />
       <div class="file-browser-body flex">
         <FileNavigator
@@ -323,6 +353,8 @@ onUnmounted(cleanupDrag)
           @renamed="refreshPending = true"
           @items-updated="fileListUpdated"
           @switch-tree="switchDirTree"
+          @sortchanged="sortChanged"
+          @create-folder="openNewFolderDialog"
         />
       </div>
     </div>
