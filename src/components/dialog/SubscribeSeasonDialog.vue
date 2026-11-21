@@ -13,6 +13,7 @@ import {
   type SubscribeMode,
 } from '@/composables/useMediaSubscribe'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
+import { formatSeasonEpisode } from '@/@core/utils/formatters'
 import { useDisplay } from 'vuetify'
 
 type SubscribeModeOption = {
@@ -72,6 +73,12 @@ const manuallySelectedModeSeasons = ref(new Set<number>())
 
 // 各季缺失状态：0-已入库 1-部分缺失 2-全部缺失，没有数据也是已入库
 const seasonsNotExisted = ref<{ [key: number]: number }>({})
+
+// 各季缺失明细，供状态标签悬停提示说明缺了哪些集
+const seasonsMissingInfo = ref<Record<number, NotExistMediaInfo>>({})
+
+// 缺失状态接口加载状态，未就绪时不展示悬停提示
+const missingStateStatus = ref<'loading' | 'ready' | 'error'>('loading')
 
 // 是否刷新过
 const isRefreshed = ref(false)
@@ -246,6 +253,7 @@ async function getGroupSeasons() {
 // 检查所有季的缺失状态（数据库）
 async function checkSeasonsNotExists() {
   const requestSeq = ++notExistsRequestSeq
+  missingStateStatus.value = 'loading'
   // 开始处理
   try {
     const tmpMedia = {
@@ -256,17 +264,24 @@ async function checkSeasonsNotExists() {
     if (requestSeq !== notExistsRequestSeq) return
     if (result) {
       const nextStates: { [key: number]: number } = {}
+      const nextMissingInfo: Record<number, NotExistMediaInfo> = {}
       result.forEach(item => {
         // 0-已入库 1-部分缺失 2-全部缺失
         let state = 0
         if (item.episodes.length === 0) state = 2
         else if (item.episodes.length < item.total_episode) state = 1
         nextStates[item.season] = state
+        nextMissingInfo[item.season] = item
       })
       seasonsNotExisted.value = nextStates
+      seasonsMissingInfo.value = nextMissingInfo
+      missingStateStatus.value = 'ready'
     }
   } catch (error) {
     if (requestSeq === notExistsRequestSeq) {
+      seasonsNotExisted.value = {}
+      seasonsMissingInfo.value = {}
+      missingStateStatus.value = 'error'
       console.error(error)
     }
   }
@@ -290,6 +305,19 @@ function getExistText(season: number) {
   if (state === 1) return t('dialog.subscribeSeason.status.partial')
   else if (state === 2) return t('dialog.subscribeSeason.status.missing')
   else return t('dialog.subscribeSeason.status.exists')
+}
+
+// 计算存在状态的悬停提示，说明判断依据和缺失的集；状态未就绪时不显示
+function getExistHint(season: number) {
+  if (missingStateStatus.value !== 'ready') return ''
+  const state = seasonsNotExisted.value[season]
+  const info = seasonsMissingInfo.value[season]
+  if (!state || !info) return t('media.status.inLibraryHint')
+  if (state === 2) return t('media.status.missingHint', { count: info.total_episode })
+  return t('media.status.partiallyMissingHint', {
+    episodes: formatSeasonEpisode(null, info.episodes),
+    count: info.episodes.length,
+  })
 }
 
 // 获取季海报地址，数据源未提供季海报时使用主海报。
@@ -353,6 +381,8 @@ function setEpisodeGroup(value: string) {
   if (episodeGroup.value === value) return
 
   seasonsNotExisted.value = {}
+  seasonsMissingInfo.value = {}
+  missingStateStatus.value = 'loading'
   seasonInfos.value = []
   episodeGroup.value = value
   nextTick(updateEpisodeGroupScrollState)
@@ -636,6 +666,9 @@ onBeforeUnmount(() => {
                   :color="getExistColor(item.season_number ?? 0)"
                 >
                   {{ getExistText(item.season_number ?? 0) }}
+                  <VTooltip v-if="getExistHint(item.season_number ?? 0)" activator="parent" location="top">
+                    {{ getExistHint(item.season_number ?? 0) }}
+                  </VTooltip>
                 </VChip>
                 <VChip v-if="isSeasonSubscribed(item.season_number ?? 0)" class="mt-2 ms-2" size="small" color="error">
                   {{ t('media.status.subscribed') }}

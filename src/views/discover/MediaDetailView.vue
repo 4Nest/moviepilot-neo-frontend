@@ -15,6 +15,7 @@ import type {
 } from '@/api/types'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import { formatSeasonLabel } from '@/@core/utils/season'
+import { formatSeasonEpisode } from '@/@core/utils/formatters'
 import router from '@/router'
 import { isNullOrEmptyObject } from '@/@core/utils'
 import { useI18n } from '@/composables/useChineseText'
@@ -74,6 +75,9 @@ const existsEpisodes = ref({} as { [key: number]: number[] })
 
 // 各季缺失状态：0-已入库 1-部分缺失 2-全部缺失，没有数据也是已入库
 const seasonsNotExisted = ref<{ [key: number]: number }>({})
+
+// 各季缺失明细，供状态标签悬停提示说明缺了哪些集
+const seasonsMissingInfo = ref<{ [key: number]: NotExistMediaInfo }>({})
 
 // 各季的订阅状态
 const seasonsSubscribed = ref<{ [key: number]: boolean }>({})
@@ -209,6 +213,7 @@ function resetMediaLocalState() {
   seasonEpisodesInfo.value = {}
   existsEpisodes.value = {}
   seasonsNotExisted.value = {}
+  seasonsMissingInfo.value = {}
   seasonsSubscribed.value = {}
   subscribedSeasonModes.value = {}
   episodeGroups.value = []
@@ -361,6 +366,7 @@ async function checkSeasonsNotExists() {
   if (mediaDetail.value.type !== '电视剧') return
   const requestId = ++seasonNotExistsRequestId
   seasonsNotExisted.value = {}
+  seasonsMissingInfo.value = {}
   try {
     const media = {
       ...mediaDetail.value,
@@ -374,6 +380,7 @@ async function checkSeasonsNotExists() {
         if (item.episodes.length === 0) state = 2
         else if (item.episodes.length < item.total_episode) state = 1
         seasonsNotExisted.value[item.season] = state
+        seasonsMissingInfo.value[item.season] = item
       })
     }
   } catch (error) {
@@ -846,6 +853,18 @@ function getExistText(season: number) {
   if (state === 1) return t('media.status.partiallyMissing')
   else if (state === 2) return t('media.status.missing')
   else return t('media.status.inLibrary')
+}
+
+// 计算存在状态的悬停提示，说明判断依据和缺失的集
+function getExistHint(season: number) {
+  const state = seasonsNotExisted.value[season]
+  const info = seasonsMissingInfo.value[season]
+  if (!state || !info) return t('media.status.inLibraryHint')
+  if (state === 2) return t('media.status.missingHint', { count: info.total_episode })
+  return t('media.status.partiallyMissingHint', {
+    episodes: formatSeasonEpisode(null, info.episodes),
+    count: info.episodes.length,
+  })
 }
 
 // 判断指定季集是否已存在于媒体服务器
@@ -1340,6 +1359,9 @@ onUnmounted(() => {
                             size="x-small"
                           >
                             {{ getExistText(season.season_number || 0) }}
+                            <VTooltip activator="parent" location="top">
+                              {{ getExistHint(season.season_number || 0) }}
+                            </VTooltip>
                           </VChip>
                           <IconBtn
                             size="small"
