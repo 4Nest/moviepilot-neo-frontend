@@ -1,8 +1,33 @@
 <script lang="ts">
+import type { MediaInfo } from '@/api/types'
 import { ref } from 'vue'
 
 const activeTouchMediaCardId = ref<number | null>(null)
 let mediaCardIdSeed = 0
+
+// 模块级媒体补充详情缓存、在途请求合并与视口高并发静默预热队列
+const mediaCardDetailCache = new Map<string, Partial<MediaInfo>>()
+const mediaCardDetailInflight = new Map<string, Promise<Partial<MediaInfo> | null>>()
+const DETAIL_PREFETCH_CONCURRENCY = 6
+let activeDetailPrefetchCount = 0
+const detailPrefetchQueue: Array<() => Promise<void>> = []
+
+function pumpDetailPrefetchQueue() {
+  while (activeDetailPrefetchCount < DETAIL_PREFETCH_CONCURRENCY && detailPrefetchQueue.length > 0) {
+    const nextTask = detailPrefetchQueue.shift()!
+    activeDetailPrefetchCount += 1
+    void nextTask().finally(() => {
+      activeDetailPrefetchCount -= 1
+      pumpDetailPrefetchQueue()
+    })
+  }
+}
+
+export function clearMediaCardDetailCache() {
+  mediaCardDetailCache.clear()
+  mediaCardDetailInflight.clear()
+  detailPrefetchQueue.length = 0
+}
 </script>
 
 <script lang="ts" setup>
@@ -10,7 +35,7 @@ import noImage from '@images/no-image.jpeg'
 import { getDisplayImageUrl, getLogoUrl } from '@/utils/imageUtils'
 import api from '@/api'
 import { formatRating } from '@/@core/utils/formatters'
-import type { MediaInfo, Site, Subscribe } from '@/api/types'
+import type { Site, Subscribe } from '@/api/types'
 import router from '@/router'
 import { useGlobalSettingsStore, useUserStore } from '@/stores'
 import { mediaTypeDict } from '@/api/constants'
@@ -29,12 +54,40 @@ import {
 
 const SearchSiteDialog = defineAsyncComponent(() => import('@/components/dialog/SearchSiteDialog.vue'))
 
-// 国际化
-const { t } = useI18n()
+const TMDB_GENRE_ID_MAP: Record<number, string> = {
+  12: '冒险',
+  14: '奇幻',
+  16: '动画',
+  18: '剧情',
+  27: '恐怖',
+  28: '动作',
+  35: '喜剧',
+  36: '历史',
+  37: '西部',
+  53: '惊悚',
+  80: '犯罪',
+  99: '纪录片',
+  878: '科幻',
+  9648: '悬疑',
+  10402: '音乐',
+  10749: '爱情',
+  10751: '家庭',
+  10752: '战争',
+  10759: '动作冒险',
+  10762: '儿童',
+  10763: '新闻',
+  10764: '真人秀',
+  10765: '科幻奇幻',
+  10766: '肥皂剧',
+  10767: '脱口秀',
+  10768: '战争政治',
+  10770: '电视电影',
+}
 
 interface MediaCardMedia extends MediaInfo {
   total_episode?: number
   episode_count?: number
+  genre_ids?: number[]
 }
 
 // 输入参数
@@ -44,7 +97,6 @@ const props = defineProps({
   height: String,
 })
 
-// 从 provide 中获取全局设置
 // 全局设置
 const globalSettingsStore = useGlobalSettingsStore()
 const globalSettings = globalSettingsStore.globalSettings
@@ -74,6 +126,12 @@ const subscribedSeasonModes = ref<SeasonSubscribeModes>({})
 const subscribedSeasonsLoaded = ref(false)
 
 const subscribedSeasonsLoading = ref(false)
+
+// 悬停/展开懒加载补齐的元数据副本（不篡改 props.media 引用）
+const lazyDetail = shallowRef<Partial<MediaInfo> | null>(null)
+let hoverDetailTimer: ReturnType<typeof setTimeout> | null = null
+let viewportPrefetchTimer: ReturnType<typeof setTimeout> | null = null
+let queuedPrefetchTask: (() => Promise<void>) | null = null
 
 // 来源角标字典
 const sourceIconDict: Record<string, string> = {
@@ -107,6 +165,208 @@ const mediaCardId = ++mediaCardIdSeed
 const isTouchLikePointer = ref(
   typeof window !== 'undefined' && Boolean(window.matchMedia?.('(hover: none), (pointer: coarse)').matches),
 )
+
+function isSlashSeparatedSubtitle(text?: string) {
+  if (!text || !text.includes(' / ')) return false
+  const slashIndex = text.indexOf(' / ')
+  return Boolean(text.slice(0, slashIndex).trim() && text.slice(slashIndex + 3).trim())
+}
+
+function isYearLikeSegment(segment: string) {
+  return /^(?:19|20)\d{2}(?:[-./(（].*)?$/.test(segment.trim())
+}
+
+// 解析豆瓣 card_subtitle 等斜杠副标题（剥离首段年份，提取地区/类型标签与末尾主演）
+const parsedSubtitle = computed(() => {
+  const raw = props.media?.overview?.trim()
+  if (!raw || !isSlashSeparatedSubtitle(raw)) {
+    return { actors: [] as string[], tags: [] as string[] }
+  }
+  const segments = raw
+    .split(' / ')
+    .map(item => item.trim())
+    .filter(item => Boolean(item) && !isYearLikeSegment(item))
+
+  const tags = segments
+    .slice(0, 2)
+    .flatMap(seg => seg.split(/\s+/))
+    .filter(Boolean)
+  const actors = segments.length >= 3 ? segments[segments.length - 1].split(/\s+/).filter(Boolean) : []
+
+  return { actors, tags }
+})
+
+const META_EDGE_CHARS = new Set(['[', ']', '(', ')', '（', '）', '"', "'", '“', '”', '‘', '’'])
+
+function sanitizeMetaToken(value: string) {
+  let start = 0
+  let end = value.length
+  while (start < end && (value[start] <= ' ' || META_EDGE_CHARS.has(value[start]))) start += 1
+  while (end > start && (value[end - 1] <= ' ' || META_EDGE_CHARS.has(value[end - 1]))) end -= 1
+  return value.slice(start, end)
+}
+
+// 第 1 行：分类与风格标签（不含年份，最多取前 5 个以“ · ”连接，单行超长省略）
+const cardTagsText = computed(() => {
+  const tags: string[] = []
+  const pushTag = (raw?: unknown) => {
+    const label = sanitizeMetaToken(
+      typeof raw === 'string'
+        ? raw
+        : raw && typeof raw === 'object' && 'name' in raw
+          ? String((raw as { name?: unknown }).name ?? '')
+          : '',
+    )
+    if (label && !isYearLikeSegment(label) && !tags.includes(label)) {
+      tags.push(label)
+    }
+  }
+
+  pushTag(props.media?.category || lazyDetail.value?.category)
+  const rawGenres = props.media?.genres?.length ? props.media.genres : lazyDetail.value?.genres
+  if (Array.isArray(rawGenres) && rawGenres.length > 0) {
+    rawGenres.forEach(pushTag)
+  } else if (Array.isArray(props.media?.genre_ids)) {
+    props.media.genre_ids.forEach(id => pushTag(TMDB_GENRE_ID_MAP[id]))
+  }
+  parsedSubtitle.value.tags.forEach(pushTag)
+
+  return tags.slice(0, 5).join(' · ')
+})
+
+// 第 2 行：演员名单（不含年份与外层括号，最多取前 5 位以“ / ”连接，单行超长省略）
+const cardActorsText = computed(() => {
+  const names: string[] = []
+  const pushActor = (actor: unknown) => {
+    const name = sanitizeMetaToken(
+      typeof actor === 'string'
+        ? actor
+        : actor && typeof actor === 'object'
+          ? String((actor as { name?: unknown; title?: unknown }).name ?? (actor as { title?: unknown }).title ?? '')
+          : '',
+    )
+    if (name && !names.includes(name)) {
+      names.push(name)
+    }
+  }
+
+  const rawActors = props.media?.actors?.length ? props.media.actors : lazyDetail.value?.actors
+  if (Array.isArray(rawActors) && rawActors.length > 0) {
+    rawActors.forEach(pushActor)
+  } else {
+    parsedSubtitle.value.actors.forEach(pushActor)
+  }
+
+  return names.slice(0, 5).join(' / ')
+})
+
+function clearHoverDetailTimer() {
+  if (hoverDetailTimer !== null) {
+    clearTimeout(hoverDetailTimer)
+    hoverDetailTimer = null
+  }
+}
+
+function clearViewportPrefetch() {
+  if (viewportPrefetchTimer !== null) {
+    clearTimeout(viewportPrefetchTimer)
+    viewportPrefetchTimer = null
+  }
+  if (queuedPrefetchTask) {
+    const idx = detailPrefetchQueue.indexOf(queuedPrefetchTask)
+    if (idx !== -1) detailPrefetchQueue.splice(idx, 1)
+    queuedPrefetchTask = null
+  }
+}
+
+async function fetchLazyMediaDetail() {
+  if (props.media?.collection_id || cardActorsText.value) return
+  const mediaId = getMediaId()
+  if (!mediaId) return
+
+  const cached = mediaCardDetailCache.get(mediaId)
+  if (cached) {
+    lazyDetail.value = cached
+    return
+  }
+
+  let requestPromise = mediaCardDetailInflight.get(mediaId)
+  if (!requestPromise) {
+    requestPromise = api
+      .get<MediaInfo, MediaInfo>(`media/${mediaId}`, {
+        params: {
+          include_images: false,
+          type_name: props.media?.type,
+          title: props.media?.title,
+          year: props.media?.year,
+        },
+      })
+      .then(detail => {
+        if (!detail || typeof detail !== 'object') return null
+        const summary: Partial<MediaInfo> = {
+          actors: detail.actors,
+          category: detail.category,
+          genres: detail.genres,
+        }
+        mediaCardDetailCache.set(mediaId, summary)
+        return summary
+      })
+      .catch(() => null)
+      .finally(() => {
+        mediaCardDetailInflight.delete(mediaId)
+      })
+    mediaCardDetailInflight.set(mediaId, requestPromise)
+  }
+
+  const resolved = await requestPromise
+  if (resolved && getMediaId() === mediaId) {
+    lazyDetail.value = resolved
+  }
+}
+
+function scheduleViewportDetailPrefetch() {
+  clearViewportPrefetch()
+  if (props.media?.collection_id || cardActorsText.value) return
+  const mediaId = getMediaId()
+  if (!mediaId) return
+  const cached = mediaCardDetailCache.get(mediaId)
+  if (cached) {
+    lazyDetail.value = cached
+    return
+  }
+
+  viewportPrefetchTimer = setTimeout(() => {
+    viewportPrefetchTimer = null
+    const task = async () => {
+      queuedPrefetchTask = null
+      await fetchLazyMediaDetail()
+    }
+    queuedPrefetchTask = task
+    detailPrefetchQueue.push(task)
+    pumpDetailPrefetchQueue()
+  }, 100)
+}
+
+function handleCardMouseEnter() {
+  void querySubscribedSeasons()
+  clearHoverDetailTimer()
+  if (props.media?.collection_id || cardActorsText.value) {
+    return
+  }
+
+  const mediaId = getMediaId()
+  if (!mediaId) return
+  const cached = mediaCardDetailCache.get(mediaId)
+  if (cached) {
+    lazyDetail.value = cached
+    return
+  }
+
+  hoverDetailTimer = setTimeout(() => {
+    hoverDetailTimer = null
+    void fetchLazyMediaDetail()
+  }, 80)
+}
 
 // 打开站点选择弹窗，并把选择结果交回当前媒体卡片继续搜索。
 function openSearchSiteDialog() {
@@ -170,13 +430,19 @@ function isSameSubscribeMedia(subscribe: Subscribe) {
   const mediaId = getMediaId()
   if (subscribe.media_source && subscribe.media_id) {
     const prefix = subscribe.media_source === 'themoviedb' ? 'tmdb' : subscribe.media_source
-    return mediaId === `${prefix}:${subscribe.media_id}`
+    if (mediaId && mediaId === `${prefix}:${subscribe.media_id}`) return true
   }
-  if (subscribe.mediaid) return mediaId === subscribe.mediaid
-  if (props.media?.tmdb_id && subscribe.tmdbid) return props.media.tmdb_id === subscribe.tmdbid
-  if (props.media?.douban_id && subscribe.doubanid) return props.media.douban_id === subscribe.doubanid
-  if (props.media?.bangumi_id && subscribe.bangumiid) return props.media.bangumi_id === subscribe.bangumiid
-  if (props.media?.anilist_id && subscribe.anilistid) return props.media.anilist_id === subscribe.anilistid
+  if (mediaId && subscribe.mediaid && subscribe.mediaid === mediaId) return true
+  if (props.media?.tmdb_id && subscribe.tmdbid && props.media.tmdb_id === subscribe.tmdbid) return true
+  if (props.media?.douban_id && subscribe.doubanid && props.media.douban_id === subscribe.doubanid) return true
+  if (
+    props.media?.bangumi_id &&
+    subscribe.bangumiid &&
+    String(props.media.bangumi_id) === String(subscribe.bangumiid)
+  ) {
+    return true
+  }
+  if (props.media?.anilist_id && subscribe.anilistid && props.media.anilist_id === subscribe.anilistid) return true
   return false
 }
 
@@ -311,6 +577,7 @@ function isMediaCardDetailVisible(isHovering: boolean | null | undefined) {
 
 // 清理移动端详情层展开态，避免路由返回后继续显示上一次的详情层。
 function resetMediaCardDetailState() {
+  clearHoverDetailTimer()
   if (activeTouchMediaCardId.value === mediaCardId) {
     activeTouchMediaCardId.value = null
   }
@@ -320,7 +587,8 @@ function resetMediaCardDetailState() {
 function handleMediaCardClick(isHovering: boolean | null | undefined) {
   if (isTouchLikePointer.value && !isMediaCardDetailVisible(isHovering)) {
     activeTouchMediaCardId.value = mediaCardId
-    querySubscribedSeasons()
+    void querySubscribedSeasons()
+    void fetchLazyMediaDetail()
     return
   }
 
@@ -377,6 +645,7 @@ function handleCheckLazy() {
   }
   handleCheckSubscribe()
   handleCheckExists()
+  scheduleViewportDetailPrefetch()
 }
 
 // 在元素进入视窗时触发懒加载函数
@@ -465,6 +734,9 @@ watch(
     if (media === previousMedia) return
 
     resetMediaCardDetailState()
+    clearViewportPrefetch()
+    const nextMediaId = getMediaSubscribeId(media)
+    lazyDetail.value = nextMediaId ? (mediaCardDetailCache.get(nextMediaId) ?? null) : null
     subscribedSeasons.value = []
     subscribedSeasonModes.value = {}
     subscribedSeasonsLoaded.value = false
@@ -480,10 +752,14 @@ onMounted(() => {
 })
 
 onActivated(resetMediaCardDetailState)
-onDeactivated(resetMediaCardDetailState)
+onDeactivated(() => {
+  resetMediaCardDetailState()
+  clearViewportPrefetch()
+})
 
 onBeforeUnmount(() => {
   resetMediaCardDetailState()
+  clearViewportPrefetch()
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   observer.value?.disconnect()
   observer.value = null
@@ -494,7 +770,13 @@ onBeforeUnmount(() => {
   <VHover>
     <template #default="hover">
       <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
-      <div ref="mediaCardRef" v-bind="hover.props" class="media-card-hover-area" @mouseenter="querySubscribedSeasons">
+      <div
+        ref="mediaCardRef"
+        v-bind="hover.props"
+        class="media-card-hover-area"
+        @mouseenter="handleCardMouseEnter"
+        @mouseleave="clearHoverDetailTimer"
+      >
         <VCard
           :height="props.height"
           :width="props.width"
@@ -542,9 +824,18 @@ onBeforeUnmount(() => {
 
             <div class="media-card__overlay-spacer" />
 
-            <h1 class="media-card-title">
+            <h1 class="media-card-title" :title="props.media?.title">
               {{ props.media?.title }}
             </h1>
+
+            <div v-if="cardTagsText || cardActorsText" class="media-card__submeta">
+              <p v-if="cardTagsText" class="media-card__meta-line media-card__tags" :title="cardTagsText">
+                {{ cardTagsText }}
+              </p>
+              <p v-if="cardActorsText" class="media-card__meta-line media-card__actors" :title="cardActorsText">
+                {{ cardActorsText }}
+              </p>
+            </div>
 
             <div v-if="props.media?.collection_id" class="media-card__collection-spacer" @click.stop="" />
             <div v-else class="media-card__actions">
@@ -568,7 +859,7 @@ onBeforeUnmount(() => {
             </div>
           </VCardText>
 
-          <!-- 常态左上：轻量磨砂类型胶囊（进入详情遮罩时自动退场，不再遮挡文字） -->
+          <!-- 常态左上：轻量类型胶囊（进入详情遮罩时自动退场，不再遮挡文字） -->
           <div
             v-show="isImageLoaded && getMediaTypeText(props.media?.type) && !isMediaCardDetailVisible(hover.isHovering)"
             class="media-card__badge media-card__badge--type"
@@ -577,7 +868,7 @@ onBeforeUnmount(() => {
             <span>{{ getMediaTypeText(props.media?.type) }}</span>
           </div>
 
-          <!-- 常态右上：已入库徽章 或 磨砂金星评分胶囊 -->
+          <!-- 常态右上：已入库徽章 或 金星评分胶囊 -->
           <ExistIcon v-if="isExists && !isMediaCardDetailVisible(hover.isHovering)" />
           <div
             v-else-if="isImageLoaded && props.media?.vote_average && !isMediaCardDetailVisible(hover.isHovering)"
@@ -587,7 +878,7 @@ onBeforeUnmount(() => {
             <span>{{ formatCardScore(props.media?.vote_average) }}</span>
           </div>
 
-          <!-- 常态右下：磨砂底座来源角标 -->
+          <!-- 常态右下：底座来源角标 -->
           <div
             v-if="!isMediaCardDetailVisible(hover.isHovering) && isImageLoaded && hasSourceBadge && !imageLoadError"
             class="media-card__source-badge"
@@ -718,21 +1009,22 @@ onBeforeUnmount(() => {
   inline-size: 14px;
 }
 
-/* 悬停详情遮罩层：通透电影暗角渐变，保留海报主体画面 */
+/* 悬停详情遮罩层：悬浮即直接完整显示，无二次位移动画 */
 .media-card__overlay {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: flex;
   flex-direction: column;
-  padding: 7px 10px 10px !important;
+  padding: 7px 10px 9px !important;
   background: linear-gradient(
     180deg,
     rgba(8, 11, 18, 0.44) 0%,
-    rgba(8, 11, 18, 0.04) 26%,
-    rgba(8, 11, 18, 0.16) 52%,
-    rgba(8, 11, 18, 0.84) 78%,
-    rgba(8, 11, 18, 0.96) 100%
+    rgba(8, 11, 18, 0.03) 26%,
+    rgba(8, 11, 18, 0.12) 48%,
+    rgba(8, 11, 18, 0.82) 70%,
+    rgba(8, 11, 18, 0.94) 86%,
+    rgba(8, 11, 18, 0.98) 100%
   );
   color: #f8fafc;
   cursor: pointer;
@@ -779,21 +1071,50 @@ onBeforeUnmount(() => {
 
 .media-card__overlay-spacer {
   flex: 1 1 auto;
+  min-block-size: 12px;
 }
 
 .media-card-title {
   display: -webkit-box;
   overflow: hidden;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   -webkit-box-orient: vertical;
   color: #fff;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
   -webkit-line-clamp: 2;
   line-height: 1.32;
   text-overflow: ellipsis;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.68);
+}
+
+.media-card__submeta {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.media-card__meta-line {
+  overflow: hidden;
+  margin: 0;
+  line-height: 1.38;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.65);
+  white-space: nowrap;
+}
+
+.media-card__tags {
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.media-card__actors {
+  color: rgba(203, 213, 225, 0.78);
+  font-size: 11px;
 }
 
 .media-card__collection-spacer {
@@ -803,36 +1124,30 @@ onBeforeUnmount(() => {
 .media-card__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  margin-block-start: 2px;
+  min-block-size: 24px;
 }
 
 .media-card__action-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  border-radius: 8px !important;
-  background: rgba(12, 15, 24, 0.88) !important;
-  block-size: 28px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
-  inline-size: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px !important;
+  background: rgba(15, 23, 42, 0.78) !important;
+  block-size: 26px !important;
+  inline-size: 26px !important;
   transition:
-    background-color 0.16s ease,
-    border-color 0.16s ease,
-    transform 0.16s ease;
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
 
-  &:hover {
-    border-color: rgba(255, 255, 255, 0.38) !important;
-    background: rgba(24, 30, 44, 0.94) !important;
-    transform: translateY(-1px);
-  }
+.media-card__action-btn:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(30, 41, 59, 0.94) !important;
+  transform: scale(1.06);
 }
 
 .media-card__action-btn--subscribed {
-  border-color: rgba(248, 113, 113, 0.5) !important;
-  background: rgba(239, 68, 68, 0.22) !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .media-card__poster :deep(.v-img__img) {
-    transition: none;
-  }
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(127, 29, 29, 0.38) !important;
 }
 </style>

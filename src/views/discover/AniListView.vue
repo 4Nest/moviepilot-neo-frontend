@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import DiscoverFilterToolbar from '@/components/discover/DiscoverFilterToolbar.vue'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import { useI18n } from '@/composables/useChineseText'
+import { useDiscoverPreferences } from '@/composables/useDiscoverPreferences'
 
 const { t } = useI18n()
+const { filtersExpanded, toggleFiltersExpanded } = useDiscoverPreferences()
 
 const currentKey = ref(0)
 const currentYear = new Date().getFullYear()
@@ -78,6 +81,18 @@ const filterGroups = [
   { key: 'country', label: t('anilist.country'), items: countryItems },
 ] as const
 
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (filterParams.sort && filterParams.sort !== 'POPULARITY_DESC') count += 1
+  if (filterParams.format) count += 1
+  if (filterParams.genre) count += 1
+  if (filterParams.season) count += 1
+  if (filterParams.season_year !== null) count += 1
+  if (filterParams.status) count += 1
+  if (filterParams.country) count += 1
+  return count
+})
+
 /** 将筛选 Chip 的选择值写入对应 AniList 查询参数。 */
 function updateFilter(key: (typeof filterGroups)[number]['key'], value: unknown) {
   if (key === 'season_year') {
@@ -87,17 +102,39 @@ function updateFilter(key: (typeof filterGroups)[number]['key'], value: unknown)
   filterParams[key as AniListFilterKey] = typeof value === 'string' ? value : null
 }
 
+function resetFilters() {
+  filterParams.sort = 'POPULARITY_DESC'
+  filterParams.genre = null
+  filterParams.format = null
+  filterParams.season = null
+  filterParams.season_year = null
+  filterParams.status = null
+  filterParams.country = null
+}
+
+let lastQuerySignature = JSON.stringify(filterParams)
+
 watch(filterParams, () => {
   if (!filterParams.sort) {
     filterParams.sort = 'POPULARITY_DESC'
   }
-  currentKey.value++
+  const nextSignature = JSON.stringify(filterParams)
+  if (nextSignature !== lastQuerySignature) {
+    lastQuerySignature = nextSignature
+    currentKey.value++
+  }
 })
 </script>
 
 <template>
   <div class="discover-filter-panel">
-    <div v-for="group in filterGroups" :key="group.key" class="discover-filter-row">
+    <div
+      v-for="(group, index) in filterGroups"
+      :key="group.key"
+      v-show="index < 2 || filtersExpanded"
+      class="discover-filter-row"
+      :class="{ 'discover-filter-row--header': index === 0 }"
+    >
       <div class="discover-filter-label">
         <VLabel>{{ group.label }}</VLabel>
       </div>
@@ -120,6 +157,13 @@ watch(filterParams, () => {
           {{ item.title }}
         </VChip>
       </VChipGroup>
+      <DiscoverFilterToolbar
+        v-if="index === 0"
+        :active-filter-count="activeFilterCount"
+        :expanded="filtersExpanded"
+        @reset="resetFilters"
+        @toggle-expand="toggleFiltersExpanded"
+      />
     </div>
   </div>
 
@@ -140,6 +184,11 @@ watch(filterParams, () => {
   align-items: center;
   gap: 10px;
   min-block-size: 28px;
+}
+
+.discover-filter-row--header {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .discover-filter-label {

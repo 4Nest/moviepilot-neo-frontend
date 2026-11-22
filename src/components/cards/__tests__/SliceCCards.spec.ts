@@ -1,12 +1,10 @@
-import type { Context, MediaServerConf, Person, StorageConf, SubtitleInfo } from '@/api/types'
+import type { Context, MediaServerConf, Person, StorageConf } from '@/api/types'
 import FilterRuleCard from '@/components/cards/FilterRuleCard.vue'
 import MediaInfoCard from '@/components/cards/MediaInfoCard.vue'
 import MediaServerCard from '@/components/cards/MediaServerCard.vue'
 import PersonCard from '@/components/cards/PersonCard.vue'
 import PluginMixedSortCard from '@/components/cards/PluginMixedSortCard.vue'
 import StorageCard from '@/components/cards/StorageCard.vue'
-import SubtitleCard from '@/components/cards/SubtitleCard.vue'
-import SubtitleItem from '@/components/cards/SubtitleItem.vue'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { renderWithProviders } from '@tests/support/render'
 import { readFileSync } from 'node:fs'
@@ -150,39 +148,5 @@ describe('Slice C card components', () => {
     await rerender({ storage: configured })
     await waitFor(() => expect(mocks.apiGet).toHaveBeenCalledWith('storage/usage/alipan'))
     expect(await screen.findByText('60%')).toBeInTheDocument()
-  })
-
-  it('SubtitleCard and SubtitleItem render compact site badge hierarchy and open download dialog on click', async () => {
-    mocks.apiGet.mockResolvedValue({ data: { icon: 'https://images.example.com/sub-site.png' } })
-    const subtitle: SubtitleInfo = {
-      enclosure: 'https://downloads.example.com/sub-1.zip',
-      grabs: 18,
-      language: '简体双语',
-      language_icon: 'https://images.example.com/zh.png',
-      page_url: 'https://sub.example.com/detail/1',
-      pubdate: '2026-08-01 12:00:00',
-      season_episode: 'S01E01',
-      site: 77,
-      site_name: '字幕测试站',
-      size: 204800,
-      subtitle_id: '9001',
-      title: 'Frieren.S01E01.JPSC.ass',
-      uploader: 'NestSub',
-    }
-
-    const cardView = await renderWithProviders(SubtitleCard, { props: { subtitle } })
-    expect(cardView.container.querySelector('.subtitle-card__footer')).not.toBeNull()
-    expect(screen.getByText('Frieren.S01E01.JPSC.ass')).toBeInTheDocument()
-    await fireEvent.click(cardView.container.querySelector('.subtitle-card')!)
-    expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
-    cardView.unmount()
-
-    mocks.openSharedDialog.mockReset()
-    const itemView = await renderWithProviders(SubtitleItem, { props: { subtitle } })
-    expect(itemView.container.querySelector('.subtitle-item__site-badge')).not.toBeNull()
-    expect(itemView.container.querySelector('.text-h6')).toBeNull()
-    expect(screen.getByText('Frieren.S01E01.JPSC.ass')).toBeInTheDocument()
-    await fireEvent.click(itemView.container.querySelector('.subtitle-item')!)
-    expect(mocks.openSharedDialog).toHaveBeenCalledOnce()
   })
 })

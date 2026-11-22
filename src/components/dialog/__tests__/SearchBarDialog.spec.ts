@@ -204,6 +204,27 @@ describe('SearchBarDialog media source selection', () => {
     })
   })
 
+  it('shows torrent site search without subtitle search entry when typing a keyword', async () => {
+    const user = userEvent.setup()
+    const { router } = await renderSearchBar()
+    const input = await screen.findByPlaceholderText('搜索电影、剧集以及更多...')
+
+    await user.type(input, '星际穿越')
+    expect(await screen.findByText('在站点中搜索种子资源')).toBeInTheDocument()
+    expect(screen.queryByText('在站点中搜索字幕资源')).not.toBeInTheDocument()
+    expect(screen.queryByText('相关字幕')).not.toBeInTheDocument()
+
+    await user.click(getSearchItem('在站点中搜索种子资源'))
+    await waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/resource')
+      expect(router.currentRoute.value.query).toEqual({
+        area: 'title',
+        keyword: '星际穿越',
+        sites: '',
+      })
+    })
+  })
+
   it('exposes nativePanel with single-select media sources and NEO resource actions', async () => {
     const dialogRef = ref<InstanceType<typeof SearchBarDialog> | null>(null)
     const Host = defineComponent({
@@ -225,7 +246,6 @@ describe('SearchBarDialog media source selection', () => {
       'media-collection',
       'media-person',
       'resource-torrent',
-      'resource-subtitle',
       'shares',
       'history',
     ])

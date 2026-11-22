@@ -136,6 +136,52 @@ describe('ExtraSourceView', () => {
     expect(screen.getByRole('button', { name: '清空媒体类型' })).toBeInTheDocument()
   })
 
+  it('forwards exclude_short_drama for streaming sources and supports reset and secondary-row collapse', async () => {
+    const user = userEvent.setup()
+    await renderSource(
+      createSource({
+        name: '哔哩哔哩',
+        mediaid_prefix: 'bilibili',
+        api_path: 'discover/bilibili',
+      }),
+    )
+
+    expect(latestMediaListRequest(mediaList)).toEqual({
+      apipath: 'discover/bilibili',
+      params: {
+        mtype: 'movie',
+        genre: null,
+        keyword: 'featured',
+        exclude_short_drama: true,
+      },
+    })
+
+    const shortDramaBtn = screen.getByTestId('short-drama-toggle')
+    await user.click(shortDramaBtn)
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList).params.exclude_short_drama).toBe(false)
+    })
+
+    await user.click(screen.getByRole('button', { name: '选择动作类型' }))
+    await waitFor(() => expect(latestMediaListRequest(mediaList).params.genre).toBe('action'))
+
+    const resetBtn = screen.getByTestId('discover-filter-reset')
+    expect(resetBtn).toHaveTextContent('1')
+    await user.click(resetBtn)
+
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList).params).toEqual({
+        mtype: 'movie',
+        genre: null,
+        keyword: 'featured',
+        exclude_short_drama: false,
+      })
+    })
+
+    await user.click(screen.getByTestId('discover-filter-collapse'))
+    expect(screen.getByRole('button', { name: '清空媒体类型', hidden: true })).not.toBeVisible()
+  })
+
   it('restores a truthy root default and clears only fields that declare the changed dependency', async () => {
     const user = userEvent.setup()
     await renderSource()
@@ -182,9 +228,7 @@ describe('ExtraSourceView', () => {
 
   it('preserves user filters but restarts the list when only the API path changes', async () => {
     const user = userEvent.setup()
-    await renderSourceUpdateHarness(createSource(), () =>
-      createSource({ api_path: 'plugin/fixture/v2/discover' }),
-    )
+    await renderSourceUpdateHarness(createSource(), () => createSource({ api_path: 'plugin/fixture/v2/discover' }))
 
     await user.click(screen.getByRole('button', { name: '切换媒体类型' }))
     await waitFor(() => expect(latestMediaListRequest(mediaList).params.mtype).toBe('series'))
@@ -225,6 +269,7 @@ describe('ExtraSourceView', () => {
       expect(screen.getByRole('button', { name: '选择新版分类' })).toBeInTheDocument()
       expect(screen.getByLabelText('媒体列表请求')).toHaveAttribute('data-apipath', 'plugin/fixture/v2/discover')
       expect(screen.getByLabelText('媒体列表请求')).toHaveTextContent(JSON.stringify(nextParams))
+      expect(screen.queryByTestId('discover-filter-collapse')).not.toBeInTheDocument()
     })
   })
 })

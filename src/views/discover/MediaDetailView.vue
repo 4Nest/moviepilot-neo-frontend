@@ -94,11 +94,6 @@ const selectedSites = ref<number[]>([])
 // 搜索方式 title/imdbid
 const searchType = ref('title')
 
-interface MediaSearchOptions {
-  season?: number | null
-  episode?: number | null
-}
-
 interface EpisodeGroupInfo {
   id: string
   name: string
@@ -109,12 +104,6 @@ interface EpisodeGroupInfo {
 interface EpisodeGroupOption extends EpisodeGroupInfo {
   icon: string
 }
-
-// 站点选择后待执行的搜索类型
-const pendingSearchResultType = ref<'torrent' | 'subtitle'>('torrent')
-
-// 站点选择后待执行的季集参数
-const pendingSearchOptions = ref<MediaSearchOptions>({})
 
 // 首次拉取站点、主订阅、分季订阅及播放防连点加载态
 const searchingSites = ref(false)
@@ -898,22 +887,17 @@ function joinArray(arr: string[]) {
 }
 
 // 开始搜索
-function handleSearch(resultType: 'torrent' | 'subtitle' = 'torrent', options: MediaSearchOptions = {}) {
-  const keyword = getMediaId()
-  const season = options.season ?? mediaDetail.value.season
-  const episode = options.episode ?? null
+function handleSearch() {
   router.push({
     path: '/resource',
     query: {
-      keyword,
+      keyword: getMediaId(),
       type: mediaDetail.value.type,
       area: searchType.value,
       title: mediaDetail.value.title,
       year: mediaDetail.value.year,
-      season,
-      episode,
+      season: mediaDetail.value.season,
       sites: selectedSites.value.join(','),
-      result_type: resultType,
     },
   })
 }
@@ -964,16 +948,10 @@ const subscribeActions = useMediaSubscribe({
   onEditRemove: onSubscribeEditRemove,
 })
 
-// 搜索前弹出站点选择框，确认后执行资源或字幕搜索。
-async function clickSearch(
-  type: string,
-  resultType: 'torrent' | 'subtitle' = 'torrent',
-  options: MediaSearchOptions = {},
-) {
+// 搜索前弹出站点选择框，确认后执行资源搜索。
+async function clickSearch(type: string) {
   if (searchingSites.value) return
   searchType.value = type
-  pendingSearchResultType.value = resultType
-  pendingSearchOptions.value = options
   if (allSites.value?.length == 0) {
     searchingSites.value = true
     try {
@@ -986,19 +964,14 @@ async function clickSearch(
   if (allSites.value?.length > 0) {
     openSearchSiteDialog()
   } else {
-    handleSearch(pendingSearchResultType.value, pendingSearchOptions.value)
+    handleSearch()
   }
 }
 
 // 搜索多站点
 function searchSites(sites: number[]) {
   selectedSites.value = sites
-  handleSearch(pendingSearchResultType.value, pendingSearchOptions.value)
-}
-
-// 搜索字幕
-async function handleSubtitleSearch() {
-  await clickSearch('title', 'subtitle')
+  handleSearch()
 }
 
 watch(
@@ -1077,7 +1050,7 @@ onUnmounted(() => {
               variant="outlined"
               rounded="lg"
               class="media-action-button media-action-button--ghost"
-              :loading="searchingSites && pendingSearchResultType === 'torrent'"
+              :loading="searchingSites"
               :disabled="searchingSites"
             >
               <template #prepend>
@@ -1094,21 +1067,6 @@ onUnmounted(() => {
                   </VListItem>
                 </VList>
               </VMenu>
-            </VBtn>
-            <VBtn
-              v-if="userStore.superUser && hasMediaIdentity()"
-              size="small"
-              variant="outlined"
-              rounded="lg"
-              class="media-action-button media-action-button--ghost"
-              :loading="searchingSites && pendingSearchResultType === 'subtitle'"
-              :disabled="searchingSites"
-              @click="handleSubtitleSearch"
-            >
-              <template #prepend>
-                <VIcon icon="mdi-subtitles-outline" />
-              </template>
-              {{ t('media.actions.searchSubtitle') }}
             </VBtn>
             <VBtn
               v-if="mediaDetail.type === '电影' || hasMediaIdentity()"

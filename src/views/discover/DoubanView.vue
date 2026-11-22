@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import DiscoverFilterToolbar from '@/components/discover/DiscoverFilterToolbar.vue'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import { useI18n } from '@/composables/useChineseText'
+import { useDiscoverPreferences } from '@/composables/useDiscoverPreferences'
 
 const { t } = useI18n()
+const { excludeShortDrama, filtersExpanded, toggleFiltersExpanded } = useDiscoverPreferences()
 
 // 电影或者电视剧 movies/tvs
 const type = ref('movies')
@@ -103,24 +106,50 @@ watch([doubanCategory, doubanZone, doubanYear], () => {
   filterParams.tags = [doubanCategory.value, doubanZone.value, doubanYear.value].filter(Boolean).join(',')
 })
 
+const requestParams = computed<Record<string, unknown>>(() => ({
+  ...filterParams,
+  exclude_short_drama: excludeShortDrama.value,
+}))
+
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (filterParams.sort && filterParams.sort !== 'U') count += 1
+  if (doubanCategory.value) count += 1
+  if (doubanZone.value) count += 1
+  if (doubanYear.value) count += 1
+  return count
+})
+
+function resetFilters() {
+  filterParams.sort = 'U'
+  doubanCategory.value = ''
+  doubanZone.value = ''
+  doubanYear.value = ''
+}
+
 // 当前Key
 const currentKey = ref(0)
+let lastQuerySignature = JSON.stringify([type.value, requestParams.value])
 
 // 类型和过滤参数变化后重新刷新列表
-watch([type, filterParams], () => {
+watch([type, filterParams, excludeShortDrama], () => {
   if (!type.value) {
     type.value = 'movies'
   }
   if (!filterParams.sort) {
     filterParams.sort = 'U'
   }
-  currentKey.value++
+  const nextSignature = JSON.stringify([type.value, requestParams.value])
+  if (nextSignature !== lastQuerySignature) {
+    lastQuerySignature = nextSignature
+    currentKey.value++
+  }
 })
 </script>
 
 <template>
   <div class="discover-filter-panel">
-    <div class="discover-filter-row">
+    <div class="discover-filter-row discover-filter-row--header">
       <div class="discover-filter-label">
         <VLabel>{{ t('douban.type') }}</VLabel>
       </div>
@@ -146,6 +175,14 @@ watch([type, filterParams], () => {
           {{ t('mediaType.tv') }}
         </VChip>
       </VChipGroup>
+      <DiscoverFilterToolbar
+        v-model:exclude-short-drama="excludeShortDrama"
+        :show-short-drama-toggle="true"
+        :active-filter-count="activeFilterCount"
+        :expanded="filtersExpanded"
+        @reset="resetFilters"
+        @toggle-expand="toggleFiltersExpanded"
+      />
     </div>
     <div class="discover-filter-row">
       <div class="discover-filter-label">
@@ -166,7 +203,7 @@ watch([type, filterParams], () => {
         </VChip>
       </VChipGroup>
     </div>
-    <div class="discover-filter-row">
+    <div v-show="filtersExpanded" class="discover-filter-row">
       <div class="discover-filter-label">
         <VLabel>{{ t('douban.genre') }}</VLabel>
       </div>
@@ -185,7 +222,7 @@ watch([type, filterParams], () => {
         </VChip>
       </VChipGroup>
     </div>
-    <div class="discover-filter-row">
+    <div v-show="filtersExpanded" class="discover-filter-row">
       <div class="discover-filter-label">
         <VLabel>{{ t('douban.zone') }}</VLabel>
       </div>
@@ -204,7 +241,7 @@ watch([type, filterParams], () => {
         </VChip>
       </VChipGroup>
     </div>
-    <div class="discover-filter-row">
+    <div v-show="filtersExpanded" class="discover-filter-row">
       <div class="discover-filter-label">
         <VLabel>{{ t('douban.year') }}</VLabel>
       </div>
@@ -225,7 +262,7 @@ watch([type, filterParams], () => {
     </div>
   </div>
   <div>
-    <MediaCardListView :key="currentKey" :apipath="`discover/douban_${type}`" :params="filterParams" />
+    <MediaCardListView :key="currentKey" :apipath="`discover/douban_${type}`" :params="requestParams" />
   </div>
 </template>
 
@@ -243,6 +280,11 @@ watch([type, filterParams], () => {
   align-items: center;
   gap: 10px;
   min-block-size: 28px;
+}
+
+.discover-filter-row--header {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .discover-filter-label {

@@ -3,7 +3,7 @@ import type { LocationQuery } from 'vue-router'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import SearchDiagnosticsPanel from '@/components/states/SearchDiagnosticsPanel.vue'
 import api from '@/api'
-import type { Context, RejectedSearchItem, SearchDiagnostics, SubtitleInfo } from '@/api/types'
+import type { Context, RejectedSearchItem, SearchDiagnostics } from '@/api/types'
 import {
   hasRuleConfigurationError,
   normalizeRejectedSearchItems,
@@ -12,8 +12,6 @@ import {
 import RejectedTorrentCard from '@/components/cards/RejectedTorrentCard.vue'
 import TorrentCard from '@/components/cards/TorrentCard.vue'
 import TorrentItem from '@/components/cards/TorrentItem.vue'
-import SubtitleCard from '@/components/cards/SubtitleCard.vue'
-import SubtitleItem from '@/components/cards/SubtitleItem.vue'
 import ProgressiveCardGrid from '@/components/misc/ProgressiveCardGrid.vue'
 import TorrentFilterBar from '@/components/filter/TorrentFilterBar.vue'
 import { useI18n } from '@/composables/useChineseText'
@@ -42,16 +40,14 @@ interface SearchParams {
   title: string
   year: string
   season: string
-  episode: string
   sites: string
-  result_type: string
 }
 
 interface LastSearchContextResponse {
   success?: boolean
   data?: {
     params?: Partial<SearchParams>
-    results?: Array<Context | SubtitleInfo>
+    results?: Context[]
     diagnostics?: unknown
     rejected_results?: unknown
   }
@@ -78,9 +74,7 @@ function createSearchParams(query: LocationQuery): SearchParams {
     title: query?.title?.toString() ?? '',
     year: query?.year?.toString() ?? '',
     season: query?.season?.toString() ?? '',
-    episode: query?.episode?.toString() ?? '',
     sites: query?.sites?.toString() ?? '',
-    result_type: query?.result_type?.toString() === 'subtitle' ? 'subtitle' : 'torrent',
   }
 }
 
@@ -92,9 +86,7 @@ function normalizeSearchParams(params?: Partial<SearchParams> | null): SearchPar
     title: params?.title?.toString() ?? '',
     year: params?.year?.toString() ?? '',
     season: params?.season?.toString() ?? '',
-    episode: params?.episode?.toString() ?? '',
     sites: params?.sites?.toString() ?? '',
-    result_type: params?.result_type?.toString() === 'subtitle' ? 'subtitle' : 'torrent',
   }
 }
 
@@ -223,12 +215,6 @@ const season = computed(() => activeSearchParams.value.season)
 // 搜索站点，以,分离多个
 const sites = computed(() => activeSearchParams.value.sites)
 
-// 搜索结果类型
-const resultType = computed(() => (activeSearchParams.value.result_type === 'subtitle' ? 'subtitle' : 'torrent'))
-
-// 是否为字幕搜索
-const isSubtitleSearch = computed(() => resultType.value === 'subtitle')
-
 // 视图类型，从localStorage中读取
 const viewType = ref<TorrentViewType>(normalizeTorrentViewType(localStorage.getItem('MPTorrentsViewType')))
 
@@ -259,9 +245,6 @@ const enableFilterAnimation = ref(true)
 
 // 原始数据列表（未筛选）
 const rawDataList = ref<Array<Context>>([])
-
-// 原始字幕数据列表
-const rawSubtitleDataList = ref<Array<SubtitleInfo>>([])
 
 // 筛选后的数据列表（用于行视图）
 const filteredRowDataList = ref<Array<Context>>([])
@@ -295,7 +278,7 @@ function resetBatchSelection() {
 
 function toggleBatchMode() {
   if (isBatchMode.value) resetBatchSelection()
-  else if (!isSubtitleSearch.value && visibleTorrentItems.value.length) isBatchMode.value = true
+  else if (visibleTorrentItems.value.length) isBatchMode.value = true
 }
 
 function toggleTorrentSelection(item: Context) {
@@ -382,9 +365,7 @@ const errorTitle = ref(t('resource.noData'))
 // 错误描述
 const errorDescription = ref(t('resource.noResourceFound'))
 
-const ruleConfigurationError = computed(
-  () => !isSubtitleSearch.value && hasRuleConfigurationError(searchDiagnostics.value),
-)
+const ruleConfigurationError = computed(() => hasRuleConfigurationError(searchDiagnostics.value))
 const displayErrorTitle = computed(() =>
   ruleConfigurationError.value ? t('resource.ruleConfigurationError') : errorTitle.value,
 )
@@ -405,32 +386,23 @@ const searchStreamDoneCloseDelay = 1500
 
 const streamTotalCount = ref(0)
 const streamPreviewDataList = ref<Array<Context>>([])
-const streamPreviewSubtitleDataList = ref<Array<SubtitleInfo>>([])
 
 // 搜索过程中还没有任何可展示结果时，显示骨架卡片，等搜索结束后再切换为空态。
 const isSearchLoading = computed(() => {
   if (!isSearchProgressVisible.value) return false
 
-  return isSubtitleSearch.value
-    ? rawSubtitleDataList.value.length === 0 && streamPreviewSubtitleDataList.value.length === 0
-    : rawDataList.value.length === 0 && streamPreviewDataList.value.length === 0
+  return rawDataList.value.length === 0 && streamPreviewDataList.value.length === 0
 })
 
 const displayResourceCount = computed(() =>
-  progressActive.value
-    ? streamTotalCount.value
-    : isSubtitleSearch.value
-      ? rawSubtitleDataList.value.length
-      : torrentFilter.totalFilteredCount.value,
+  progressActive.value ? streamTotalCount.value : torrentFilter.totalFilteredCount.value,
 )
 
 // 搜索中只显示进度区域，避免结果抬头和进度条同时占用顶部空间。
 const showResultHeader = computed(() => isRefreshed.value && !progressActive.value)
 
 let pendingStreamItems: Array<Context> = []
-let pendingSubtitleStreamItems: Array<SubtitleInfo> = []
 const streamReplaceBatchCollector = new SearchReplaceBatchCollector<Context>()
-const subtitleReplaceBatchCollector = new SearchReplaceBatchCollector<SubtitleInfo>()
 let streamFlushTimer: ReturnType<typeof setTimeout> | null = null
 let streamFinalResultApplied = false
 let pendingProgressText: string | null = null
@@ -454,8 +426,6 @@ watch([() => torrentFilter.sortField.value, () => torrentFilter.sortType.value],
 
 // 应用筛选
 function applyFilter() {
-  if (isSubtitleSearch.value) return
-
   if (viewType.value === 'row') {
     filteredRowDataList.value = torrentFilter.filterRowData(rawDataList.value)
   } else {
@@ -553,14 +523,11 @@ function clearStreamFlushTimer() {
 function clearStreamPreviewState(resetFinalState: boolean = false) {
   clearStreamFlushTimer()
   pendingStreamItems = []
-  pendingSubtitleStreamItems = []
   pendingProgressText = null
   pendingProgressValue = null
   pendingStreamTotalCount = null
   streamReplaceBatchCollector.reset()
-  subtitleReplaceBatchCollector.reset()
   streamPreviewDataList.value = []
-  streamPreviewSubtitleDataList.value = []
   if (resetFinalState) {
     streamFinalResultApplied = false
   }
@@ -583,15 +550,6 @@ function flushBufferedStreamState() {
   pendingProgressText = null
   pendingProgressValue = null
   pendingStreamTotalCount = null
-
-  if (pendingSubtitleStreamItems.length) {
-    streamPreviewSubtitleDataList.value = [...pendingSubtitleStreamItems, ...streamPreviewSubtitleDataList.value].slice(
-      0,
-      streamPreviewLimit,
-    )
-    pendingSubtitleStreamItems = []
-    isRefreshed.value = true
-  }
 
   if (!pendingStreamItems.length) return
 
@@ -629,28 +587,12 @@ function setSearchParam(params: URLSearchParams, key: string, value: unknown) {
 function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
   const isMediaSearch = /^[a-zA-Z]+:/.test(params.keyword)
   const url = getApiUrl(
-    params.result_type === 'subtitle'
-      ? isMediaSearch
-        ? `search/subtitle/media/${encodeURIComponent(params.keyword)}/stream`
-        : 'search/subtitle/title/stream'
-      : isMediaSearch
-        ? `search/media/${encodeURIComponent(params.keyword)}/stream`
-        : 'search/title/stream',
+    isMediaSearch ? `search/media/${encodeURIComponent(params.keyword)}/stream` : 'search/title/stream',
   )
   // NEO 前端固定简体中文；后端仍依赖 locale 选择搜索结果语言。
   setSearchParam(url.searchParams, 'locale', 'zh-CN')
 
-  if (params.result_type === 'subtitle' && isMediaSearch) {
-    setSearchParam(url.searchParams, 'mtype', params.type)
-    setSearchParam(url.searchParams, 'title', params.title)
-    setSearchParam(url.searchParams, 'year', params.year)
-    setSearchParam(url.searchParams, 'season', params.season)
-    setSearchParam(url.searchParams, 'episode', params.episode)
-    setSearchParam(url.searchParams, 'sites', params.sites)
-  } else if (params.result_type === 'subtitle') {
-    setSearchParam(url.searchParams, 'keyword', params.keyword)
-    setSearchParam(url.searchParams, 'sites', params.sites)
-  } else if (isMediaSearch) {
+  if (isMediaSearch) {
     setSearchParam(url.searchParams, 'mtype', params.type)
     setSearchParam(url.searchParams, 'area', params.area)
     setSearchParam(url.searchParams, 'title', params.title)
@@ -679,7 +621,6 @@ function resetSearchResults() {
   isRefreshed.value = false
   errorDescription.value = t('resource.noResourceFound')
   rawDataList.value = []
-  rawSubtitleDataList.value = []
   streamTotalCount.value = 0
   torrentFilter.clearAllFilters()
   applyFilter()
@@ -687,8 +628,12 @@ function resetSearchResults() {
 
 // 判断当前页面是否已经完成过一次带关键词的空结果搜索，避免 keep-alive 返回时自动重搜。
 function hasLoadedEmptySearchResult() {
-  const dataLength = isSubtitleSearch.value ? rawSubtitleDataList.value.length : rawDataList.value.length
-  return isRefreshed.value && !progressActive.value && dataLength === 0 && hasSearchKeyword(activeSearchParams.value)
+  return (
+    isRefreshed.value &&
+    !progressActive.value &&
+    rawDataList.value.length === 0 &&
+    hasSearchKeyword(activeSearchParams.value)
+  )
 }
 
 // 更新搜索进度
@@ -717,24 +662,11 @@ function setStreamResults(items: Context[]) {
   resetBatchSelection()
   clearStreamPreviewState()
   rawDataList.value = items
-  rawSubtitleDataList.value = []
   if (!progressActive.value) {
     streamTotalCount.value = items.length
   }
   isRefreshed.value = true
   applyFilter()
-}
-
-// 设置字幕搜索结果
-function setSubtitleStreamResults(items: SubtitleInfo[]) {
-  resetBatchSelection()
-  clearStreamPreviewState()
-  rawSubtitleDataList.value = items
-  rawDataList.value = []
-  if (!progressActive.value) {
-    streamTotalCount.value = items.length
-  }
-  isRefreshed.value = true
 }
 
 // 追加流式搜索预览结果
@@ -748,29 +680,11 @@ function appendStreamResults(items: Context[]) {
   scheduleStreamFlush()
 }
 
-// 追加流式字幕搜索预览结果
-function appendSubtitleStreamResults(items: SubtitleInfo[]) {
-  if (!items.length) return
-
-  pendingSubtitleStreamItems.unshift(...items)
-  if (pendingSubtitleStreamItems.length > streamPreviewBufferLimit) {
-    pendingSubtitleStreamItems = pendingSubtitleStreamItems.slice(0, streamPreviewBufferLimit)
-  }
-  scheduleStreamFlush()
-}
-
 // 完整最终结果到达后原子替换资源列表。
 function applyFinalStreamResults(items: Context[]) {
   streamFinalResultApplied = true
   flushBufferedStreamState()
   setStreamResults(items)
-}
-
-// 应用最终字幕搜索结果
-function applyFinalSubtitleStreamResults(items: SubtitleInfo[]) {
-  streamFinalResultApplied = true
-  flushBufferedStreamState()
-  setSubtitleStreamResults(items)
 }
 
 // 获取磁力链接的key
@@ -780,16 +694,6 @@ function getTorrentItemKey(item: Context, index = 0) {
     item.torrent_info?.enclosure ||
     `${item.torrent_info?.site_name || ''}-${item.torrent_info?.title || ''}-${item.torrent_info?.description || ''}` ||
     `torrent-${index}`
-  )
-}
-
-// 获取字幕结果的key
-function getSubtitleItemKey(item: SubtitleInfo, index: number) {
-  return (
-    item.enclosure ||
-    item.page_url ||
-    `${item.site_name || ''}-${item.subtitle_id || ''}-${item.title || ''}` ||
-    `subtitle-${index}`
   )
 }
 
@@ -805,33 +709,10 @@ function handleSearchStreamMessage(eventData: { [key: string]: any }) {
     return
   }
 
-  if (isSearchReplaceBatchEvent<Context | SubtitleInfo>(eventData)) {
-    if (isSubtitleSearch.value) {
-      const completedItems = subtitleReplaceBatchCollector.append(eventData)
-      updateSearchProgress(eventData, completedItems !== null)
-      if (completedItems) applyFinalSubtitleStreamResults(completedItems)
-    } else {
-      const completedItems = streamReplaceBatchCollector.append(eventData)
-      updateSearchProgress(eventData, completedItems !== null)
-      if (completedItems) applyFinalStreamResults(completedItems)
-    }
-    return
-  }
-
-  if (isSubtitleSearch.value) {
-    const subtitleItems = Array.isArray(eventData.items) ? (eventData.items as SubtitleInfo[]) : []
-    if (eventData.type === 'append') {
-      updateSearchProgress(eventData)
-      appendSubtitleStreamResults(subtitleItems)
-    } else if (eventData.type === 'replace') {
-      updateSearchProgress(eventData, true)
-      applyFinalSubtitleStreamResults(subtitleItems)
-    } else if (eventData.type === 'done' && subtitleItems.length > 0 && !streamFinalResultApplied) {
-      updateSearchProgress(eventData, true)
-      applyFinalSubtitleStreamResults(subtitleItems)
-    } else {
-      updateSearchProgress(eventData)
-    }
+  if (isSearchReplaceBatchEvent<Context>(eventData)) {
+    const completedItems = streamReplaceBatchCollector.append(eventData)
+    updateSearchProgress(eventData, completedItems !== null)
+    if (completedItems) applyFinalStreamResults(completedItems)
     return
   }
 
@@ -864,11 +745,7 @@ async function searchByRequest(params: SearchParams, requestToken: string | unde
   resetRejectedResults()
   errorDescription.value = t('resource.noResourceFound')
   streamTotalCount.value = items.length
-  if (params.result_type === 'subtitle') {
-    setSubtitleStreamResults(items as SubtitleInfo[])
-  } else {
-    setStreamResults(items as Context[])
-  }
+  setStreamResults(items)
   return true
 }
 
@@ -877,27 +754,7 @@ async function requestSearchResults(params: SearchParams, requestToken?: string)
   let result: { [key: string]: any }
   const isMediaSearch = /^[a-zA-Z]+:/.test(params.keyword)
   // 如果keyword的格式是 xxxx:xxxxx 且:前面的xxxx为字符，则按照媒体ID格式搜索
-  if (params.result_type === 'subtitle' && isMediaSearch) {
-    result = await api.get(`search/subtitle/media/${params.keyword}`, {
-      params: {
-        mtype: params.type,
-        title: params.title,
-        year: params.year,
-        season: params.season,
-        episode: params.episode,
-        sites: params.sites,
-        _ts: requestToken,
-      },
-    })
-  } else if (params.result_type === 'subtitle') {
-    result = await api.get('search/subtitle/title', {
-      params: {
-        keyword: params.keyword,
-        sites: params.sites,
-        _ts: requestToken,
-      },
-    })
-  } else if (isMediaSearch) {
+  if (isMediaSearch) {
     result = await api.get(`search/media/${params.keyword}`, {
       params: {
         mtype: params.type,
@@ -921,7 +778,7 @@ async function requestSearchResults(params: SearchParams, requestToken?: string)
   }
 
   if (result && result.success) {
-    return (result.data || []) as Array<Context | SubtitleInfo>
+    return (result.data || []) as Context[]
   }
 
   throw new Error(result?.message || t('resource.noResourceFound'))
@@ -1022,7 +879,7 @@ async function fetchData(options: { force?: boolean; params?: SearchParams; sile
     rememberSearchParams(currentSearchParams)
   }
   const requestToken = options.force || Boolean(currentSearchParams.keyword) ? createSearchRequestToken() : undefined
-  const hasCurrentResults = isSubtitleSearch.value ? rawSubtitleDataList.value.length > 0 : rawDataList.value.length > 0
+  const hasCurrentResults = rawDataList.value.length > 0
   const silentRefresh = Boolean(options.silent && isRefreshed.value && hasCurrentResults)
 
   try {
@@ -1031,14 +888,10 @@ async function fetchData(options: { force?: boolean; params?: SearchParams; sile
       // 查询上次搜索结果，并同步可重放的搜索参数
       const results = await fetchLastSearchContext()
       if (requestId !== activeSearchRequestId) return
-      if (activeSearchParams.value.result_type === 'subtitle') {
-        setSubtitleStreamResults((results || []) as SubtitleInfo[])
-      } else {
-        setStreamResults((results || []) as Context[])
-      }
+      setStreamResults((results || []) as Context[])
     } else if (silentRefresh) {
       // keep-alive 重新进入时后台刷新，旧结果继续显示，等新结果完整返回后一次性替换。
-      let results: Array<Context | SubtitleInfo>
+      let results: Context[]
       try {
         results = await requestSearchResults(currentSearchParams, requestToken)
       } catch (error) {
@@ -1051,11 +904,7 @@ async function fetchData(options: { force?: boolean; params?: SearchParams; sile
       searchDiagnostics.value = null
       resetRejectedResults()
       streamTotalCount.value = results.length
-      if (currentSearchParams.result_type === 'subtitle') {
-        setSubtitleStreamResults(results as SubtitleInfo[])
-      } else {
-        setStreamResults(results as Context[])
-      }
+      setStreamResults(results)
     } else {
       resetSearchResults()
       startLoadingProgress()
@@ -1113,13 +962,6 @@ async function refreshSearch() {
 
 // 计算当前显示的数据是否有数据
 const hasData = computed(() => {
-  if (isSubtitleSearch.value) {
-    if (progressActive.value) {
-      return streamPreviewSubtitleDataList.value.length > 0 || rawSubtitleDataList.value.length > 0
-    }
-    return rawSubtitleDataList.value.length > 0
-  }
-
   if (progressActive.value) {
     return streamPreviewDataList.value.length > 0 || rawDataList.value.length > 0
   }
@@ -1241,7 +1083,7 @@ onUnmounted(() => {
     <div v-if="showResultHeader" class="resource-page-header d-flex justify-space-between align-center mb-3">
       <div class="resource-page-header__copy">
         <VPageContentTitle
-          :title="isSubtitleSearch ? t('resource.subtitleSearchResults') : t('resource.searchResults')"
+          :title="t('resource.searchResults')"
           class="resource-page-header__title my-0"
           style="margin-block: 0"
         />
@@ -1287,7 +1129,7 @@ onUnmounted(() => {
           </template>
           <template v-else>
             <VBtn
-              v-if="!isSubtitleSearch && visibleTorrentItems.length > 0"
+              v-if="visibleTorrentItems.length > 0"
               size="small"
               variant="outlined"
               rounded="lg"
@@ -1328,7 +1170,7 @@ onUnmounted(() => {
     </div>
 
     <SearchDiagnosticsPanel
-      v-if="isRefreshed && !progressActive && !isSubtitleSearch && searchDiagnostics"
+      v-if="isRefreshed && !progressActive && searchDiagnostics"
       :diagnostics="searchDiagnostics"
       :rejected-count="rejectedItems.length"
       :show-rejected="showRejected"
@@ -1339,7 +1181,7 @@ onUnmounted(() => {
     <div v-if="isRefreshed && hasData" class="search-results-container">
       <!-- 筛选栏 -->
       <TorrentFilterBar
-        v-if="!progressActive && !isSubtitleSearch"
+        v-if="!progressActive"
         :filter-form="torrentFilter.filterForm"
         :filter-options="torrentFilter.filterOptions"
         :sort-field="torrentFilter.sortField.value"
@@ -1362,29 +1204,7 @@ onUnmounted(() => {
         <!-- 卡片视图模式 -->
         <div v-if="viewType === 'card'" key="card">
           <div
-            v-if="isSubtitleSearch && progressActive && streamPreviewSubtitleDataList.length > 0"
-            class="grid gap-4 grid-torrent-card items-start"
-          >
-            <SubtitleCard
-              v-for="(item, index) in streamPreviewSubtitleDataList"
-              :key="getSubtitleItemKey(item, index)"
-              :subtitle="item"
-              class="stream-result-item"
-            />
-          </div>
-          <ProgressiveCardGrid
-            v-else-if="isSubtitleSearch && rawSubtitleDataList.length > 0"
-            :items="rawSubtitleDataList"
-            :get-item-key="getSubtitleItemKey"
-            :min-item-width="300"
-            :estimated-item-height="320"
-          >
-            <template #default="{ item }">
-              <SubtitleCard :subtitle="item" />
-            </template>
-          </ProgressiveCardGrid>
-          <div
-            v-else-if="!isSubtitleSearch && progressActive && streamPreviewDataList.length > 0"
+            v-if="progressActive && streamPreviewDataList.length > 0"
             class="grid gap-4 grid-torrent-card items-start"
           >
             <TorrentCard
@@ -1413,11 +1233,7 @@ onUnmounted(() => {
           </ProgressiveCardGrid>
           <!-- 无结果时显示 -->
           <NoDataFound
-            v-if="
-              !progressActive &&
-              ((isSubtitleSearch && rawSubtitleDataList.length === 0) ||
-                (!isSubtitleSearch && filteredCardDataList.length === 0))
-            "
+            v-if="!progressActive && filteredCardDataList.length === 0"
             icon="mdi-file-search-outline"
             :error-title="t('common.noData')"
             :error-description="t('torrent.noResults')"
@@ -1429,47 +1245,12 @@ onUnmounted(() => {
           <VCard class="resource-list-container">
             <!-- 无结果时显示 -->
             <NoDataFound
-              v-if="
-                !progressActive &&
-                ((isSubtitleSearch && rawSubtitleDataList.length === 0) ||
-                  (!isSubtitleSearch && filteredRowDataList.length === 0))
-              "
+              v-if="!progressActive && filteredRowDataList.length === 0"
               icon="mdi-file-search-outline"
               :error-title="t('common.noData')"
               :error-description="t('torrent.noResults')"
             />
-            <div
-              v-else-if="isSubtitleSearch && progressActive && streamPreviewSubtitleDataList.length > 0"
-              class="resource-list overflow-visible"
-            >
-              <div
-                v-for="(item, index) in streamPreviewSubtitleDataList"
-                :key="getSubtitleItemKey(item, index)"
-                class="stream-result-item"
-              >
-                <SubtitleItem :subtitle="item" />
-                <VDivider v-if="index < streamPreviewSubtitleDataList.length - 1" class="my-2" />
-              </div>
-            </div>
-            <div v-else-if="isSubtitleSearch && rawSubtitleDataList.length > 0" class="resource-list">
-              <ProgressiveCardGrid
-                :items="rawSubtitleDataList"
-                :columns="1"
-                :gap="8"
-                :estimated-item-height="190"
-                :overscan-rows="6"
-                :get-item-key="getSubtitleItemKey"
-              >
-                <template #default="{ item, index }">
-                  <SubtitleItem :subtitle="item" />
-                  <VDivider v-if="index < rawSubtitleDataList.length - 1" class="my-2" />
-                </template>
-              </ProgressiveCardGrid>
-            </div>
-            <div
-              v-else-if="!isSubtitleSearch && progressActive && streamPreviewDataList.length > 0"
-              class="resource-list overflow-visible"
-            >
+            <div v-else-if="progressActive && streamPreviewDataList.length > 0" class="resource-list overflow-visible">
               <div
                 v-for="(item, index) in streamPreviewDataList"
                 :key="getTorrentItemKey(item, index)"
@@ -1478,7 +1259,7 @@ onUnmounted(() => {
                 <TorrentItem :torrent="item" />
               </div>
             </div>
-            <div v-else-if="!isSubtitleSearch && filteredRowDataList.length > 0" class="resource-list">
+            <div v-else-if="filteredRowDataList.length > 0" class="resource-list">
               <ProgressiveCardGrid
                 :items="filteredRowDataList"
                 :columns="1"

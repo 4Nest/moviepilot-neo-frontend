@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { debounce } from 'lodash-es'
+import DiscoverFilterToolbar from '@/components/discover/DiscoverFilterToolbar.vue'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import { useI18n } from '@/composables/useChineseText'
+import { useDiscoverPreferences } from '@/composables/useDiscoverPreferences'
 
 const { t } = useI18n()
+const { excludeShortDrama, filtersExpanded, toggleFiltersExpanded } = useDiscoverPreferences()
 
 // 电影或者电视剧 movies/tvs
 const type = ref('movies')
@@ -21,6 +24,9 @@ const filterParams = reactive({
 })
 
 const voteCountInput = ref<number | string>(filterParams.vote_count)
+const selectedYear = ref<string | undefined>('')
+const withNetworks = ref<string | undefined>('')
+const includeUpcoming = ref(false)
 
 // TMDB 电影排序字典
 const tmdbSortDict: Record<string, string> = {
@@ -85,6 +91,40 @@ const tmdbTvGenreDict: Record<string, string> = {
   '37': t('tmdb.genreType.western'),
 }
 
+// TMDB 电视剧精选流媒体与播出平台（数组保序，避免数字键自动升序）
+const tmdbTvNetworkItems: Array<{ label: string; value: string }> = [
+  { value: '213', label: 'Netflix' },
+  { value: '2739', label: 'Disney+' },
+  { value: '2552', label: 'Apple TV+' },
+  { value: '49|3186', label: 'HBO / Max' },
+  { value: '1024', label: 'Prime Video' },
+  { value: '453', label: 'Hulu' },
+  { value: '2007', label: t('tmdb.networkType.tencent') },
+  { value: '1330', label: t('tmdb.networkType.iqiyi') },
+  { value: '1419', label: t('tmdb.networkType.youku') },
+  { value: '1631', label: t('tmdb.networkType.mangotv') },
+  { value: '1605', label: t('tmdb.networkType.bilibili') },
+  { value: '1366', label: 'CCTV' },
+]
+
+// 近 10 年单年 + 年代范围
+const currentYear = new Date().getFullYear()
+const yearOptions: Array<{ label: string; value: string; start: string; end: string }> = [
+  ...Array.from({ length: 10 }, (_, index) => {
+    const year = String(currentYear - index)
+    return {
+      value: year,
+      label: year,
+      start: `${year}-01-01`,
+      end: `${year}-12-31`,
+    }
+  }),
+  { value: '2020s', label: t('tmdb.yearType.2020s'), start: '2020-01-01', end: '2029-12-31' },
+  { value: '2010s', label: t('tmdb.yearType.2010s'), start: '2010-01-01', end: '2019-12-31' },
+  { value: '2000s', label: t('tmdb.yearType.2000s'), start: '2000-01-01', end: '2009-12-31' },
+  { value: '1990s', label: t('tmdb.yearType.1990s'), start: '1990-01-01', end: '1999-12-31' },
+]
+
 // TMDB原始语言字典（主要语言）
 const tmdbLanguageDict = {
   'zh': t('tmdb.languageType.zh'),
@@ -102,12 +142,88 @@ const tmdbLanguageDict = {
   'th': t('tmdb.languageType.th'),
 }
 
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const isDateDescSort = computed(
+  () => filterParams.sort_by === 'release_date.desc' || filterParams.sort_by === 'first_air_date.desc',
+)
+
+const resolvedDateBounds = computed(() => {
+  const matchedYear = selectedYear.value ? yearOptions.find(item => item.value === selectedYear.value) : undefined
+  const today = formatLocalDate(new Date())
+
+  if (matchedYear) {
+    let end = matchedYear.end
+    if (isDateDescSort.value && !includeUpcoming.value && matchedYear.start <= today && end > today) {
+      end = today
+    }
+    return {
+      release_date: matchedYear.start,
+      release_date_lte: end,
+    }
+  }
+
+  if (isDateDescSort.value && !includeUpcoming.value) {
+    return {
+      release_date: '',
+      release_date_lte: today,
+    }
+  }
+
+  return {
+    release_date: '',
+    release_date_lte: '',
+  }
+})
+
+const requestParams = computed<Record<string, unknown>>(() => {
+  const { release_date, release_date_lte } = resolvedDateBounds.value
+  const params: Record<string, unknown> = {
+    sort_by: filterParams.sort_by,
+    with_genres: filterParams.with_genres,
+    with_original_language: filterParams.with_original_language,
+    with_keywords: filterParams.with_keywords,
+    with_watch_providers: filterParams.with_watch_providers,
+    vote_average: filterParams.vote_average,
+    vote_count: filterParams.vote_count,
+    release_date,
+  }
+  if (release_date_lte) {
+    params.release_date_lte = release_date_lte
+  }
+  if (type.value === 'tvs') {
+    if (withNetworks.value) {
+      params.with_networks = withNetworks.value
+    }
+    params.exclude_short_drama = excludeShortDrama.value
+  }
+  return params
+})
+
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (filterParams.sort_by && filterParams.sort_by !== 'popularity.desc') count += 1
+  if (filterParams.with_genres) count += 1
+  if (type.value === 'tvs' && withNetworks.value) count += 1
+  if (selectedYear.value) count += 1
+  if (filterParams.with_original_language) count += 1
+  if (Number(filterParams.vote_average) > 0) count += 1
+  if (String(filterParams.vote_count) !== '10') count += 1
+  if (isDateDescSort.value && includeUpcoming.value) count += 1
+  return count
+})
+
 // 当前Key
 const currentKey = ref(0)
 let lastCommittedType = type.value
 
 function buildQuerySignature() {
-  return JSON.stringify([type.value, filterParams])
+  return JSON.stringify([type.value, requestParams.value])
 }
 
 let lastQuerySignature = buildQuerySignature()
@@ -139,8 +255,22 @@ function handleSliderKeyup(event: KeyboardEvent) {
   debouncedSliderKeyupUpdate(parsed)
 }
 
+function resetFilters() {
+  debouncedSliderKeyupUpdate.cancel()
+  debouncedVoteCountUpdate.cancel()
+  filterParams.sort_by = 'popularity.desc'
+  filterParams.with_genres = ''
+  filterParams.with_original_language = ''
+  filterParams.vote_average = 0
+  filterParams.vote_count = 10
+  voteCountInput.value = 10
+  selectedYear.value = ''
+  withNetworks.value = ''
+  includeUpcoming.value = false
+}
+
 // 合并类型与过滤参数联动归一化，避免同 tick 双次递增 currentKey 频闪
-watch([type, filterParams], () => {
+watch([type, filterParams, selectedYear, withNetworks, includeUpcoming, excludeShortDrama], () => {
   if (type.value !== lastCommittedType) {
     debouncedSliderKeyupUpdate.flush()
     debouncedVoteCountUpdate.flush()
@@ -157,6 +287,9 @@ watch([type, filterParams], () => {
     }
     if (filterParams.with_genres && !tmdbMovieGenreDict[filterParams.with_genres]) {
       filterParams.with_genres = ''
+    }
+    if (withNetworks.value) {
+      withNetworks.value = ''
     }
   } else if (type.value === 'tvs') {
     if (!tmdbTvSortDict[filterParams.sort_by]) {
@@ -182,7 +315,7 @@ onUnmounted(() => {
 
 <template>
   <div class="discover-filter-panel">
-    <div class="discover-filter-row">
+    <div class="discover-filter-row discover-filter-row--header">
       <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.type') }}</VLabel>
       </div>
@@ -208,6 +341,14 @@ onUnmounted(() => {
           {{ t('mediaType.tv') }}
         </VChip>
       </VChipGroup>
+      <DiscoverFilterToolbar
+        v-model:exclude-short-drama="excludeShortDrama"
+        :show-short-drama-toggle="type === 'tvs'"
+        :active-filter-count="activeFilterCount"
+        :expanded="filtersExpanded"
+        @reset="resetFilters"
+        @toggle-expand="toggleFiltersExpanded"
+      />
     </div>
     <div class="discover-filter-row">
       <div class="discover-filter-label">
@@ -227,8 +368,20 @@ onUnmounted(() => {
           {{ value }}
         </VChip>
       </VChipGroup>
+      <button
+        v-if="isDateDescSort"
+        type="button"
+        class="discover-upcoming-chip"
+        :class="{ 'discover-upcoming-chip--active': includeUpcoming }"
+        :aria-pressed="includeUpcoming"
+        data-testid="tmdb-include-upcoming"
+        @click="includeUpcoming = !includeUpcoming"
+      >
+        <VIcon :icon="includeUpcoming ? 'mdi-calendar-check-outline' : 'mdi-calendar-clock-outline'" size="13" />
+        <span>{{ t('tmdb.includeUpcoming') }}</span>
+      </button>
     </div>
-    <div class="discover-filter-row">
+    <div v-show="filtersExpanded" class="discover-filter-row">
       <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.genre') }}</VLabel>
       </div>
@@ -247,7 +400,45 @@ onUnmounted(() => {
         </VChip>
       </VChipGroup>
     </div>
-    <div class="discover-filter-row">
+    <div v-if="type === 'tvs'" v-show="filtersExpanded" class="discover-filter-row">
+      <div class="discover-filter-label">
+        <VLabel>{{ t('tmdb.network') }}</VLabel>
+      </div>
+      <VChipGroup v-model="withNetworks" class="discover-chip-group">
+        <VChip
+          v-for="item in tmdbTvNetworkItems"
+          :key="item.value"
+          :variant="withNetworks == item.value ? 'tonal' : 'text'"
+          :color="withNetworks == item.value ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="item.value"
+          class="discover-filter-chip"
+        >
+          {{ item.label }}
+        </VChip>
+      </VChipGroup>
+    </div>
+    <div v-show="filtersExpanded" class="discover-filter-row">
+      <div class="discover-filter-label">
+        <VLabel>{{ t('tmdb.year') }}</VLabel>
+      </div>
+      <VChipGroup v-model="selectedYear" class="discover-chip-group">
+        <VChip
+          v-for="item in yearOptions"
+          :key="item.value"
+          :variant="selectedYear == item.value ? 'tonal' : 'text'"
+          :color="selectedYear == item.value ? 'primary' : undefined"
+          rounded="lg"
+          filter
+          :value="item.value"
+          class="discover-filter-chip"
+        >
+          {{ item.label }}
+        </VChip>
+      </VChipGroup>
+    </div>
+    <div v-show="filtersExpanded" class="discover-filter-row">
       <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.language') }}</VLabel>
       </div>
@@ -266,7 +457,7 @@ onUnmounted(() => {
         </VChip>
       </VChipGroup>
     </div>
-    <div class="discover-filter-row discover-filter-row--slider">
+    <div v-show="filtersExpanded" class="discover-filter-row discover-filter-row--slider">
       <div class="discover-filter-label">
         <VLabel>{{ t('tmdb.rating') }}</VLabel>
       </div>
@@ -306,7 +497,7 @@ onUnmounted(() => {
   </div>
 
   <div>
-    <MediaCardListView :key="currentKey" :apipath="`discover/tmdb_${type}`" :params="filterParams" />
+    <MediaCardListView :key="currentKey" :apipath="`discover/tmdb_${type}`" :params="requestParams" />
   </div>
 </template>
 
@@ -324,6 +515,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   min-block-size: 28px;
+}
+
+.discover-filter-row--header {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .discover-filter-row--slider {
@@ -370,6 +566,40 @@ onUnmounted(() => {
 
 .discover-filter-chip:deep(.v-chip--selected),
 .discover-filter-chip.v-chip--selected {
+  font-weight: 600;
+}
+
+.discover-upcoming-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.14));
+  border-radius: 6px;
+  background-color: transparent;
+  block-size: 26px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding-inline: 8px;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+  white-space: nowrap;
+}
+
+.discover-upcoming-chip:hover {
+  border-color: rgba(var(--v-theme-on-surface), 0.24);
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+}
+
+.discover-upcoming-chip--active {
+  border-color: rgba(var(--v-theme-primary), 0.28);
+  background-color: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
   font-weight: 600;
 }
 

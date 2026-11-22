@@ -461,23 +461,24 @@ describe('MediaDetailView detail and actions', () => {
     expect(screen.queryByLabelText('媒体入口 类似')).not.toBeInTheDocument()
   })
 
-  it('routes subtitle searches directly when no sites are enabled', async () => {
-    const media = createMediaInfo({ season: 2, title: '字幕剧', tmdb_id: 8501, type: '电视剧' })
+  it('does not render subtitle search button and routes title resource searches directly when no sites are enabled', async () => {
+    const user = userEvent.setup()
+    const media = createMediaInfo({ season: 2, title: '资源标题剧', tmdb_id: 8501, type: '电视剧' })
     await renderDetail({ media, type: '电视剧' })
 
-    await fireEvent.click(await screen.findByRole('button', { name: /搜索字幕/ }))
+    expect(screen.queryByRole('button', { name: /搜索字幕/ })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: /搜索资源/ }))
+    await user.click(await screen.findByText('标题'))
 
     await waitFor(() => expect(mocks.routerPush).toHaveBeenCalledOnce())
     expect(mocks.routerPush).toHaveBeenCalledWith({
       path: '/resource',
       query: {
         area: 'title',
-        episode: null,
         keyword: 'tmdb:8501',
-        result_type: 'subtitle',
         season: 2,
         sites: '',
-        title: '字幕剧',
+        title: '资源标题剧',
         type: '电视剧',
         year: '2026',
       },
@@ -497,9 +498,7 @@ describe('MediaDetailView detail and actions', () => {
       path: '/resource',
       query: {
         area: 'imdbid',
-        episode: null,
         keyword: 'tmdb:8502',
-        result_type: 'torrent',
         season: 3,
         sites: '',
         title: '资源剧',
@@ -510,10 +509,12 @@ describe('MediaDetailView detail and actions', () => {
   })
 
   it('opens site selection and routes with the selected sites', async () => {
+    const user = userEvent.setup()
     const site = createSubscribeSite({ id: 91, is_active: true, name: '搜索站点' })
     await renderDetail({ selectedSites: [91], sites: [site] })
 
-    await fireEvent.click(await screen.findByRole('button', { name: /搜索字幕/ }))
+    await user.click(await screen.findByRole('button', { name: /搜索资源/ }))
+    await user.click(await screen.findByText('标题'))
 
     await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
     const [, props, events] = mocks.openSharedDialog.mock.calls[0] as [
@@ -526,25 +527,28 @@ describe('MediaDetailView detail and actions', () => {
     events.search([91])
     expect(mocks.routerPush).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: expect.objectContaining({ result_type: 'subtitle', sites: '91' }),
+        query: expect.objectContaining({ area: 'title', sites: '91' }),
       }),
     )
   })
 
   it('continues to resource search when site settings fail to load', async () => {
+    const user = userEvent.setup()
     await renderDetail()
     server.use(
       http.get(siteListUrl, () => HttpResponse.json({ message: '站点失败' }, { status: 500 })),
       http.get(selectedSitesUrl, () => HttpResponse.json({ message: '设置失败' }, { status: 500 })),
     )
 
-    await fireEvent.click(screen.getByRole('button', { name: /搜索字幕/ }))
+    await user.click(screen.getByRole('button', { name: /搜索资源/ }))
+    await user.click(await screen.findByText('标题'))
 
     await waitFor(() => expect(mocks.routerPush).toHaveBeenCalledOnce())
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
   })
 
   it('opens site selection with an empty selection when the setting has no value', async () => {
+    const user = userEvent.setup()
     const site = createSubscribeSite({ id: 92, is_active: true, name: '空设置站点' })
     await renderDetail()
     server.use(
@@ -552,7 +556,8 @@ describe('MediaDetailView detail and actions', () => {
       http.get(selectedSitesUrl, () => HttpResponse.json({ data: {}, success: true })),
     )
 
-    await fireEvent.click(screen.getByRole('button', { name: /搜索字幕/ }))
+    await user.click(screen.getByRole('button', { name: /搜索资源/ }))
+    await user.click(await screen.findByText('标题'))
 
     await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
     const [, props] = mocks.openSharedDialog.mock.calls[0] as [unknown, { selected: number[]; sites: Site[] }]
@@ -1007,13 +1012,14 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
       ),
     )
 
-    const subtitleBtn = await screen.findByRole('button', { name: /搜索字幕/ })
-    const resourceBtn = screen.getByRole('button', { name: /搜索资源/ })
-    await fireEvent.click(subtitleBtn)
-    await waitFor(() => expect(subtitleBtn).toBeDisabled())
-    expect(resourceBtn).toBeDisabled()
+    const user = userEvent.setup()
+    const resourceBtn = await screen.findByRole('button', { name: /搜索资源/ })
+    expect(screen.queryByRole('button', { name: /搜索字幕/ })).not.toBeInTheDocument()
+    await user.click(resourceBtn)
+    await user.click(await screen.findByText('标题'))
+    await waitFor(() => expect(resourceBtn).toBeDisabled())
     siteGate.resolve([])
-    await waitFor(() => expect(subtitleBtn).not.toBeDisabled())
+    await waitFor(() => expect(resourceBtn).not.toBeDisabled())
 
     const playBtn = screen.getByRole('button', { name: /在线播放/ })
     await fireEvent.click(playBtn)

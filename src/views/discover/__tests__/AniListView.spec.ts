@@ -43,7 +43,7 @@ describe('AniListView', () => {
     })
   })
 
-  it('uses the shared chip filter pattern and forwards selected values', async () => {
+  it('uses the shared chip filter pattern, forwards selected values, and supports reset and collapse', async () => {
     const user = userEvent.setup()
     await renderView()
 
@@ -88,5 +88,27 @@ describe('AniListView', () => {
         },
       })
     })
+
+    const resetBtn = screen.getByTestId('discover-filter-reset')
+    expect(resetBtn).toHaveTextContent('6')
+    await user.click(resetBtn)
+
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList)).toEqual({
+        apipath: 'anilist/discover',
+        params: {
+          sort: 'POPULARITY_DESC',
+          genre: null,
+          format: null,
+          season: null,
+          season_year: null,
+          status: null,
+          country: null,
+        },
+      })
+    })
+
+    await user.click(screen.getByTestId('discover-filter-collapse'))
+    expect(screen.getByText('奇幻')).not.toBeVisible()
   })
 })

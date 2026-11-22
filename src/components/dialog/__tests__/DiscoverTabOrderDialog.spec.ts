@@ -62,12 +62,13 @@ function createSource(name: string, prefix: string): DiscoverSource {
   }
 }
 
-async function renderDialog(tabs: DiscoverSource[], enabled?: Record<string, boolean>) {
+async function renderDialog(tabs: DiscoverSource[], enabled?: Record<string, boolean>, defaultTabs?: DiscoverSource[]) {
   const close = vi.fn()
   const save = vi.fn()
   const updateModelValue = vi.fn()
   const result = await renderWithProviders(DiscoverTabOrderDialog, {
     props: {
+      defaultTabs,
       enabled,
       modelValue: true,
       onClose: close,
@@ -104,7 +105,7 @@ describe('DiscoverTabOrderDialog', () => {
     expect(payload.tabs[0].filter_params).toStrictEqual(tabs[1].filter_params)
   })
 
-  it('toggles visibility switches, hides badge on disabled items, and resets both order and switches', async () => {
+  it('toggles visibility switches, hides badge on disabled items, prevents saving zero enabled tabs, and resets both order and switches', async () => {
     const tabs = [createSource('来源甲', 'source-a'), createSource('来源乙', 'source-b')]
     const user = userEvent.setup()
     const { save } = await renderDialog(tabs, { 'source-a': true, 'source-b': false })
@@ -113,12 +114,15 @@ describe('DiscoverTabOrderDialog', () => {
     const switchB = screen.getByRole('checkbox', { name: '来源乙' }) as HTMLInputElement
     expect(switchA.checked).toBe(true)
     expect(switchB.checked).toBe(false)
+    expect(screen.getByTestId('discover-enabled-count')).toHaveTextContent('已启用 1 / 共 2 个')
     expect(document.querySelectorAll('.setting-order-badge')).toHaveLength(1)
 
     await user.click(switchA)
     await user.click(screen.getByRole('button', { name: '反转顺序' }))
     expect(switchA.checked).toBe(false)
     expect(document.querySelectorAll('.setting-order-badge')).toHaveLength(0)
+    expect(screen.getByTestId('discover-keep-one-warning')).toHaveTextContent('请至少保留 1 个启用的探索源')
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: '重置' }))
     expect(switchA.checked).toBe(true)
@@ -130,6 +134,39 @@ describe('DiscoverTabOrderDialog', () => {
     const payload = save.mock.calls[0][0] as DiscoverTabOrderSavePayload
     expect(payload.tabs.map(item => item.mediaid_prefix)).toEqual(['source-a', 'source-b'])
     expect(payload.enabled).toEqual({ 'source-a': true, 'source-b': true })
+  })
+
+  it('distinguishes built-in vs plugin badges and supports enable-all and restore-default actions', async () => {
+    const defaultTabs = [
+      createSource('TheMovieDb', 'themoviedb'),
+      createSource('哔哩哔哩', 'bilibili'),
+      createSource('第三方榜单', 'ext-plugin'),
+    ]
+    const reorderedTabs = [defaultTabs[2], defaultTabs[0], defaultTabs[1]]
+    const user = userEvent.setup()
+    const { save } = await renderDialog(
+      reorderedTabs,
+      { themoviedb: true, bilibili: false, 'ext-plugin': false },
+      defaultTabs,
+    )
+
+    expect(screen.getByTestId('discover-enabled-count')).toHaveTextContent('已启用 1 / 共 3 个')
+    expect(screen.getAllByText('内置')).toHaveLength(2)
+    expect(screen.getAllByText('扩展插件')).toHaveLength(1)
+
+    // 点击「全部开启」开启所有开关，保持当前顺序
+    await user.click(screen.getByRole('button', { name: '全部开启' }))
+    expect(screen.getByTestId('discover-enabled-count')).toHaveTextContent('已启用 3 / 共 3 个')
+
+    // 点击「恢复默认」恢复默认排序且全部开启
+    await user.click(screen.getByRole('checkbox', { name: '哔哩哔哩' }))
+    await user.click(screen.getByRole('button', { name: '恢复默认' }))
+    expect(screen.getByTestId('discover-enabled-count')).toHaveTextContent('已启用 3 / 共 3 个')
+
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    const payload = save.mock.calls[0][0] as DiscoverTabOrderSavePayload
+    expect(payload.tabs.map(item => item.mediaid_prefix)).toEqual(['themoviedb', 'bilibili', 'ext-plugin'])
+    expect(payload.enabled).toEqual({ themoviedb: true, bilibili: true, 'ext-plugin': true })
   })
 
   it('resets the local order when the tabs prop changes', async () => {

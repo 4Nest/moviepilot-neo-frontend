@@ -37,6 +37,7 @@ describe('DoubanView', () => {
       params: {
         sort: 'U',
         tags: '',
+        exclude_short_drama: true,
       },
     })
     const yearRow = container.querySelectorAll('.discover-filter-row')[4]
@@ -61,6 +62,7 @@ describe('DoubanView', () => {
         params: {
           sort: 'U',
           tags: '喜剧,日本,2020年代',
+          exclude_short_drama: true,
         },
       })
     })
@@ -77,9 +79,11 @@ describe('DoubanView', () => {
     await waitFor(() => expect(latestMediaListRequest(mediaList).params.tags).toBe(''))
   })
 
-  it('preserves filters across type changes and enforces mandatory type and sort chip groups', async () => {
+  it('preserves filters across type changes, passes exclude_short_drama in movie and TV modes, and supports reset and collapse', async () => {
     const user = userEvent.setup()
     await renderView()
+
+    expect(screen.getByTestId('short-drama-toggle')).toBeInTheDocument()
 
     await user.click(screen.getByText('高分优先'))
     await user.click(screen.getByText('喜剧'))
@@ -91,21 +95,36 @@ describe('DoubanView', () => {
         params: {
           sort: 'S',
           tags: '喜剧',
+          exclude_short_drama: true,
         },
       })
+    })
+
+    const shortDramaBtn = screen.getByTestId('short-drama-toggle')
+    await user.click(shortDramaBtn)
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList).params.exclude_short_drama).toBe(false)
     })
 
     await user.click(screen.getByText('电视剧'))
     await user.click(screen.getByText('高分优先'))
 
+    const resetBtn = screen.getByTestId('discover-filter-reset')
+    expect(resetBtn).toHaveTextContent('2')
+    await user.click(resetBtn)
+
     await waitFor(() => {
       expect(latestMediaListRequest(mediaList)).toEqual({
         apipath: 'discover/douban_tvs',
         params: {
-          sort: 'S',
-          tags: '喜剧',
+          sort: 'U',
+          tags: '',
+          exclude_short_drama: false,
         },
       })
     })
+
+    await user.click(screen.getByTestId('discover-filter-collapse'))
+    expect(screen.getByText('喜剧')).not.toBeVisible()
   })
 })

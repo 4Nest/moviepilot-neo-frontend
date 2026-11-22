@@ -11,11 +11,13 @@ import { getActiveRequestsCount, setNavigatingState } from '@/utils/requestOptim
 import { useSubscribeRefresh } from '@/composables/useSubscribeRefresh'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSubscribe, createSubscribeMovie, createSubscribeTv } from '@tests/support/factories/subscribe'
+import { mediaDetailsHandler } from '@tests/support/msw/handlers/media'
 import {
   createSubscribeHandler,
   defaultSubscribeConfigHandler,
   deleteSubscribeByMediaHandler,
   querySubscribeByMediaHandler,
+  subscribeListHandler,
   updateSubscribeHandler,
 } from '@tests/support/msw/handlers/subscribe'
 import { server } from '@tests/support/msw/server'
@@ -495,7 +497,143 @@ describe('useMediaSubscribe entry flows', () => {
 
     await waitFor(() => expect(deleted).toHaveBeenCalledOnce())
     expect((deleted.mock.calls[0][0] as URL).searchParams.get('season')).toBe('2')
+    expect((deleted.mock.calls[0][0] as URL).searchParams.get('title')).toBe(media.title)
     expect(screen.getByTestId('season-map')).toHaveTextContent('"2":false')
+  })
+
+  it('resolves external discover TV media to authoritative TMDB identity, syncs subscribed seasons, and keeps default season', async () => {
+    const externalTv = createSubscribeTv({
+      anilist_id: undefined,
+      bangumi_id: undefined,
+      douban_id: undefined,
+      media_id: 'ep-28234',
+      mediaid_prefix: 'bilibili',
+      season: 2,
+      source: 'bilibili',
+      title: '凡人修仙传',
+      tmdb_id: undefined,
+      type: '电视剧',
+      year: '2020',
+    })
+    const resolvedTmdbTv = createSubscribeTv({
+      source: 'themoviedb',
+      title: '凡人修仙传',
+      tmdb_id: 106449,
+      type: '电视剧',
+      year: '2020',
+    })
+    const detailRequested = vi.fn()
+    const created = vi.fn()
+    server.use(
+      mediaDetailsHandler('bilibili:ep-28234', resolvedTmdbTv, 200, url => detailRequested(url)),
+      subscribeListHandler([
+        createSubscribe({ best_version: 1, best_version_full: 0, id: 801, season: 1, tmdbid: 106449, type: '电视剧' }),
+      ]),
+      defaultSubscribeConfigHandler('电视剧', { best_version: 0, show_edit_dialog: false }),
+      createSubscribeHandler({ data: { id: 802 }, success: true }, 200, created),
+    )
+
+    await renderSubscribeHarness({ media: externalTv })
+    await fireEvent.click(screen.getByRole('button', { name: 'primary' }))
+
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    expect(detailRequested).toHaveBeenCalledOnce()
+    expect(Object.fromEntries((detailRequested.mock.calls[0][0] as URL).searchParams)).toEqual({
+      title: '凡人修仙传',
+      type_name: '电视剧',
+      year: '2020',
+    })
+
+    const seasonDialog = getDialogCall()
+    expect(seasonDialog.props).toMatchObject({
+      media: expect.objectContaining({
+        source: 'themoviedb',
+        tmdb_id: 106449,
+      }),
+      selectedSeason: 2,
+      subscribedSeasonModes: { 1: 'best_version' },
+      subscribedSeasons: [1],
+    })
+
+    // 在弹窗中确认订阅第 1、2 季，新增第 2 季应使用权威 tmdbid 提交并同步回原卡片订阅状态
+    seasonDialog.events.subscribe(
+      [{ season_number: 1 }, { season_number: 2 }],
+      {},
+      'eg-bilibili',
+      { 1: 'best_version', 2: 'normal' },
+      [1, 2],
+    )
+    await waitFor(() => expect(created).toHaveBeenCalledOnce())
+    expect(created.mock.calls[0][0]).toMatchObject({
+      episode_group: 'eg-bilibili',
+      media_id: '106449',
+      media_source: 'themoviedb',
+      mediaid: 'tmdb:106449',
+      season: 2,
+      tmdbid: 106449,
+    })
+    // 再次打开季选择弹窗直接复用已解析的权威媒体缓存，不重复请求详情接口
+    mocks.openSharedDialog.mockClear()
+    await fireEvent.click(screen.getByRole('button', { name: 'open-season' }))
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    expect(detailRequested).toHaveBeenCalledOnce()
+  })
+
+  it('falls back smoothly to original external media when backend returns empty resolution or fails', async () => {
+    const externalMovie = createSubscribeMovie({
+      anilist_id: undefined,
+      bangumi_id: undefined,
+      douban_id: undefined,
+      media_id: 'tx-900',
+      mediaid_prefix: 'tencentvideo',
+      source: 'tencentvideo',
+      title: '未识别外部电影',
+      tmdb_id: undefined,
+      type: '电影',
+      year: '2026',
+    })
+    const created = vi.fn()
+    server.use(
+      mediaDetailsHandler('tencentvideo:tx-900', { episode_run_time: [], origin_country: [] }),
+      createSubscribeHandler({ data: { id: 803 }, success: true }, 200, created),
+      defaultSubscribeConfigHandler('电影', { show_edit_dialog: false }),
+    )
+
+    const firstView = await renderSubscribeHarness({ media: externalMovie })
+    await fireEvent.click(screen.getByRole('button', { name: 'primary' }))
+
+    await waitFor(() => expect(created).toHaveBeenCalledOnce())
+    expect(created.mock.calls[0][0]).toMatchObject({
+      media_id: 'tx-900',
+      media_source: 'tencentvideo',
+      mediaid: 'tencentvideo:tx-900',
+      name: '未识别外部电影',
+    })
+    expect(screen.getByTestId('subscribed')).toHaveTextContent('true')
+    firstView.unmount()
+
+    // 当详情接口直接返回 500 时同样平滑回退原外部媒体，不报错阻断
+    const failingMovie = createSubscribeMovie({
+      media_id: 'mg-500',
+      mediaid_prefix: 'mangguo',
+      source: 'mangguo',
+      title: '接口异常外部电影',
+      tmdb_id: undefined,
+      type: '电影',
+    })
+    created.mockClear()
+    server.use(
+      mediaDetailsHandler('mangguo:mg-500', { episode_run_time: [], origin_country: [] }, 500),
+      createSubscribeHandler({ data: { id: 804 }, success: true }, 200, created),
+    )
+    await renderSubscribeHarness({ media: failingMovie })
+    await fireEvent.click(screen.getByRole('button', { name: 'primary' }))
+    await waitFor(() => expect(created).toHaveBeenCalledOnce())
+    expect(created.mock.calls[0][0]).toMatchObject({
+      media_id: 'mg-500',
+      media_source: 'mangguo',
+      mediaid: 'mangguo:mg-500',
+    })
   })
 
   it('aligns visible seasons while preserving hidden subscriptions', async () => {

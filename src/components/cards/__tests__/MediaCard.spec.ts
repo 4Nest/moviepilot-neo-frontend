@@ -1,9 +1,9 @@
 import type { MediaInfo } from '@/api/types'
-import MediaCard from '@/components/cards/MediaCard.vue'
+import MediaCard, { clearMediaCardDetailCache } from '@/components/cards/MediaCard.vue'
 import { clearCachedMediaSubscribeStatuses } from '@/utils/mediaStatusCache'
 import { fireEvent, waitFor } from '@testing-library/vue'
 import { createMediaInfo } from '@tests/support/factories/media'
-import { mediaExistsHandler } from '@tests/support/msw/handlers/media'
+import { mediaDetailsHandler, mediaExistsHandler } from '@tests/support/msw/handlers/media'
 import { querySubscribeByMediaHandler, subscribeListHandler } from '@tests/support/msw/handlers/subscribe'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
@@ -171,10 +171,12 @@ describe('MediaCard', () => {
   beforeEach(() => {
     intersectionObservers = []
     clearCachedMediaSubscribeStatuses()
+    clearMediaCardDetailCache()
     vi.stubGlobal('IntersectionObserver', IntersectionObserverMock)
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
     mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
+    server.use(http.get(new URL('media/:mediaId', API_BASE_URL).href, () => HttpResponse.json({})))
   })
 
   it('loads exact subscribe and exists status only after entering the viewport', async () => {
@@ -771,7 +773,7 @@ describe('MediaCard', () => {
     await waitFor(() => expect(mocks.routerPush).toHaveBeenCalledWith(expect.objectContaining({ path: '/media' })))
   })
 
-  it('omits overview on hover, renders 100-scale rating, fallback type dot, non-superuser actions, and tolerates status API errors', async () => {
+  it('renders overview, genres, and actors on hover, renders 100-scale rating, fallback type dot, non-superuser actions, and tolerates status API errors', async () => {
     server.use(
       http.get(new URL('subscribe/media/tmdb:9801', API_BASE_URL).href, () =>
         HttpResponse.json({ message: 'err' }, { status: 500 }),
@@ -782,9 +784,12 @@ describe('MediaCard', () => {
     )
     const requests: ControlledImageRequest[] = []
     const media = createMediaInfo({
-      overview: '这是一段不应在卡片上展示的剧情摘要',
+      actors: [{ name: '[甲演员' }, '乙演员]'],
+      category: '动画番剧',
+      genres: ['科幻', '冒险'],
+      overview: '这是一段展示在悬停层的两行精简剧情摘要',
       poster_path: '/original/overview.jpg',
-      title: '无简介百分制卡片',
+      title: '带简介百分制卡片',
       tmdb_id: 9801,
       type: '动漫',
       vote_average: 86,
@@ -804,26 +809,192 @@ describe('MediaCard', () => {
 
     await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
     expect(container.querySelector('.media-card__type-dot--other')).not.toBeNull()
-    expect(container).toHaveTextContent('无简介百分制卡片')
-    expect(container).not.toHaveTextContent('这是一段不应在卡片上展示的剧情摘要')
+    expect(container).toHaveTextContent('带简介百分制卡片')
+    expect(container.querySelector('.media-card__tags')).toHaveTextContent('动画番剧 · 科幻 · 冒险')
+    expect(container.querySelector('.media-card__actors')).toHaveTextContent('甲演员 / 乙演员')
+    // 悬停层仅保留标签与演员最多两行，不渲染长剧情简介
+    expect(container).not.toHaveTextContent('这是一段展示在悬停层的两行精简剧情摘要')
     expect(container).toHaveTextContent('86')
     // 非超管仅渲染订阅按钮，不渲染资源搜索按钮
     expect(getActionButtons(container)).toHaveLength(1)
 
-    // 切换为无类型、无评分媒体，覆盖空类型与零分分支
-    const untypedMedia = createMediaInfo({
-      poster_path: '/original/untyped.jpg',
-      title: '无类型卡片',
-      tmdb_id: 9802,
-      type: undefined,
-      vote_average: 0,
-      year: undefined,
+    // 切换为豆瓣 card_subtitle 风格媒体，验证自动剥离年份并拆出标签行与演员行
+    const doubanSubtitleMedia = createMediaInfo({
+      genres: ['动作', '科幻'],
+      overview: '2026 / 美国 / 动作 科幻 冒险 / 弗朗西斯·劳伦斯 / 约瑟夫·扎达 麦肯娜·格瑞丝',
+      poster_path: '/original/douban-sub.jpg',
+      source: 'douban',
+      title: '豆瓣副标题卡片',
+      type: '电影',
+      year: '2026',
     })
+    await rerender({ media: doubanSubtitleMedia, width: '9rem' })
+    requests.at(-1)?.load()
+    expect(container.querySelector('.media-card__tags')).toHaveTextContent('动作 · 科幻 · 美国 · 冒险')
+    expect(container.querySelector('.media-card__tags')).not.toHaveTextContent('2026')
+    expect(container.querySelector('.media-card__actors')).toHaveTextContent('约瑟夫·扎达 / 麦肯娜·格瑞丝')
+
+    // 切换为无类型、无评分、无演员媒体，覆盖空类型、零分与 genre_ids 单行标签映射分支
+    const untypedMedia = {
+      ...createMediaInfo({
+        genres: [{ name: '纪录片' } as unknown as string],
+        overview: '2025 / 法国 / 纪录片',
+        poster_path: '/original/untyped.jpg',
+        title: '无类型卡片',
+        tmdb_id: 9802,
+        type: undefined,
+        vote_average: 0,
+        year: undefined,
+      }),
+    }
     await rerender({ media: untypedMedia, width: '9rem' })
+    requests.at(-1)?.load()
+    expect(container.querySelector('.media-card__tags')).toHaveTextContent('纪录片 · 法国')
+    expect(container.querySelector('.media-card__actors')).toBeNull()
+
+    const genreIdOnlyMedia = {
+      ...createMediaInfo({
+        actors: [{ title: '丙演员' } as unknown as Record<string, unknown>, {} as Record<string, unknown>],
+        genres: [],
+        overview: '',
+        poster_path: '/original/genre-id.jpg',
+        title: 'GenreId卡片',
+        tmdb_id: 9803,
+        type: undefined,
+        vote_average: 0,
+        year: undefined,
+      }),
+      genre_ids: [28, 878],
+    }
+    await rerender({ media: genreIdOnlyMedia, width: '9rem' })
     const latestReq = requests.at(-1)
     latestReq?.load()
     await waitFor(() => expect(getCard(container)).toHaveClass('media-card--image-loaded'))
     expect(container.querySelector('.media-card__badge--score')).toBeNull()
+    expect(container.querySelector('.media-card__tags')).toHaveTextContent('动作 · 科幻')
+    expect(container.querySelector('.media-card__actors')).toHaveTextContent('丙演员')
+  })
+
+  it('lazily fetches missing cast/overview after 140ms hover with memory cache, cancels quick mouseleave, and matches external mediaid alongside structured TMDB subscribe', async () => {
+    const detailFetched = vi.fn<(url: URL) => void>()
+    server.use(
+      mediaDetailsHandler(
+        'tmdb:9910',
+        createMediaInfo({
+          actors: [{ name: '基努·里维斯' }, { name: '凯瑞-安·莫斯' }],
+          category: '外语电影',
+          genres: ['动作', '科幻'],
+          overview: '尼奥觉醒并发现矩阵真相。',
+          tmdb_id: 9910,
+        }),
+        200,
+        detailFetched,
+      ),
+    )
+
+    const requests: ControlledImageRequest[] = []
+    const media = createMediaInfo({
+      actors: undefined,
+      genres: [],
+      overview: '',
+      poster_path: '/original/matrix.jpg',
+      title: '黑客帝国',
+      tmdb_id: 9910,
+      type: '电影',
+      year: '1999',
+    })
+
+    const firstRender = await renderWithProviders(MediaCard, {
+      props: { media, width: '9rem' },
+      global: { stubs: { VImg: createControlledImageStub(requests) } },
+    })
+    requests[0].load()
+    await waitFor(() => expect(getCard(firstRender.container)).toHaveClass('media-card--image-loaded'))
+
+    // 140ms 内快速划过立即移出，不应发起详情请求
+    await fireEvent.mouseEnter(getHoverArea(firstRender.container))
+    await fireEvent.mouseLeave(getHoverArea(firstRender.container))
+    await new Promise(resolve => setTimeout(resolve, 180))
+    expect(detailFetched).not.toHaveBeenCalled()
+
+    // 悬停停留超过 140ms，静默补齐标签行与演员行，且不重新请求图片
+    const imageRequestCountBefore = requests.length
+    await fireEvent.mouseEnter(getHoverArea(firstRender.container))
+    await waitFor(() => expect(detailFetched).toHaveBeenCalledOnce())
+    await waitFor(() => {
+      expect(firstRender.container.querySelector('.media-card__tags')).toHaveTextContent('外语电影 · 动作 · 科幻')
+      expect(firstRender.container.querySelector('.media-card__actors')).toHaveTextContent('基努·里维斯 / 凯瑞-安·莫斯')
+    })
+    expect(requests.length).toBe(imageRequestCountBefore)
+    firstRender.unmount()
+
+    // 再次渲染同 mediaId 卡片并悬停时直接命中模块级 Map 缓存，不再重复请求接口
+    const secondRender = await renderCard(media)
+    await fireEvent.mouseEnter(getHoverArea(secondRender.container))
+    await waitFor(() =>
+      expect(secondRender.container.querySelector('.media-card__actors')).toHaveTextContent('基努·里维斯'),
+    )
+    expect(detailFetched).toHaveBeenCalledOnce()
+    secondRender.unmount()
+
+    // 验证卡片进入视口停留后自动通过低并发队列静默预热详情，悬停时标签与演员直接 0ms 同步呈现
+    clearMediaCardDetailCache()
+    intersectionObservers = []
+    server.use(
+      querySubscribeByMediaHandler('tmdb:9910', {}),
+      mediaExistsHandler({ data: { item: {} }, success: false }),
+    )
+    const prefetchRender = await renderCard(media)
+    getStatusObservers()[0]?.trigger()
+    await waitFor(() => expect(detailFetched).toHaveBeenCalledTimes(2))
+    await waitFor(() => {
+      expect(prefetchRender.container.querySelector('.media-card__tags')).toHaveTextContent('外语电影 · 动作 · 科幻')
+      expect(prefetchRender.container.querySelector('.media-card__actors')).toHaveTextContent(
+        '基努·里维斯 / 凯瑞-安·莫斯',
+      )
+    })
+    prefetchRender.unmount()
+
+    // 验证非原生外部探索源卡片在订阅记录同时含 media_source='themoviedb' 与 mediaid='bilibili:ep-77' 时仍能匹配季状态
+    intersectionObservers = []
+    const externalCardMedia = createMediaInfo({
+      media_id: 'ep-77',
+      mediaid_prefix: 'bilibili',
+      season: 1,
+      source: 'bilibili',
+      title: '外部番剧',
+      tmdb_id: undefined,
+      type: '电视剧',
+    })
+    server.use(
+      querySubscribeByMediaHandler('bilibili:ep-77', { id: 301, season: 1 }),
+      mediaExistsHandler({ data: { item: {} }, success: false }),
+      subscribeListHandler([
+        {
+          id: 301,
+          media_id: '106449',
+          media_source: 'themoviedb',
+          mediaid: 'bilibili:ep-77',
+          season: 1,
+          tmdbid: 106449,
+          type: '电视剧',
+        },
+      ]),
+      mediaDetailsHandler('bilibili:ep-77', { episode_run_time: [], origin_country: [] }),
+      http.get(new URL('system/setting/public/DefaultTvSubscribeConfig', API_BASE_URL).href, () =>
+        HttpResponse.json({ data: { value: {} }, success: true }),
+      ),
+    )
+    const extView = await renderCard(externalCardMedia)
+    getStatusObservers()[0]?.trigger()
+    await waitFor(() => expect(getActionButtons(extView.container).at(-1)).toHaveClass('text-error'))
+
+    await fireEvent.mouseEnter(getHoverArea(extView.container))
+    mocks.openSharedDialog.mockClear()
+    await fireEvent.click(getActionButtons(extView.container).at(-1) as HTMLButtonElement)
+    await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
+    const [, dialogProps] = mocks.openSharedDialog.mock.calls[0] as [unknown, Record<string, unknown>]
+    expect(dialogProps).toMatchObject({ subscribedSeasons: [1] })
   })
 
   it('opens mode dialog when subscribing an in-library movie, handles TV season unsubscribe reset, and matches non-TMDB structured source', async () => {

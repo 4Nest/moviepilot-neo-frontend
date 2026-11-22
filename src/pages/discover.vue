@@ -108,6 +108,7 @@ function openOrderConfigDialog() {
     DiscoverTabOrderDialog,
     {
       tabs: discoverTabs.value,
+      defaultTabs: [...createBuiltInDiscoverTabs(), ...extraDiscoverSources.value],
       enabled: tabEnabledMap.value,
     },
     {

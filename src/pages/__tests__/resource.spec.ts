@@ -1,4 +1,4 @@
-import type { Context, RejectedSearchItem, SubtitleInfo } from '@/api/types'
+import type { Context, RejectedSearchItem } from '@/api/types'
 import ResourcePage from '@/pages/resource.vue'
 import { createSearchDiagnostics } from '@tests/support/fixtures/searchDiagnostics'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
@@ -93,7 +93,7 @@ interface SearchRouteCase {
   displayTitle: string
   expectedPath: string
   query: Record<string, string>
-  result: Context | SubtitleInfo
+  result: Context
   streamParams: Record<string, string>
 }
 
@@ -139,15 +139,6 @@ function createRejectedItem(): RejectedSearchItem {
   }
 }
 
-function createSubtitle(title: string): SubtitleInfo {
-  return {
-    enclosure: `https://example.test/${title}.srt`,
-    site_name: 'Subtitle Site',
-    subtitle_id: title,
-    title,
-  }
-}
-
 const TorrentCardStub = defineComponent({
   props: {
     torrent: { type: Object, required: true },
@@ -176,20 +167,6 @@ const TorrentItemStub = defineComponent({
   emits: ['select'],
   template:
     '<article data-testid="torrent-row" :data-selected="selected" @click="$emit(\'select\')">{{ torrent.torrent_info.title }}</article>',
-})
-
-const SubtitleCardStub = defineComponent({
-  props: {
-    subtitle: { type: Object, required: true },
-  },
-  template: '<article data-testid="subtitle-card">{{ subtitle.title }}</article>',
-})
-
-const SubtitleItemStub = defineComponent({
-  props: {
-    subtitle: { type: Object, required: true },
-  },
-  template: '<article data-testid="subtitle-row">{{ subtitle.title }}</article>',
 })
 
 const ProgressiveCardGridStub = defineComponent({
@@ -254,8 +231,6 @@ const pageStubs = {
   NoDataFound: NoDataFoundStub,
   ProgressiveCardGrid: ProgressiveCardGridStub,
   RejectedTorrentCard: RejectedTorrentCardStub,
-  SubtitleCard: SubtitleCardStub,
-  SubtitleItem: SubtitleItemStub,
   Teleport: true,
   TorrentCard: TorrentCardStub,
   TorrentFilterBar: TorrentFilterBarStub,
@@ -284,7 +259,7 @@ async function latestEventSource(expectedCount = 1) {
   return EventSourceFake.instances[expectedCount - 1]
 }
 
-function finishStream(source: EventSourceFake, items: Array<Context | SubtitleInfo>) {
+function finishStream(source: EventSourceFake, items: Context[]) {
   source.message({
     items,
     total_items: items.length,
@@ -308,7 +283,7 @@ const searchRouteCases: SearchRouteCase[] = [
     apiParams: { keyword: '普通标题', sites: '1,2' },
     displayTitle: '普通标题结果',
     expectedPath: '/api/v1/search/title/stream',
-    query: { keyword: '普通标题', result_type: 'invalid', sites: '1,2' },
+    query: { keyword: '普通标题', sites: '1,2' },
     result: createTorrent({ title: '普通标题结果' }),
     streamParams: { keyword: '普通标题', sites: '1,2' },
   },
@@ -327,7 +302,6 @@ const searchRouteCases: SearchRouteCase[] = [
     query: {
       area: 'CN',
       keyword: 'tmdb:42',
-      result_type: 'torrent',
       season: '2',
       sites: '1',
       title: '媒体标题',
@@ -341,47 +315,6 @@ const searchRouteCases: SearchRouteCase[] = [
       season: '2',
       sites: '1',
       title: '媒体标题',
-      year: '2025',
-    },
-  },
-  {
-    apiEndpoint: 'search/subtitle/title',
-    apiParams: { keyword: '字幕标题', sites: '2' },
-    displayTitle: '字幕标题结果',
-    expectedPath: '/api/v1/search/subtitle/title/stream',
-    query: { keyword: '字幕标题', result_type: 'subtitle', sites: '2' },
-    result: createSubtitle('字幕标题结果'),
-    streamParams: { keyword: '字幕标题', sites: '2' },
-  },
-  {
-    apiEndpoint: 'search/subtitle/media/tmdb:84',
-    apiParams: {
-      episode: '3',
-      mtype: '电视剧',
-      season: '2',
-      sites: '2',
-      title: '字幕媒体',
-      year: '2025',
-    },
-    displayTitle: '字幕媒体结果',
-    expectedPath: '/api/v1/search/subtitle/media/tmdb%3A84/stream',
-    query: {
-      episode: '3',
-      keyword: 'tmdb:84',
-      result_type: 'subtitle',
-      season: '2',
-      sites: '2',
-      title: '字幕媒体',
-      type: '电视剧',
-      year: '2025',
-    },
-    result: createSubtitle('字幕媒体结果'),
-    streamParams: {
-      episode: '3',
-      mtype: '电视剧',
-      season: '2',
-      sites: '2',
-      title: '字幕媒体',
       year: '2025',
     },
   },
@@ -404,7 +337,7 @@ describe('resource page search flow', () => {
   })
 
   it('shows diagnostics only after the current successful terminal event', async () => {
-    await renderResource({ path: '/resource', query: { keyword: '诊断测试', result_type: 'torrent' } })
+    await renderResource({ path: '/resource', query: { keyword: '诊断测试' } })
     const source = await latestEventSource()
     source.message({ type: 'replace', items: [], diagnostics: createSearchDiagnostics(), value: 100 })
     expect(screen.queryByRole('status', { name: '本页搜索情况' })).not.toBeInTheDocument()
@@ -414,7 +347,7 @@ describe('resource page search flow', () => {
   })
 
   it('distinguishes an invalid rule configuration from candidates that simply do not match', async () => {
-    await renderResource({ path: '/resource', query: { keyword: '旧规则搜索', result_type: 'torrent' } })
+    await renderResource({ path: '/resource', query: { keyword: '旧规则搜索' } })
     const source = await latestEventSource()
     const diagnostics = createSearchDiagnostics()
     diagnostics.stage_counts = { candidates: 146, retained: 0 }
@@ -429,7 +362,7 @@ describe('resource page search flow', () => {
   })
 
   it('shows and hides rejected torrents from the terminal search event', async () => {
-    const rendered = await renderResource({ path: '/resource', query: { keyword: '过滤测试', result_type: 'torrent' } })
+    const rendered = await renderResource({ path: '/resource', query: { keyword: '过滤测试' } })
     const source = await latestEventSource()
     source.message({
       type: 'done',
@@ -448,7 +381,7 @@ describe('resource page search flow', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: '显示过滤' }))
     expect(screen.getByTestId('rejected-torrent-card')).toBeInTheDocument()
-    await rendered.router.push({ path: '/resource', query: { keyword: '下一轮搜索', result_type: 'torrent' } })
+    await rendered.router.push({ path: '/resource', query: { keyword: '下一轮搜索' } })
     const nextSource = await latestEventSource(2)
     expect(screen.queryByTestId('rejected-torrent-card')).not.toBeInTheDocument()
     finishStream(nextSource, [createTorrent({ title: '新搜索结果' })])
@@ -474,9 +407,9 @@ describe('resource page search flow', () => {
   })
 
   it('ignores diagnostics from a canceled stream and supports old backend events', async () => {
-    const rendered = await renderResource({ path: '/resource', query: { keyword: '旧搜索', result_type: 'torrent' } })
+    const rendered = await renderResource({ path: '/resource', query: { keyword: '旧搜索' } })
     const old = await latestEventSource()
-    await rendered.router.push({ path: '/resource', query: { keyword: '新搜索', result_type: 'torrent' } })
+    await rendered.router.push({ path: '/resource', query: { keyword: '新搜索' } })
     const current = await latestEventSource(2)
     old.message({ type: 'done', diagnostics: createSearchDiagnostics() })
     finishStream(current, [createTorrent({ title: '新结果' })])
@@ -515,9 +448,7 @@ describe('resource page search flow', () => {
       const storedParams = JSON.parse(localStorage.getItem('MP_ResourceSearchParams') || '{}')
       expect(storedParams).toEqual({
         area: query.area ?? '',
-        episode: query.episode ?? '',
         keyword: query.keyword,
-        result_type: query.result_type === 'subtitle' ? 'subtitle' : 'torrent',
         season: query.season ?? '',
         sites: query.sites ?? '',
         title: query.title ?? '',
@@ -533,7 +464,7 @@ describe('resource page search flow', () => {
     mocks.apiGet.mockResolvedValueOnce({
       success: true,
       data: {
-        params: { keyword: '上次关键词', result_type: 'invalid', sites: '3' },
+        params: { keyword: '上次关键词', sites: '3' },
         results: [restored],
       },
     })
@@ -545,9 +476,7 @@ describe('resource page search flow', () => {
     expect(mocks.apiGet).toHaveBeenCalledWith('search/last/context')
     expect(JSON.parse(localStorage.getItem('MP_ResourceSearchParams') || '{}')).toEqual({
       area: '',
-      episode: '',
       keyword: '上次关键词',
-      result_type: 'torrent',
       season: '',
       sites: '3',
       title: '',
@@ -559,7 +488,7 @@ describe('resource page search flow', () => {
   it('does not automatically repeat a completed empty search when KeepAlive reactivates', async () => {
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '没有结果', result_type: 'torrent' },
+      query: { keyword: '没有结果' },
     })
     const source = await latestEventSource()
     finishStream(source, [])
@@ -571,22 +500,10 @@ describe('resource page search flow', () => {
     expect(mocks.apiGet).not.toHaveBeenCalled()
   })
 
-  it.each([
-    {
-      item: createTorrent({ title: '流式资源预览' }),
-      query: { keyword: '流式资源', result_type: 'torrent' },
-      testId: 'torrent-card',
-      title: '流式资源预览',
-    },
-    {
-      item: createSubtitle('流式字幕预览'),
-      query: { keyword: '流式字幕', result_type: 'subtitle' },
-      testId: 'subtitle-card',
-      title: '流式字幕预览',
-    },
-  ])('shows $title from an append event before the final result arrives', async ({ item, query, testId, title }) => {
-    await renderResource({ path: '/resource', query })
+  it('shows torrent preview from an append event before the final result arrives', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '流式资源' } })
     const source = await latestEventSource()
+    const item = createTorrent({ title: '流式资源预览' })
 
     vi.useFakeTimers()
     try {
@@ -600,7 +517,7 @@ describe('resource page search flow', () => {
       await vi.advanceTimersByTimeAsync(1000)
       await nextTick()
 
-      expect(screen.getByTestId(testId)).toHaveTextContent(title)
+      expect(screen.getByTestId('torrent-card')).toHaveTextContent('流式资源预览')
       source.message({ type: 'done' })
       source.fail()
     } finally {
@@ -611,7 +528,7 @@ describe('resource page search flow', () => {
   it('shows the SSE business error instead of replacing it with the generic empty-state message', async () => {
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '业务失败', result_type: 'torrent' },
+      query: { keyword: '业务失败' },
     })
     const source = await latestEventSource()
 
@@ -628,7 +545,7 @@ describe('resource page search flow', () => {
   it('restores the default empty-state message when a new search succeeds without results', async () => {
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '业务失败', result_type: 'torrent' },
+      query: { keyword: '业务失败' },
     })
     const failedSource = await latestEventSource()
     failedSource.message({
@@ -640,7 +557,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '正常空结果', result_type: 'torrent' },
+      query: { keyword: '正常空结果' },
     })
     const emptySource = await latestEventSource(2)
     finishStream(emptySource, [])
@@ -653,7 +570,7 @@ describe('resource page search flow', () => {
     mocks.apiGet.mockResolvedValueOnce({ data: [], success: true })
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '降级空结果', result_type: 'torrent' },
+      query: { keyword: '降级空结果' },
     })
     const source = await latestEventSource()
 
@@ -667,7 +584,7 @@ describe('resource page search flow', () => {
   it('ignores heartbeat messages and accepts final results carried only by the done event', async () => {
     await renderResource({
       path: '/resource',
-      query: { keyword: '收尾结果', result_type: 'torrent' },
+      query: { keyword: '收尾结果' },
     })
     const source = await latestEventSource()
     const result = createTorrent({ title: '仅在完成消息返回' })
@@ -691,7 +608,7 @@ describe('resource page search flow', () => {
     const newResult = createTorrent({ title: '静默刷新结果' })
     await renderResource({
       path: '/resource',
-      query: { keyword: '可刷新', result_type: 'torrent' },
+      query: { keyword: '可刷新' },
     })
     const source = await latestEventSource()
     finishStream(source, [oldResult])
@@ -719,7 +636,7 @@ describe('resource page search flow', () => {
   it('restores the default empty-state message after a failed silent refresh is followed by an empty success', async () => {
     await renderResource({
       path: '/resource',
-      query: { keyword: '静默刷新空态', result_type: 'torrent' },
+      query: { keyword: '静默刷新空态' },
     })
     const source = await latestEventSource()
     finishStream(source, [createTorrent({ title: '刷新前结果' })])
@@ -740,7 +657,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsViewType', 'removed-view')
     await renderResource({
       path: '/resource',
-      query: { keyword: '视图回退', result_type: 'torrent' },
+      query: { keyword: '视图回退' },
     })
     const source = await latestEventSource()
     finishStream(source, [createTorrent({ title: '可见卡片结果' })])
@@ -752,7 +669,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsViewType', 'row')
     await renderResource({
       path: '/resource',
-      query: { keyword: '视图切换', result_type: 'torrent' },
+      query: { keyword: '视图切换' },
     })
     const source = await latestEventSource()
     finishStream(source, [createTorrent({ title: '切换视图结果' })])
@@ -770,7 +687,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsViewType', 'card')
     const first = createTorrent({ name: '媒体一', title: '批量资源一', pageUrl: 'https://example.test/first' })
     const second = createTorrent({ name: '媒体二', title: '批量资源二', pageUrl: 'https://example.test/second' })
-    await renderResource({ path: '/resource', query: { keyword: '批量下载', result_type: 'torrent' } })
+    await renderResource({ path: '/resource', query: { keyword: '批量下载' } })
     finishStream(await latestEventSource(), [first, second])
 
     await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
@@ -798,7 +715,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsViewType', 'card')
     const first = createTorrent({ name: '媒体一', title: '稳定资源一', pageUrl: 'https://example.test/stable-first' })
     const second = createTorrent({ name: '媒体二', title: '稳定资源二', pageUrl: 'https://example.test/stable-second' })
-    await renderResource({ path: '/resource', query: { keyword: '稳定勾选', result_type: 'torrent' } })
+    await renderResource({ path: '/resource', query: { keyword: '稳定勾选' } })
     finishStream(await latestEventSource(), [first, second])
 
     await waitFor(() => expect(fabButton('批量选择')).toBeInTheDocument())
@@ -825,7 +742,7 @@ describe('resource page search flow', () => {
 
   it('clears batch selections when search results are replaced', async () => {
     localStorage.setItem('MPTorrentsViewType', 'card')
-    await renderResource({ path: '/resource', query: { keyword: '批量重置', result_type: 'torrent' } })
+    await renderResource({ path: '/resource', query: { keyword: '批量重置' } })
     const source = await latestEventSource()
     finishStream(source, [createTorrent({ title: '旧资源' })])
 
@@ -846,7 +763,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsSortType', 'asc')
     await renderResource({
       path: '/resource',
-      query: { keyword: '排序恢复', result_type: 'torrent' },
+      query: { keyword: '排序恢复' },
     })
     finishStream(await latestEventSource(), [createTorrent({ title: '排序恢复结果' })])
 
@@ -860,7 +777,7 @@ describe('resource page search flow', () => {
     localStorage.setItem('MPTorrentsSortType', 'sideways')
     await renderResource({
       path: '/resource',
-      query: { keyword: '排序回退', result_type: 'torrent' },
+      query: { keyword: '排序回退' },
     })
     finishStream(await latestEventSource(), [createTorrent({ title: '排序回退结果' })])
 
@@ -872,7 +789,7 @@ describe('resource page search flow', () => {
   it('persists sort changes for the next visit', async () => {
     await renderResource({
       path: '/resource',
-      query: { keyword: '排序保存', result_type: 'torrent' },
+      query: { keyword: '排序保存' },
     })
     finishStream(await latestEventSource(), [createTorrent({ title: '排序保存结果' })])
 
@@ -886,7 +803,7 @@ describe('resource page search flow', () => {
   it('clears filters for a new route search', async () => {
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '首次搜索', result_type: 'torrent' },
+      query: { keyword: '首次搜索' },
     })
     const firstSource = await latestEventSource()
     finishStream(firstSource, [createTorrent({ title: '首次结果' })])
@@ -895,7 +812,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '第二次搜索', result_type: 'torrent' },
+      query: { keyword: '第二次搜索' },
     })
     const secondSource = await latestEventSource(2)
     finishStream(secondSource, [createTorrent({ title: '第二次结果' })])
@@ -912,7 +829,7 @@ describe('resource page search flow', () => {
     )
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '旧搜索', result_type: 'torrent' },
+      query: { keyword: '旧搜索' },
     })
     const firstSource = await latestEventSource()
     firstSource.fail()
@@ -920,7 +837,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '新搜索', result_type: 'torrent' },
+      query: { keyword: '新搜索' },
     })
     const secondSource = await latestEventSource(2)
     finishStream(secondSource, [createTorrent({ title: '新结果' })])
@@ -940,7 +857,7 @@ describe('resource page search flow', () => {
         resolveRequest = resolve
       }),
     )
-    const initialQuery = { keyword: '卸载中的降级请求', result_type: 'torrent' }
+    const initialQuery = { keyword: '卸载中的降级请求' }
     const rendered = await renderResource({ path: '/resource', query: initialQuery })
     const source = await latestEventSource()
     source.fail()
@@ -956,7 +873,7 @@ describe('resource page search flow', () => {
   })
 
   it('closes an active stream and ignores its completion when the page unmounts', async () => {
-    const initialQuery = { keyword: '卸载中的流', result_type: 'torrent' }
+    const initialQuery = { keyword: '卸载中的流' }
     const rendered = await renderResource({ path: '/resource', query: initialQuery })
     const source = await latestEventSource()
     expect(rendered.router.currentRoute.value.query).toEqual(initialQuery)
@@ -974,7 +891,7 @@ describe('resource page search flow', () => {
   it('settles an active refresh stream when a newer route search replaces it', async () => {
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '初始搜索', result_type: 'torrent' },
+      query: { keyword: '初始搜索' },
     })
     const initialSource = await latestEventSource()
     finishStream(initialSource, [createTorrent({ title: '初始结果' })])
@@ -985,7 +902,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '替代搜索', result_type: 'torrent' },
+      query: { keyword: '替代搜索' },
     })
     const replacementSource = await latestEventSource(3)
     expect(refreshSource.closed).toBe(true)
@@ -1005,7 +922,7 @@ describe('resource page search flow', () => {
     )
     const rendered = await renderResource({
       path: '/resource',
-      query: { keyword: '旧失败搜索', result_type: 'torrent' },
+      query: { keyword: '旧失败搜索' },
     })
     const firstSource = await latestEventSource()
     firstSource.fail()
@@ -1013,7 +930,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '当前空搜索', result_type: 'torrent' },
+      query: { keyword: '当前空搜索' },
     })
     const secondSource = await latestEventSource(2)
     finishStream(secondSource, [])
@@ -1037,7 +954,7 @@ describe('resource page search flow', () => {
 
     await rendered.router.push({
       path: '/resource',
-      query: { keyword: '当前搜索', result_type: 'torrent', sites: '2' },
+      query: { keyword: '当前搜索', sites: '2' },
     })
     const source = await latestEventSource()
     finishStream(source, [createTorrent({ title: '当前结果' })])
@@ -1046,7 +963,7 @@ describe('resource page search flow', () => {
     resolveLastContext({
       success: true,
       data: {
-        params: { keyword: '过期搜索', result_type: 'torrent', sites: '1' },
+        params: { keyword: '过期搜索', sites: '1' },
         results: [createTorrent({ title: '过期结果' })],
       },
     })

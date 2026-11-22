@@ -88,9 +88,6 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 2
     },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
     "no-useless-assignment": {
       "count": 1
     }
@@ -497,7 +494,7 @@
       "count": 3
     },
     "sonarjs/no-duplicated-branches": {
-      "count": 3
+      "count": 1
     }
   },
   "src/plugins/stateRestore.ts": {

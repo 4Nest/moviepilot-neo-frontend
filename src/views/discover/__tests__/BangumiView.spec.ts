@@ -50,7 +50,7 @@ describe('BangumiView', () => {
     expect(screen.queryByText('2016')).not.toBeInTheDocument()
   })
 
-  it('passes selected filter values as strings while keeping the fixed Bangumi type numeric', async () => {
+  it('passes selected filter values as strings while keeping the fixed Bangumi type numeric and supports reset', async () => {
     const user = userEvent.setup()
     const currentYear = String(new Date().getFullYear())
     await renderView()
@@ -69,6 +69,61 @@ describe('BangumiView', () => {
           year: currentYear,
         },
       })
+    })
+
+    const resetBtn = screen.getByTestId('discover-filter-reset')
+    expect(resetBtn).toHaveTextContent('3')
+    await user.click(resetBtn)
+
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList)).toEqual({
+        apipath: 'discover/bangumi',
+        params: {
+          type: 2,
+          cat: null,
+          sort: 'rank',
+          year: null,
+        },
+      })
+    })
+  })
+
+  it('switches to daily calendar mode, selects today weekday by default with Today badge, and filters by weekday', async () => {
+    // 2026-11-22 是周日 -> getDay() === 0 -> weekday 应为 7
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-11-22T12:00:00+08:00'))
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    await renderView()
+
+    await user.click(screen.getByRole('button', { name: '每日放送' }))
+
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList)).toEqual({
+        apipath: 'discover/bangumi_calendar',
+        params: {
+          weekday: 7,
+        },
+      })
+    })
+
+    const sundayChip = screen.getByText('周日').closest('.v-chip')
+    expect(sundayChip).toHaveTextContent('今日')
+
+    await user.click(screen.getByText('全部'))
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList)).toEqual({
+        apipath: 'discover/bangumi_calendar',
+        params: {
+          weekday: 0,
+        },
+      })
+    })
+
+    // 点击重置回到今日星期
+    await user.click(screen.getByTestId('discover-filter-reset'))
+    await waitFor(() => {
+      expect(latestMediaListRequest(mediaList).params).toEqual({ weekday: 7 })
     })
   })
 

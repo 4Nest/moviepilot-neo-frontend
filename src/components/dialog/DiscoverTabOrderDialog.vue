@@ -12,14 +12,29 @@ export interface DiscoverTabOrderSavePayload {
   enabled: Record<string, boolean>
 }
 
+const BUILT_IN_SOURCE_ORDER = ['themoviedb', 'douban', 'bangumi', 'anilist', 'bilibili', 'tencentvideo', 'mangguo']
+const BUILT_IN_SOURCE_SET = new Set(BUILT_IN_SOURCE_ORDER)
+
+const SOURCE_ICON_MAP: Record<string, string> = {
+  themoviedb: 'mdi-movie-search-outline',
+  douban: 'mdi-book-open-page-variant-outline',
+  bangumi: 'mdi-calendar-star-outline',
+  anilist: 'mdi-alpha-a-circle-outline',
+  bilibili: 'mdi-television-classic',
+  tencentvideo: 'mdi-television-play',
+  mangguo: 'mdi-movie-open-outline',
+}
+
 const props = withDefaults(
   defineProps<{
     modelValue?: boolean
     tabs: DiscoverSource[]
+    defaultTabs?: DiscoverSource[]
     enabled?: Record<string, boolean>
   }>(),
   {
     modelValue: true,
+    defaultTabs: undefined,
     enabled: undefined,
   },
 )
@@ -41,6 +56,12 @@ const visible = computed({
   },
 })
 
+const enabledCount = computed(
+  () => localTabs.value.filter(item => localEnabled.value[item.mediaid_prefix] !== false).length,
+)
+
+const isSaveDisabled = computed(() => localTabs.value.length > 0 && enabledCount.value === 0)
+
 watch(
   [() => props.tabs, () => props.enabled],
   () => {
@@ -49,12 +70,53 @@ watch(
   { deep: true, immediate: true },
 )
 
-// 重置弹窗内部排序与显隐副本。
+function isBuiltInSource(prefix: string) {
+  return BUILT_IN_SOURCE_SET.has(prefix)
+}
+
+function getSourceIcon(prefix: string) {
+  return SOURCE_ICON_MAP[prefix] || 'mdi-puzzle-outline'
+}
+
+// 重置弹窗内部排序与显隐副本（撤销本次弹窗内未保存修改）。
 function resetLocalTabs() {
   localTabs.value = props.tabs.map(item => ({ ...item }))
   const nextEnabled: Record<string, boolean> = {}
   props.tabs.forEach(item => {
     nextEnabled[item.mediaid_prefix] = props.enabled?.[item.mediaid_prefix] !== false
+  })
+  localEnabled.value = nextEnabled
+}
+
+// 一键开启全部探索源。
+function enableAllTabs() {
+  const nextEnabled: Record<string, boolean> = {}
+  localTabs.value.forEach(item => {
+    nextEnabled[item.mediaid_prefix] = true
+  })
+  localEnabled.value = nextEnabled
+}
+
+// 恢复默认排序并开启全部探索源。
+function restoreDefaultTabs() {
+  let ordered: DiscoverSource[]
+  if (props.defaultTabs && props.defaultTabs.length > 0) {
+    ordered = props.defaultTabs.map(item => ({ ...item }))
+  } else {
+    ordered = [...localTabs.value]
+      .map(item => ({ ...item }))
+      .sort((a, b) => {
+        const aBuiltInIndex = BUILT_IN_SOURCE_ORDER.indexOf(a.mediaid_prefix)
+        const bBuiltInIndex = BUILT_IN_SOURCE_ORDER.indexOf(b.mediaid_prefix)
+        const aRank = aBuiltInIndex === -1 ? 999 : aBuiltInIndex
+        const bRank = bBuiltInIndex === -1 ? 999 : bBuiltInIndex
+        return aRank - bRank
+      })
+  }
+  localTabs.value = ordered
+  const nextEnabled: Record<string, boolean> = {}
+  ordered.forEach(item => {
+    nextEnabled[item.mediaid_prefix] = true
   })
   localEnabled.value = nextEnabled
 }
@@ -73,8 +135,10 @@ function getVisibleOrder(element: DiscoverSource) {
   return 0
 }
 
-// 保存当前拖拽后的发现标签顺序与显隐状态。
+// 保存当前拖拽后的发现标签顺序与显隐状态（至少保留 1 个启用源）。
 function submitOrder() {
+  if (isSaveDisabled.value) return
+
   emit('save', {
     tabs: localTabs.value.map(item => ({ ...item })),
     enabled: { ...localEnabled.value },
@@ -102,7 +166,43 @@ function submitOrder() {
       </VCardItem>
       <VDivider />
       <VCardText class="settings-card-body">
-        <p class="settings-hint">{{ t('discover.dragToReorder') }}</p>
+        <div class="settings-toolbar">
+          <div class="settings-toolbar-meta">
+            <p class="settings-hint">{{ t('discover.dragToReorder') }}</p>
+            <span class="settings-count-badge" data-testid="discover-enabled-count">
+              {{ t('discover.enabledCount', { enabled: enabledCount, total: localTabs.length }) }}
+            </span>
+          </div>
+          <div class="settings-toolbar-actions">
+            <VBtn
+              color="primary"
+              variant="tonal"
+              size="x-small"
+              class="setting-quick-btn"
+              prepend-icon="mdi-check-all"
+              :disabled="enabledCount === localTabs.length"
+              @click="enableAllTabs"
+            >
+              {{ t('discover.enableAll') }}
+            </VBtn>
+            <VBtn
+              color="default"
+              variant="outlined"
+              size="x-small"
+              class="setting-quick-btn"
+              prepend-icon="mdi-restore"
+              @click="restoreDefaultTabs"
+            >
+              {{ t('discover.restoreDefault') }}
+            </VBtn>
+          </div>
+        </div>
+
+        <div v-if="isSaveDisabled" class="settings-empty-warning" role="alert" data-testid="discover-keep-one-warning">
+          <VIcon icon="mdi-alert-circle-outline" size="16" class="flex-shrink-0" />
+          <span>{{ t('discover.keepAtLeastOneHint') }}</span>
+        </div>
+
         <draggable
           v-model="localTabs"
           handle=".cursor-move"
@@ -119,7 +219,16 @@ function submitOrder() {
             >
               <div class="setting-item-inner">
                 <VIcon icon="mdi-drag-vertical" size="18" class="drag-icon cursor-move" />
+                <VIcon :icon="getSourceIcon(element.mediaid_prefix)" size="16" class="setting-source-icon" />
                 <span class="setting-label">{{ element.name }}</span>
+                <span
+                  class="setting-source-tag"
+                  :class="isBuiltInSource(element.mediaid_prefix) ? 'is-builtin' : 'is-plugin'"
+                >
+                  {{
+                    isBuiltInSource(element.mediaid_prefix) ? t('discover.sourceBuiltIn') : t('discover.sourcePlugin')
+                  }}
+                </span>
                 <span v-if="localEnabled[element.mediaid_prefix] !== false" class="setting-order-badge">
                   {{ getVisibleOrder(element) }}
                 </span>
@@ -153,7 +262,14 @@ function submitOrder() {
         <VBtn color="default" variant="text" size="small" class="setting-action-btn" @click="visible = false">
           {{ t('common.cancel') }}
         </VBtn>
-        <VBtn color="primary" variant="flat" size="small" class="setting-action-btn px-4" @click="submitOrder">
+        <VBtn
+          color="primary"
+          variant="flat"
+          size="small"
+          class="setting-action-btn px-4"
+          :disabled="isSaveDisabled"
+          @click="submitOrder"
+        >
           <template #prepend>
             <VIcon icon="mdi-content-save-outline" size="18" />
           </template>
@@ -181,11 +297,69 @@ function submitOrder() {
   padding-inline: 20px;
 }
 
+.settings-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-block-end: 14px;
+}
+
+.settings-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .settings-hint {
+  margin: 0;
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 13px;
   line-height: 1.45;
-  margin-block-end: 14px;
+}
+
+.settings-count-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 999px;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+  padding-block: 4px;
+  padding-inline: 8px;
+}
+
+.settings-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setting-quick-btn {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.settings-empty-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(var(--v-theme-warning), 0.34);
+  border-radius: 8px;
+  background-color: rgba(var(--v-theme-warning), 0.1);
+  color: rgb(var(--v-theme-warning));
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-block-end: 12px;
+  padding-block: 7px;
+  padding-inline: 11px;
 }
 
 .settings-grid {
@@ -221,7 +395,7 @@ function submitOrder() {
 .setting-item-inner {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-inline-size: 0;
 }
 
@@ -244,6 +418,11 @@ function submitOrder() {
   color: rgba(var(--v-theme-on-surface), 0.82);
 }
 
+.setting-source-icon {
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-primary), 0.85);
+}
+
 .setting-label {
   overflow: hidden;
   flex: 1;
@@ -254,6 +433,29 @@ function submitOrder() {
   min-inline-size: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.setting-source-tag {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding-block: 3px;
+  padding-inline: 5px;
+  white-space: nowrap;
+}
+
+.setting-source-tag.is-builtin {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  color: rgba(var(--v-theme-primary), 0.92);
+}
+
+.setting-source-tag.is-plugin {
+  background-color: rgba(var(--v-theme-on-surface), 0.07);
+  color: rgba(var(--v-theme-on-surface), 0.64);
 }
 
 .setting-order-badge {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { DiscoverSource } from '@/api/types'
+import DiscoverFilterToolbar from '@/components/discover/DiscoverFilterToolbar.vue'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import FormRender from '@/components/render/FormRender.vue'
+import { useDiscoverPreferences } from '@/composables/useDiscoverPreferences'
 import { cloneDeep, isEqual } from 'lodash-es'
 
 // 输入参数
@@ -9,7 +11,24 @@ const props = defineProps<{
   source: DiscoverSource
 }>()
 
-// 默认输入参数
+const { excludeShortDrama, filtersExpanded, toggleFiltersExpanded } = useDiscoverPreferences()
+
+const SHORT_DRAMA_STREAMING_PATTERN = /(bilibili|tencentvideo|tencent|mangguo|mgtv|iqiyi|youku)/i
+
+const supportsShortDramaFilter = computed(() => {
+  const prefix = props.source.mediaid_prefix ?? ''
+  const apiPath = props.source.api_path ?? ''
+  return (
+    SHORT_DRAMA_STREAMING_PATTERN.test(prefix) ||
+    SHORT_DRAMA_STREAMING_PATTERN.test(apiPath) ||
+    Object.prototype.hasOwnProperty.call(props.source.filter_params ?? {}, 'exclude_short_drama')
+  )
+})
+
+const canCollapse = computed(() => (props.source.filter_ui?.length ?? 0) > 2)
+
+// 默认输入参数（响应式快照供重置计数追踪）
+const defaultParamsSnapshot = ref(cloneDeep(props.source.filter_params))
 let defaultParams = cloneDeep(props.source.filter_params)
 
 // 过滤参数
@@ -21,6 +40,35 @@ let previousParams = cloneDeep(props.source.filter_params)
 // 当前Key
 const currentKey = ref(0)
 
+const activeFilterCount = computed(() => {
+  const base = defaultParamsSnapshot.value ?? {}
+  const keys = new Set([...Object.keys(base), ...Object.keys(filterParams)])
+  let count = 0
+  for (const key of keys) {
+    if (!isEqual(filterParams[key], base[key])) {
+      count += 1
+    }
+  }
+  return count
+})
+
+const showToolbar = computed(() => supportsShortDramaFilter.value || activeFilterCount.value > 0 || canCollapse.value)
+
+const requestParams = computed<Record<string, unknown>>(() => {
+  if (supportsShortDramaFilter.value) {
+    return {
+      ...filterParams,
+      exclude_short_drama: excludeShortDrama.value,
+    }
+  }
+  return filterParams
+})
+
+function resetFilters() {
+  for (const key of Object.keys(filterParams)) delete filterParams[key]
+  Object.assign(filterParams, cloneDeep(defaultParams))
+}
+
 // 来源筛选契约变化时重建模型；语义相同的来源快照保留用户当前选择。
 watch(
   () => props.source.filter_params,
@@ -28,6 +76,7 @@ watch(
     if (isEqual(newDefaultParams, defaultParams)) return
 
     defaultParams = cloneDeep(newDefaultParams)
+    defaultParamsSnapshot.value = cloneDeep(newDefaultParams)
     for (const key of Object.keys(filterParams)) delete filterParams[key]
     Object.assign(filterParams, cloneDeep(newDefaultParams))
     previousParams = cloneDeep(newDefaultParams)
@@ -60,14 +109,38 @@ watch(filterParams, newParams => {
   // 刷新界面
   currentKey.value++
 })
+
+watch(excludeShortDrama, () => {
+  if (supportsShortDramaFilter.value) {
+    currentKey.value++
+  }
+})
 </script>
 
 <template>
   <div class="extra-source-filters">
-    <FormRender v-for="(element, index) in source.filter_ui" :key="index" :config="element" :model="filterParams" />
+    <div v-if="showToolbar" class="extra-source-toolbar-row">
+      <DiscoverFilterToolbar
+        v-model:exclude-short-drama="excludeShortDrama"
+        :show-short-drama-toggle="supportsShortDramaFilter"
+        :active-filter-count="activeFilterCount"
+        :can-collapse="canCollapse"
+        :expanded="filtersExpanded"
+        @reset="resetFilters"
+        @toggle-expand="toggleFiltersExpanded"
+      />
+    </div>
+    <div
+      v-for="(element, index) in source.filter_ui"
+      :key="index"
+      v-show="index < 2 || filtersExpanded"
+      class="extra-source-filter-item"
+    >
+      <FormRender :config="element" :model="filterParams" />
+    </div>
   </div>
   <div>
-    <MediaCardListView :key="`${source.api_path}:${currentKey}`" :apipath="source.api_path" :params="filterParams" />
+    <MediaCardListView :key="`${source.api_path}:${currentKey}`" :apipath="source.api_path" :params="requestParams" />
   </div>
 </template>
 
@@ -78,6 +151,13 @@ watch(filterParams, newParams => {
   gap: 5px;
   padding-block: 4px 6px;
   padding-inline: 0;
+}
+
+.extra-source-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-block-size: 26px;
 }
 
 .extra-source-filters :deep(.v-label) {

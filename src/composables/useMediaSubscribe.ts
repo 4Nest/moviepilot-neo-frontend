@@ -55,6 +55,27 @@ export interface MediaSubscribeIdentity {
   source: string
 }
 
+const NATIVE_MEDIA_SOURCES = new Set(['themoviedb', 'tmdb', 'douban', 'bangumi', 'anilist'])
+
+/** 判断媒体对象是否已具备任一原生权威源 ID。 */
+export function hasAuthoritativeMediaId(media?: MediaInfo): boolean {
+  if (!media) return false
+  return Boolean(
+    media.tmdb_id ||
+    (media.douban_id && String(media.douban_id).trim()) ||
+    (media.bangumi_id !== undefined && media.bangumi_id !== null && String(media.bangumi_id).trim()) ||
+    media.anilist_id,
+  )
+}
+
+/** 判断媒体是否来自外部探索源（非原生四源且无权威 ID）。 */
+export function isExternalDiscoverMedia(media?: MediaInfo): boolean {
+  if (!media || hasAuthoritativeMediaId(media)) return false
+  const primarySource = (media.source || media.mediaid_prefix || '').trim().toLowerCase()
+  if (!primarySource || NATIVE_MEDIA_SOURCES.has(primarySource)) return false
+  return Boolean(getMediaSubscribeId(media))
+}
+
 /** 按媒体声明的主来源解析订阅身份，避免辅助 ID 覆盖原始识别源。 */
 export function getMediaSubscribeIdentity(media?: MediaInfo): MediaSubscribeIdentity | undefined {
   if (!media) return undefined
@@ -145,6 +166,38 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+function mergeResolvedMedia(origin: MediaInfo, resolved: MediaInfo): MediaInfo {
+  return {
+    ...origin,
+    ...resolved,
+    mediaid_prefix: resolved.mediaid_prefix,
+    media_id: resolved.media_id,
+    source: resolved.source,
+    title: resolved.title || origin.title,
+    year: resolved.year || origin.year,
+    type: resolved.type || origin.type,
+    poster_path: resolved.poster_path || origin.poster_path,
+    season: origin.season ?? resolved.season,
+  }
+}
+
+function matchesTargetSubscribe(subscribe: Subscribe, target: MediaInfo): boolean {
+  const targetKey = getMediaSubscribeId(target)
+  const structuredKey =
+    subscribe.media_source && subscribe.media_id
+      ? `${subscribe.media_source === 'themoviedb' ? 'tmdb' : subscribe.media_source}:${subscribe.media_id}`
+      : ''
+  if (targetKey && (targetKey === structuredKey || targetKey === subscribe.mediaid)) return true
+
+  const idPairs: Array<[unknown, unknown]> = [
+    [target.tmdb_id, subscribe.tmdbid],
+    [target.douban_id, subscribe.doubanid],
+    [target.bangumi_id, subscribe.bangumiid],
+    [target.anilist_id, subscribe.anilistid],
+  ]
+  return idPairs.some(([left, right]) => Boolean(left && right && String(left) === String(right)))
+}
+
 // 封装媒体卡片与详情页共用的订阅交互。
 export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   const { t } = useChineseText()
@@ -153,12 +206,26 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   const episodeGroup = ref('')
   const route = useRoute()
   const userStore = useUserStore()
-  // 获取调用方当前媒体，避免在异步流程中持有旧对象。
-  function currentMedia() {
+  let activeResolvedMedia: { origin: MediaInfo; resolved: MediaInfo } | null = null
+
+  // 获取调用方原始当前媒体。
+  function originMedia() {
     return options.media()
   }
 
-  // 获取当前媒体的统一订阅标识。
+  // 获取本次订阅流程生效的目标媒体（若外部探索源已静默解析出权威媒体则优先使用）。
+  function currentMedia() {
+    const origin = originMedia()
+    if (!origin) return undefined
+    return activeResolvedMedia?.origin === origin ? activeResolvedMedia.resolved : origin
+  }
+
+  // 获取原始媒体的统一订阅标识（用于卡片初始状态检测）。
+  function getOriginMediaId() {
+    return getMediaSubscribeId(originMedia())
+  }
+
+  // 获取当前生效目标媒体的统一订阅标识。
   function getMediaId() {
     return getMediaSubscribeId(currentMedia())
   }
@@ -166,6 +233,61 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   // 获取主订阅入口默认对应的季号。
   function getPrimarySeason() {
     return options.primarySeason?.() ?? currentMedia()?.season ?? null
+  }
+
+  // 对外部探索源卡片静默解析权威媒体信息，并在电视剧场景同步已订阅季状态。
+  async function resolveSubscribeTargetMedia(): Promise<{
+    media: MediaInfo | undefined
+    wasExternalResolved: boolean
+  }> {
+    const origin = originMedia()
+    if (!origin) return { media: undefined, wasExternalResolved: false }
+    if (activeResolvedMedia?.origin === origin) {
+      return { media: activeResolvedMedia.resolved, wasExternalResolved: true }
+    }
+    if (!isExternalDiscoverMedia(origin)) {
+      return { media: origin, wasExternalResolved: false }
+    }
+
+    try {
+      const resolved: MediaInfo = await api.get(`media/${getMediaSubscribeId(origin)}`, {
+        params: {
+          type_name: origin.type,
+          title: origin.title,
+          year: origin.year,
+        },
+      })
+      if (hasAuthoritativeMediaId(resolved)) {
+        const merged = mergeResolvedMedia(origin, resolved)
+        activeResolvedMedia = { origin, resolved: merged }
+
+        if (merged.type === '电视剧' && (options.subscribedSeasons || options.subscribedSeasonModes)) {
+          try {
+            const subscribes: Subscribe[] = await api.get('subscribe/')
+            const matched = subscribes.filter(
+              item => item.type === '电视剧' && item.season !== undefined && matchesTargetSubscribe(item, merged),
+            )
+            if (options.subscribedSeasons) {
+              options.subscribedSeasons.value = matched.map(item => item.season as number).sort((a, b) => a - b)
+            }
+            if (options.subscribedSeasonModes) {
+              options.subscribedSeasonModes.value = matched.reduce<SeasonSubscribeModes>((acc, item) => {
+                if (item.season !== undefined) acc[item.season] = getSubscribeMode(item)
+                return acc
+              }, {})
+            }
+          } catch {
+            // 订阅列表辅助同步失败不阻断主订阅弹窗
+          }
+        }
+
+        return { media: merged, wasExternalResolved: true }
+      }
+    } catch {
+      // 外部词条解析失败时平滑回退使用原始卡片信息
+    }
+
+    return { media: origin, wasExternalResolved: false }
   }
 
   // 同步调用方状态和订阅状态缓存。
@@ -245,15 +367,19 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
 
   // 打开季订阅弹窗，并保留发起入口当前使用的剧集组。
   async function openSubscribeSeasonDialog(selectedSeason?: number | null, initialEpisodeGroup = '') {
-    const media = currentMedia()
+    const origin = originMedia()
+    if (!origin) return
+    const { media, wasExternalResolved } = await resolveSubscribeTargetMedia()
     if (!media) return
     const defaultSubscribeConfig = await queryDefaultSubscribeConfig()
+    const resolvedSelectedSeason =
+      selectedSeason !== undefined ? selectedSeason : wasExternalResolved ? (origin.season ?? media.season) : undefined
 
     openSharedDialog(
       SubscribeSeasonDialog,
       {
         media,
-        selectedSeason,
+        selectedSeason: resolvedSelectedSeason,
         initialEpisodeGroup,
         subscribedSeasons: options.subscribedSeasons?.value ?? [],
         subscribedSeasonModes: options.subscribedSeasonModes?.value ?? {},
@@ -373,7 +499,7 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
     }
   }
 
-  // 删除指定季的订阅。
+  // 删除指定季的订阅（附带 title 供外部探索源按标题兜底取消）。
   async function removeSubscribe(season: number | null = null, removeOptions: RemoveSubscribeOptions = {}) {
     if (removeOptions.confirm ?? true) {
       const confirmed = await createConfirm({
@@ -393,6 +519,7 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
       const result: { [key: string]: any } = await api.delete(`subscribe/media/${getMediaId()}`, {
         params: {
           season: media.type === '电影' ? null : season,
+          title: media.title,
         },
       })
 
@@ -419,10 +546,10 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
   // 检查当前媒体指定季是否已订阅。
   async function checkSubscribe(season: number | null = null) {
     try {
-      const result: Subscribe = await api.get(`subscribe/media/${getMediaId()}`, {
+      const result: Subscribe = await api.get(`subscribe/media/${getOriginMediaId()}`, {
         params: {
           season,
-          title: currentMedia()?.title,
+          title: originMedia()?.title,
         },
       })
 
@@ -503,32 +630,35 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
       return
     }
 
-    openSubscribeSeasonDialog(season, initialEpisodeGroup)
+    void openSubscribeSeasonDialog(season, initialEpisodeGroup)
   }
 
   // 处理媒体主订阅入口，电视剧统一进入季选择弹窗。
-  function handlePrimarySubscribe() {
-    const media = currentMedia()
-    if (!media) return
+  async function handlePrimarySubscribe() {
+    const origin = originMedia()
+    if (!origin) return
 
-    const season = media.type === '电影' ? null : getPrimarySeason()
+    const season = origin.type === '电影' ? null : getPrimarySeason()
 
-    if (media.type === '电视剧') {
-      openSubscribeSeasonDialog()
+    if (origin.type === '电视剧') {
+      await openSubscribeSeasonDialog()
       return
     }
 
     if (options.isSubscribed?.value) {
-      removeSubscribe(season)
+      await removeSubscribe(season)
       return
     }
+
+    await resolveSubscribeTargetMedia()
+    if (!currentMedia()) return
 
     if (options.isExists?.()) {
       openSubscribeModeDialog(['normal', 'best_version'], payload => addSubscribe(null, payload))
       return
     }
 
-    addSubscribe(null)
+    await addSubscribe(null)
   }
 
   // 根据是否指定季号分发主订阅或单季订阅操作。
@@ -538,7 +668,7 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
       return
     }
 
-    handlePrimarySubscribe()
+    void handlePrimarySubscribe()
   }
 
   // 批量对齐弹窗中选择的季、订阅模式和当前订阅状态。
