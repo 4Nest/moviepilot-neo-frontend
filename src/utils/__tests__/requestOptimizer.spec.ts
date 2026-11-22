@@ -2,7 +2,11 @@ import {
   abortAllRequests,
   getActiveRequestsCount,
   initializeRequestOptimizer,
+  isRequestCanceledError,
+  resetNavigationAbortState,
   setNavigatingState,
+  shouldSuppressNavigationErrorToast,
+  wasRequestRecentlyAborted,
 } from '@/utils/requestOptimizer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -68,13 +72,16 @@ function createAxiosInterceptorFake() {
 describe('requestOptimizer', () => {
   beforeEach(() => {
     abortAllRequests()
+    resetNavigationAbortState()
     setNavigatingState(false)
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
 
   afterEach(() => {
     abortAllRequests()
+    resetNavigationAbortState()
     setNavigatingState(false)
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -159,5 +166,44 @@ describe('requestOptimizer', () => {
     expect(first.signal?.aborted).toBe(true)
     expect(second.signal?.aborted).toBe(true)
     expect(getActiveRequestsCount()).toBe(0)
+  })
+
+  it('准确识别 Axios / Fetch 取消错误并区分普通业务错误', () => {
+    expect(isRequestCanceledError({ code: 'ERR_CANCELED', message: 'canceled' })).toBe(true)
+    expect(isRequestCanceledError({ name: 'CanceledError', message: 'canceled' })).toBe(true)
+    expect(isRequestCanceledError({ name: 'AbortError', message: 'aborted' })).toBe(true)
+    expect(isRequestCanceledError({ __CANCEL__: true })).toBe(true)
+    expect(isRequestCanceledError(new Error('网络错误'))).toBe(false)
+    expect(isRequestCanceledError(null)).toBe(false)
+  })
+
+  it('快速切页中断在途请求时抑制 canceled 及短窗口内的错误提示，不误杀正常提示', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-22T03:00:00.000Z'))
+
+    // 未发生导航中断时，普通错误正常展示，纯 canceled 文案仍被抑制
+    expect(wasRequestRecentlyAborted()).toBe(false)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: '保存失败' })).toBe(false)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: 'canceled' })).toBe(true)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: '加载失败：canceled' })).toBe(true)
+    expect(shouldSuppressNavigationErrorToast({ type: 'success', content: 'canceled' })).toBe(false)
+
+    // 没有活跃请求时的导航不应误触发静默窗口
+    setNavigatingState(true)
+    expect(wasRequestRecentlyAborted()).toBe(false)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: '请求失败' })).toBe(false)
+
+    // 有在途请求被导航取消时，短窗口内抑制 error toast，但放行 success/info
+    const interceptors = createAxiosInterceptorFake()
+    interceptors.request.fulfilled({})
+    setNavigatingState(true)
+    expect(wasRequestRecentlyAborted()).toBe(true)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: '请求失败' })).toBe(true)
+    expect(shouldSuppressNavigationErrorToast({ type: 'info', content: '提示' })).toBe(false)
+
+    // 超过抑制窗口后，新页面的真实报错正常展示
+    vi.advanceTimersByTime(300)
+    expect(wasRequestRecentlyAborted()).toBe(false)
+    expect(shouldSuppressNavigationErrorToast({ type: 'error', content: '服务器异常' })).toBe(false)
   })
 })

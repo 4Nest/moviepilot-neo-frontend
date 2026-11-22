@@ -277,6 +277,8 @@ describe('TorrentItem display and interactions', () => {
       expect(screen.getByText(text)).toBeInTheDocument()
     }
     expect(container.querySelector('.discount-banner')).toHaveClass('bg-orange')
+    expect(container.querySelector('.torrent-item__header')).toHaveTextContent('剩余 2 小时')
+    expect(container.querySelector('.torrent-item__tags')).not.toHaveTextContent('剩余 2 小时')
     expect(container.querySelector('.torrent-item [title="列表测试站"]')).toBeInTheDocument()
     await waitFor(() => expect(container.querySelector<HTMLImageElement>('img')?.src).toContain('site-101.png'))
   })

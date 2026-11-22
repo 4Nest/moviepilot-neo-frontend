@@ -168,11 +168,6 @@ watch(
       }"
       hover
     >
-      <!-- 优惠标签 -->
-      <div v-if="promotionKind" class="discount-banner font-weight-semibold" :class="getPromotionClass(promotionKind)">
-        {{ torrent?.volume_factor }}
-      </div>
-
       <VIcon
         v-if="props.batchMode"
         class="torrent-card__selection-icon"
@@ -181,28 +176,47 @@ watch(
         size="22"
       />
 
-      <!-- 媒体标题 -->
+      <!-- 媒体标题与右上角促销信息 -->
       <VCardItem class="torrent-card__head">
-        <div class="torrent-card__media-title pr-12">
-          {{ media?.title ?? meta?.name }}
-          <VChip
-            v-if="meta?.season_episode"
-            color="primary"
-            variant="tonal"
-            size="x-small"
-            class="torrent-card__season torrent-chip font-weight-semibold"
+        <div class="torrent-card__head-row d-flex align-start justify-space-between gap-2">
+          <div class="torrent-card__media-title">
+            {{ media?.title ?? meta?.name }}
+            <VChip
+              v-if="meta?.season_episode"
+              color="primary"
+              variant="tonal"
+              size="x-small"
+              class="torrent-card__season torrent-chip font-weight-semibold"
+            >
+              {{ meta?.season_episode }}
+            </VChip>
+            <VChip
+              v-if="isDownloaded"
+              color="success"
+              variant="tonal"
+              size="x-small"
+              class="torrent-card__season torrent-chip font-weight-medium"
+            >
+              已下载
+            </VChip>
+          </div>
+
+          <div
+            v-if="promotionKind || torrent?.freedate_diff"
+            class="torrent-card__promotion d-inline-flex align-center flex-shrink-0 gap-1"
           >
-            {{ meta?.season_episode }}
-          </VChip>
-          <VChip
-            v-if="isDownloaded"
-            color="success"
-            variant="tonal"
-            size="x-small"
-            class="torrent-card__season torrent-chip font-weight-medium"
-          >
-            已下载
-          </VChip>
+            <span
+              v-if="promotionKind"
+              class="discount-banner font-weight-semibold"
+              :class="getPromotionClass(promotionKind)"
+            >
+              {{ torrent?.volume_factor }}
+            </span>
+            <span v-if="torrent?.freedate_diff" class="torrent-card__freedate-diff">
+              <VIcon icon="mdi-timer-outline" size="11" />
+              {{ torrent?.freedate_diff }}
+            </span>
+          </div>
         </div>
       </VCardItem>
 
@@ -245,9 +259,6 @@ watch(
           </VChip>
           <VChip v-if="torrent?.hit_and_run" color="error" size="x-small" variant="tonal" class="torrent-chip">
             H&R
-          </VChip>
-          <VChip v-if="torrent?.freedate_diff" color="secondary" size="x-small" variant="tonal" class="torrent-chip">
-            {{ torrent?.freedate_diff }}
           </VChip>
         </div>
       </VCardText>
@@ -331,8 +342,6 @@ watch(
 </template>
 <style scoped>
 .discount-banner {
-  position: absolute;
-  z-index: 3;
   display: inline-flex;
   align-items: center;
   border-radius: 5px;
@@ -341,10 +350,25 @@ watch(
   color: rgb(var(--v-theme-primary)) !important;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  inset-block-start: 12px;
-  inset-inline-end: 12px;
   line-height: 1;
   padding-inline: 6px;
+  white-space: nowrap;
+}
+
+.torrent-card__freedate-diff {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
+  block-size: 20px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  gap: 3px;
+  line-height: 1;
+  padding-inline: 6px;
+  white-space: nowrap;
 }
 
 .torrent-chip {

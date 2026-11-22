@@ -192,13 +192,17 @@ watch(
           >
             已下载
           </VChip>
-          <!-- 优惠标签整合进标题行 -->
+          <!-- 优惠标签与剩余免费时间整合进标题行 -->
           <span
             v-if="promotionKind"
             class="discount-banner font-weight-semibold"
             :class="getPromotionClass(promotionKind)"
           >
             {{ torrent?.volume_factor }}
+          </span>
+          <span v-if="torrent?.freedate_diff" class="torrent-item__freedate-diff">
+            <VIcon icon="mdi-timer-outline" size="11" />
+            {{ torrent?.freedate_diff }}
           </span>
           <span v-if="torrent?.pubdate" class="torrent-item__time d-inline-flex align-center">
             <VIcon size="12" icon="mdi-clock-outline" class="me-1" />
@@ -242,9 +246,6 @@ watch(
           </VChip>
           <VChip v-if="torrent?.hit_and_run" color="error" size="x-small" variant="tonal" class="torrent-chip">
             H&R
-          </VChip>
-          <VChip v-if="torrent?.freedate_diff" color="secondary" size="x-small" variant="tonal" class="torrent-chip">
-            {{ torrent?.freedate_diff }}
           </VChip>
         </div>
       </VListItemTitle>
@@ -375,6 +376,22 @@ watch(
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.torrent-item__freedate-diff {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  background-color: rgba(var(--v-theme-on-surface), 0.06);
+  block-size: 20px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  gap: 3px;
+  line-height: 1;
+  padding-inline: 6px;
   white-space: nowrap;
 }
 

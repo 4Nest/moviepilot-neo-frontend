@@ -13,10 +13,11 @@ import App from '@/App.vue'
 import { PerfectScrollbarPlugin } from 'vue3-perfect-scrollbar'
 
 // 4. 其他插件和功能模块
-import Toast from 'vue-toastification'
+import Toast, { type PluginOptions } from 'vue-toastification'
 import ConfirmDialog from '@/composables/useConfirm'
 import { configureApexChartsTheme } from '@/utils/apexCharts'
 import { initializeServiceWorker } from '@/composables/useVersionChecker'
+import { shouldSuppressNavigationErrorToast } from '@/utils/requestOptimizer'
 
 // 5. 注册自定义组件
 import DialogCloseBtn from '@/@core/components/DialogCloseBtn.vue'
@@ -105,14 +106,17 @@ app
   .component('VPathField', AsyncPathField)
   .component('VPageContentTitle', PageContentTitle)
 
+const toastOptions: PluginOptions = {
+  position: 'bottom-right' as PluginOptions['position'],
+  hideProgressBar: true,
+  filterBeforeCreate: toast => {
+    if (shouldSuppressNavigationErrorToast(toast)) return false
+    return toast
+  },
+}
+
 // 6. 注册其他插件
-app
-  .use(PerfectScrollbarPlugin)
-  .use(Toast, {
-    position: 'bottom-right',
-    hideProgressBar: true,
-  })
-  .use(ConfirmDialog)
+app.use(PerfectScrollbarPlugin).use(Toast, toastOptions).use(ConfirmDialog)
 
 // UI 通知依赖安装完成后立即绑定更新监听并启动唯一的 Service Worker 注册。
 void initializeServiceWorker()

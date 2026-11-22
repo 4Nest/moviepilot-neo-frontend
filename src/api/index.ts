@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import router from '@/router'
 import { useAuthStore } from '@/stores'
-import { initializeRequestOptimizer } from '@/utils/requestOptimizer'
+import { initializeRequestOptimizer, isRequestCanceledError } from '@/utils/requestOptimizer'
 import { useGlobalOfflineStatus } from '@/composables/useOfflineStatus'
 
 // 创建axios实例
@@ -57,8 +57,11 @@ interface LocalizedApiPayload {
   message?: unknown
   message_i18n?: unknown
 }
+export { isRequestCanceledError }
+
 /** 从未知请求错误中安全提取后端文本或 Pydantic 校验消息。 */
 export function getApiErrorMessage(error: unknown): string | undefined {
+  if (isRequestCanceledError(error)) return undefined
   let payload: unknown
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = error.response

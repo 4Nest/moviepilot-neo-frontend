@@ -9,7 +9,10 @@ declare module 'axios' {
 }
 
 let isNavigating = false
+let lastNavigationAbortAt = 0
 const activeRequests = new Set<AbortController>()
+const NAVIGATION_ABORT_TOAST_SUPPRESS_MS = 250
+const CANCELED_TOAST_PATTERN = /(?:^|[:：\s])(?:canceled|cancelled|aborted|the user aborted a request\.?)\s*$/i
 
 // 监听路由状态
 export function setNavigatingState(navigating: boolean) {
@@ -24,12 +27,48 @@ export function setNavigatingState(navigating: boolean) {
 
 // 中断所有活跃的请求
 function abortAllActiveRequests() {
+  let abortedCount = 0
   for (const controller of activeRequests) {
     if (!controller.signal.aborted) {
       controller.abort()
+      abortedCount += 1
     }
   }
   activeRequests.clear()
+  if (abortedCount > 0) {
+    lastNavigationAbortAt = Date.now()
+  }
+}
+
+/** 判断未知异常是否属于 Axios / Fetch 请求取消错误。 */
+export function isRequestCanceledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; name?: unknown; __CANCEL__?: unknown }
+  return (
+    candidate.__CANCEL__ === true ||
+    candidate.code === 'ERR_CANCELED' ||
+    candidate.name === 'CanceledError' ||
+    candidate.name === 'AbortError'
+  )
+}
+
+/** 判断最近是否刚因路由切换中止过在途请求。 */
+export function wasRequestRecentlyAborted(windowMs: number = NAVIGATION_ABORT_TOAST_SUPPRESS_MS): boolean {
+  return lastNavigationAbortAt > 0 && Date.now() - lastNavigationAbortAt <= windowMs
+}
+
+/** 重置最近一次导航取消时间戳（主要用于单元测试隔离）。 */
+export function resetNavigationAbortState() {
+  lastNavigationAbortAt = 0
+}
+
+/** 过滤路由切换中断在途请求引发的误报错误提示，避免右下角弹出 canceled。 */
+export function shouldSuppressNavigationErrorToast(toast: { type?: unknown; content?: unknown }): boolean {
+  if (toast?.type !== 'error') return false
+  if (typeof toast.content === 'string' && CANCELED_TOAST_PATTERN.test(toast.content.trim())) {
+    return true
+  }
+  return wasRequestRecentlyAborted()
 }
 
 // 清理已完成的请求控制器

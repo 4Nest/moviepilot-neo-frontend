@@ -261,6 +261,8 @@ describe('TorrentCard display and interactions', () => {
       expect(screen.getByText(text)).toBeInTheDocument()
     }
     expect(container.querySelector('.discount-banner')).toHaveClass('bg-success')
+    expect(container.querySelector('.torrent-card__promotion')).toHaveTextContent('剩余 1 天')
+    expect(container.querySelector('.torrent-card__tags')).not.toHaveTextContent('剩余 1 天')
     await waitFor(() => expect(container.querySelector<HTMLImageElement>('img')?.src).toContain('site-101.png'))
   })
 

@@ -445,6 +445,14 @@ onMounted(() => {
                 <VChip v-if="item.hit_and_run" variant="flat" size="x-small" class="site-resource-hr-chip">
                   H&amp;R
                 </VChip>
+                <VChip
+                  v-if="getTorrentPromotionKind(item)"
+                  :class="getVolumeFactorClass(item)"
+                  variant="elevated"
+                  size="x-small"
+                >
+                  {{ item.volume_factor }}
+                </VChip>
                 <VChip v-if="item.freedate_diff" variant="tonal" color="secondary" size="x-small">
                   {{ item.freedate_diff }}
                 </VChip>
@@ -456,14 +464,6 @@ onMounted(() => {
                   size="x-small"
                 >
                   {{ label }}
-                </VChip>
-                <VChip
-                  v-if="getTorrentPromotionKind(item)"
-                  :class="getVolumeFactorClass(item)"
-                  variant="elevated"
-                  size="x-small"
-                >
-                  {{ item.volume_factor }}
                 </VChip>
                 <VChip v-if="item.category" variant="tonal" color="primary" size="x-small">
                   {{ t('dialog.siteResource.resourceCategory') }}：{{ item.category }}
@@ -578,6 +578,15 @@ onMounted(() => {
                         H&amp;R
                       </VChip>
                       <VChip
+                        v-if="getTorrentPromotionKind(item)"
+                        :class="getVolumeFactorClass(item)"
+                        variant="elevated"
+                        size="small"
+                        class="me-1 mb-1"
+                      >
+                        {{ item.volume_factor }}
+                      </VChip>
+                      <VChip
                         v-if="item.freedate_diff"
                         variant="elevated"
                         color="secondary"
@@ -594,15 +603,6 @@ onMounted(() => {
                         class="me-1 mb-1 site-resource-label-chip"
                       >
                         {{ label }}
-                      </VChip>
-                      <VChip
-                        v-if="getTorrentPromotionKind(item)"
-                        :class="getVolumeFactorClass(item)"
-                        variant="elevated"
-                        size="small"
-                        class="me-1 mb-1"
-                      >
-                        {{ item.volume_factor }}
                       </VChip>
                       <VChip v-if="item.category" variant="tonal" color="primary" size="small" class="me-1 mb-1">
                         {{ t('dialog.siteResource.resourceCategory') }}：{{ item.category }}
