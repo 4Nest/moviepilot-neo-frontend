@@ -260,28 +260,44 @@ export function getPluginTabs(t: TextTranslator): NavMenuTabItem[] {
   ]
 }
 
+export const DISCOVER_SOURCE_ICON_MAP: Record<string, string> = {
+  themoviedb: 'mdi-movie-search-outline',
+  douban: 'mdi-book-open-page-variant-outline',
+  bangumi: 'mdi-calendar-star-outline',
+  anilist: 'mdi-alpha-a-circle-outline',
+  bilibili: 'mdi-television-play',
+  tencentvideo: 'mdi-play-box-outline',
+  mangguo: 'mdi-movie-open-play-outline',
+}
+
+/** 根据发现页来源前缀返回统一的线性导航图标。 */
+export function getDiscoverSourceIcon(prefix?: string): string {
+  if (!prefix) return 'mdi-compass-outline'
+  return DISCOVER_SOURCE_ICON_MAP[prefix] ?? 'mdi-compass-outline'
+}
+
 /** 返回发现页的媒体来源标签。 */
 export function getDiscoverTabs(t: TextTranslator): NavMenuTabItem[] {
   return [
     {
       title: t('discoverTabs.themoviedb'),
       tab: 'themoviedb',
-      icon: 'mdi-movie-search-outline',
+      icon: DISCOVER_SOURCE_ICON_MAP.themoviedb,
     },
     {
       title: t('discoverTabs.douban'),
       tab: 'douban',
-      icon: 'mdi-book-open-page-variant-outline',
+      icon: DISCOVER_SOURCE_ICON_MAP.douban,
     },
     {
       title: t('discoverTabs.bangumi'),
       tab: 'bangumi',
-      icon: 'mdi-calendar-star-outline',
+      icon: DISCOVER_SOURCE_ICON_MAP.bangumi,
     },
     {
       title: t('discoverTabs.anilist'),
       tab: 'anilist',
-      icon: 'mdi-alpha-a-circle-outline',
+      icon: DISCOVER_SOURCE_ICON_MAP.anilist,
     },
   ]
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { getDiscoverTabs } from '@/router/i18n-menu'
+import { getDiscoverSourceIcon, getDiscoverTabs } from '@/router/i18n-menu'
+import { setSharedDiscoverNavTabs } from '@/utils/discoverNavTabs'
 import TheMovieDbView from '@/views/discover/TheMovieDbView.vue'
 import DoubanView from '@/views/discover/DoubanView.vue'
 import BangumiView from '@/views/discover/BangumiView.vue'
@@ -81,13 +82,26 @@ const visibleDiscoverTabs = computed(() => {
   return discoverTabs.value.filter(isTabEnabled)
 })
 
-// 顶栏仅展示已启用的标签页项
+// 顶栏仅展示已启用的标签页项，并附带各探索源语义图标供水平导航三级菜单直接渲染
 const discoverTabItems = computed(() => {
   return visibleDiscoverTabs.value.map(item => ({
     title: item.name,
     tab: item.mediaid_prefix,
+    icon: getDiscoverSourceIcon(item.mediaid_prefix),
   }))
 })
+
+const discoverSourcesLoaded = ref(false)
+
+watch(
+  discoverTabItems,
+  items => {
+    if (items.length > 0 && discoverSourcesLoaded.value) {
+      setSharedDiscoverNavTabs(items, true)
+    }
+  },
+  { flush: 'sync' },
+)
 
 // 额外的数据源
 const extraDiscoverSources = ref<DiscoverSource[]>([])
@@ -332,12 +346,10 @@ async function initializeDiscover() {
 
   await Promise.all([loadOrderConfig(), loadExtraDiscoverSources()])
   sortSubscribeOrder()
-  // 首次初始化完成后选中权威排序下的第一个可见标签
-  if (visibleDiscoverTabs.value.length > 0) {
-    activeTab.value = visibleDiscoverTabs.value[0].mediaid_prefix
-  } else {
-    activeTab.value = ''
-  }
+  discoverSourcesLoaded.value = true
+  setSharedDiscoverNavTabs(discoverTabItems.value, true)
+  // 首次初始化完成后校验并保持有效激活标签（兼容水平导航跨页预选的扩展源 tab）
+  ensureValidActiveTab()
 }
 
 onBeforeMount(() => {

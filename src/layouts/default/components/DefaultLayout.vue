@@ -12,6 +12,7 @@ import HeaderTab from './HeaderTab.vue'
 import ThemeCustomizer from '@/components/theme/ThemeCustomizer.vue'
 import { usePluginSidebarNavStore, useUserStore } from '@/stores'
 import { getNavMenus } from '@/router/i18n-menu'
+import { ensureDiscoverNavTabsLoaded, sharedDiscoverNavTabs } from '@/utils/discoverNavTabs'
 import { filterPluginSidebarNavEntries } from '@/utils/pluginSidebarNav'
 import { NavMenu } from '@/@layouts/types'
 import { useDisplay } from 'vuetify'
@@ -410,10 +411,14 @@ function getHorizontalNavTabs(item: NavMenu): DynamicHeaderTabItem[] {
     return visibleDynamicHeaderTabItems.value
   }
 
+  if (targetPath === '/discover' && sharedDiscoverNavTabs.value && sharedDiscoverNavTabs.value.length > 0) {
+    return sharedDiscoverNavTabs.value
+  }
+
   return item.tabs ?? []
 }
 
-/** 在目标页面注册动态标签后应用此前暂存的标签切换。 */
+/** 在目标页面注册或异步补齐动态标签后应用此前暂存的标签切换。 */
 function applyPendingHorizontalTab() {
   if (!pendingHorizontalTab.value || !hasDynamicHeaderTab.value) return
 
@@ -426,6 +431,20 @@ function applyPendingHorizontalTab() {
   handleTabChange(pending.tab)
   pendingHorizontalTab.value = null
 }
+
+watch(visibleDynamicHeaderTabItems, () => {
+  applyPendingHorizontalTab()
+})
+
+watch(
+  showHorizontalThemeNav,
+  active => {
+    if (active) {
+      void ensureDiscoverNavTabsLoaded(t)
+    }
+  },
+  { immediate: true },
+)
 
 /** 关闭插件快速访问面板。 */
 function handleClosePluginQuickAccess() {
