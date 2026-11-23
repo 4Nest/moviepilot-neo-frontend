@@ -383,10 +383,10 @@ function registerListHandlers(responses: ListResponses = {}) {
   )
 }
 
-async function renderList(responses: ListResponses = {}) {
+async function renderList(responses: ListResponses = {}, options: { initialRoute?: string } = {}) {
   registerListHandlers(responses)
   return renderWithProviders(PluginCardListView, {
-    initialRoute: '/plugins',
+    initialRoute: options.initialRoute ?? '/plugins',
     global: {
       stubs: {
         LoadingBanner: LoadingBannerStub,
@@ -1753,5 +1753,24 @@ describe('PluginCardListView folders and persistence', () => {
 
     getHeaderButton('mdi-arrow-left').action?.()
     expect(await screen.findByText('folder:Tools')).toBeInTheDocument()
+  })
+
+  it('opens the route target as soon as installed plugins load without waiting for the market', async () => {
+    const market = createDeferred<Plugin[]>()
+    await renderList(
+      {
+        installed: () => [createPlugin({ id: 'Beta', installed: true, plugin_name: 'Beta' })],
+        market: () => market.promise,
+      },
+      { initialRoute: '/plugins?id=Beta' },
+    )
+
+    await waitFor(() => expect(screen.getByTestId('plugin-Beta')).toHaveAttribute('data-page-open', 'true'))
+    expect(screen.queryByText(/^market:/)).not.toBeInTheDocument()
+
+    market.resolve([createPlugin({ id: 'Market', plugin_name: '市场插件' })])
+    expect(await screen.findByText('market:市场插件')).toBeInTheDocument()
+    expect(screen.getByTestId('plugin-Beta')).toHaveAttribute('data-page-open', 'true')
+    await waitForRequestsToFinish()
   })
 })

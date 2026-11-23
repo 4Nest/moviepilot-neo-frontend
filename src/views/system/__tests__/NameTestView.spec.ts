@@ -8,9 +8,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
+  copyToClipboard: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   toastWarning: vi.fn(),
+}))
+
+vi.mock('@/@core/utils/navigator', () => ({
+  copyToClipboard: (...args: unknown[]) => mocks.copyToClipboard(...args),
 }))
 
 vi.mock('@/api', () => ({
@@ -18,6 +23,7 @@ vi.mock('@/api', () => ({
     get: mocks.apiGet,
     post: mocks.apiPost,
   },
+  getApiErrorMessage: (error: unknown) => (error instanceof Error && error.message ? error.message : undefined),
 }))
 
 vi.mock('vue-toastification', () => ({
@@ -181,5 +187,287 @@ describe('NameTestView media identity', () => {
     expect(screen.getByLabelText('标题')).toHaveValue('Nisekoi.False.Love.S02E12')
     expect(screen.getByLabelText('副标题')).toHaveValue('DIY 中字')
     expect(screen.getByLabelText('识别词')).toHaveValue('False Love => ')
+  })
+
+  it('识别失败时不发起整理预览请求', async () => {
+    mocks.apiGet.mockResolvedValueOnce({
+      meta_info: {
+        apply_words: [],
+        org_string: 'Unknown.Release',
+        title: 'Unknown.Release',
+      },
+      torrent_info: {},
+    })
+
+    await renderWithProviders(NameTestView, {
+      initialState: {
+        globalSettings: {
+          data: { RECOGNIZE_SOURCE: 'themoviedb' },
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('标题'), 'Unknown.Release')
+    await user.click(screen.getByRole('button', { name: '识别' }))
+
+    expect(await screen.findByText('未识别到媒体')).toBeInTheDocument()
+    expect(mocks.apiGet).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('transfer-preview')).not.toBeInTheDocument()
+  })
+
+  it('fetches and displays transfer preview details and copies the full target path', async () => {
+    mocks.copyToClipboard.mockResolvedValueOnce(true)
+    mocks.apiGet
+      .mockResolvedValueOnce({
+        media_info: {
+          category: '外语电影',
+          media_id: '10376',
+          source: 'themoviedb',
+          title: '海上钢琴师',
+          type: '电影',
+          year: '1998',
+        },
+        meta_info: {
+          apply_words: [],
+          name: '海上钢琴师',
+          org_string: 'The.Legend.of.1900.1998.1080p.BluRay.mkv',
+          title: 'The.Legend.of.1900.1998.1080p.BluRay.mkv',
+        },
+        torrent_info: {},
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          category: '外语电影',
+          target_dir: '海上钢琴师 (1998) {tmdbid=10376}',
+          file_name: '海上钢琴师 (1998) - 1080p.mkv',
+          rename_path: '海上钢琴师 (1998) {tmdbid=10376}/海上钢琴师 (1998) - 1080p.mkv',
+          library_path: '/media/电影/外语电影',
+          full_path: '/media/电影/外语电影/海上钢琴师 (1998) {tmdbid=10376}/海上钢琴师 (1998) - 1080p.mkv',
+        },
+      })
+
+    await renderWithProviders(NameTestView, {
+      initialState: {
+        globalSettings: {
+          data: { RECOGNIZE_SOURCE: 'themoviedb' },
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('标题'), 'The.Legend.of.1900.1998.1080p.BluRay.mkv')
+    await user.type(screen.getByLabelText('副标题'), '海上钢琴师')
+    await user.type(screen.getByLabelText('识别词'), '屏蔽词')
+    await user.click(screen.getByRole('button', { name: '识别' }))
+
+    const previewSection = await screen.findByTestId('transfer-preview')
+    expect(previewSection).toHaveTextContent('分类路径外语电影')
+    expect(previewSection).toHaveTextContent('目标目录海上钢琴师 (1998) {tmdbid=10376}')
+    expect(previewSection).toHaveTextContent('最终文件名海上钢琴师 (1998) - 1080p.mkv')
+    expect(previewSection).toHaveTextContent(
+      '完整目标路径/media/电影/外语电影/海上钢琴师 (1998) {tmdbid=10376}/海上钢琴师 (1998) - 1080p.mkv',
+    )
+
+    expect(mocks.apiGet).toHaveBeenNthCalledWith(2, 'transfer/name/preview', {
+      params: {
+        title: 'The.Legend.of.1900.1998.1080p.BluRay.mkv',
+        subtitle: '海上钢琴师',
+        custom_words: '屏蔽词',
+        media_source: 'themoviedb',
+        media_id: '10376',
+        mtype: '电影',
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: '复制路径' }))
+    expect(mocks.copyToClipboard).toHaveBeenCalledWith(
+      '/media/电影/外语电影/海上钢琴师 (1998) {tmdbid=10376}/海上钢琴师 (1998) - 1080p.mkv',
+    )
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('整理路径已复制')
+  })
+
+  it('shows relative path and uncategorized hint when no library directory matches', async () => {
+    mocks.apiGet
+      .mockResolvedValueOnce({
+        media_info: {
+          media_id: '271016',
+          source: 'themoviedb',
+          title: '测试剧集',
+          type: '电视剧',
+          year: '2026',
+        },
+        meta_info: {
+          apply_words: [],
+          name: '测试剧集',
+          org_string: 'Test.Show.S01E01.1080p',
+          season_episode: 'S01 E01',
+          title: 'Test.Show.S01E01.1080p',
+        },
+        torrent_info: {},
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          category: null,
+          target_dir: '测试剧集 (2026)',
+          file_name: '测试剧集 - S01E01',
+          rename_path: '测试剧集 (2026)/Season 1/测试剧集 - S01E01',
+          library_path: null,
+          full_path: null,
+        },
+      })
+
+    await renderWithProviders(NameTestView, {
+      initialState: {
+        globalSettings: {
+          data: { RECOGNIZE_SOURCE: 'themoviedb' },
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('标题'), 'Test.Show.S01E01.1080p')
+    await user.click(screen.getByRole('button', { name: '识别' }))
+
+    const previewSection = await screen.findByTestId('transfer-preview')
+    expect(previewSection).toHaveTextContent('分类路径未命中分类')
+    expect(previewSection).toHaveTextContent('目标目录测试剧集 (2026)')
+    expect(previewSection).toHaveTextContent('最终文件名测试剧集 - S01E01')
+    expect(previewSection).toHaveTextContent('相对路径测试剧集 (2026)/Season 1/测试剧集 - S01E01')
+  })
+
+  it('keeps recognition results visible when transfer preview fails', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.apiGet
+      .mockResolvedValueOnce({
+        media_info: {
+          media_id: '10376',
+          source: 'themoviedb',
+          title: '海上钢琴师',
+          type: '电影',
+          year: '1998',
+        },
+        meta_info: {
+          apply_words: [],
+          name: '海上钢琴师',
+          org_string: 'The.Legend.of.1900.1998',
+          title: 'The.Legend.of.1900.1998',
+        },
+        torrent_info: {},
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        message: '重命名模板渲染失败：模板语法错误',
+        data: null,
+      })
+
+    try {
+      await renderWithProviders(NameTestView, {
+        initialState: {
+          globalSettings: {
+            data: { RECOGNIZE_SOURCE: 'themoviedb' },
+          },
+        },
+      })
+      const user = userEvent.setup()
+
+      await user.type(screen.getByLabelText('标题'), 'The.Legend.of.1900.1998')
+      await user.click(screen.getByRole('button', { name: '识别' }))
+
+      await screen.findByText('TMDBID：10376')
+      expect(await screen.findByText('重命名模板渲染失败：模板语法错误')).toBeInTheDocument()
+      expect(screen.getAllByText(/海上钢琴师/)).not.toHaveLength(0)
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
+  })
+
+  it('ignores stale transfer preview responses from an earlier recognition', async () => {
+    let resolveFirstPreview: ((value: unknown) => void) | undefined
+    const firstPreviewPromise = new Promise(resolve => {
+      resolveFirstPreview = resolve
+    })
+
+    mocks.apiGet
+      .mockResolvedValueOnce({
+        media_info: {
+          media_id: '10376',
+          source: 'themoviedb',
+          title: '海上钢琴师',
+          type: '电影',
+          year: '1998',
+        },
+        meta_info: {
+          apply_words: [],
+          name: '海上钢琴师',
+          org_string: 'First.Movie.1998',
+          title: 'First.Movie.1998',
+        },
+        torrent_info: {},
+      })
+      .mockImplementationOnce(() => firstPreviewPromise)
+      .mockResolvedValueOnce({
+        media_info: {
+          media_id: '27205',
+          source: 'themoviedb',
+          title: '盗梦空间',
+          type: '电影',
+          year: '2010',
+        },
+        meta_info: {
+          apply_words: [],
+          name: '盗梦空间',
+          org_string: 'Second.Movie.2010',
+          title: 'Second.Movie.2010',
+        },
+        torrent_info: {},
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          category: '外语电影',
+          target_dir: '盗梦空间 (2010) {tmdbid=27205}',
+          file_name: '盗梦空间 (2010).mkv',
+          rename_path: '盗梦空间 (2010) {tmdbid=27205}/盗梦空间 (2010).mkv',
+          library_path: '/media/电影/外语电影',
+          full_path: '/media/电影/外语电影/盗梦空间 (2010) {tmdbid=27205}/盗梦空间 (2010).mkv',
+        },
+      })
+
+    await renderWithProviders(NameTestView, {
+      initialState: {
+        globalSettings: {
+          data: { RECOGNIZE_SOURCE: 'themoviedb' },
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('标题'), 'First.Movie.1998')
+    await user.click(screen.getByRole('button', { name: '识别' }))
+    await screen.findByText('TMDBID：10376')
+
+    await user.clear(screen.getByLabelText('标题'))
+    await user.type(screen.getByLabelText('标题'), 'Second.Movie.2010')
+    await user.click(screen.getByRole('button', { name: '重新识别' }))
+
+    const previewSection = await screen.findByTestId('transfer-preview')
+    expect(previewSection).toHaveTextContent('目标目录盗梦空间 (2010) {tmdbid=27205}')
+
+    resolveFirstPreview?.({
+      success: true,
+      data: {
+        category: '外语电影',
+        target_dir: '海上钢琴师 (1998) {tmdbid=10376}',
+        file_name: '海上钢琴师 (1998).mkv',
+        rename_path: '海上钢琴师 (1998) {tmdbid=10376}/海上钢琴师 (1998).mkv',
+      },
+    })
+    await Promise.resolve()
+
+    expect(screen.getByTestId('transfer-preview')).toHaveTextContent('目标目录盗梦空间 (2010) {tmdbid=27205}')
+    expect(screen.getByTestId('transfer-preview')).not.toHaveTextContent('海上钢琴师 (1998) {tmdbid=10376}')
   })
 })

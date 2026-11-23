@@ -44,6 +44,8 @@ const pluginDetail = ref<Plugin | null>(null)
 const releaseLoading = ref(false)
 const releaseError = ref('')
 const releaseDetail = ref<PluginReleaseVersionsResponse | null>(null)
+// 递增序号用于在关闭或切换插件后丢弃延迟返回的旧请求结果。
+let loadSequence = 0
 
 // 弹窗显示状态
 const visible = computed({
@@ -66,6 +68,9 @@ const resolvedHistory = computed(() => {
 })
 
 const hasHistory = computed(() => Object.keys(resolvedHistory.value).length > 0)
+// 已有传入快照时直接渲染历史内容，仅在无内容可展示时使用居中加载占位。
+const showBlockingLoading = computed(() => loading.value && !hasHistory.value)
+const showTopProgress = computed(() => !showBlockingLoading.value && (loading.value || releaseLoading.value))
 
 const latestActionText = computed(() =>
   props.actionMode === 'install' ? t('plugin.installReleaseVersion') : t('plugin.updateToLatest'),
@@ -103,49 +108,64 @@ function shouldShowReleaseButton(item?: PluginReleaseVersion) {
   return !(item.is_latest && shouldShowUpdatePanel.value && props.actionMode === 'update')
 }
 
+/** 打开时优先保留传入快照并异步刷新历史与 Release，市场未安装条目不查询已安装接口。 */
 async function loadPluginHistory() {
-  if (!props.plugin?.id) {
-    pluginDetail.value = null
-    loadError.value = ''
-    releaseDetail.value = null
-    releaseError.value = ''
-    return
-  }
-
-  loading.value = true
+  const requestSequence = ++loadSequence
+  pluginDetail.value = null
   loadError.value = ''
   releaseDetail.value = null
   releaseError.value = ''
 
-  // 插件市场条目已经携带远端信息；history 接口只查询已安装插件，
-  // 未安装插件打开版本历史时只能基于传入的市场数据和 Release 列表展示。
-  if (props.actionMode === 'install' && props.plugin?.repo_url) {
-    pluginDetail.value = null
+  if (!props.plugin?.id) {
     loading.value = false
-    loadPluginReleases(props.plugin, false)
+    releaseLoading.value = false
     return
   }
 
+  // 插件市场条目已经携带远端信息；history 接口只查询已安装插件，
+  // 未安装插件打开版本历史时只能基于传入的市场数据和 Release 列表展示。
+  if (props.actionMode === 'install' && props.plugin?.repo_url) {
+    loading.value = false
+    await loadPluginReleases(props.plugin, false, requestSequence)
+    return
+  }
+
+  loading.value = true
   try {
-    pluginDetail.value = await api.get(`plugin/history/${props.plugin.id}`, {
+    const fetchedDetail: Plugin | null = await api.get(`plugin/history/${props.plugin.id}`, {
       params: {
         force: true,
       },
     })
-    loadPluginReleases(pluginDetail.value ?? props.plugin, true)
+    if (requestSequence !== loadSequence) return
+    pluginDetail.value = fetchedDetail
   } catch (error) {
+    if (requestSequence !== loadSequence) return
     pluginDetail.value = null
     loadError.value = t('plugin.updateHistoryLoadFailed')
     console.error(error)
+    return
   } finally {
-    loading.value = false
+    if (requestSequence === loadSequence) {
+      loading.value = false
+    }
   }
+
+  // 历史说明返回后立即解除主加载态，再异步补齐 Release 列表。
+  await loadPluginReleases(pluginDetail.value ?? props.plugin, true, requestSequence)
 }
 
-async function loadPluginReleases(plugin: Plugin | null | undefined = resolvedPlugin.value, force = false) {
+async function loadPluginReleases(
+  plugin: Plugin | null | undefined = resolvedPlugin.value,
+  force = false,
+  requestSequence = loadSequence,
+) {
   if (!plugin?.id || !plugin?.repo_url || !plugin?.release) {
-    releaseDetail.value = null
-    releaseError.value = ''
+    if (requestSequence === loadSequence) {
+      releaseDetail.value = null
+      releaseError.value = ''
+      releaseLoading.value = false
+    }
     return
   }
 
@@ -153,18 +173,23 @@ async function loadPluginReleases(plugin: Plugin | null | undefined = resolvedPl
   releaseError.value = ''
 
   try {
-    releaseDetail.value = await api.get(`plugin/releases/${plugin.id}`, {
+    const detail: PluginReleaseVersionsResponse | null = await api.get(`plugin/releases/${plugin.id}`, {
       params: {
         repo_url: plugin.repo_url,
         force,
       },
     })
+    if (requestSequence !== loadSequence) return
+    releaseDetail.value = detail
   } catch (error) {
+    if (requestSequence !== loadSequence) return
     releaseDetail.value = null
     releaseError.value = t('plugin.releaseVersionsLoadFailed')
     console.error(error)
   } finally {
-    releaseLoading.value = false
+    if (requestSequence === loadSequence) {
+      releaseLoading.value = false
+    }
   }
 }
 
@@ -178,7 +203,11 @@ watch(
   () => [visible.value, props.plugin?.id],
   ([isVisible]) => {
     if (isVisible) {
-      loadPluginHistory()
+      void loadPluginHistory()
+    } else {
+      loadSequence += 1
+      loading.value = false
+      releaseLoading.value = false
     }
   },
   { immediate: true },
@@ -190,8 +219,8 @@ watch(
     <VCard :title="t('plugin.updateHistoryTitle', { name: resolvedPlugin?.plugin_name })">
       <VDialogCloseBtn v-model="visible" />
       <VDivider />
-      <VProgressLinear v-if="releaseLoading && !loading" indeterminate color="primary" height="2" />
-      <div v-if="loading" class="plugin-version-history-dialog__loading">
+      <VProgressLinear v-if="showTopProgress" indeterminate color="primary" height="2" />
+      <div v-if="showBlockingLoading" class="plugin-version-history-dialog__loading">
         <VProgressCircular indeterminate color="primary" />
       </div>
       <template v-else>
@@ -206,7 +235,7 @@ watch(
             :text="releaseError"
           />
         </VCardText>
-        <VCardText v-if="!hasHistory && !releaseLoading && !loadError && !releaseError">
+        <VCardText v-if="!hasHistory && !loading && !releaseLoading && !loadError && !releaseError">
           <VAlert type="info" variant="tonal" density="compact" :text="t('plugin.updateHistoryEmpty')" />
         </VCardText>
         <VersionHistory

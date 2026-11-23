@@ -1,13 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useToast } from 'vue-toastification'
+import { copyToClipboard } from '@/@core/utils/navigator'
 import { requiredValidator } from '@/@validators'
-import api from '@/api'
-import type { Context, MediaInfo } from '@/api/types'
+import api, { getApiErrorMessage } from '@/api'
+import type { ApiResponse, Context, MediaInfo, TransferNamePreview } from '@/api/types'
 import { getMediaSubscribeIdentity } from '@/composables/useMediaSubscribe'
 import { useNameTestSession } from '@/composables/useNameTestSession'
 import { useShortcutTools } from '@/composables/useShortcutTools'
 import { useI18n } from '@/composables/useChineseText'
+
+/** 整理预览中的单项路径或目录展示。 */
+interface TransferPreviewItem {
+  icon: string
+  key: string
+  label: string
+  monospace?: boolean
+  muted?: boolean
+  value: string
+}
+
+/** 发起整理预览时冻结的识别表单快照，避免异步返回前表单已被改写。 */
+interface TransferPreviewRequestSnapshot {
+  customWords?: string
+  subtitle: string | null
+  title: string
+}
 
 interface PipelineStep {
   icon: string
@@ -55,6 +73,13 @@ const nameTestError = ref('')
 
 // 识别词保存中状态
 const savingCustomWords = ref(false)
+
+// 整理预览结果、加载态及失败提示，与主识别流程解耦，避免预览失败影响识别结果
+const transferPreview = ref<TransferNamePreview | null>(null)
+const transferPreviewLoading = ref(false)
+const transferPreviewError = ref('')
+// 递增请求序号，防止快速连续识别时旧预览响应覆盖最新结果
+let transferPreviewRequestSeq = 0
 
 const metaInfo = computed(() => nameTestResult.value?.meta_info)
 const mediaInfo = computed(() => nameTestResult.value?.media_info)
@@ -147,6 +172,134 @@ const pipelineSteps = computed<PipelineStep[]>(() => {
   return steps
 })
 
+const transferPreviewCopyText = computed(
+  () => transferPreview.value?.full_path || transferPreview.value?.rename_path || '',
+)
+
+const transferPreviewItems = computed<TransferPreviewItem[]>(() => {
+  const preview = transferPreview.value
+  if (!preview) return []
+
+  const items: TransferPreviewItem[] = [
+    {
+      icon: 'mdi-folder-outline',
+      key: 'category',
+      label: t('nameTest.transferPreview.category'),
+      muted: !preview.category,
+      value: preview.category || t('nameTest.transferPreview.noCategory'),
+    },
+  ]
+  if (preview.target_dir) {
+    items.push({
+      icon: 'mdi-folder-star-outline',
+      key: 'targetDir',
+      label: t('nameTest.transferPreview.targetDir'),
+      monospace: true,
+      value: preview.target_dir,
+    })
+  }
+  if (preview.file_name) {
+    items.push({
+      icon: 'mdi-file-video-outline',
+      key: 'fileName',
+      label: t('nameTest.transferPreview.fileName'),
+      monospace: true,
+      value: preview.file_name,
+    })
+  }
+  if (preview.full_path) {
+    items.push({
+      icon: 'mdi-file-tree-outline',
+      key: 'fullPath',
+      label: t('nameTest.transferPreview.fullPath'),
+      monospace: true,
+      value: preview.full_path,
+    })
+  } else if (preview.rename_path) {
+    items.push({
+      icon: 'mdi-file-tree-outline',
+      key: 'renamePath',
+      label: t('nameTest.transferPreview.renamePath'),
+      monospace: true,
+      value: preview.rename_path,
+    })
+  }
+  return items
+})
+
+const showTransferPreviewSection = computed(
+  () =>
+    showResult.value &&
+    isRecognized.value &&
+    (transferPreviewLoading.value || Boolean(transferPreviewError.value) || Boolean(transferPreview.value)),
+)
+
+/** 检查整理预览接口返回值是否包含至少一项可展示字段。 */
+function hasTransferPreviewContent(preview?: TransferNamePreview | null): preview is TransferNamePreview {
+  if (!preview || typeof preview !== 'object') return false
+  return Boolean(
+    preview.category || preview.target_dir || preview.file_name || preview.rename_path || preview.full_path,
+  )
+}
+
+/** 异步拉取按当前重命名模板与目录配置生成的整理预览。 */
+async function loadTransferPreview(seq: number, snapshot: TransferPreviewRequestSnapshot, recognizedMedia: MediaInfo) {
+  transferPreviewLoading.value = true
+  transferPreviewError.value = ''
+  transferPreview.value = null
+
+  const identity = getMediaSubscribeIdentity(recognizedMedia)
+  try {
+    const response = await api.get<
+      ApiResponse<TransferNamePreview | null> | undefined,
+      ApiResponse<TransferNamePreview | null> | undefined
+    >('transfer/name/preview', {
+      params: {
+        title: snapshot.title,
+        subtitle: snapshot.subtitle || undefined,
+        custom_words: snapshot.customWords,
+        media_source: identity?.source,
+        media_id: identity?.mediaId,
+        mtype: recognizedMedia.type || undefined,
+      },
+    })
+    if (seq !== transferPreviewRequestSeq) return
+    if (response && response.success === false) {
+      transferPreviewError.value = response.message || t('nameTest.transferPreview.failed')
+      return
+    }
+    const preview = response?.data
+    if (hasTransferPreviewContent(preview)) {
+      transferPreview.value = preview
+    }
+  } catch (error) {
+    if (seq !== transferPreviewRequestSeq) return
+    console.error(error)
+    transferPreviewError.value = getApiErrorMessage(error) || t('nameTest.transferPreview.failed')
+  } finally {
+    if (seq === transferPreviewRequestSeq) {
+      transferPreviewLoading.value = false
+    }
+  }
+}
+
+/** 复制整理预览中的完整目标路径或相对路径。 */
+async function copyTransferPreviewPath() {
+  const pathText = transferPreviewCopyText.value
+  if (!pathText) return
+  try {
+    const copied = await copyToClipboard(pathText)
+    if (copied) {
+      $toast.success(t('nameTest.transferPreview.copied'))
+    } else {
+      $toast.error(t('nameTest.transferPreview.copyFailed'))
+    }
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('nameTest.transferPreview.copyFailed'))
+  }
+}
+
 /** 将 TMDB 原始图片地址转换为弹窗内更轻量的海报缩略图。 */
 function getPosterImage(url = '') {
   if (!url) return ''
@@ -159,21 +312,35 @@ async function nameTest() {
   if (!normalizedTitle) return
 
   nameTestForm.title = normalizedTitle
+  const previewSeq = ++transferPreviewRequestSeq
+  const requestSnapshot: TransferPreviewRequestSnapshot = {
+    title: normalizedTitle,
+    subtitle: nameTestForm.subtitle,
+    customWords: nameTestForm.customWords?.trim() || undefined,
+  }
 
   try {
     nameTestLoading.value = true
     nameTestText.value = t('nameTest.recognizing')
     nameTestError.value = ''
     showResult.value = false
-    nameTestResult.value = await api.get<Context, Context>('media/recognize', {
+    transferPreview.value = null
+    transferPreviewError.value = ''
+    transferPreviewLoading.value = false
+    const result = await api.get<Context, Context>('media/recognize', {
       params: {
-        title: nameTestForm.title,
-        subtitle: nameTestForm.subtitle,
-        custom_words: nameTestForm.customWords?.trim() || undefined,
+        title: requestSnapshot.title,
+        subtitle: requestSnapshot.subtitle,
+        custom_words: requestSnapshot.customWords,
       },
     })
+    if (previewSeq !== transferPreviewRequestSeq) return
+    nameTestResult.value = result
     nameTestText.value = t('nameTest.recognizeAgain')
     showResult.value = true
+    if (result?.media_info) {
+      void loadTransferPreview(previewSeq, requestSnapshot, result.media_info)
+    }
   } catch (error) {
     console.error(error)
     nameTestError.value = error instanceof Error ? error.message : t('nameTest.requestFailed')
@@ -383,6 +550,59 @@ async function saveCustomWords() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div v-if="showTransferPreviewSection" class="transfer-preview" data-testid="transfer-preview">
+          <div class="transfer-preview-header">
+            <div class="transfer-preview-title">
+              <VIcon icon="mdi-folder-move-outline" size="16" />
+              <span>{{ t('nameTest.transferPreview.title') }}</span>
+            </div>
+            <VBtn
+              v-if="transferPreviewCopyText"
+              type="button"
+              size="x-small"
+              variant="text"
+              color="primary"
+              prepend-icon="mdi-content-copy"
+              @click="copyTransferPreviewPath"
+            >
+              {{ t('nameTest.transferPreview.copyPath') }}
+            </VBtn>
+          </div>
+
+          <div v-if="transferPreviewLoading" class="transfer-preview-state text-body-2 text-medium-emphasis">
+            <VProgressCircular indeterminate size="16" width="2" color="primary" />
+            <span>{{ t('nameTest.transferPreview.loading') }}</span>
+          </div>
+
+          <div v-else-if="transferPreviewError" class="transfer-preview-state text-body-2 text-medium-emphasis">
+            <VIcon icon="mdi-information-outline" size="16" />
+            <span>{{ transferPreviewError }}</span>
+          </div>
+
+          <dl v-else-if="transferPreviewItems.length" class="transfer-preview-list">
+            <div
+              v-for="item in transferPreviewItems"
+              :key="item.key"
+              class="transfer-preview-row"
+              :data-preview-field="item.key"
+            >
+              <dt class="transfer-preview-label">
+                <VIcon :icon="item.icon" size="15" />
+                <span>{{ item.label }}</span>
+              </dt>
+              <dd
+                class="transfer-preview-value"
+                :class="{
+                  'transfer-preview-value--mono': item.monospace,
+                  'text-medium-emphasis': item.muted,
+                }"
+              >
+                {{ item.value }}
+              </dd>
+            </div>
+          </dl>
         </div>
 
         <div v-if="metaInfo?.apply_words?.length" class="applied-words">
@@ -621,6 +841,77 @@ async function saveCustomWords() {
   word-break: normal;
 }
 
+.transfer-preview {
+  display: grid;
+  padding: 12px 14px;
+  border: 1px solid var(--mp-border-card);
+  border-radius: 10px;
+  background: var(--mp-field-bg);
+  gap: 10px;
+  min-inline-size: 0;
+}
+
+.transfer-preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.transfer-preview-title {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  gap: 5px;
+  letter-spacing: 0.02em;
+}
+
+.transfer-preview-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfer-preview-list {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  gap: 8px;
+}
+
+.transfer-preview-row {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.transfer-preview-label {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 11.5px;
+  gap: 5px;
+  letter-spacing: 0.02em;
+}
+
+.transfer-preview-value {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.transfer-preview-value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 .applied-words {
   display: grid;
   padding: 10px 14px;
@@ -726,6 +1017,7 @@ async function saveCustomWords() {
   }
 
   .pipeline,
+  .transfer-preview,
   .applied-words {
     padding: 10px 12px;
   }
