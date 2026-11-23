@@ -461,6 +461,12 @@ export function useMediaSubscribe(options: UseMediaSubscribeOptions) {
 
       const subscribeSeason = media.type === '电影' ? null : season
       const subscribeMode = getSubscribeMode(payload)
+      if (result.success && result.data?.pending_approval) {
+        let pendingTitle = media.title ?? ''
+        if (subscribeSeason !== null) pendingTitle = `${pendingTitle} ${formatSeason(subscribeSeason.toString())}`
+        $toast.info(`${pendingTitle} ${result.message || '已提交订阅审批，等待管理员审核'}`)
+        return
+      }
       if (result.success) {
         updateSubscribeStatus(subscribeSeason, true, subscribeMode)
         notifySubscribeChanged()

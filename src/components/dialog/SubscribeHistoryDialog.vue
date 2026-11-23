@@ -102,7 +102,10 @@ async function reSubscribe(item: Subscribe) {
   progressDialog.value = true
   try {
     const result: { [key: string]: any } = await api.post('subscribe/', item)
-    if (result.success) {
+    if (result.success && result.data?.pending_approval) {
+      $toast.info(result.message || '已提交订阅审批，等待管理员审核')
+      emit('save')
+    } else if (result.success) {
       emit('save')
     } else {
       $toast.error(t('subscribe.requestFailed'))
