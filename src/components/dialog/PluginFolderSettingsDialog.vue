@@ -204,7 +204,6 @@ onMounted(() => {
             placeholder="https://example.com/image.jpg"
             variant="outlined"
             :hint="t('folder.customBackgroundImageHint')"
-            persistent-hint
             prepend-inner-icon="mdi-image"
           />
         </div>

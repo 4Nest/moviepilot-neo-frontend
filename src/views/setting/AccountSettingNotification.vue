@@ -525,7 +525,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存通知推送渠道配置</span>
           <VBtn
             type="submit"
             size="small"
@@ -623,7 +622,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存各业务场景的通知接收人范围</span>
           <VBtn
             type="submit"
             size="small"
@@ -673,7 +671,6 @@ useSilentSettingRefresh(
         </VRow>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存每日允许推送消息的活跃时间窗口</span>
           <VBtn
             type="submit"
             size="small"

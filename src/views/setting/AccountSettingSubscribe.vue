@@ -264,7 +264,6 @@ useSilentSettingRefresh(
                 :items="subscribeModeItems"
                 :label="t('setting.subscribe.mode')"
                 :hint="t('setting.subscribe.modeHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-cog"
               />
             </VCol>
@@ -274,7 +273,6 @@ useSilentSettingRefresh(
                 :items="rssIntervalItems"
                 :label="t('setting.subscribe.rssInterval')"
                 :hint="t('setting.subscribe.rssIntervalHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-timer"
               />
             </VCol>
@@ -287,7 +285,6 @@ useSilentSettingRefresh(
                 clearable
                 :label="t('setting.subscribe.filterRuleGroup')"
                 :hint="t('setting.subscribe.filterRuleGroupHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-filter"
               />
             </VCol>
@@ -300,7 +297,6 @@ useSilentSettingRefresh(
                 clearable
                 :label="t('setting.subscribe.bestVersionRuleGroup')"
                 :hint="t('setting.subscribe.bestVersionRuleGroupHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-star"
               />
             </VCol>
@@ -325,7 +321,6 @@ useSilentSettingRefresh(
                 :items="subscribeSearchIntervalItems"
                 :label="t('setting.subscribe.searchInterval')"
                 :hint="t('setting.subscribe.searchIntervalHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-timer"
               />
             </VCol>
@@ -346,7 +341,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存订阅运行模式、RSS 周期与洗版规则组</span>
           <VBtn
             type="submit"
             size="small"
@@ -404,7 +398,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存参与 RSS 轮询与订阅搜索的站点范围</span>
           <VBtn
             type="submit"
             size="small"

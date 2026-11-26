@@ -138,7 +138,6 @@ watch(mediaType, val => {
                 { title: t('dialog.reorganize.tv'), value: '电视剧' },
               ]"
               :hint="t('dialog.reorganize.mediaTypeHint')"
-              persistent-hint
               prepend-inner-icon="mdi-movie-open"
             />
           </VCol>
@@ -148,7 +147,6 @@ watch(mediaType, val => {
               :items="mediaSourceItems"
               :label="t('dialog.reorganize.mediaSource')"
               :hint="t('dialog.reorganize.mediaSourceHint')"
-              persistent-hint
               prepend-inner-icon="mdi-database-search"
             />
           </VCol>
@@ -161,7 +159,6 @@ watch(mediaType, val => {
               :rules="[numberValidator]"
               append-inner-icon="mdi-magnify"
               :hint="t('dialog.reorganize.mediaIdHint')"
-              persistent-hint
               prepend-inner-icon="mdi-identifier"
               @click:append-inner="mediaSelectorDialog = true"
             />

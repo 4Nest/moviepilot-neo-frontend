@@ -1969,7 +1969,7 @@ html[data-theme-radius='extra'] {
 }
 
 .grid-customrule-card {
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
 }
 
 .grid-subscribe-card {
@@ -2983,6 +2983,7 @@ html[data-theme='dark'] .app-pull-indicator {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   margin-block-start: 16px;
 }

@@ -272,7 +272,6 @@ onUnmounted(() => {
               accept=".json"
               :label="t('site.fields.selectFile')"
               :hint="t('site.hints.selectFile')"
-              persistent-hint
               prepend-icon="mdi-file-upload"
             />
             <div class="text-center mt-4">

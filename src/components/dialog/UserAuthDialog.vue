@@ -192,7 +192,6 @@ onUnmounted(() => {
               :label="param.name"
               :placeholder="param.placeholder"
               :hint="param.tooltip && param.tooltip !== param.name ? param.tooltip : undefined"
-              :persistent-hint="Boolean(param.tooltip && param.tooltip !== param.name)"
               clearable
             />
           </VCol>

@@ -24,15 +24,6 @@ const props = defineProps({
 // 定义触发的自定义事件
 const emit = defineEmits(['close', 'change', 'done'])
 
-const ruleSummary = computed(() => {
-  const parts: string[] = []
-  if (props.rule.include) parts.push(`包含: ${props.rule.include}`)
-  if (props.rule.exclude) parts.push(`排除: ${props.rule.exclude}`)
-  if (props.rule.size_range) parts.push(`体积: ${props.rule.size_range}`)
-  if (props.rule.seeders) parts.push(`做种: ${props.rule.seeders}`)
-  return parts.join(' · ')
-})
-
 /** 打开共享自定义规则配置弹窗。 */
 function openRuleInfoDialog() {
   openSharedDialog(
@@ -68,9 +59,6 @@ function onClose() {
             <span class="setting-item-card__title app-card-summary__title" :title="props.rule.name">
               {{ props.rule.name }}
             </span>
-            <span v-if="props.rule.id" class="setting-item-card__code-pill">
-              {{ props.rule.id }}
-            </span>
           </div>
 
           <div class="setting-item-card__actions" @click.stop>
@@ -89,8 +77,10 @@ function onClose() {
           </div>
         </div>
 
-        <div class="setting-item-card__subtitle" :title="ruleSummary || props.rule.id">
-          <span>{{ ruleSummary || `ID: ${props.rule.id}` }}</span>
+        <div v-if="props.rule.id" class="setting-item-card__meta">
+          <span class="setting-item-card__code-pill" :title="props.rule.id">
+            {{ props.rule.id }}
+          </span>
         </div>
       </div>
     </div>
@@ -156,6 +146,7 @@ function onClose() {
 
 .setting-item-card__title-wrap {
   display: flex;
+  overflow: hidden;
   flex: 1 1 auto;
   align-items: center;
   gap: 6px;
@@ -164,6 +155,7 @@ function onClose() {
 
 .setting-item-card__title {
   overflow: hidden;
+  min-inline-size: 0;
   color: rgb(var(--v-theme-on-surface));
   font-size: 14px;
   font-weight: 600;
@@ -172,8 +164,18 @@ function onClose() {
   white-space: nowrap;
 }
 
+.setting-item-card__meta {
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
 .setting-item-card__code-pill {
-  flex-shrink: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
+  max-inline-size: 100%;
   border-radius: 5px;
   background: rgba(var(--v-theme-on-surface), 0.07);
   color: rgba(var(--v-theme-on-surface), 0.72);
@@ -183,6 +185,8 @@ function onClose() {
   line-height: 1.3;
   padding-block: 1px;
   padding-inline: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .setting-item-card__actions {
@@ -203,15 +207,5 @@ function onClose() {
 
 .setting-item-card__action-btn:hover {
   color: rgb(var(--v-theme-on-surface));
-}
-
-.setting-item-card__subtitle {
-  overflow: hidden;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 12px;
-  line-height: 1.35;
-  min-inline-size: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 </style>

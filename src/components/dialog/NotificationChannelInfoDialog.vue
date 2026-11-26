@@ -220,7 +220,6 @@ onMounted(() => {
                   multiple
                   clearable
                   chips
-                  persistent-hint
                   prepend-inner-icon="mdi-bell-outline"
                 />
               </div>
@@ -251,7 +250,6 @@ onMounted(() => {
                     :label="t('notification.name')"
                     :placeholder="t('notification.name')"
                     :hint="t('notification.nameHint')"
-                    persistent-hint
                     prepend-inner-icon="mdi-label"
                   />
                 </VCol>
@@ -261,7 +259,6 @@ onMounted(() => {
                       v-model="notificationInfo.config.WECHAT_BOT_ID"
                       :label="t('notification.wechat.botId')"
                       :hint="t('notification.wechat.botIdHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-robot"
                     />
                   </VCol>
@@ -271,7 +268,6 @@ onMounted(() => {
                       type="password"
                       :label="t('notification.wechat.botSecret')"
                       :hint="t('notification.wechat.botSecretHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-key"
                     />
                   </VCol>
@@ -281,7 +277,6 @@ onMounted(() => {
                       :label="t('notification.wechat.botChatId')"
                       :placeholder="t('notification.wechat.botChatIdPlaceholder')"
                       :hint="t('notification.wechat.botChatIdHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-chat-processing"
                     />
                   </VCol>
@@ -290,7 +285,6 @@ onMounted(() => {
                       v-model="notificationInfo.config.WECHAT_BOT_WS_URL"
                       :label="t('notification.wechat.botWsUrl')"
                       :hint="t('notification.wechat.botWsUrlHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-lan-connect"
                     />
                   </VCol>
@@ -300,7 +294,6 @@ onMounted(() => {
                       :label="t('notification.wechat.admins')"
                       :placeholder="t('notification.wechat.adminsPlaceholder')"
                       :hint="t('notification.wechat.adminsHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-account-supervisor"
                     />
                   </VCol>
@@ -311,7 +304,6 @@ onMounted(() => {
                       v-model="notificationInfo.config.WECHAT_CORPID"
                       :label="t('notification.wechat.corpId')"
                       :hint="t('notification.wechat.corpIdHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-domain"
                     />
                   </VCol>
@@ -320,7 +312,6 @@ onMounted(() => {
                       v-model="notificationInfo.config.WECHAT_APP_ID"
                       :label="t('notification.wechat.appId')"
                       :hint="t('notification.wechat.appIdHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-application"
                     />
                   </VCol>
@@ -330,7 +321,6 @@ onMounted(() => {
                       type="password"
                       :label="t('notification.wechat.appSecret')"
                       :hint="t('notification.wechat.appSecretHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-key"
                     />
                   </VCol>
@@ -339,7 +329,6 @@ onMounted(() => {
                       v-model="notificationInfo.config.WECHAT_PROXY"
                       :label="t('notification.wechat.proxy')"
                       :hint="t('notification.wechat.proxyHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-server-network"
                     />
                   </VCol>
@@ -349,7 +338,6 @@ onMounted(() => {
                       type="password"
                       :label="t('notification.wechat.token')"
                       :hint="t('notification.wechat.tokenHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-key-variant"
                     />
                   </VCol>
@@ -359,7 +347,6 @@ onMounted(() => {
                       type="password"
                       :label="t('notification.wechat.encodingAesKey')"
                       :hint="t('notification.wechat.encodingAesKeyHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-lock"
                     />
                   </VCol>
@@ -369,7 +356,6 @@ onMounted(() => {
                       :label="t('notification.wechat.admins')"
                       :placeholder="t('notification.wechat.adminsPlaceholder')"
                       :hint="t('notification.wechat.adminsHint')"
-                      persistent-hint
                       prepend-inner-icon="mdi-account-supervisor"
                     />
                   </VCol>
@@ -386,7 +372,6 @@ onMounted(() => {
                   :label="t('notification.name')"
                   :placeholder="t('notification.name')"
                   :hint="t('notification.nameHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-label"
                 />
               </VCol>
@@ -396,7 +381,6 @@ onMounted(() => {
                   type="password"
                   :label="t('notification.telegram.token')"
                   :hint="t('notification.telegram.tokenHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-key"
                 />
               </VCol>
@@ -405,7 +389,6 @@ onMounted(() => {
                   v-model="notificationInfo.config.TELEGRAM_CHAT_ID"
                   :label="t('notification.telegram.chatId')"
                   :hint="t('notification.telegram.chatIdHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-chat"
                 />
               </VCol>
@@ -415,7 +398,6 @@ onMounted(() => {
                   :label="t('notification.telegram.users')"
                   :placeholder="t('notification.telegram.usersPlaceholder')"
                   :hint="t('notification.telegram.usersHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-account-group"
                 />
               </VCol>
@@ -425,7 +407,6 @@ onMounted(() => {
                   :label="t('notification.telegram.admins')"
                   :placeholder="t('notification.telegram.adminsPlaceholder')"
                   :hint="t('notification.telegram.adminsHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-account-supervisor"
                 />
               </VCol>
@@ -435,7 +416,6 @@ onMounted(() => {
                   :label="t('notification.telegram.apiUrl')"
                   :placeholder="t('notification.telegram.apiUrlPlaceholder')"
                   :hint="t('notification.telegram.apiUrlHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-web"
                 />
               </VCol>
@@ -450,7 +430,6 @@ onMounted(() => {
                   :label="t('notification.name')"
                   :placeholder="t('notification.name')"
                   :hint="t('notification.nameHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-label"
                 />
               </VCol>
@@ -460,7 +439,6 @@ onMounted(() => {
                   :label="t('notification.apppush.server')"
                   placeholder="https://push.example.com"
                   :hint="t('notification.apppush.serverHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-server-network"
                 />
               </VCol>
@@ -474,7 +452,6 @@ onMounted(() => {
                         autocomplete="new-password"
                         :label="t('notification.apppush.key')"
                         :hint="t('notification.apppush.keyHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-key"
                       />
                     </VExpansionPanelText>

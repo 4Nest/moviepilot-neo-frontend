@@ -87,7 +87,6 @@ function handleDone() {
               v-model="localConf.type"
               :label="t('storage.type')"
               :hint="t('storage.customTypeHint')"
-              persistent-hint
               prepend-inner-icon="mdi-database"
             />
           </VCol>
@@ -96,7 +95,6 @@ function handleDone() {
               v-model="localConf.name"
               :label="t('storage.name')"
               :rules="[v => !!v?.trim() || t('common.nameRequired')]"
-              persistent-hint
               prepend-inner-icon="mdi-label"
             />
           </VCol>

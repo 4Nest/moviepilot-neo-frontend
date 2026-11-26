@@ -115,7 +115,6 @@ const $toast = useToast()
                 v-model="shareForm.share_title"
                 :label="t('dialog.workflowShare.title')"
                 :rules="[requiredValidator]"
-                persistent-hint
                 prepend-inner-icon="mdi-format-title"
               />
             </VCol>
@@ -127,7 +126,6 @@ const $toast = useToast()
                 :hint="t('dialog.workflowShare.descriptionHint')"
                 rows="3"
                 auto-grow
-                persistent-hint
                 prepend-inner-icon="mdi-comment-text-outline"
               />
             </VCol>
@@ -137,7 +135,6 @@ const $toast = useToast()
                 :label="t('dialog.workflowShare.shareUser')"
                 :rules="[requiredValidator]"
                 :hint="t('dialog.workflowShare.shareUserHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-account-outline"
               />
             </VCol>

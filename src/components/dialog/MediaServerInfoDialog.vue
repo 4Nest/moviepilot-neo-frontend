@@ -172,7 +172,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -183,7 +182,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.hostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -194,7 +192,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -204,7 +201,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.username"
                   :label="t('mediaserver.username')"
                   :hint="t('mediaserver.usernameHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-account"
                 />
@@ -214,7 +210,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.apikey"
                   :label="t('mediaserver.apiKey')"
                   :hint="t('mediaserver.embyApiKeyHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-key"
                 />
@@ -228,7 +223,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -242,7 +236,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -260,7 +253,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -271,7 +263,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.hostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -282,7 +273,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -292,7 +282,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.username"
                   :label="t('mediaserver.username')"
                   :hint="t('mediaserver.usernameHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-account"
                 />
@@ -303,7 +292,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.password"
                   :label="t('mediaserver.password')"
                   :hint="t('mediaserver.passwordHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-lock"
                 />
@@ -317,7 +305,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -331,7 +318,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -349,7 +335,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -360,7 +345,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.hostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -371,7 +355,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -381,7 +364,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.apikey"
                   :label="t('mediaserver.apiKey')"
                   :hint="t('mediaserver.jellyfinApiKeyHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-key"
                 />
@@ -395,7 +377,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -409,7 +390,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -427,7 +407,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -438,7 +417,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.hostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -449,7 +427,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -459,7 +436,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.username"
                   :label="t('mediaserver.username')"
                   :hint="t('mediaserver.usernameHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-account"
                 />
@@ -470,7 +446,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.password"
                   :label="t('mediaserver.password')"
                   :hint="t('mediaserver.passwordHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-lock"
                 />
@@ -481,7 +456,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.access_code"
                   :label="t('mediaserver.accessCode')"
                   :hint="t('mediaserver.accessCodeHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-shield-key"
                 />
@@ -495,7 +469,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -509,7 +482,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -528,7 +500,6 @@ onMounted(() => {
                     :label="t('common.name')"
                     :placeholder="t('mediaserver.nameRequired')"
                     :hint="t('mediaserver.serverAlias')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-label"
                   />
@@ -539,7 +510,6 @@ onMounted(() => {
                     :label="t('mediaserver.host')"
                     :placeholder="t('mediaserver.hostPlaceholder')"
                     :hint="t('mediaserver.hostHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-server"
                   />
@@ -550,7 +520,6 @@ onMounted(() => {
                     :label="t('mediaserver.playHost')"
                     :placeholder="t('mediaserver.playHostPlaceholder')"
                     :hint="t('mediaserver.playHostHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-play-network"
                   />
@@ -560,7 +529,6 @@ onMounted(() => {
                     v-model="mediaServerInfo.config.username"
                     :label="t('mediaserver.username')"
                     :hint="t('mediaserver.usernameHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-account"
                   />
@@ -571,7 +539,6 @@ onMounted(() => {
                     v-model="mediaServerInfo.config.password"
                     :label="t('mediaserver.password')"
                     :hint="t('mediaserver.passwordHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-lock"
                   />
@@ -585,7 +552,6 @@ onMounted(() => {
                     clearable
                     :label="t('mediaserver.syncInterval')"
                     :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                    persistent-hint
                     suffix="h"
                     prepend-inner-icon="mdi-sync"
                   />
@@ -596,7 +562,6 @@ onMounted(() => {
                     :label="t('mediaserver.scanMode')"
                     :items="ugreenScanModeOptions"
                     :hint="t('mediaserver.scanModeHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-radar"
                   />
@@ -610,7 +575,6 @@ onMounted(() => {
                     multiple
                     clearable
                     :hint="t('mediaserver.syncLibrariesHint')"
-                    persistent-hint
                     active
                     append-inner-icon="mdi-refresh"
                     prepend-inner-icon="mdi-library"
@@ -643,7 +607,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -654,7 +617,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.hostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -665,7 +627,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -675,7 +636,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.token"
                   :label="t('mediaserver.plexToken')"
                   :hint="t('mediaserver.plexTokenHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-key"
                 />
@@ -689,7 +649,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -703,7 +662,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -721,7 +679,6 @@ onMounted(() => {
                   :label="t('common.name')"
                   :placeholder="t('mediaserver.nameRequired')"
                   :hint="t('mediaserver.serverAlias')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />
@@ -732,7 +689,6 @@ onMounted(() => {
                   :label="t('mediaserver.host')"
                   :placeholder="t('mediaserver.hostPlaceholder')"
                   :hint="t('mediaserver.vyoHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -743,7 +699,6 @@ onMounted(() => {
                   :label="t('mediaserver.playHost')"
                   :placeholder="t('mediaserver.playHostPlaceholder')"
                   :hint="t('mediaserver.playHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-play-network"
                 />
@@ -753,7 +708,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.config.apikey"
                   :label="t('mediaserver.apiKey')"
                   :hint="t('mediaserver.vyoApiKeyHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-key"
                 />
@@ -767,7 +721,6 @@ onMounted(() => {
                   clearable
                   :label="t('mediaserver.syncInterval')"
                   :hint="t('mediaserver.syncIntervalHint', { interval: props.defaultSyncInterval ?? 6 })"
-                  persistent-hint
                   suffix="h"
                   prepend-inner-icon="mdi-sync"
                 />
@@ -781,7 +734,6 @@ onMounted(() => {
                   multiple
                   clearable
                   :hint="t('mediaserver.syncLibrariesHint')"
-                  persistent-hint
                   active
                   append-inner-icon="mdi-refresh"
                   prepend-inner-icon="mdi-library"
@@ -798,7 +750,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.type"
                   :label="t('mediaserver.type')"
                   :hint="t('mediaserver.customTypeHint')"
-                  persistent-hint
                   prepend-inner-icon="mdi-cog"
                 />
               </VCol>
@@ -807,7 +758,6 @@ onMounted(() => {
                   v-model="mediaServerInfo.name"
                   :label="t('common.name')"
                   :hint="t('mediaserver.nameRequired')"
-                  persistent-hint
                   prepend-inner-icon="mdi-label"
                 />
               </VCol>

@@ -657,7 +657,6 @@ onMounted(() => {
                         v-model="subscribeForm.keyword"
                         :label="t('dialog.subscribeEdit.searchKeyword')"
                         :hint="t('dialog.subscribeEdit.searchKeywordHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-magnify"
                       />
                     </VCol>
@@ -667,7 +666,6 @@ onMounted(() => {
                         :label="t('dialog.subscribeEdit.totalEpisode')"
                         :rules="[optionalNumberValidator]"
                         :hint="t('dialog.subscribeEdit.totalEpisodeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-playlist-play"
                       />
                     </VCol>
@@ -677,7 +675,6 @@ onMounted(() => {
                         :label="t('dialog.subscribeEdit.startEpisode')"
                         :rules="[optionalNumberValidator]"
                         :hint="t('dialog.subscribeEdit.startEpisodeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-play-circle-outline"
                       />
                     </VCol>
@@ -693,7 +690,6 @@ onMounted(() => {
                         :label="t('dialog.subscribeEdit.quality')"
                         :items="qualityOptions"
                         :hint="t('dialog.subscribeEdit.qualityHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-quality-high"
                       />
                     </VCol>
@@ -703,7 +699,6 @@ onMounted(() => {
                         :label="t('dialog.subscribeEdit.resolution')"
                         :items="resolutionOptions"
                         :hint="t('dialog.subscribeEdit.resolutionHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-monitor"
                       />
                     </VCol>
@@ -713,7 +708,6 @@ onMounted(() => {
                         :label="t('dialog.subscribeEdit.effect')"
                         :items="effectOptions"
                         :hint="t('dialog.subscribeEdit.effectHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-auto-fix"
                       />
                     </VCol>
@@ -732,7 +726,6 @@ onMounted(() => {
                         multiple
                         clearable
                         :hint="t('dialog.subscribeEdit.subscribeSitesHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-web"
                       />
                     </VCol>
@@ -742,7 +735,6 @@ onMounted(() => {
                         :items="downloaderOptions"
                         :label="t('dialog.subscribeEdit.downloader')"
                         :hint="t('dialog.subscribeEdit.downloaderHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-download"
                       />
                     </VCol>
@@ -755,7 +747,6 @@ onMounted(() => {
                         :custom-filter="filterDownloadDirectoryOption"
                         :label="t('dialog.subscribeEdit.savePath')"
                         :hint="t('dialog.subscribeEdit.savePathHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-folder"
                       >
                         <template #item="{ props: itemProps, item }">
@@ -845,7 +836,6 @@ onMounted(() => {
                         v-model="activeVersion.release_group"
                         :label="t('dialog.subscribeEdit.releaseGroup')"
                         :hint="t('dialog.subscribeEdit.releaseGroupHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-account-group-outline"
                       />
                     </VCol>
@@ -854,7 +844,6 @@ onMounted(() => {
                         v-model="subscribeForm.include"
                         :label="t('dialog.subscribeEdit.include')"
                         :hint="t('dialog.subscribeEdit.includeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-plus-circle-outline"
                       />
                     </VCol>
@@ -863,7 +852,6 @@ onMounted(() => {
                         v-model="subscribeForm.exclude"
                         :label="t('dialog.subscribeEdit.exclude')"
                         :hint="t('dialog.subscribeEdit.excludeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-minus-circle-outline"
                       />
                     </VCol>
@@ -876,7 +864,6 @@ onMounted(() => {
                         clearable
                         :label="t('dialog.subscribeEdit.filterGroups')"
                         :hint="t('dialog.subscribeEdit.filterGroupsHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-filter"
                       />
                     </VCol>
@@ -887,7 +874,6 @@ onMounted(() => {
                         :item-props="episodeGroupItemProps"
                         :label="t('dialog.subscribeEdit.episodeGroup')"
                         :hint="t('dialog.subscribeEdit.episodeGroupHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-view-list"
                       />
                     </VCol>
@@ -897,7 +883,6 @@ onMounted(() => {
                         :items="seasonItems"
                         :label="t('dialog.subscribeEdit.season')"
                         :hint="t('dialog.subscribeEdit.seasonHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-calendar"
                       />
                     </VCol>
@@ -908,7 +893,6 @@ onMounted(() => {
                         :hint="t('dialog.subscribeEdit.customWordsHint')"
                         rows="3"
                         auto-grow
-                        persistent-hint
                         :placeholder="t('dialog.subscribeEdit.customWordsPlaceholder')"
                         prepend-inner-icon="mdi-text"
                       />

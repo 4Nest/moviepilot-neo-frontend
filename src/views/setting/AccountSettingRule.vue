@@ -560,7 +560,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存自定义过滤规则条目</span>
           <VBtn
             type="submit"
             size="small"
@@ -659,7 +658,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存优先级规则组与顺序</span>
           <VBtn
             type="submit"
             size="small"
@@ -700,7 +698,6 @@ useSilentSettingRefresh(
                 chips
                 :label="t('setting.rule.currentPriorityRules')"
                 :hint="t('setting.rule.currentPriorityRulesHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-priority-high"
               />
             </VCol>
@@ -708,7 +705,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存多资源命中时的选种排序策略</span>
           <VBtn
             type="submit"
             size="small"

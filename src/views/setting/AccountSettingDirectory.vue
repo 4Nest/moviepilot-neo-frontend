@@ -409,7 +409,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存存储源连接与排序配置</span>
           <VBtn
             type="submit"
             size="small"
@@ -490,7 +489,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存下载目录与媒体库整理映射关系</span>
           <VBtn
             type="submit"
             size="small"
@@ -528,7 +526,6 @@ useSilentSettingRefresh(
                 :items="sourceItems"
                 :label="t('setting.directory.scrapSource')"
                 :hint="t('setting.directory.scrapSourceHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-database"
               />
             </VCol>
@@ -592,7 +589,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存刮削源与电影/剧集重命名模板</span>
           <VBtn
             type="submit"
             size="small"

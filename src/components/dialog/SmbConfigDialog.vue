@@ -116,7 +116,6 @@ async function handleReset() {
               v-model="localConf.host"
               :hint="t('dialog.smbConfig.hostHint')"
               :label="t('dialog.smbConfig.host')"
-              persistent-hint
               prepend-inner-icon="mdi-server"
               placeholder="192.168.1.100"
             />
@@ -126,7 +125,6 @@ async function handleReset() {
               v-model="localConf.share"
               :hint="t('dialog.smbConfig.shareHint')"
               :label="t('dialog.smbConfig.share')"
-              persistent-hint
               prepend-inner-icon="mdi-folder-network"
               placeholder="shared_folder"
             />
@@ -136,7 +134,6 @@ async function handleReset() {
               v-model="localConf.username"
               :hint="t('dialog.smbConfig.usernameHint')"
               :label="t('dialog.smbConfig.username')"
-              persistent-hint
               prepend-inner-icon="mdi-account"
               placeholder="your_username"
             />
@@ -147,7 +144,6 @@ async function handleReset() {
               v-model="localConf.password"
               :hint="t('dialog.smbConfig.passwordHint')"
               :label="t('dialog.smbConfig.password')"
-              persistent-hint
               prepend-inner-icon="mdi-lock"
               placeholder="your_password"
             />
@@ -157,7 +153,6 @@ async function handleReset() {
               v-model="localConf.domain"
               :hint="t('dialog.smbConfig.domainHint')"
               :label="t('dialog.smbConfig.domain')"
-              persistent-hint
               prepend-inner-icon="mdi-domain"
               placeholder="WORKGROUP"
             />

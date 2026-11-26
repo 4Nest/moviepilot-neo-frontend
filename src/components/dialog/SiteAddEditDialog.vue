@@ -249,7 +249,6 @@ onMounted(async () => {
                   :label="t('site.fields.url')"
                   :rules="[requiredValidator]"
                   :hint="t('site.hints.url')"
-                  persistent-hint
                   prepend-inner-icon="mdi-web"
                 />
               </VCol>
@@ -258,7 +257,6 @@ onMounted(async () => {
                   v-model="siteForm.rss"
                   :label="t('site.fields.rss')"
                   :hint="t('site.hints.rss')"
-                  persistent-hint
                   prepend-inner-icon="mdi-rss"
                 />
               </VCol>
@@ -269,7 +267,6 @@ onMounted(async () => {
                   :items="priorityItems"
                   :rules="[priorityRequiredValidator]"
                   :hint="t('site.hints.priority')"
-                  persistent-hint
                   prepend-inner-icon="mdi-priority-high"
                 />
               </VCol>
@@ -279,7 +276,6 @@ onMounted(async () => {
                   :items="statusItems"
                   :label="t('site.fields.status')"
                   :hint="t('site.hints.status')"
-                  persistent-hint
                   prepend-inner-icon="mdi-toggle-switch"
                 />
               </VCol>
@@ -288,7 +284,6 @@ onMounted(async () => {
                   v-model="siteForm.timeout"
                   :label="t('site.fields.timeout')"
                   :hint="t('site.hints.timeout')"
-                  persistent-hint
                   prepend-inner-icon="mdi-timer"
                 />
               </VCol>
@@ -298,7 +293,6 @@ onMounted(async () => {
                   :label="t('site.fields.downloader')"
                   :items="downloaderOptions"
                   :hint="t('site.hints.downloader')"
-                  persistent-hint
                   prepend-inner-icon="mdi-download"
                 />
               </VCol>
@@ -329,7 +323,6 @@ onMounted(async () => {
                       :hint="t('site.hints.cookie')"
                       rows="3"
                       auto-grow
-                      persistent-hint
                       prepend-inner-icon="mdi-cookie"
                     />
                   </VCol>
@@ -338,7 +331,6 @@ onMounted(async () => {
                       v-model="siteForm.ua"
                       :label="t('site.fields.userAgent')"
                       :hint="t('site.hints.userAgent')"
-                      persistent-hint
                       prepend-inner-icon="mdi-web-box"
                     />
                   </VCol>
@@ -351,7 +343,6 @@ onMounted(async () => {
                       v-model="siteForm.token"
                       :label="t('site.fields.authorization')"
                       :hint="t('site.hints.authorization')"
-                      persistent-hint
                       prepend-inner-icon="mdi-key"
                     />
                   </VCol>
@@ -360,7 +351,6 @@ onMounted(async () => {
                       v-model="siteForm.apikey"
                       :label="t('site.fields.apiKey')"
                       :hint="t('site.hints.apiKey')"
-                      persistent-hint
                       prepend-inner-icon="mdi-api"
                     />
                   </VCol>
@@ -390,7 +380,6 @@ onMounted(async () => {
                       :label="t('site.fields.limitInterval')"
                       :rules="[optionalNumberValidator]"
                       :hint="t('site.hints.limitInterval')"
-                      persistent-hint
                       prepend-inner-icon="mdi-clock-outline"
                     />
                   </VCol>
@@ -400,7 +389,6 @@ onMounted(async () => {
                       :label="t('site.fields.limitCount')"
                       :rules="[optionalNumberValidator]"
                       :hint="t('site.hints.limitCount')"
-                      persistent-hint
                       prepend-inner-icon="mdi-counter"
                     />
                   </VCol>
@@ -410,7 +398,6 @@ onMounted(async () => {
                       :label="t('site.fields.limitSeconds')"
                       :rules="[optionalNumberValidator]"
                       :hint="t('site.hints.limitSeconds')"
-                      persistent-hint
                       prepend-inner-icon="mdi-timer-sand"
                     />
                   </VCol>

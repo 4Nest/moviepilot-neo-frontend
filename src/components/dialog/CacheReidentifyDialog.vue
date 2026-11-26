@@ -82,7 +82,6 @@ function submitReidentify() {
               :label="t('setting.cache.reidentifyDialog.mediaSource')"
               :hint="t('setting.cache.reidentifyDialog.mediaSourceHint')"
               prepend-inner-icon="mdi-database-search"
-              persistent-hint
             />
           </VCol>
           <VCol cols="12">
@@ -92,7 +91,6 @@ function submitReidentify() {
               :hint="t('setting.cache.reidentifyDialog.mediaIdHint')"
               clearable
               prepend-inner-icon="mdi-id-card"
-              persistent-hint
             />
           </VCol>
         </VRow>

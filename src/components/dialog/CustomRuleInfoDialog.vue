@@ -124,7 +124,6 @@ onMounted(() => {
                 :label="t('customRule.field.ruleId')"
                 :placeholder="t('customRule.placeholder.ruleId')"
                 :hint="t('customRule.hint.ruleId')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-identifier"
                 @input="validateRuleId"
@@ -136,7 +135,6 @@ onMounted(() => {
                 :label="t('customRule.field.ruleName')"
                 :placeholder="t('customRule.placeholder.ruleName')"
                 :hint="t('customRule.hint.ruleName')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-label"
               />
@@ -147,7 +145,6 @@ onMounted(() => {
                 :label="t('customRule.field.include')"
                 :placeholder="t('customRule.placeholder.include')"
                 :hint="t('customRule.hint.include')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-plus-circle"
               />
@@ -158,7 +155,6 @@ onMounted(() => {
                 :label="t('customRule.field.exclude')"
                 :placeholder="t('customRule.placeholder.exclude')"
                 :hint="t('customRule.hint.exclude')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-minus-circle"
               />
@@ -169,7 +165,6 @@ onMounted(() => {
                 :label="t('customRule.field.sizeRange')"
                 :placeholder="t('customRule.placeholder.sizeRange')"
                 :hint="t('customRule.hint.sizeRange')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-harddisk"
               />
@@ -180,7 +175,6 @@ onMounted(() => {
                 :label="t('customRule.field.seeders')"
                 :placeholder="t('customRule.placeholder.seeders')"
                 :hint="t('customRule.hint.seeders')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-account-group"
               />
@@ -191,7 +185,6 @@ onMounted(() => {
                 :label="t('customRule.field.publishTime')"
                 :placeholder="t('customRule.placeholder.publishTime')"
                 :hint="t('customRule.hint.publishTime')"
-                persistent-hint
                 active
                 prepend-inner-icon="mdi-calendar-clock"
               />

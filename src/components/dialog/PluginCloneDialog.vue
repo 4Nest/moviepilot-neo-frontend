@@ -92,7 +92,6 @@ onMounted(() => {
                 :label="t('plugin.suffix') + ' *'"
                 :placeholder="t('plugin.suffixPlaceholder')"
                 :hint="t('plugin.suffixHint')"
-                persistent-hint
                 :rules="[
                   v => !!v || t('plugin.suffixRequired'),
                   v => /^[a-zA-Z0-9]+$/.test(v) || t('plugin.suffixFormatError'),
@@ -109,7 +108,6 @@ onMounted(() => {
                 :label="t('plugin.cloneName')"
                 :placeholder="t('plugin.cloneNamePlaceholder')"
                 :hint="t('plugin.cloneNameHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-rename-box"
               />
             </VCol>
@@ -120,7 +118,6 @@ onMounted(() => {
                 :label="t('plugin.cloneDescriptionLabel')"
                 :placeholder="t('plugin.cloneDescriptionPlaceholder')"
                 :hint="t('plugin.cloneDescriptionHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-text"
               />
             </VCol>
@@ -131,7 +128,6 @@ onMounted(() => {
                 :label="t('plugin.cloneVersion')"
                 :placeholder="t('plugin.cloneVersionPlaceholder')"
                 :hint="t('plugin.cloneVersionHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-numeric"
               />
             </VCol>
@@ -142,7 +138,6 @@ onMounted(() => {
                 :label="t('plugin.cloneIcon')"
                 :placeholder="t('plugin.cloneIconPlaceholder')"
                 :hint="t('plugin.cloneIconHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-image"
               />
             </VCol>

@@ -605,7 +605,6 @@ onMounted(() => {
               :rules="[optionalNumberValidator]"
               append-inner-icon="mdi-magnify"
               :hint="t('dialog.reorganize.mediaIdHint')"
-              persistent-hint
               prepend-inner-icon="mdi-identifier"
               variant="outlined"
               density="compact"

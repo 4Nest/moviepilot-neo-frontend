@@ -411,7 +411,6 @@ onMounted(() => {
                 v-model="workflowForm.name"
                 :label="t('dialog.workflowAddEdit.name')"
                 :rules="[requiredValidator]"
-                persistent-hint
                 :hint="t('dialog.workflowAddEdit.namePlaceholder')"
                 prepend-inner-icon="mdi-workflow"
               />
@@ -454,7 +453,6 @@ onMounted(() => {
                 item-title="title"
                 item-value="value"
                 :rules="[requiredValidator]"
-                persistent-hint
                 :hint="t('dialog.workflowAddEdit.eventTypePlaceholder')"
                 prepend-inner-icon="mdi-calendar-check"
               />

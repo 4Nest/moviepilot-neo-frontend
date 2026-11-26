@@ -268,7 +268,6 @@ useSilentSettingRefresh(
                 :items="mediaSourcesDict"
                 :label="t('setting.search.mediaSource')"
                 :hint="t('setting.search.mediaSourceHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-database-search"
               />
             </VCol>
@@ -281,7 +280,6 @@ useSilentSettingRefresh(
                 :items="filterRuleGroupOptions"
                 :label="t('setting.search.filterRuleGroup')"
                 :hint="t('setting.search.filterRuleGroupHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-filter"
               />
             </VCol>
@@ -293,7 +291,6 @@ useSilentSettingRefresh(
                 :label="t('setting.search.downloadLabel')"
                 placeholder="MOVIEPILOT"
                 :hint="t('setting.search.downloadLabelHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-tag"
               />
             </VCol>
@@ -305,7 +302,6 @@ useSilentSettingRefresh(
                 step="1"
                 :label="t('setting.search.searchResourcePages')"
                 :hint="t('setting.search.searchResourcePagesHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-file-search"
               />
             </VCol>
@@ -339,7 +335,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存搜索数据源、过滤规则组与默认分页参数</span>
           <VBtn
             type="submit"
             size="small"
@@ -397,7 +392,6 @@ useSilentSettingRefresh(
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存手动与快速搜索时默认勾选的索引站点</span>
           <VBtn
             type="submit"
             size="small"

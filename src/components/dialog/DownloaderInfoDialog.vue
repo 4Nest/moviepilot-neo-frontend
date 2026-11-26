@@ -275,7 +275,6 @@ onMounted(() => {
                   v-model="downloaderInfo.bt_save_path"
                   :label="t('downloader.btSavePath')"
                   :hint="t('downloader.btSavePathHint')"
-                  persistent-hint
                   clearable
                   :disabled="!downloaderInfo.enabled || !downloaderInfo.bt_default"
                   prepend-inner-icon="mdi-folder-outline"
@@ -312,7 +311,6 @@ onMounted(() => {
                     type="password"
                     :label="t('downloader.apiKey')"
                     :hint="t('downloader.qbittorrentApiKeyHint')"
-                    persistent-hint
                     active
                     prepend-inner-icon="mdi-key-variant"
                   />
@@ -469,7 +467,6 @@ onMounted(() => {
                   :label="t('downloader.host')"
                   placeholder="http(s)://ip:port/RPC2"
                   :hint="t('downloader.rtorrentHostHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-server"
                 />
@@ -501,7 +498,6 @@ onMounted(() => {
                   v-model="downloaderInfo.type"
                   :label="t('downloader.type')"
                   :hint="t('downloader.customTypeHint')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-cog"
                 />
@@ -511,7 +507,6 @@ onMounted(() => {
                   v-model="downloaderInfo.name"
                   :label="t('downloader.name')"
                   :hint="t('downloader.nameRequired')"
-                  persistent-hint
                   active
                   prepend-inner-icon="mdi-label"
                 />

@@ -1575,7 +1575,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.targetStorage')"
                         :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
                         :hint="t('dialog.reorganize.targetStorageHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-harddisk"
                       />
                     </VCol>
@@ -1585,7 +1584,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.transferType')"
                         :items="manualTransferTypeOptions"
                         :hint="t('dialog.reorganize.transferTypeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-swap-horizontal"
                       />
                     </VCol>
@@ -1599,7 +1597,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.targetPath')"
                         :placeholder="t('dialog.reorganize.targetPathPlaceholder')"
                         :hint="t('dialog.reorganize.targetPathHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-folder-outline"
                       />
                     </VCol>
@@ -1619,7 +1616,6 @@ onUnmounted(() => {
                           { title: t('dialog.reorganize.tv'), value: '电视剧' },
                         ]"
                         :hint="t('dialog.reorganize.mediaTypeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-movie-open"
                       />
                     </VCol>
@@ -1629,7 +1625,6 @@ onUnmounted(() => {
                         :items="mediaSourceItems"
                         :label="t('dialog.reorganize.mediaSource')"
                         :hint="t('dialog.reorganize.mediaSourceHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-database-search"
                       />
                     </VCol>
@@ -1642,7 +1637,6 @@ onUnmounted(() => {
                         :rules="[optionalNumberValidator]"
                         append-inner-icon="mdi-magnify"
                         :hint="t('dialog.reorganize.mediaIdHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-identifier"
                         @click:append-inner="mediaSelectorDialog = true"
                       />
@@ -1665,7 +1659,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.episodeGroup')"
                         :placeholder="t('dialog.reorganize.episodeGroupPlaceholder')"
                         :hint="t('dialog.reorganize.episodeGroupHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-view-list"
                       />
                     </VCol>
@@ -1675,7 +1668,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.season')"
                         :items="seasonItems"
                         :hint="t('dialog.reorganize.seasonHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-calendar"
                       />
                     </VCol>
@@ -1686,7 +1678,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.episodeDetail')"
                         :placeholder="t('dialog.reorganize.episodeDetailPlaceholder')"
                         :hint="t('dialog.reorganize.episodeDetailHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-playlist-play"
                       />
                     </VCol>
@@ -1696,7 +1687,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.episodeFormat')"
                         :placeholder="t('dialog.reorganize.episodeFormatPlaceholder')"
                         :hint="t('dialog.reorganize.episodeFormatHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-format-text"
                       >
                         <template #append-inner>
@@ -1728,7 +1718,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.episodeOffset')"
                         :placeholder="t('dialog.reorganize.episodeOffsetPlaceholder')"
                         :hint="t('dialog.reorganize.episodeOffsetHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-numeric"
                       />
                     </VCol>
@@ -1743,7 +1732,6 @@ onUnmounted(() => {
                         :label="t('dialog.reorganize.episodePart')"
                         :placeholder="t('dialog.reorganize.episodePartPlaceholder')"
                         :hint="t('dialog.reorganize.episodePartHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-file-multiple"
                       />
                     </VCol>
@@ -1754,7 +1742,6 @@ onUnmounted(() => {
                         :rules="[optionalNumberValidator]"
                         placeholder="0"
                         :hint="t('dialog.reorganize.minFileSizeHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-file-document-outline"
                       />
                     </VCol>

@@ -94,7 +94,6 @@ const $toast = useToast()
                 readonly
                 :label="t('dialog.subscribeShare.title')"
                 :rules="[requiredValidator]"
-                persistent-hint
                 prepend-inner-icon="mdi-format-title"
               />
             </VCol>
@@ -106,7 +105,6 @@ const $toast = useToast()
                 :hint="t('dialog.subscribeShare.descriptionHint')"
                 rows="3"
                 auto-grow
-                persistent-hint
                 prepend-inner-icon="mdi-comment-text-outline"
               />
             </VCol>
@@ -116,7 +114,6 @@ const $toast = useToast()
                 :label="t('dialog.subscribeShare.shareUser')"
                 :rules="[requiredValidator]"
                 :hint="t('dialog.subscribeShare.shareUserHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-account-outline"
               />
             </VCol>

@@ -191,7 +191,6 @@ useSilentSettingRefresh(
                 :placeholder="t('setting.site.serviceAddressPlaceholder')"
                 :disabled="siteSetting.CookieCloud.COOKIECLOUD_ENABLE_LOCAL"
                 :hint="t('setting.site.serviceAddressHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-server"
               />
             </VCol>
@@ -200,7 +199,6 @@ useSilentSettingRefresh(
                 v-model="siteSetting.CookieCloud.COOKIECLOUD_KEY"
                 :label="t('setting.site.userKey')"
                 :hint="t('setting.site.userKeyHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-key"
               />
             </VCol>
@@ -212,7 +210,6 @@ useSilentSettingRefresh(
                 @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 :label="t('setting.site.e2ePassword')"
                 :hint="t('setting.site.e2ePasswordHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-lock"
               />
             </VCol>
@@ -224,7 +221,6 @@ useSilentSettingRefresh(
                 @click:append-inner="isCookieCloudAuthHeaderVisible = !isCookieCloudAuthHeaderVisible"
                 :label="t('setting.site.cookieCloudAuthHeader')"
                 :hint="t('setting.site.cookieCloudAuthHeaderHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-shield-key"
               />
             </VCol>
@@ -234,7 +230,6 @@ useSilentSettingRefresh(
                 :label="t('setting.site.autoSyncInterval')"
                 :items="CookieCloudIntervalItems"
                 :hint="t('setting.site.autoSyncIntervalHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-timer"
               />
             </VCol>
@@ -244,7 +239,6 @@ useSilentSettingRefresh(
                 :label="t('setting.site.syncBlacklist')"
                 :placeholder="t('setting.site.syncBlacklistPlaceholder')"
                 :hint="t('setting.site.syncBlacklistHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-block-helper"
               />
             </VCol>
@@ -252,7 +246,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存 CookieCloud 自动同步参数</span>
           <VBtn
             type="submit"
             size="small"
@@ -290,7 +283,6 @@ useSilentSettingRefresh(
                 :label="t('setting.site.siteDataRefreshInterval')"
                 :items="SiteDataRefreshIntervalItems"
                 :hint="t('setting.site.siteDataRefreshIntervalHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-refresh"
               />
             </VCol>
@@ -301,7 +293,6 @@ useSilentSettingRefresh(
                 :items="BrowserEmulationItems"
                 :label="t('setting.site.browserEmulation')"
                 :hint="t('setting.site.browserEmulationHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-web"
               />
             </VCol>
@@ -311,7 +302,6 @@ useSilentSettingRefresh(
                 :label="t('setting.site.ocrHost')"
                 placeholder="https://movie-pilot.org"
                 :hint="t('setting.site.ocrHostHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-text-recognition"
               />
             </VCol>
@@ -321,7 +311,6 @@ useSilentSettingRefresh(
                 :label="t('setting.site.flaresolverrUrl')"
                 :placeholder="'http://127.0.0.1:8191'"
                 :hint="t('setting.site.flaresolverrUrlHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-server"
               />
             </VCol>
@@ -357,7 +346,6 @@ useSilentSettingRefresh(
         </VForm>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存站点访问与防盾策略</span>
           <VBtn
             type="submit"
             size="small"

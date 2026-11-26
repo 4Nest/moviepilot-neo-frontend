@@ -762,7 +762,6 @@ defineExpose({
                 :label="t('setting.system.appDomain')"
                 :hint="t('setting.system.appDomainHint')"
                 placeholder="http://localhost:3000"
-                persistent-hint
                 prepend-inner-icon="mdi-web"
               />
             </VCol>
@@ -772,7 +771,6 @@ defineExpose({
                 :label="t('setting.system.apiToken')"
                 :hint="t('setting.system.apiTokenHint')"
                 :placeholder="t('setting.system.apiTokenMinChars')"
-                persistent-hint
                 prepend-inner-icon="mdi-key"
                 :append-inner-icon="SystemSettings.Basic.API_TOKEN ? 'mdi-content-copy' : 'mdi-reload'"
                 @click:append-inner="
@@ -790,14 +788,12 @@ defineExpose({
                 :label="t('setting.system.githubToken')"
                 :placeholder="t('setting.system.githubTokenFormat')"
                 :hint="t('setting.system.githubTokenHint')"
-                persistent-hint
                 prepend-inner-icon="mdi-github"
               />
             </VCol>
           </VRow>
 
           <div class="mp-card-footer">
-            <span class="mp-card-footer__hint">保存外部访问域名、API 鉴权令牌与 GitHub 接口凭据</span>
             <VBtn
               type="submit"
               size="small"
@@ -910,7 +906,6 @@ defineExpose({
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存下载客户端连接参数与卡片排序</span>
           <VBtn
             type="submit"
             size="small"
@@ -982,7 +977,6 @@ defineExpose({
         </div>
 
         <VForm class="mp-card-footer" @submit.prevent="() => {}">
-          <span class="mp-card-footer__hint">保存媒体库服务器连接与同步间隔配置</span>
           <VBtn
             type="submit"
             size="small"
@@ -1222,7 +1216,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.TMDB_API_DOMAIN"
                         :label="t('setting.system.tmdbApiDomain')"
                         :hint="t('setting.system.tmdbApiDomainHint')"
-                        persistent-hint
                         :placeholder="t('setting.system.tmdbApiDomainPlaceholder')"
                         :items="['api.themoviedb.org', 'api.tmdb.org']"
                         :rules="[
@@ -1236,7 +1229,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.TMDB_API_KEY"
                         :label="t('setting.system.tmdbApiKey')"
                         :hint="t('setting.system.tmdbApiKeyHint')"
-                        persistent-hint
                         :placeholder="t('setting.system.tmdbApiKeyPlaceholder')"
                         :rules="[
                           (v: string | null) => v === null || !!v?.trim() || t('setting.system.tmdbApiKeyRequired'),
@@ -1249,7 +1241,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.TMDB_IMAGE_DOMAIN"
                         :label="t('setting.system.tmdbImageDomain')"
                         :hint="t('setting.system.tmdbImageDomainHint')"
-                        persistent-hint
                         :placeholder="t('setting.system.tmdbImageDomainPlaceholder')"
                         :items="['image.tmdb.org']"
                         :rules="[
@@ -1264,7 +1255,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.TMDB_LOCALE"
                         :label="t('setting.system.tmdbLocale')"
                         :hint="t('setting.system.tmdbLocaleHint')"
-                        persistent-hint
                         :placeholder="t('setting.system.tmdbLocalePlaceholder')"
                         :items="tmdbLanguageItems"
                         prepend-inner-icon="mdi-translate"
@@ -1275,7 +1265,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.META_CACHE_EXPIRE"
                         :label="t('setting.system.metaCacheExpire')"
                         :hint="t('setting.system.metaCacheExpireHint')"
-                        persistent-hint
                         min="0"
                         type="number"
                         :suffix="t('setting.system.hour')"
@@ -1366,7 +1355,6 @@ defineExpose({
                       v-model="fanartLanguageSelection"
                       :label="t('setting.system.fanartLang')"
                       :hint="t('setting.system.fanartLangHint')"
-                      persistent-hint
                       :items="fanartLanguageItems"
                       multiple
                       chips
@@ -1465,7 +1453,6 @@ defineExpose({
                         :label="t('setting.system.proxyHost')"
                         placeholder="http://127.0.0.1:7890"
                         :hint="t('setting.system.proxyHostHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-server-network"
                       />
                     </VCol>
@@ -1475,7 +1462,6 @@ defineExpose({
                         :label="t('setting.system.githubProxy')"
                         :placeholder="t('setting.system.githubProxyPlaceholder')"
                         :hint="t('setting.system.githubProxyHint')"
-                        persistent-hint
                         :items="githubMirrorsItems"
                         clearable
                         prepend-inner-icon="mdi-github"
@@ -1487,7 +1473,6 @@ defineExpose({
                         :label="t('setting.system.pipProxy')"
                         :placeholder="t('setting.system.pipProxyPlaceholder')"
                         :hint="t('setting.system.pipProxyHint')"
-                        persistent-hint
                         :items="pipMirrorsItems"
                         clearable
                         prepend-inner-icon="mdi-package"
@@ -1522,7 +1507,6 @@ defineExpose({
                           :hint="t('setting.system.dohResolversHint')"
                           rows="2"
                           auto-grow
-                          persistent-hint
                           prepend-inner-icon="mdi-dns"
                         />
                       </VCol>
@@ -1534,7 +1518,6 @@ defineExpose({
                           :hint="t('setting.system.dohDomainsHint')"
                           rows="2"
                           auto-grow
-                          persistent-hint
                           prepend-inner-icon="mdi-domain"
                         />
                       </VCol>
@@ -1672,7 +1655,6 @@ defineExpose({
                         v-model.number="SystemSettings.Advanced.DATA_CLEANUP_MESSAGE_DAYS"
                         :label="t('setting.system.dataCleanupMessageDays')"
                         :hint="t('setting.system.dataCleanupMessageDaysHint')"
-                        persistent-hint
                         min="0"
                         type="number"
                         :suffix="t('setting.system.day')"
@@ -1685,7 +1667,6 @@ defineExpose({
                         v-model.number="SystemSettings.Advanced.DATA_CLEANUP_DOWNLOAD_HISTORY_DAYS"
                         :label="t('setting.system.dataCleanupDownloadHistoryDays')"
                         :hint="t('setting.system.dataCleanupDownloadHistoryDaysHint')"
-                        persistent-hint
                         min="0"
                         type="number"
                         :suffix="t('setting.system.day')"
@@ -1698,7 +1679,6 @@ defineExpose({
                         v-model.number="SystemSettings.Advanced.DATA_CLEANUP_SITE_USERDATA_DAYS"
                         :label="t('setting.system.dataCleanupSiteUserDataDays')"
                         :hint="t('setting.system.dataCleanupSiteUserDataDaysHint')"
-                        persistent-hint
                         min="0"
                         type="number"
                         :suffix="t('setting.system.day')"
@@ -1711,7 +1691,6 @@ defineExpose({
                         v-model.number="SystemSettings.Advanced.DATA_CLEANUP_TRANSFER_HISTORY_DAYS"
                         :label="t('setting.system.dataCleanupTransferHistoryDays')"
                         :hint="t('setting.system.dataCleanupTransferHistoryDaysHint')"
-                        persistent-hint
                         min="0"
                         type="number"
                         :suffix="t('setting.system.day')"
@@ -1751,7 +1730,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.LOG_LEVEL"
                         :label="t('setting.system.logLevel')"
                         :hint="t('setting.system.logLevelHint')"
-                        persistent-hint
                         :items="logLevelItems"
                         prepend-inner-icon="mdi-format-list-bulleted"
                       />
@@ -1761,7 +1739,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.LOG_MAX_FILE_SIZE"
                         :label="t('setting.system.logMaxFileSize')"
                         :hint="t('setting.system.logMaxFileSizeHint')"
-                        persistent-hint
                         min="1"
                         type="number"
                         :suffix="t('setting.system.mb')"
@@ -1777,7 +1754,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.LOG_BACKUP_COUNT"
                         :label="t('setting.system.logBackupCount')"
                         :hint="t('setting.system.logBackupCountHint')"
-                        persistent-hint
                         min="1"
                         type="number"
                         :rules="[
@@ -1792,7 +1768,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.LOG_FILE_FORMAT"
                         :label="t('setting.system.logFileFormat')"
                         :hint="t('setting.system.logFileFormatHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-format-text"
                       />
                     </VCol>
@@ -1859,7 +1834,6 @@ defineExpose({
                         v-model="SystemSettings.Advanced.PLUGIN_LOCAL_REPO_PATHS"
                         :label="t('setting.system.pluginLocalRepoPaths')"
                         :hint="t('setting.system.pluginLocalRepoPathsHint')"
-                        persistent-hint
                         prepend-inner-icon="mdi-folder-outline"
                       />
                     </VCol>
@@ -1868,7 +1842,6 @@ defineExpose({
                         v-model.number="SystemSettings.Advanced.TRANSFER_THREADS"
                         :label="t('setting.system.transferThreads')"
                         :hint="t('setting.system.transferThreadsHint')"
-                        persistent-hint
                         type="number"
                         min="1"
                         prepend-inner-icon="mdi-swap-horizontal"
