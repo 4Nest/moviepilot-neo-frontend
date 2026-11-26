@@ -64,9 +64,9 @@ defineExpose({ fetchData })
     <ProgressiveCardGrid
       :items="dataList"
       :get-item-key="item => item.hash || item.name"
-      :min-item-width="320"
+      :min-item-width="340"
       :gap="14"
-      :estimated-item-height="230"
+      :estimated-item-height="215"
     >
       <template #default="{ item }">
         <DownloadingCard :info="item" :downloader-name="props.name" @remove="removeDownloadItem" />

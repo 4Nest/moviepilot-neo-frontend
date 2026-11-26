@@ -181,69 +181,83 @@ async function deleteDownload() {
               'downloading-card--deleting': isDeleting,
             }"
           >
-            <div v-if="hasPosterImage" class="downloading-card__poster">
-              <VImg
-                :src="media.poster"
-                class="downloading-card__image"
-                cover
-                position="center"
-                @error="imageLoadError = true"
-              >
-                <template #placeholder>
-                  <VSkeletonLoader class="downloading-card__image-loader h-full" />
-                </template>
-              </VImg>
-              <div class="downloading-card__poster-edge" />
-            </div>
-
             <VCardText class="downloading-card__body">
-              <div class="downloading-card__heading">
-                <div class="downloading-card__title" :title="mediaTitle">
-                  <span>{{ mediaTitle }}</span>
-                  <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
+              <div class="downloading-card__main">
+                <div v-if="hasPosterImage" class="downloading-card__poster">
+                  <VImg
+                    :src="media.poster"
+                    :aspect-ratio="2 / 3"
+                    class="downloading-card__image"
+                    cover
+                    position="center"
+                    @error="imageLoadError = true"
+                  >
+                    <template #placeholder>
+                      <VSkeletonLoader class="downloading-card__image-loader h-full" />
+                    </template>
+                  </VImg>
                 </div>
-                <VTooltip :disabled="!props.info?.title" :max-width="480" location="top" open-delay="200">
-                  <template #activator="{ props: tooltipProps }">
-                    <!-- Tooltip 浮层不参与布局；有标题时允许键盘聚焦，以便读取被截断的完整种子名。 -->
-                    <div
-                      v-bind="tooltipProps"
-                      class="downloading-card__torrent-title"
-                      :class="{ 'downloading-card__torrent-title--focusable': props.info?.title }"
-                      :tabindex="props.info?.title ? 0 : undefined"
-                    >
-                      {{ props.info?.title || t('common.unknown') }}
+
+                <div class="downloading-card__meta">
+                  <div class="downloading-card__heading">
+                    <div class="downloading-card__title-row">
+                      <div class="downloading-card__title" :title="mediaTitle">
+                        <span>{{ mediaTitle }}</span>
+                        <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
+                      </div>
+                      <span
+                        class="downloading-card__status-pill"
+                        :class="isDownloading ? 'downloading-card__status-pill--active' : 'downloading-card__status-pill--paused'"
+                      >
+                        <span class="downloading-card__status-dot" />
+                        <span>{{ isDownloading ? t('common.download') : t('common.pause') }}</span>
+                      </span>
                     </div>
-                  </template>
-                  <span class="downloading-card__torrent-tooltip">{{ props.info?.title }}</span>
-                </VTooltip>
-              </div>
 
-              <div class="downloading-card__chips">
-                <VChip v-if="mediaTypeText" :prepend-icon="mediaTypeIcon" size="x-small" variant="tonal">
-                  {{ mediaTypeText }}
-                </VChip>
-                <VChip prepend-icon="mdi-harddisk" size="x-small" variant="tonal">
-                  {{ sizeText }}
-                </VChip>
-                <VChip v-if="sourceSiteText" prepend-icon="mdi-web" size="x-small" variant="tonal">
-                  {{ sourceSiteText }}
-                </VChip>
-              </div>
-
-              <VTooltip v-if="savePathText" :max-width="480" location="top" open-delay="200">
-                <template #activator="{ props: tooltipProps }">
-                  <div v-bind="tooltipProps" class="downloading-card__save-path" tabindex="0">
-                    <VIcon icon="mdi-folder-outline" size="14" />
-                    <span>{{ savePathText }}</span>
+                    <VTooltip :disabled="!props.info?.title" :max-width="480" location="top" open-delay="200">
+                      <template #activator="{ props: tooltipProps }">
+                        <!-- Tooltip 浮层不参与布局；有标题时允许键盘聚焦，以便读取被截断的完整种子名。 -->
+                        <div
+                          v-bind="tooltipProps"
+                          class="downloading-card__torrent-title"
+                          :class="{ 'downloading-card__torrent-title--focusable': props.info?.title }"
+                          :tabindex="props.info?.title ? 0 : undefined"
+                        >
+                          {{ props.info?.title || t('common.unknown') }}
+                        </div>
+                      </template>
+                      <span class="downloading-card__torrent-tooltip">{{ props.info?.title }}</span>
+                    </VTooltip>
                   </div>
-                </template>
-                <span class="downloading-card__save-path-tooltip">{{ savePathText }}</span>
-              </VTooltip>
+
+                  <div class="downloading-card__chips">
+                    <VChip v-if="mediaTypeText" :prepend-icon="mediaTypeIcon" size="x-small" variant="tonal">
+                      {{ mediaTypeText }}
+                    </VChip>
+                    <VChip prepend-icon="mdi-harddisk" size="x-small" variant="tonal">
+                      {{ sizeText }}
+                    </VChip>
+                    <VChip v-if="sourceSiteText" prepend-icon="mdi-web" size="x-small" variant="tonal">
+                      {{ sourceSiteText }}
+                    </VChip>
+                  </div>
+
+                  <VTooltip v-if="savePathText" :max-width="480" location="top" open-delay="200">
+                    <template #activator="{ props: tooltipProps }">
+                      <div v-bind="tooltipProps" class="downloading-card__save-path" tabindex="0">
+                        <VIcon icon="mdi-folder-outline" size="13" />
+                        <span>{{ savePathText }}</span>
+                      </div>
+                    </template>
+                    <span class="downloading-card__save-path-tooltip">{{ savePathText }}</span>
+                  </VTooltip>
+                </div>
+              </div>
 
               <div v-if="progressValue > 0" class="downloading-card__progress">
                 <div class="downloading-card__progress-label">
                   <span class="downloading-card__progress-copy">
-                    <span>{{ isDownloading ? t('common.download') : t('common.pause') }}</span>
+                    <VIcon icon="mdi-clock-outline" size="12" />
                     <span class="downloading-card__progress-remaining" :title="remainingTimeText">
                       {{ remainingTimeText }}
                     </span>
@@ -296,7 +310,7 @@ async function deleteDownload() {
                     color="error"
                     icon
                     size="small"
-                    variant="text"
+                    variant="tonal"
                     class="downloading-card__action-btn"
                     @click="deleteDownload"
                   >
@@ -327,20 +341,40 @@ async function deleteDownload() {
 }
 
 .downloading-card {
-  display: grid;
-  min-block-size: 8.5rem;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--mp-border-card);
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   background-color: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+}
+
+.downloading-card__body {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px !important;
+}
+
+.downloading-card__main {
+  display: flex;
+  min-inline-size: 0;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .downloading-card__poster {
   position: relative;
   overflow: hidden;
-  min-block-size: 8.5rem;
+  flex: 0 0 auto;
+  inline-size: 5.5rem;
+  aspect-ratio: 2 / 3;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  border-radius: 9px;
   background: rgba(var(--v-theme-on-surface), 0.06);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
 }
 
 .downloading-card__image,
@@ -349,24 +383,54 @@ async function deleteDownload() {
   inline-size: 100%;
 }
 
-.downloading-card__image {
-  position: absolute;
-  inset: 0;
-}
-
-.downloading-card__poster-edge {
-  position: absolute;
-  background: linear-gradient(90deg, rgba(var(--v-theme-surface), 0) 72%, rgba(var(--v-theme-surface), 0.38));
-  inset: 0;
-  pointer-events: none;
-}
-
-.downloading-card__body {
+.downloading-card__meta {
   display: flex;
   min-inline-size: 0;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 8px;
-  padding: 13px 15px !important;
+}
+
+.downloading-card__heading {
+  min-inline-size: 0;
+}
+
+.downloading-card__title-row {
+  display: flex;
+  min-inline-size: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.downloading-card__status-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 5px;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.downloading-card__status-pill--active {
+  background: rgba(var(--v-theme-success), 0.14);
+  color: rgb(var(--v-theme-success));
+}
+
+.downloading-card__status-pill--paused {
+  background: rgba(var(--v-theme-warning), 0.15);
+  color: rgb(var(--v-theme-warning));
+}
+
+.downloading-card__status-dot {
+  border-radius: 50%;
+  background: currentcolor;
+  block-size: 6px;
+  inline-size: 6px;
 }
 
 .downloading-card__chips {
@@ -379,13 +443,13 @@ async function deleteDownload() {
 
 .downloading-card__chips :deep(.v-chip) {
   border-radius: 6px !important;
-  block-size: 20px !important;
+  block-size: 21px !important;
   flex: 0 1 auto;
   font-size: 11px !important;
   font-variant-numeric: tabular-nums;
   min-inline-size: 0;
   max-inline-size: 100%;
-  padding-inline: 6px !important;
+  padding-inline: 7px !important;
 }
 
 .downloading-card__chips :deep(.v-chip__content) {
@@ -402,7 +466,7 @@ async function deleteDownload() {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: help;
   font-size: 11.5px;
-  gap: 4px;
+  gap: 5px;
 }
 
 .downloading-card__save-path:focus-visible {
@@ -419,6 +483,7 @@ async function deleteDownload() {
 
 .downloading-card__save-path .v-icon {
   flex: 0 0 auto;
+  opacity: 0.8;
 }
 
 .downloading-card__save-path span {
@@ -428,26 +493,24 @@ async function deleteDownload() {
   white-space: nowrap;
 }
 
-.downloading-card__heading {
-  min-inline-size: 0;
-}
-
 .downloading-card__title {
-  display: -webkit-box;
-  overflow: hidden;
+  display: flex;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  row-gap: 2px;
   color: rgb(var(--v-theme-on-surface));
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  letter-spacing: -0.01em;
   line-height: 1.35;
   overflow-wrap: anywhere;
   word-break: normal;
 }
 
 .downloading-card__title-meta {
-  margin-inline-start: 6px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -456,19 +519,15 @@ async function deleteDownload() {
 }
 
 .downloading-card__torrent-title {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
   min-inline-size: 0;
-  margin-block-start: 3px;
+  margin-block-start: 4px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 12px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  line-height: 1.4;
+  font-size: 11.5px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: normal;
-  word-break: normal;
+  word-break: break-word;
 }
 
 .downloading-card__torrent-title--focusable {
@@ -510,14 +569,14 @@ async function deleteDownload() {
   flex: 1 1 5.5rem;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 6px;
+  align-items: center;
+  gap: 4px;
   line-height: 1.3;
 }
 
-.downloading-card__progress-copy > span:first-child {
-  flex-shrink: 0;
-  white-space: nowrap;
+.downloading-card__progress-copy .v-icon {
+  flex: 0 0 auto;
+  opacity: 0.75;
 }
 
 .downloading-card__progress-remaining {
@@ -541,7 +600,9 @@ async function deleteDownload() {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  border-block-start: 1px solid rgba(var(--v-theme-on-surface), 0.07);
   margin-block-start: auto;
+  padding-block-start: 10px;
   gap: 8px;
 }
 
@@ -551,8 +612,8 @@ async function deleteDownload() {
   flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 10px;
-  row-gap: 2px;
+  column-gap: 12px;
+  row-gap: 3px;
 }
 
 .downloading-card__speed {
@@ -560,7 +621,7 @@ async function deleteDownload() {
   min-inline-size: 0;
   align-items: center;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  gap: 3px;
+  gap: 4px;
 }
 
 .downloading-card__speed strong {
@@ -587,30 +648,34 @@ async function deleteDownload() {
   align-items: center;
   margin-inline-start: auto;
   min-block-size: 0 !important;
-  gap: 8px;
+  gap: 6px;
 }
 
 .downloading-card__action-btn {
   border-radius: 8px !important;
-  block-size: 32px !important;
-  inline-size: 32px !important;
-  min-inline-size: 32px !important;
+  block-size: 30px !important;
+  inline-size: 30px !important;
+  min-inline-size: 30px !important;
   padding: 0 !important;
 }
 
 @container (width <= 25rem) {
-  .downloading-card {
-    min-block-size: 8rem;
-    grid-template-columns: 5rem minmax(0, 1fr);
+  .downloading-card__body {
+    gap: 10px;
+    padding: 12px !important;
+  }
+
+  .downloading-card__main {
+    gap: 11px;
   }
 
   .downloading-card__poster {
-    min-block-size: 8rem;
+    inline-size: 4.75rem;
+    border-radius: 8px;
   }
 
-  .downloading-card__body {
+  .downloading-card__meta {
     gap: 6px;
-    padding: 10px 12px !important;
   }
 
   .downloading-card__chips {
@@ -622,8 +687,12 @@ async function deleteDownload() {
   }
 
   .downloading-card__title-meta {
-    margin-inline-start: 4px;
     font-size: 11.5px;
+  }
+
+  .downloading-card__status-pill {
+    font-size: 10.5px;
+    padding: 3px 6px;
   }
 
   .downloading-card__torrent-title {
@@ -633,6 +702,7 @@ async function deleteDownload() {
   .downloading-card__footer {
     flex-wrap: nowrap;
     align-items: center;
+    padding-block-start: 9px;
     gap: 6px;
   }
 
@@ -645,15 +715,11 @@ async function deleteDownload() {
   .downloading-card__speed strong {
     font-size: 11.5px;
   }
-
-  .downloading-card__actions {
-    gap: 6px;
-  }
 }
 
 @container (width <= 21rem) {
-  .downloading-card {
-    grid-template-columns: 4.5rem minmax(0, 1fr);
+  .downloading-card__poster {
+    inline-size: 4.25rem;
   }
 
   .downloading-card__body {
@@ -670,19 +736,10 @@ async function deleteDownload() {
 @media (width <= 600px) {
   .downloading-card__action-btn {
     border-radius: 8px !important;
-    block-size: 34px !important;
-    inline-size: 34px !important;
-    min-inline-size: 34px !important;
+    block-size: 32px !important;
+    inline-size: 32px !important;
+    min-inline-size: 32px !important;
   }
-
-  .downloading-card__actions {
-    gap: 6px;
-  }
-}
-
-.downloading-card.downloading-card--no-image {
-  min-block-size: 8.5rem;
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .downloading-card--deleting {
