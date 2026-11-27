@@ -272,4 +272,75 @@ describe('ExtraSourceView', () => {
       expect(screen.queryByTestId('discover-filter-collapse')).not.toBeInTheDocument()
     })
   })
+
+  it('evaluates conditional show expressions when counting visible rows and collapsing filters', async () => {
+    const user = userEvent.setup()
+    const { MediaCardListViewStub } = createMediaListHarness()
+    const { container } = await renderWithProviders(ExtraSourceView, {
+      global: {
+        stubs: {
+          FormRender: FormRenderStub,
+          MediaCardListView: MediaCardListViewStub,
+        },
+      },
+      props: {
+        source: createSource({
+          filter_params: { mtype: 'tv', sort: '75', itype: null, flag: true, count: 2 },
+          filter_ui: [
+            filterControl('切电影频道', 'mtype', 'movie'),
+            {
+              component: 'div',
+              props: { show: "{{ mtype == 'tv' || mtype == 'anime' }}" },
+              text: '剧集排序',
+            },
+            {
+              component: 'div',
+              props: { show: "{{ mtype == 'movie' && flag == true }}" },
+              text: '电影排序',
+            },
+            {
+              component: 'div',
+              props: { show: "{{ mtype != 'tv' && count == 2 }}" },
+              text: '非剧集年份',
+            },
+            {
+              component: 'div',
+              props: { show: '{{ !flag }}' },
+              text: '关闭项',
+            },
+            {
+              component: 'div',
+              props: { show: false },
+              text: '常隐项',
+            },
+            {
+              component: 'div',
+              props: { show: '{{ flag }}' },
+              text: '常显项',
+            },
+          ],
+          depends: {},
+        }),
+      },
+    })
+
+    const items = () => [...container.querySelectorAll<HTMLElement>('.extra-source-filter-item')]
+    // 默认展开态：仅满足条件的 3 行可见（索引 0、1、6）
+    expect(items()[0]).toBeVisible()
+    expect(items()[1]).toBeVisible()
+    expect(items()[2]).not.toBeVisible()
+    expect(items()[4]).not.toBeVisible()
+    expect(items()[5]).not.toBeVisible()
+    expect(items()[6]).toBeVisible()
+
+    // 收起筛选后，切到电影频道仍应保留前 2 个可见行（索引 0、2）
+    await user.click(screen.getByTestId('discover-filter-collapse'))
+    await user.click(screen.getByRole('button', { name: '切电影频道' }))
+    await waitFor(() => {
+      expect(items()[0]).toBeVisible()
+      expect(items()[1]).not.toBeVisible()
+      expect(items()[2]).toBeVisible()
+      expect(items()[3]).not.toBeVisible()
+    })
+  })
 })
