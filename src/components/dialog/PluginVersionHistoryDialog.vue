@@ -59,11 +59,27 @@ const visible = computed({
 const resolvedPlugin = computed(() => pluginDetail.value ?? props.plugin)
 
 const resolvedHistory = computed(() => {
-  const history = { ...(resolvedPlugin.value?.history || {}) }
+  const declaredHistory = Object.fromEntries(
+    Object.entries(resolvedPlugin.value?.history || {}).map(([version, body]) => [
+      normalizeHistoryVersion(version),
+      body,
+    ]),
+  )
+  const history: Record<string, string> = {}
+
+  // Release 与 history 可能来自不同数据源；合并后统一按版本号降序，不能依赖接口返回或对象插入顺序。
+  const entries = new Map<string, string>(Object.entries(declaredHistory))
   releaseItems.value.forEach(item => {
     const key = normalizeHistoryVersion(item.version)
-    if (!(key in history)) history[key] = item.body || ''
+    if (!entries.has(key)) entries.set(key, item.body || '')
   })
+
+  Array.from(entries.entries())
+    .sort(([left], [right]) => compareVersions(right, left))
+    .forEach(([version, body]) => {
+      history[version] = body
+    })
+
   return history
 })
 
@@ -72,12 +88,49 @@ const hasHistory = computed(() => Object.keys(resolvedHistory.value).length > 0)
 const showBlockingLoading = computed(() => loading.value && !hasHistory.value)
 const showTopProgress = computed(() => !showBlockingLoading.value && (loading.value || releaseLoading.value))
 
-const latestActionText = computed(() =>
-  props.actionMode === 'install' ? t('plugin.installReleaseVersion') : t('plugin.updateToLatest'),
+// 兼容旧后端按原始字符串标记版本的响应，避免 v 前缀差异导致最新版和当前版本失配。
+const releaseItems = computed(() => {
+  const detail = releaseDetail.value
+  return (detail?.items || []).map(item => ({
+    ...item,
+    is_latest: detail?.latest_version
+      ? normalizeHistoryVersion(item.version) === normalizeHistoryVersion(detail.latest_version)
+      : item.is_latest,
+    is_current: detail?.current_version
+      ? normalizeHistoryVersion(item.version) === normalizeHistoryVersion(detail.current_version)
+      : item.is_current,
+  }))
+})
+
+// 优先使用本次强制刷新的更新判据；旧接口缺少标记时才比较 Release 版本，未知状态保持不可操作。
+const latestUpdateAvailable = computed(() => {
+  if (typeof pluginDetail.value?.has_update === 'boolean') return pluginDetail.value.has_update
+  const latestVersion = releaseDetail.value?.latest_version
+  const currentVersion = releaseDetail.value?.current_version || pluginDetail.value?.plugin_version
+  return latestVersion && currentVersion ? isVersionHigher(latestVersion, currentVersion) : null
+})
+
+const updateCheckComplete = computed(
+  () => !loading.value && !releaseLoading.value && !loadError.value && !releaseError.value,
 )
 
-const releaseItems = computed(() => releaseDetail.value?.items || [])
+const latestActionText = computed(() =>
+  props.actionMode === 'install'
+    ? t('plugin.installReleaseVersion')
+    : updateCheckComplete.value && latestUpdateAvailable.value === false
+      ? t('plugin.upToDate')
+      : t('plugin.updateToLatest'),
+)
 
+const latestActionDisabled = computed(
+  () =>
+    props.updating ||
+    !updateCheckComplete.value ||
+    resolvedPlugin.value?.system_version_compatible === false ||
+    (props.actionMode === 'update' && latestUpdateAvailable.value !== true),
+)
+
+// 保留调用方要求的底部面板，无更新时展示禁用提示。
 const shouldShowUpdatePanel = computed(() => props.showUpdateAction)
 
 const releaseByHistoryVersion = computed(() => {
@@ -88,8 +141,34 @@ const releaseByHistoryVersion = computed(() => {
   return releaseMap
 })
 
+/** 历史与 Release 共用带 v 前缀的展示键。 */
 function normalizeHistoryVersion(version: string) {
-  return version.startsWith('v') ? version : `v${version}`
+  return `v${version.trim().replace(/^v/i, '')}`
+}
+
+/** 将版本拆成数值段，兼容插件旧的连字符版本。 */
+function versionParts(value: string) {
+  return value
+    .replace(/^v/i, '')
+    .split(/[.-]/)
+    .map(part => Number.parseInt(part, 10) || 0)
+}
+
+/** 按数值段比较，避免字典序把 3.10 排在 3.9 之前。 */
+function compareVersions(left: string, right: string) {
+  const leftParts = versionParts(left)
+  const rightParts = versionParts(right)
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] || 0) - (rightParts[index] || 0)
+    if (difference !== 0) return difference
+  }
+  return 0
+}
+
+/** 缺失版本不能被视为可升级版本。 */
+function isVersionHigher(candidate?: string | null, current?: string | null) {
+  if (!candidate || !current) return false
+  return compareVersions(candidate, current) > 0
 }
 
 function formatReleaseDate(value?: string) {
@@ -196,6 +275,7 @@ async function loadPluginReleases(
 /** 触发插件更新操作。 */
 function handleUpdate(releaseItem?: PluginReleaseVersion) {
   if (props.updating) return
+  if ((!releaseItem || releaseItem.is_latest) && latestActionDisabled.value) return
   emit('update', releaseItem?.is_latest ? undefined : releaseItem?.version, resolvedPlugin.value?.repo_url)
 }
 
@@ -281,7 +361,7 @@ watch(
               :disabled="
                 props.updating ||
                 releaseItemByHistoryVersion(version)?.is_current ||
-                (releaseItemByHistoryVersion(version)?.is_latest && resolvedPlugin?.system_version_compatible === false)
+                (releaseItemByHistoryVersion(version)?.is_latest && latestActionDisabled)
               "
               @click.stop="handleUpdate(releaseItemByHistoryVersion(version))"
             >
@@ -303,16 +383,11 @@ watch(
             class="mb-3"
             :text="resolvedPlugin?.system_version_message || t('plugin.incompatibleSystemVersion')"
           />
-          <VBtn
-            block
-            :loading="props.updating"
-            :disabled="props.updating || resolvedPlugin?.system_version_compatible === false"
-            @click="handleUpdate()"
-          >
+          <VBtn block :loading="props.updating" :disabled="latestActionDisabled" @click="handleUpdate()">
             <template #prepend>
               <VIcon icon="mdi-arrow-up-circle-outline" />
             </template>
-            {{ t('plugin.updateToLatest') }}
+            {{ latestActionText }}
           </VBtn>
         </VCardItem>
       </template>

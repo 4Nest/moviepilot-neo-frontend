@@ -75,6 +75,43 @@ describe('FormRender & PageRender', () => {
     expect(htmlNode.innerHTML).toBe('<em>富文本内容</em>')
   })
 
+  it('hides d-flex nodes cleanly with d-none when show evaluates to false', async () => {
+    const { container, rerender } = await renderWithProviders(FormRender, {
+      props: {
+        model: { mtype: 'tv' },
+        config: {
+          component: 'div',
+          props: {
+            class: 'd-flex justify-start ga-2',
+            show: "{{ mtype == 'movie' }}",
+          },
+          text: '电影类型',
+        },
+      },
+    })
+
+    const hiddenRoot = container.firstElementChild as HTMLElement
+    expect(hiddenRoot).toHaveClass('d-none')
+    expect(hiddenRoot).not.toHaveClass('d-flex')
+    expect(hiddenRoot.style.display).toBe('none')
+
+    await rerender({
+      model: { mtype: 'movie' },
+      config: {
+        component: 'div',
+        props: {
+          class: 'd-flex justify-start ga-2',
+          show: "{{ mtype == 'movie' }}",
+        },
+        text: '电影类型',
+      },
+    })
+
+    const visibleRoot = container.firstElementChild as HTMLElement
+    expect(visibleRoot).toHaveClass('d-flex')
+    expect(visibleRoot).not.toHaveClass('d-none')
+  })
+
   it('dispatches PageRender actions by HTTP method (GET/POST/PUT/DELETE) and closes ProgressDialog on unmount', async () => {
     mocks.apiGet.mockResolvedValue({})
     mocks.apiPost.mockResolvedValue({})

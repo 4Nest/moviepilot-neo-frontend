@@ -25,7 +25,79 @@ const supportsShortDramaFilter = computed(() => {
   )
 })
 
-const canCollapse = computed(() => (props.source.filter_ui?.length ?? 0) > 2)
+/** 安全解析简单布尔条件表达式（支持 ==、===、!=、!==、&&、||），避免动态代码执行。 */
+function evaluateSimpleShowExpr(expr: string, model: Record<string, unknown>): boolean {
+  const orBranches = expr
+    .split('||')
+    .map(part => part.trim())
+    .filter(Boolean)
+  if (!orBranches.length) return true
+
+  const resolveToken = (token: string): unknown => {
+    const t = token.trim()
+    if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
+      return t.slice(1, -1)
+    }
+    if (t === 'true') return true
+    if (t === 'false') return false
+    if (t === 'null') return null
+    if (t === 'undefined') return undefined
+    if (/^-?\d+(?:\.\d+)?$/.test(t)) return Number(t)
+    return model[t]
+  }
+
+  return orBranches.some(branch => {
+    const andParts = branch
+      .split('&&')
+      .map(part => part.trim())
+      .filter(Boolean)
+    return andParts.every(clause => {
+      for (const op of ['===', '!==', '==', '!='] as const) {
+        const opIndex = clause.indexOf(op)
+        if (opIndex > 0) {
+          const left = resolveToken(clause.slice(0, opIndex))
+          const right = resolveToken(clause.slice(opIndex + op.length))
+          return op === '===' || op === '==' ? left === right : left !== right
+        }
+      }
+      if (clause.startsWith('!')) {
+        return !resolveToken(clause.slice(1))
+      }
+      return Boolean(resolveToken(clause))
+    })
+  })
+}
+
+const visibleRowOrderMap = computed<Map<number, number>>(() => {
+  const map = new Map<number, number>()
+  let visibleIdx = 0
+  for (const [index, element] of (props.source.filter_ui ?? []).entries()) {
+    const rawShow =
+      (element as { props?: Record<string, unknown> })?.props?.show ??
+      (element as { props?: Record<string, unknown> })?.props?.['v-show']
+    let visible = true
+    if (typeof rawShow === 'boolean') {
+      visible = rawShow
+    } else if (typeof rawShow === 'string' && rawShow.trim()) {
+      const trimmed = rawShow.trim()
+      const expr = trimmed.startsWith('{{') && trimmed.endsWith('}}') ? trimmed.slice(2, -2).trim() : trimmed
+      visible = evaluateSimpleShowExpr(expr, filterParams)
+    }
+    if (visible) {
+      map.set(index, visibleIdx)
+      visibleIdx += 1
+    }
+  }
+  return map
+})
+
+const canCollapse = computed(() => visibleRowOrderMap.value.size > 2)
+
+function isFilterRowVisible(index: number): boolean {
+  const order = visibleRowOrderMap.value.get(index)
+  if (order === undefined) return false
+  return filtersExpanded.value || order < 2
+}
 
 // 默认输入参数（响应式快照供重置计数追踪）
 const defaultParamsSnapshot = ref(cloneDeep(props.source.filter_params))
@@ -133,7 +205,7 @@ watch(excludeShortDrama, () => {
     <div
       v-for="(element, index) in source.filter_ui"
       :key="index"
-      v-show="index < 2 || filtersExpanded"
+      v-show="isFilterRowVisible(index)"
       class="extra-source-filter-item"
     >
       <FormRender :config="element" :model="filterParams" />
@@ -158,6 +230,10 @@ watch(excludeShortDrama, () => {
   align-items: center;
   justify-content: flex-end;
   min-block-size: 26px;
+}
+
+.extra-source-filter-item:has(> .d-none) {
+  display: none;
 }
 
 .extra-source-filters :deep(.v-label) {

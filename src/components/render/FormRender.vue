@@ -34,6 +34,7 @@ function evaluateExpression(expression: string, model: FormModel, fallback: unkn
  */
 const parseProps = (rawProps: PropRecord, model: FormModel): PropRecord => {
   const parsedProps: PropRecord = {}
+  let hiddenByShow = false
 
   const isExpression = (value: string) => value.startsWith('{{') && value.endsWith('}}')
   const extractExpression = (value: string) => value.slice(2, -2).trim()
@@ -56,6 +57,9 @@ const parseProps = (rawProps: PropRecord, model: FormModel): PropRecord => {
         parsedProps.style && typeof parsedProps.style === 'object' ? (parsedProps.style as Record<string, string>) : {}
       currentStyle.display = isVisible ? '' : 'none'
       parsedProps.style = currentStyle
+      if (!isVisible) {
+        hiddenByShow = true
+      }
     } else if ((key.startsWith('model:') || key.startsWith('v-model:')) && typeof value === 'string') {
       const propName = key.split(':')[1]
       parsedProps[propName] = model[value]
@@ -96,6 +100,21 @@ const parseProps = (rawProps: PropRecord, model: FormModel): PropRecord => {
       } else {
         parsedProps[key] = value
       }
+    }
+  }
+
+  // 防止 Vuetify 的 .d-flex (!important) 覆盖内联 display: none
+  if (hiddenByShow) {
+    const rawClass = parsedProps.class
+    if (typeof rawClass === 'string') {
+      const filtered = rawClass
+        .split(/\s+/)
+        .filter(token => token && token !== 'd-flex')
+      parsedProps.class = [...filtered, 'd-none'].join(' ')
+    } else if (Array.isArray(rawClass)) {
+      parsedProps.class = [...rawClass.filter(token => token !== 'd-flex'), 'd-none']
+    } else {
+      parsedProps.class = 'd-none'
     }
   }
 

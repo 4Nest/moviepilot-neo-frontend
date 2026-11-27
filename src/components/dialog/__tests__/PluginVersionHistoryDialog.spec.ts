@@ -20,6 +20,7 @@ const installedPlugin: Plugin = {
   repo_url: 'https://github.com/example/plugins',
   installed: true,
   release: true,
+  has_update: true,
 }
 
 const releases: PluginReleaseVersionsResponse = {
@@ -104,8 +105,132 @@ describe('PluginVersionHistoryDialog', () => {
     ])
   })
 
+  it.each([
+    { name: 'the installed version is current', latest: '1.0.0', current: '1.0.0', release: true },
+    { name: 'version prefixes differ', latest: 'v1.0.0', current: '1.0.0', release: true },
+    { name: 'the installed version is ahead', latest: '0.9.0', current: '1.0.0', release: true },
+    { name: 'Release metadata is stale', latest: '2.0.0', current: '1.0.0', release: true },
+    { name: 'the plugin does not use Releases', latest: '1.0.0', current: '1.0.0', release: false },
+  ])(
+    'disables the latest action when refreshed history has no update and $name',
+    async ({ latest, current, release }) => {
+      const currentReleaseSnapshot: PluginReleaseVersionsResponse = {
+        ...releases,
+        latest_version: latest,
+        current_version: current,
+      }
+      mocks.apiGet.mockImplementation((url: string) => {
+        if (url === 'plugin/history/DemoPlugin') {
+          return Promise.resolve({
+            ...installedPlugin,
+            release,
+            has_update: false,
+            history: { 'v1.0.0': '当前更新说明' },
+          })
+        }
+        if (url === 'plugin/releases/DemoPlugin') return Promise.resolve(currentReleaseSnapshot)
+        throw new Error(`Unexpected request: ${url}`)
+      })
+
+      const { emitted } = await renderDialog({
+        modelValue: true,
+        plugin: installedPlugin,
+        showUpdateAction: true,
+        actionMode: 'update',
+      })
+
+      const latestButton = await screen.findByRole('button', { name: '已是最新版本' })
+      expect(latestButton).toBeDisabled()
+      await fireEvent.click(latestButton)
+      expect(emitted().update).toBeUndefined()
+      expect(screen.queryByRole('button', { name: '更新到最新版本' })).not.toBeInTheDocument()
+    },
+  )
+
+  it.each([
+    { latest: 'v2.0.0', current: 'V1.0.0', itemPrefix: '' },
+    { latest: '2.0.0', current: '1.0.0', itemPrefix: 'v' },
+  ])(
+    'normalizes Release version markers before choosing install actions: $itemPrefix',
+    async ({ latest, current, itemPrefix }) => {
+      mocks.apiGet.mockImplementation((url: string) => {
+        if (url === 'plugin/history/DemoPlugin') {
+          return Promise.resolve({ ...installedPlugin, history: { 'v1.0.0': '当前更新说明' } })
+        }
+        if (url === 'plugin/releases/DemoPlugin') {
+          return Promise.resolve({
+            ...releases,
+            latest_version: latest,
+            current_version: current,
+            items: releases.items.map(item => ({
+              ...item,
+              version: `${itemPrefix}${item.version}`,
+              is_latest: false,
+              is_current: false,
+            })),
+          })
+        }
+        throw new Error(`Unexpected request: ${url}`)
+      })
+
+      const { emitted } = await renderDialog({
+        modelValue: true,
+        plugin: installedPlugin,
+        showUpdateAction: true,
+      })
+
+      expect(await screen.findByText('最新')).toBeInTheDocument()
+      expect(screen.getByText('当前')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: '安装' })).toHaveLength(1)
+      await fireEvent.click(screen.getByRole('button', { name: '更新到最新版本' }))
+      expect(emitted().update).toEqual([[undefined, 'https://github.com/example/plugins']])
+    },
+  )
+
+  it.each([
+    { latest: 'v2.0.0', current: '1.0.0', label: '更新到最新版本', enabled: true },
+    { latest: 'v1.0.0', current: '1.0.0', label: '已是最新版本', enabled: false },
+    { latest: undefined, current: undefined, label: '更新到最新版本', enabled: false },
+  ])(
+    'falls back to known Release versions when the update flag is absent: $latest',
+    async ({ latest, current, label, enabled }) => {
+      mocks.apiGet.mockImplementation((url: string) => {
+        if (url === 'plugin/history/DemoPlugin') {
+          return Promise.resolve({ ...installedPlugin, has_update: undefined, history: { 'v1.0.0': '当前更新说明' } })
+        }
+        if (url === 'plugin/releases/DemoPlugin') {
+          return Promise.resolve({ ...releases, latest_version: latest, current_version: current })
+        }
+        throw new Error(`Unexpected request: ${url}`)
+      })
+
+      const { emitted } = await renderDialog({ modelValue: true, plugin: installedPlugin, showUpdateAction: true })
+      await screen.findByText('旧版说明')
+      const updateButton = screen.getByRole('button', { name: label })
+      if (enabled) expect(updateButton).toBeEnabled()
+      else expect(updateButton).toBeDisabled()
+      await fireEvent.click(updateButton)
+      expect(emitted().update).toEqual(enabled ? [[undefined, 'https://github.com/example/plugins']] : undefined)
+    },
+  )
+
+  it('blocks the latest action when release query fails', async () => {
+    const successfulGet = mocks.apiGet.getMockImplementation()!
+    mocks.apiGet.mockImplementation((url: string) =>
+      url === 'plugin/releases/DemoPlugin' ? Promise.reject(new Error('query unavailable')) : successfulGet(url),
+    )
+    const { emitted } = await renderDialog({ modelValue: true, plugin: installedPlugin, showUpdateAction: true })
+
+    await screen.findByText('Release 版本加载失败')
+    const updateButton = screen.getByRole('button', { name: '更新到最新版本' })
+    expect(updateButton).toBeDisabled()
+    await fireEvent.click(updateButton)
+    expect(emitted().update).toBeUndefined()
+    expect(screen.queryByText('已是最新版本')).not.toBeInTheDocument()
+  })
+
   it('uses market metadata directly and emits latest installation without a release version', async () => {
-    const marketPlugin = { ...installedPlugin, installed: false, history: {} }
+    const marketPlugin = { ...installedPlugin, installed: false, has_update: false, history: {} }
     const { emitted } = await renderDialog({
       modelValue: true,
       plugin: marketPlugin,
@@ -181,12 +306,14 @@ describe('PluginVersionHistoryDialog', () => {
       throw new Error(`Unexpected request: ${url}`)
     })
 
-    await renderDialog({
+    const { emitted } = await renderDialog({
       modelValue: true,
       plugin: {
         ...installedPlugin,
+        has_update: false,
         history: { 'v1.0.0': '缓存中的旧更新说明' },
       },
+      showUpdateAction: true,
       actionMode: 'update',
     })
 
@@ -196,6 +323,10 @@ describe('PluginVersionHistoryDialog', () => {
     expect(mocks.apiGet).toHaveBeenCalledWith('plugin/history/DemoPlugin', {
       params: { force: true },
     })
+    const pendingButton = screen.getByRole('button', { name: '更新到最新版本' })
+    expect(pendingButton).toBeDisabled()
+    await fireEvent.click(pendingButton)
+    expect(emitted().update).toBeUndefined()
 
     resolveHistory({
       ...installedPlugin,
@@ -209,23 +340,32 @@ describe('PluginVersionHistoryDialog', () => {
     expect(
       Array.from(document.querySelectorAll('.version-history__version')).map(element => element.textContent),
     ).toEqual(['v1.1.0', 'v1.0.0'])
+    const updateButton = screen.getByRole('button', { name: '更新到最新版本' })
+    await waitFor(() => expect(updateButton).toBeEnabled())
+    await fireEvent.click(updateButton)
+    expect(emitted().update).toEqual([[undefined, 'https://github.com/example/plugins']])
   })
 
   it('preserves passed-in history and shows a non-blocking warning when refresh fails', async () => {
     mocks.apiGet.mockRejectedValueOnce(new Error('history timeout'))
 
-    await renderDialog({
+    const { emitted } = await renderDialog({
       modelValue: true,
       plugin: {
         ...installedPlugin,
         history: { 'v1.0.0': '保留的本地快照说明' },
       },
+      showUpdateAction: true,
       actionMode: 'update',
     })
 
     expect(await screen.findByText('读取更新说明失败，请稍后重试')).toBeInTheDocument()
     expect(screen.getByText('保留的本地快照说明')).toBeInTheDocument()
     expect(screen.queryByText('暂未获取到更新说明')).not.toBeInTheDocument()
+    const updateButton = screen.getByRole('button', { name: '更新到最新版本' })
+    expect(updateButton).toBeDisabled()
+    await fireEvent.click(updateButton)
+    expect(emitted().update).toBeUndefined()
   })
 
   it('shows refreshed history immediately without waiting for slow release queries', async () => {
