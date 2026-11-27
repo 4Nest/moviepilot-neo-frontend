@@ -449,6 +449,7 @@ describe('resource page search flow', () => {
       expect(storedParams).toEqual({
         area: query.area ?? '',
         keyword: query.keyword,
+        rule_groups: '',
         season: query.season ?? '',
         sites: query.sites ?? '',
         title: query.title ?? '',
@@ -477,6 +478,7 @@ describe('resource page search flow', () => {
     expect(JSON.parse(localStorage.getItem('MP_ResourceSearchParams') || '{}')).toEqual({
       area: '',
       keyword: '上次关键词',
+      rule_groups: '',
       season: '',
       sites: '3',
       title: '',
