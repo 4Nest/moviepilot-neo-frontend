@@ -275,12 +275,12 @@ describe('ExtraSourceView', () => {
 
   it('evaluates conditional show expressions when counting visible rows and collapsing filters', async () => {
     const user = userEvent.setup()
-    const { MediaCardListViewStub } = createMediaListHarness()
+    const { stub } = createMediaListHarness()
     const { container } = await renderWithProviders(ExtraSourceView, {
       global: {
         stubs: {
           FormRender: FormRenderStub,
-          MediaCardListView: MediaCardListViewStub,
+          MediaCardListView: stub,
         },
       },
       props: {
