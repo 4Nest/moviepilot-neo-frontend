@@ -41,6 +41,7 @@ interface SearchParams {
   year: string
   season: string
   sites: string
+  rule_groups: string
 }
 
 interface LastSearchContextResponse {
@@ -75,6 +76,7 @@ function createSearchParams(query: LocationQuery): SearchParams {
     year: query?.year?.toString() ?? '',
     season: query?.season?.toString() ?? '',
     sites: query?.sites?.toString() ?? '',
+    rule_groups: query?.rule_groups?.toString() ?? '',
   }
 }
 
@@ -87,6 +89,7 @@ function normalizeSearchParams(params?: Partial<SearchParams> | null): SearchPar
     year: params?.year?.toString() ?? '',
     season: params?.season?.toString() ?? '',
     sites: params?.sites?.toString() ?? '',
+    rule_groups: params?.rule_groups?.toString() ?? '',
   }
 }
 
@@ -599,9 +602,11 @@ function buildSearchStreamUrl(params: SearchParams, requestToken?: string) {
     setSearchParam(url.searchParams, 'year', params.year)
     setSearchParam(url.searchParams, 'season', params.season)
     setSearchParam(url.searchParams, 'sites', params.sites)
+    setSearchParam(url.searchParams, 'rule_groups', params.rule_groups)
   } else {
     setSearchParam(url.searchParams, 'keyword', params.keyword)
     setSearchParam(url.searchParams, 'sites', params.sites)
+    setSearchParam(url.searchParams, 'rule_groups', params.rule_groups)
   }
 
   if (requestToken) {
@@ -763,6 +768,7 @@ async function requestSearchResults(params: SearchParams, requestToken?: string)
         year: params.year,
         season: params.season,
         sites: params.sites,
+        ...(params.rule_groups ? { rule_groups: params.rule_groups } : {}),
         _ts: requestToken,
       },
     })
@@ -772,6 +778,7 @@ async function requestSearchResults(params: SearchParams, requestToken?: string)
       params: {
         keyword: params.keyword,
         sites: params.sites,
+        ...(params.rule_groups ? { rule_groups: params.rule_groups } : {}),
         _ts: requestToken,
       },
     })

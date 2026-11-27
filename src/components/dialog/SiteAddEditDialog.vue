@@ -313,7 +313,7 @@ onMounted(async () => {
                 </VTab>
               </VTabs>
             </div>
-            <VWindow v-model="siteType" class="mt-3 disable-tab-transition" :touch="false">
+            <VWindow v-model="siteType" class="mt-4 disable-tab-transition mp-tabbed-window--stable" :touch="false">
               <VWindowItem value="cookie">
                 <VRow class="mp-form-grid">
                   <VCol cols="12">
@@ -513,59 +513,6 @@ onMounted(async () => {
 
 .mp-form-grid {
   row-gap: 6px;
-}
-
-.mp-segmented-bar {
-  display: flex;
-  align-items: center;
-}
-
-.mp-segmented-tabs {
-  display: inline-flex;
-  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
-  border-radius: 8px;
-  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
-  block-size: 36px !important;
-  inline-size: fit-content;
-  max-inline-size: 100%;
-  min-block-size: 36px !important;
-  padding: 3px;
-
-  :deep(.v-slide-group__container),
-  :deep(.v-slide-group__content) {
-    align-items: center;
-    gap: 2px;
-  }
-
-  :deep(.v-tab__slider) {
-    display: none !important;
-  }
-
-  :deep(.v-tab) {
-    border-radius: 6px !important;
-    block-size: 28px !important;
-    color: rgba(var(--v-theme-on-surface), 0.64);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    min-block-size: 28px !important;
-    min-inline-size: 84px;
-    padding-inline: 14px;
-    text-transform: none;
-    transition:
-      background-color 0.16s ease,
-      color 0.16s ease,
-      box-shadow 0.16s ease;
-  }
-
-  :deep(.v-tab--selected) {
-    background: rgb(var(--v-theme-surface));
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.08),
-      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
-    color: rgb(var(--v-theme-on-surface)) !important;
-    font-weight: 600;
-  }
 }
 
 @media (max-width: 599.98px) {

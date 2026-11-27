@@ -431,7 +431,7 @@ onMounted(() => {
 
 <template>
   <VDialog :model-value="modelValue" max-width="62rem" scrollable :fullscreen="!display.mdAndUp.value">
-    <VCard class="mp-dialog-card">
+    <VCard class="mp-dialog-card mp-tabbed-dialog">
       <VDialogCloseBtn @click="emit('close')" />
       <VCardItem class="mp-dialog-header">
         <template #prepend>
@@ -444,26 +444,25 @@ onMounted(() => {
           {{ t('setting.category.subtitle') }}
         </VCardSubtitle>
       </VCardItem>
+      <div class="mp-tabbed-dialog__tabs">
+        <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs mp-segmented-tabs--block">
+          <VTab value="movie" :ripple="false">
+            <VIcon icon="mdi-movie-outline" size="16" class="me-1" />
+            {{ t('setting.category.movie') }}
+          </VTab>
+          <VTab value="tv" :ripple="false">
+            <VIcon icon="mdi-television" size="16" class="me-1" />
+            {{ t('setting.category.tv') }}
+          </VTab>
+          <VTab value="advanced" :ripple="false">
+            <VIcon icon="mdi-file-code-outline" size="16" class="me-1" />
+            {{ t('setting.category.advanced') }}
+            <span v-if="rawDirty" class="ms-1 text-primary">●</span>
+          </VTab>
+        </VTabs>
+      </div>
       <VDivider />
-      <VCardText class="mp-dialog-body">
-        <div class="mp-segmented-bar mb-4">
-          <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs">
-            <VTab value="movie" :ripple="false">
-              <VIcon icon="mdi-movie-outline" size="16" class="me-1" />
-              {{ t('setting.category.movie') }}
-            </VTab>
-            <VTab value="tv" :ripple="false">
-              <VIcon icon="mdi-television" size="16" class="me-1" />
-              {{ t('setting.category.tv') }}
-            </VTab>
-            <VTab value="advanced" :ripple="false">
-              <VIcon icon="mdi-file-code-outline" size="16" class="me-1" />
-              {{ t('setting.category.advanced') }}
-              <span v-if="rawDirty" class="ms-1 text-primary">●</span>
-            </VTab>
-          </VTabs>
-        </div>
-
+      <VCardText class="mp-dialog-body mp-tabbed-dialog__body mp-tabbed-dialog__body--tall">
         <div v-if="loading" class="d-flex justify-center align-center" style="min-block-size: 300px">
           <VProgressCircular indeterminate color="primary" size="48" />
         </div>
@@ -758,58 +757,6 @@ onMounted(() => {
 
 .mp-form-grid {
   row-gap: 6px;
-}
-
-.mp-segmented-bar {
-  display: flex;
-  align-items: center;
-}
-
-.mp-segmented-tabs {
-  display: inline-flex;
-  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
-  border-radius: 8px;
-  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
-  block-size: 36px !important;
-  inline-size: fit-content;
-  max-inline-size: 100%;
-  min-block-size: 36px !important;
-  padding: 3px;
-
-  :deep(.v-slide-group__container),
-  :deep(.v-slide-group__content) {
-    align-items: center;
-    gap: 2px;
-  }
-
-  :deep(.v-tab__slider) {
-    display: none !important;
-  }
-
-  :deep(.v-tab) {
-    border-radius: 6px !important;
-    block-size: 28px !important;
-    color: rgba(var(--v-theme-on-surface), 0.64);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    min-block-size: 28px !important;
-    padding-inline: 14px;
-    text-transform: none;
-    transition:
-      background-color 0.16s ease,
-      color 0.16s ease,
-      box-shadow 0.16s ease;
-  }
-
-  :deep(.v-tab--selected) {
-    background: rgb(var(--v-theme-surface));
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.08),
-      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
-    color: rgb(var(--v-theme-on-surface)) !important;
-    font-weight: 600;
-  }
 }
 
 .category-item {

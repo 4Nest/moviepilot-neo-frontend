@@ -584,7 +584,7 @@ onMounted(() => {
 
 <template>
   <VDialog scrollable max-width="46rem" :fullscreen="!display.mdAndUp.value">
-    <VCard class="mp-dialog-card">
+    <VCard class="mp-dialog-card mp-tabbed-dialog">
       <VCardItem class="mp-dialog-header">
         <VDialogCloseBtn @click="emit('close')" />
         <template #prepend>
@@ -632,20 +632,19 @@ onMounted(() => {
           {{ props.type }}
         </VCardSubtitle>
       </VCardItem>
+      <div class="mp-tabbed-dialog__tabs">
+        <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs mp-segmented-tabs--block">
+          <VTab value="basic" :ripple="false">
+            {{ t('dialog.subscribeEdit.tabs.basic') }}
+          </VTab>
+          <VTab value="advance" :ripple="false">
+            {{ t('dialog.subscribeEdit.tabs.advance') }}
+          </VTab>
+        </VTabs>
+      </div>
       <VDivider />
-      <VCardText class="mp-dialog-body">
+      <VCardText class="mp-dialog-body mp-tabbed-dialog__body mp-tabbed-dialog__body--tall">
         <VForm ref="subscribeFormRef" @submit.prevent="() => {}">
-          <div class="mp-segmented-bar mb-4">
-            <VTabs v-model="activeTab" density="compact" class="mp-segmented-tabs">
-              <VTab value="basic" :ripple="false">
-                {{ t('dialog.subscribeEdit.tabs.basic') }}
-              </VTab>
-              <VTab value="advance" :ripple="false">
-                {{ t('dialog.subscribeEdit.tabs.advance') }}
-              </VTab>
-            </VTabs>
-          </div>
-
           <VWindow v-model="activeTab" class="disable-tab-transition" :touch="false">
             <VWindowItem value="basic">
               <div class="mp-form-sections">
@@ -960,59 +959,6 @@ onMounted(() => {
 
 .mp-form-grid {
   row-gap: 6px;
-}
-
-.mp-segmented-bar {
-  display: flex;
-  align-items: center;
-}
-
-.mp-segmented-tabs {
-  display: inline-flex;
-  border: 1px solid var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.1));
-  border-radius: 8px;
-  background: var(--mp-item-bg, rgba(var(--v-theme-on-surface), 0.04));
-  block-size: 36px !important;
-  inline-size: fit-content;
-  max-inline-size: 100%;
-  min-block-size: 36px !important;
-  padding: 3px;
-
-  :deep(.v-slide-group__container),
-  :deep(.v-slide-group__content) {
-    align-items: center;
-    gap: 2px;
-  }
-
-  :deep(.v-tab__slider) {
-    display: none !important;
-  }
-
-  :deep(.v-tab) {
-    border-radius: 6px !important;
-    block-size: 28px !important;
-    color: rgba(var(--v-theme-on-surface), 0.64);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    min-block-size: 28px !important;
-    min-inline-size: 84px;
-    padding-inline: 16px;
-    text-transform: none;
-    transition:
-      background-color 0.16s ease,
-      color 0.16s ease,
-      box-shadow 0.16s ease;
-  }
-
-  :deep(.v-tab--selected) {
-    background: rgb(var(--v-theme-surface));
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.08),
-      0 0 0 1px var(--mp-border-subtle, rgba(var(--v-theme-on-surface), 0.08));
-    color: rgb(var(--v-theme-on-surface)) !important;
-    font-weight: 600;
-  }
 }
 
 // 版本名称就地编辑：默认与副标题文本一致，铅笔图标提示可点击，悬停浮出底色

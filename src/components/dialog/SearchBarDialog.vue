@@ -4,6 +4,7 @@ import type { Site, Plugin, Subscribe } from '@/api/types'
 import { getNavMenus, getSettingTabs } from '@/router/i18n-menu'
 import { NavMenu } from '@/@layouts/types'
 import SearchSiteDialog from '@/components/dialog/SearchSiteDialog.vue'
+import { encodeSearchRuleGroupsParam, loadStoredSearchSelection } from '@/composables/useSearchSelection'
 import { useI18n } from '@/composables/useChineseText'
 import { useUserStore } from '@/stores'
 import { useDisplay } from 'vuetify'
@@ -302,16 +303,40 @@ const matchedSubscribeItems = computed(() => {
   return SubscribeItems.value.filter((item: Subscribe) => Boolean(item.name?.toLowerCase().includes(lowerWord)))
 })
 
+// 本次搜索选中的过滤规则参数（undefined 表示沿用系统默认规则）
+const selectedRuleGroups = ref<string | undefined>(undefined)
+
 /** 使用选中的站点执行站点资源搜索。 */
-function searchSites(sites: number[]) {
+function searchSites(sites: number[], ruleGroups?: string) {
   chooseSiteDialog.value = false
   selectedSites.value = sites
-  searchTorrent()
+  selectedRuleGroups.value = ruleGroups
+  performSearchTorrent(true)
 }
 
-/** 使用当前关键词搜索站点资源。 */
+/** 使用当前关键词搜索站点资源（模板点击入口）。 */
 function searchTorrent() {
+  performSearchTorrent(false)
+}
+
+/** 执行站点资源搜索跳转，非弹窗入口时同步读取本地记忆的站点与规则选择。 */
+function performSearchTorrent(fromDialog: boolean) {
   if (!searchWord.value) return
+  let targetSites = selectedSites.value
+  let targetRuleGroups = selectedRuleGroups.value
+  if (!fromDialog) {
+    const stored = loadStoredSearchSelection()
+    if (stored) {
+      if (stored.sites && stored.sites.length > 0 && allSites.value.length > 0) {
+        const availableIds = new Set(allSites.value.map((site: Site) => site.id))
+        const validStoredSites = stored.sites.filter(id => availableIds.has(id))
+        if (validStoredSites.length > 0) {
+          targetSites = validStoredSites
+        }
+      }
+      targetRuleGroups = encodeSearchRuleGroupsParam(stored)
+    }
+  }
   // 记录搜索词
   saveRecentSearches(searchWord.value)
   // 跳转到搜索页面
@@ -320,7 +345,8 @@ function searchTorrent() {
     query: {
       keyword: searchWord.value,
       area: 'title',
-      sites: selectedSites.value.join(','),
+      sites: targetSites.join(','),
+      ...(targetRuleGroups ? { rule_groups: targetRuleGroups } : {}),
     },
   })
   closeSearch()

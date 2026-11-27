@@ -616,6 +616,9 @@ async function clickSearch() {
   }
 }
 
+// 本次搜索选中的过滤规则参数（undefined 表示沿用系统默认规则）
+const selectedRuleGroups = ref<string | undefined>(undefined)
+
 // 开始搜索
 function handleSearch() {
   router.push({
@@ -628,13 +631,15 @@ function handleSearch() {
       year: props.media?.year,
       season: props.media?.season,
       sites: selectedSites.value.join(','),
+      ...(selectedRuleGroups.value ? { rule_groups: selectedRuleGroups.value } : {}),
     },
   })
 }
 
 // 搜索多站点
-function searchSites(sites: number[]) {
+function searchSites(sites: number[], ruleGroups?: string) {
   selectedSites.value = sites
+  selectedRuleGroups.value = ruleGroups
   handleSearch()
 }
 

@@ -222,17 +222,17 @@ onMounted(() => {
 }
 
 .mp-dialog-header {
-  padding-block: 14px;
-  padding-inline: 22px 48px;
+  padding-block: 18px 12px;
+  padding-inline: 26px 52px;
 }
 
 .mp-dialog-body {
-  padding: 18px 22px !important;
+  padding: 20px 26px !important;
 }
 
 .mp-dialog-footer {
-  gap: 8px;
-  padding: 10px 20px !important;
+  gap: 10px;
+  padding: 14px 26px !important;
 }
 
 @media (max-width: 599.98px) {
